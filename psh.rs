@@ -253,7 +253,7 @@ impl Layout {
     }
 
     fn ros2_install_script(&self) -> PathBuf {
-        self.repo_path.join("scripts").join("install_ros2.sh")
+        self.repo_path.join("tools").join("install_ros2.sh")
     }
 }
 
