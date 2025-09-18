@@ -3,6 +3,7 @@ use clap::{Args, Parser, Subcommand, ValueHint};
 use include_dir::{include_dir, Dir};
 use serde::Deserialize;
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -79,6 +80,16 @@ struct ModuleArgs {
     modules: Vec<String>,
 }
 
+#[derive(Args, Debug, Clone, Default)]
+struct Ros2Args {
+    /// ROS distribution to install (defaults to ROS_DISTRO env or kilted)
+    #[arg(long, value_hint = ValueHint::Other)]
+    distro: Option<String>,
+    /// Optional override for the install script path
+    #[arg(long, value_hint = ValueHint::FilePath)]
+    script: Option<PathBuf>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct CommandSpec {
     program: String,
@@ -121,6 +132,7 @@ struct CommandOutput {
 }
 
 impl CommandOutput {
+    #[cfg(test)]
     fn success() -> Self {
         Self { status: 0 }
     }
@@ -193,6 +205,7 @@ impl Layout {
         })
     }
 
+    #[cfg(test)]
     fn new(repo_path: PathBuf, install_dir: PathBuf, systemd_dir: PathBuf) -> Self {
         Self {
             repo_path,
@@ -219,6 +232,10 @@ impl Layout {
 
     fn service_path(&self, filename: &str) -> PathBuf {
         self.systemd_dir.join(filename)
+    }
+
+    fn ros2_install_script(&self) -> PathBuf {
+        self.repo_path.join("scripts").join("install_ros2.sh")
     }
 }
 
@@ -312,6 +329,46 @@ impl<R: CommandRunner> Psh<R> {
         self.clone_repo()?;
         self.build()?;
         self.install()?;
+        Ok(())
+    }
+
+    fn install_ros2(&self, args: &Ros2Args) -> Result<()> {
+        ensure_tool(
+            "bash",
+            "Install bash so the ROS 2 provisioning script can be executed.",
+        )?;
+
+        let script_path = args
+            .script
+            .clone()
+            .unwrap_or_else(|| self.layout.ros2_install_script());
+
+        if !script_path.exists() {
+            bail!(
+                "{} does not exist. Run `psh clone` first or provide --script to point to install_ros2.sh.",
+                script_path.display()
+            );
+        }
+
+        let distro = args.distro.clone().unwrap_or_else(ros_distro);
+
+        let original: Option<OsString> = env::var_os("ROS_DISTRO");
+        env::set_var("ROS_DISTRO", &distro);
+
+        let result = self
+            .runner
+            .run(&CommandSpec::new("bash").arg(script_path.to_string_lossy()));
+
+        match original {
+            Some(value) => env::set_var("ROS_DISTRO", value),
+            None => env::remove_var("ROS_DISTRO"),
+        }
+
+        result?;
+        println!(
+            "Invoked ROS 2 {distro} provisioning via {}",
+            script_path.display()
+        );
         Ok(())
     }
 
@@ -600,7 +657,7 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let layout = Layout::detect()?;
-    let psh = Psh::new(layout, RealCommandRunner::default());
+    let psh = Psh::new(layout, RealCommandRunner);
 
     match cli.command {
         Commands::Install => psh.install(),
@@ -639,7 +696,13 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use std::sync::{Mutex, OnceLock};
     use tempfile::tempdir;
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[derive(Clone, Default)]
     struct MockRunner {
@@ -696,6 +759,7 @@ mod tests {
         fs::create_dir_all(release.parent().unwrap()).unwrap();
         fs::write(&release, b"fake binary").unwrap();
 
+        let _guard = env_lock().lock().unwrap();
         env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
         psh.install().expect("install succeeds");
 
@@ -703,10 +767,12 @@ mod tests {
         assert!(installed.exists());
         let contents = fs::read(installed).unwrap();
         assert_eq!(contents, b"fake binary");
+        env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
     }
 
     #[test]
     fn foot_setup_clones_repositories() {
+        let _guard = env_lock().lock().unwrap();
         env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
         let repo_dir = tempdir().unwrap();
         fs::create_dir_all(repo_dir.path()).unwrap();
@@ -729,6 +795,7 @@ mod tests {
         assert!(commands
             .iter()
             .any(|cmd| cmd.program == "git" && cmd.args.contains(&LIBCREATE_REPO.to_string())));
+        env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
     }
 
     #[test]
@@ -746,5 +813,42 @@ mod tests {
             .module_action("unknown", ModuleAction::Setup)
             .unwrap_err();
         assert!(err.to_string().contains("Unknown module"));
+    }
+
+    #[test]
+    fn install_ros2_invokes_install_script() {
+        let _guard = env_lock().lock().unwrap();
+        env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
+        let repo_dir = tempdir().unwrap();
+        let scripts_dir = repo_dir.path().join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        let script_path = scripts_dir.join("install_ros2.sh");
+        fs::write(&script_path, b"#!/bin/bash\nexit 0\n").unwrap();
+        let install_dir = tempdir().unwrap();
+        let systemd_dir = tempdir().unwrap();
+        let layout = Layout::new(
+            repo_dir.path().into(),
+            install_dir.path().into(),
+            systemd_dir.path().into(),
+        );
+        let runner = MockRunner::default();
+        let psh = Psh::new(layout, runner.clone());
+
+        let mut args = Ros2Args::default();
+        args.script = Some(script_path.clone());
+        args.distro = Some("jazzy".to_string());
+
+        let result = psh.install_ros2(&args);
+        assert!(result.is_ok(), "install_ros2 should execute successfully");
+
+        let commands = runner.commands();
+        assert_eq!(commands.len(), 1);
+        let command = &commands[0];
+        assert_eq!(command.program, "bash");
+        assert!(command
+            .args
+            .iter()
+            .any(|arg| arg == script_path.to_string_lossy().as_ref()));
+        env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
     }
 }
