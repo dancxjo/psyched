@@ -2,7 +2,7 @@
 
 # Default ROS 2 distribution
 ROS_DISTRO ?= kilted
-WORKSPACE_PATH ?= /opt/psyched
+WORKSPACE_PATH ?= $HOME/psyched
 LOCAL_WORKSPACE := $(CURDIR)
 SOURCE_DIR ?= $(LOCAL_WORKSPACE)/src
 

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const REPO_URL: &str = "https://github.com/dancxjo/psyched.git";
-const DEFAULT_REPO_PATH: &str = "/opt/psyched";
+const DEFAULT_REPO_PATH: &str = "$HOME/psyched";
 const DEFAULT_SYSTEM_INSTALL_DIR: &str = "/usr/bin";
 const DEFAULT_INSTALL_SUBDIR: &str = ".local/bin";
 const DEFAULT_SYSTEMD_DIR: &str = "/etc/systemd/system";
