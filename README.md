@@ -30,7 +30,7 @@ cargo run -- install
 cargo run -- update
 ```
 
-By default, `psh` manages a checkout of this repository in `$HOME/psyched` and installs
+By default, `psh` manages a checkout of this repository in `/opt/psyched` and installs
 its binary into `~/.local/bin`. Set the `PSH_REPO_DIR` and `PSH_INSTALL_DIR`
 environment variables to override these locations.
 
@@ -107,7 +107,7 @@ The existing Makefile remains available for compatibility. It mirrors the legacy
 workflows for situations where `psh` is unavailable. The important targets are:
 
 - `make ros2` — Install ROS 2 using the Debian packages
-- `make workspace` — Create and build the ROS workspace at `$HOME/psyched`
+- `make workspace` — Create and build the ROS workspace at `/opt/psyched`
 - `make env` — Print environment setup instructions
 - `make build` — Install dependencies and rebuild the workspace
 - `make clean` — Remove build artefacts

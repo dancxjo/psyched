@@ -3,7 +3,7 @@
 
 # Default values
 ROS_DISTRO=${ROS_DISTRO:-jazzy}
-WORKSPACE_PATH=${WORKSPACE_PATH:-$HOME/psyched}
+WORKSPACE_PATH=${WORKSPACE_PATH:-/opt/psyched}
 
 echo "Setting up ROS2 environment..."
 echo "ROS_DISTRO: $ROS_DISTRO"

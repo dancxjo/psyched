@@ -14,7 +14,7 @@ fi
 # Compile psh in release mode
 cargo build --release
 
-# Install the compiled binary
+# Install the compiled binary (will attempt system path then fallback to ~/.local/bin)
 cargo run -- install
 
 echo "psh installed successfully."

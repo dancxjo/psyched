@@ -1,7 +1,7 @@
 #!/bin/bash
 # Development script for psyched framework
 
-WORKSPACE_PATH=${WORKSPACE_PATH:-$HOME/psyched}
+WORKSPACE_PATH=${WORKSPACE_PATH:-/opt/psyched}
 
 echo "Psyched Framework Development Helper"
 echo "===================================="

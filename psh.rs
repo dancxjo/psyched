@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const REPO_URL: &str = "https://github.com/dancxjo/psyched.git";
-const DEFAULT_REPO_PATH: &str = "$HOME/psyched";
+const DEFAULT_REPO_PATH: &str = "/opt/psyched";
 const DEFAULT_SYSTEM_INSTALL_DIR: &str = "/usr/bin";
 const DEFAULT_INSTALL_SUBDIR: &str = ".local/bin";
 const DEFAULT_SYSTEMD_DIR: &str = "/etc/systemd/system";
@@ -358,12 +358,67 @@ impl<R: CommandRunner> Psh<R> {
                 );
             }
         } else {
+            // Ensure parent directory exists; elevate with sudo if needed
             if let Some(parent) = self.layout.repo_path.parent() {
                 if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .with_context(|| format!("unable to create {}", parent.display()))?;
+                    match fs::create_dir_all(parent) {
+                        Ok(()) => {}
+                        Err(err) => {
+                            if err.kind() == io::ErrorKind::PermissionDenied {
+                                self.runner.run(
+                                    &CommandSpec::new("sudo").args([
+                                        "mkdir".into(),
+                                        "-p".into(),
+                                        parent.to_string_lossy().into(),
+                                    ]),
+                                )?;
+                            } else {
+                                return Err(err).with_context(|| {
+                                    format!("unable to create {}", parent.display())
+                                });
+                            }
+                        }
+                    }
                 }
             }
+
+            // Ensure target repo directory exists and is writable by current user
+            if !self.layout.repo_path.exists() {
+                match fs::create_dir_all(&self.layout.repo_path) {
+                    Ok(()) => {}
+                    Err(err) => {
+                        if err.kind() == io::ErrorKind::PermissionDenied {
+                            let path_str = self.layout.repo_path.to_string_lossy().to_string();
+                            self.runner.run(
+                                &CommandSpec::new("sudo").args([
+                                    "mkdir".into(),
+                                    "-p".into(),
+                                    path_str.clone(),
+                                ]),
+                            )?;
+                            let user = env::var("USER").unwrap_or_else(|_| "root".to_string());
+                            let owner = format!("{user}:{user}");
+                            self.runner.run(
+                                &CommandSpec::new("sudo").args([
+                                    "chown".into(),
+                                    "-R".into(),
+                                    owner,
+                                    path_str,
+                                ]),
+                            )?;
+                        } else {
+                            return Err(err).with_context(|| {
+                                format!(
+                                    "unable to create {}",
+                                    self.layout.repo_path.display()
+                                )
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Clone repository into the target directory (empty directory is acceptable)
             self.runner.run(
                 &CommandSpec::new("git")
                     .arg("clone")
