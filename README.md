@@ -10,22 +10,27 @@ An experimental robot framework built on ROS2 using the ament build system.
 
 ### Installation and Setup
 
-1. **Install ROS2 Jazzy** (or your preferred distribution):
+1. **Check current status** (optional):
+   ```bash
+   ./scripts/status.sh
+   ```
+
+2. **Install ROS2 Jazzy** (or your preferred distribution):
    ```bash
    make ros2
    ```
 
-2. **Create and setup workspace**:
+3. **Create and setup workspace**:
    ```bash
    make workspace
    ```
 
-3. **Build the workspace**:
+4. **Build the workspace**:
    ```bash
    make build
    ```
 
-4. **Source the environment**:
+5. **Source the environment**:
    ```bash
    # Option 1: View source commands
    make env
@@ -72,6 +77,7 @@ ros2 launch psyched psyched_launch.py
 
 - `scripts/setup_env.sh` - Source ROS2 and workspace environment
 - `scripts/dev.sh` - Development helper (build, test, clean)
+- `scripts/status.sh` - Check workspace and ROS2 installation status
 
 ## Package Structure
 
