@@ -115,6 +115,7 @@ impl CommandSpec {
         self
     }
 
+    #[allow(dead_code)]
     fn args<I, S>(mut self, args: I) -> Self
     where
         I: IntoIterator<Item = S>,
