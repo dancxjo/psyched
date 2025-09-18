@@ -405,10 +405,7 @@ impl<R: CommandRunner> Psh<R> {
                             )?;
                         } else {
                             return Err(err).with_context(|| {
-                                format!(
-                                    "unable to create {}",
-                                    self.layout.repo_path.display()
-                                )
+                                format!("unable to create {}", self.layout.repo_path.display())
                             });
                         }
                     }
@@ -599,9 +596,12 @@ impl<R: CommandRunner> Psh<R> {
 
         if is_tool_available("systemctl") {
             let service = FOOT_SERVICE_NAME;
-            let _ = self
-                .runner
-                .run(&CommandSpec::new("systemctl").arg("disable").arg("--now").arg(service));
+            let _ = self.runner.run(
+                &CommandSpec::new("systemctl")
+                    .arg("disable")
+                    .arg("--now")
+                    .arg(service),
+            );
         }
 
         let service_path = self.layout.service_path(FOOT_SERVICE_NAME);
@@ -640,8 +640,12 @@ impl<R: CommandRunner> Psh<R> {
 
         self.runner
             .run(&CommandSpec::new("systemctl").arg("daemon-reload"))?;
-        self.runner
-            .run(&CommandSpec::new("systemctl").arg("enable").arg("--now").arg(FOOT_SERVICE_NAME))?;
+        self.runner.run(
+            &CommandSpec::new("systemctl")
+                .arg("enable")
+                .arg("--now")
+                .arg(FOOT_SERVICE_NAME),
+        )?;
         println!(
             "Foot module service installed at {} and enabled via systemd.",
             service_path.display()
@@ -916,12 +920,15 @@ mod tests {
         let result = psh.install();
         assert!(result.is_ok(), "install should succeed with fallback");
 
-        let fallback_path = home_dir
-            .path()
-            .join(DEFAULT_INSTALL_SUBDIR)
-            .join("psh");
-        assert!(fallback_path.exists(), "fallback binary should be installed");
-        assert!(!primary_dir.join("psh").exists(), "primary path should remain untouched");
+        let fallback_path = home_dir.path().join(DEFAULT_INSTALL_SUBDIR).join("psh");
+        assert!(
+            fallback_path.exists(),
+            "fallback binary should be installed"
+        );
+        assert!(
+            !primary_dir.join("psh").exists(),
+            "primary path should remain untouched"
+        );
         let contents = fs::read(fallback_path).unwrap();
         assert_eq!(contents, b"fallback binary");
 
@@ -983,7 +990,7 @@ mod tests {
         let _guard = env_lock().lock().unwrap();
         env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
         let repo_dir = tempdir().unwrap();
-        let scripts_dir = repo_dir.path().join("scripts");
+        let scripts_dir = repo_dir.path().join("tools");
         fs::create_dir_all(&scripts_dir).unwrap();
         let script_path = scripts_dir.join("install_ros2.sh");
         fs::write(&script_path, b"#!/bin/bash\nexit 0\n").unwrap();
