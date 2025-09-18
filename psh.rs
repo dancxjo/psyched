@@ -366,11 +366,10 @@ impl<R: CommandRunner> Psh<R> {
                         Err(err) => {
                             if err.kind() == io::ErrorKind::PermissionDenied {
                                 self.runner.run(
-                                    &CommandSpec::new("sudo").args([
-                                        "mkdir".into(),
-                                        "-p".into(),
-                                        parent.to_string_lossy().into(),
-                                    ]),
+                                    &CommandSpec::new("sudo")
+                                        .arg("mkdir")
+                                        .arg("-p")
+                                        .arg(parent.to_string_lossy().to_string()),
                                 )?;
                             } else {
                                 return Err(err).with_context(|| {
@@ -390,21 +389,19 @@ impl<R: CommandRunner> Psh<R> {
                         if err.kind() == io::ErrorKind::PermissionDenied {
                             let path_str = self.layout.repo_path.to_string_lossy().to_string();
                             self.runner.run(
-                                &CommandSpec::new("sudo").args([
-                                    "mkdir".into(),
-                                    "-p".into(),
-                                    path_str.clone(),
-                                ]),
+                                &CommandSpec::new("sudo")
+                                    .arg("mkdir")
+                                    .arg("-p")
+                                    .arg(path_str.clone()),
                             )?;
                             let user = env::var("USER").unwrap_or_else(|_| "root".to_string());
                             let owner = format!("{user}:{user}");
                             self.runner.run(
-                                &CommandSpec::new("sudo").args([
-                                    "chown".into(),
-                                    "-R".into(),
-                                    owner,
-                                    path_str,
-                                ]),
+                                &CommandSpec::new("sudo")
+                                    .arg("chown")
+                                    .arg("-R")
+                                    .arg(owner)
+                                    .arg(path_str),
                             )?;
                         } else {
                             return Err(err).with_context(|| {
@@ -604,7 +601,7 @@ impl<R: CommandRunner> Psh<R> {
             let service = FOOT_SERVICE_NAME;
             let _ = self
                 .runner
-                .run(&CommandSpec::new("systemctl").args(["disable", "--now", service]));
+                .run(&CommandSpec::new("systemctl").arg("disable").arg("--now").arg(service));
         }
 
         let service_path = self.layout.service_path(FOOT_SERVICE_NAME);
@@ -642,12 +639,9 @@ impl<R: CommandRunner> Psh<R> {
             .with_context(|| format!("unable to write {}", service_path.display()))?;
 
         self.runner
-            .run(&CommandSpec::new("systemctl").args(["daemon-reload"]))?;
-        self.runner.run(&CommandSpec::new("systemctl").args([
-            "enable",
-            "--now",
-            FOOT_SERVICE_NAME,
-        ]))?;
+            .run(&CommandSpec::new("systemctl").arg("daemon-reload"))?;
+        self.runner
+            .run(&CommandSpec::new("systemctl").arg("enable").arg("--now").arg(FOOT_SERVICE_NAME))?;
         println!(
             "Foot module service installed at {} and enabled via systemd.",
             service_path.display()
