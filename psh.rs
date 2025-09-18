@@ -38,6 +38,8 @@ enum Commands {
     Build,
     /// Clone, build, and install the utility in one go
     Update,
+    /// Print environment sourcing instructions for the workspace
+    Env,
     /// Provision ROS 2 using the bundled installer script
     Ros2(Ros2Args),
     /// Remove the installed utility and the cloned repository
@@ -442,6 +444,23 @@ impl<R: CommandRunner> Psh<R> {
         Ok(())
     }
 
+    fn env(&self) -> Result<()> {
+        let distro = ros_distro();
+        let repo = self.layout.repo_path.display();
+
+        println!("To configure a shell for the Psyched workspace, run:");
+        println!("  source /etc/profile.d/ros2-defaults.sh");
+        println!("  source /opt/ros/{distro}/setup.bash");
+        println!("  source {repo}/install/setup.bash");
+        println!();
+        println!("To persist this configuration:");
+        println!("  echo 'source /etc/profile.d/ros2-defaults.sh' >> ~/.bashrc");
+        println!("  echo 'source /opt/ros/{distro}/setup.bash' >> ~/.bashrc");
+        println!("  echo 'source {repo}/install/setup.bash' >> ~/.bashrc");
+
+        Ok(())
+    }
+
     fn install_ros2(&self, args: &Ros2Args) -> Result<()> {
         ensure_tool(
             "bash",
@@ -572,8 +591,7 @@ impl<R: CommandRunner> Psh<R> {
 
         let distro = ros_distro();
         let script = format!(
-            "set -euo pipefail\nsource /opt/ros/{distro}/setup.bash\ncd {repo}\nrosdep install -i --from-path src --rosdistro {distro} -y\ncolcon build --symlink-install\n",
-            repo = self.layout.repo_path.display()
+            "set -euo pipefail\nsource /opt/ros/{distro}/setup.bash\nrosdep install -i --from-path src --rosdistro {distro} -y\ncolcon build --symlink-install\ncolcon build --symlink-install --install-base install\n",
         );
         self.runner.run(
             &CommandSpec::new("bash")
@@ -581,10 +599,21 @@ impl<R: CommandRunner> Psh<R> {
                 .arg(script)
                 .cwd(&self.layout.repo_path),
         )?;
+
+        self.env()?;
         Ok(())
     }
 
     fn foot_teardown(&self) -> Result<()> {
+        for artifact in ["build", "install", "log"] {
+            let path = self.layout.repo_path.join(artifact);
+            if path.exists() {
+                fs::remove_dir_all(&path)
+                    .with_context(|| format!("unable to remove {}", path.display()))?;
+                println!("Removed {}", path.display());
+            }
+        }
+
         let source_dir = self.layout.repo_path.join("src");
         for dir in ["create_robot", "libcreate"] {
             let path = source_dir.join(dir);
@@ -778,6 +807,7 @@ fn run() -> Result<()> {
         Commands::Clone => psh.clone_repo(),
         Commands::Build => psh.build(),
         Commands::Update => psh.update(),
+        Commands::Env => psh.env(),
         Commands::Ros2(args) => psh.install_ros2(&args),
         Commands::Remove => psh.remove(),
         Commands::Host { command } => match command {
@@ -966,6 +996,70 @@ mod tests {
         assert!(commands
             .iter()
             .any(|cmd| cmd.program == "git" && cmd.args.contains(&LIBCREATE_REPO.to_string())));
+
+        let script_cmd = commands
+            .iter()
+            .find(|cmd| cmd.program == "bash")
+            .expect("expected setup script to run");
+        assert_eq!(
+            script_cmd.cwd.as_ref().map(|p| p.as_path()),
+            Some(repo_dir.path())
+        );
+        let script_body = script_cmd
+            .args
+            .get(1)
+            .expect("bash -lc should include script body");
+        assert!(script_body.contains("rosdep install"));
+        assert!(script_body.contains("colcon build --symlink-install"));
+        assert!(script_body.contains("colcon build --symlink-install --install-base install"));
+        env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
+    }
+
+    #[test]
+    fn foot_teardown_removes_workspace_artifacts() {
+        let _guard = env_lock().lock().unwrap();
+        env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
+
+        let repo_dir = tempdir().unwrap();
+        let install_dir = tempdir().unwrap();
+        let systemd_dir = tempdir().unwrap();
+
+        // Prepare workspace artefacts that should be cleared during teardown.
+        for artifact in ["build", "install", "log"] {
+            let path = repo_dir.path().join(artifact);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(path.join("dummy"), b"data").unwrap();
+        }
+
+        let source_dir = repo_dir.path().join("src");
+        let create_robot_dir = source_dir.join("create_robot");
+        let libcreate_dir = source_dir.join("libcreate");
+        fs::create_dir_all(&create_robot_dir).unwrap();
+        fs::write(create_robot_dir.join("README.md"), b"create").unwrap();
+        fs::create_dir_all(&libcreate_dir).unwrap();
+        fs::write(libcreate_dir.join("README.md"), b"libcreate").unwrap();
+
+        let layout = Layout::new(
+            repo_dir.path().into(),
+            install_dir.path().into(),
+            systemd_dir.path().into(),
+        );
+        let service_path = layout.service_path(FOOT_SERVICE_NAME);
+        fs::create_dir_all(service_path.parent().unwrap()).unwrap();
+        fs::write(&service_path, b"[Unit]").unwrap();
+
+        let runner = MockRunner::default();
+        let psh = Psh::new(layout, runner);
+
+        psh.foot_teardown().unwrap();
+
+        for artifact in ["build", "install", "log"] {
+            assert!(!repo_dir.path().join(artifact).exists());
+        }
+        assert!(!create_robot_dir.exists());
+        assert!(!libcreate_dir.exists());
+        assert!(!service_path.exists());
+
         env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
     }
 

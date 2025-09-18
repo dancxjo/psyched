@@ -3,6 +3,10 @@ build/
 install/
 log/
 
+# External workspace sources
+src/create_robot/
+src/libcreate/
+
 # Python cache
 __pycache__/
 *.pyc
