@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
-# Default ROS2 distribution
-ROS_DISTRO ?= jazzy
+# Default ROS 2 distribution
+ROS_DISTRO ?= kilted
 WORKSPACE_PATH ?= /opt/psyched
 
 .PHONY: help ros2 workspace env build clean
@@ -9,31 +9,50 @@ WORKSPACE_PATH ?= /opt/psyched
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  ros2      - Install ROS2 $(ROS_DISTRO) on the system"
+	@echo "  ros2      - Install ROS 2 $(ROS_DISTRO) on the system"
 	@echo "  workspace - Create and setup workspace at $(WORKSPACE_PATH)"
-	@echo "  env       - Source ROS2 and workspace environment"
+	@echo "  env       - Source ROS 2 and workspace environment"
 	@echo "  build     - Install dependencies and build the workspace"
 	@echo "  clean     - Clean build artifacts"
 	@echo ""
 	@echo "Environment variables:"
-	@echo "  ROS_DISTRO      - ROS2 distribution (default: $(ROS_DISTRO))"
+	@echo "  ROS_DISTRO      - ROS 2 distribution (default: $(ROS_DISTRO))"
 	@echo "  WORKSPACE_PATH  - Workspace location (default: $(WORKSPACE_PATH))"
 
-# Install ROS2
+# Install ROS 2 using the official Debian packages for Ubuntu
 ros2:
-	@echo "Installing ROS2 $(ROS_DISTRO)..."
-	@if [ ! -f /etc/apt/sources.list.d/ros2.list ]; then \
-		sudo apt update && sudo apt install -y curl gnupg2 lsb-release; \
-		curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg; \
-		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $$(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null; \
-		sudo apt update; \
-	fi
-	@sudo apt install -y ros-$(ROS_DISTRO)-desktop python3-colcon-common-extensions python3-rosdep
-	@if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then \
-		sudo rosdep init; \
-	fi
-	@rosdep update
-	@echo "ROS2 $(ROS_DISTRO) installation completed!"
+	@set -e; \
+	echo "Provisioning ROS 2 $(ROS_DISTRO) using Debian packages..."; \
+	sudo apt update; \
+	sudo apt install -y locales; \
+	sudo locale-gen en_US en_US.UTF-8; \
+	sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8; \
+	export LANG=en_US.UTF-8; \
+	locale; \
+	sudo apt install -y software-properties-common; \
+	sudo add-apt-repository -y universe; \
+	sudo apt update; \
+	sudo apt install -y curl ca-certificates; \
+	ROS_APT_SOURCE_VERSION=$$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $$4}'); \
+	curl -fsSL -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/$${ROS_APT_SOURCE_VERSION}/ros2-apt-source_$${ROS_APT_SOURCE_VERSION}.$$(. /etc/os-release && echo $$VERSION_CODENAME)_all.deb"; \
+	sudo dpkg -i /tmp/ros2-apt-source.deb; \
+	sudo apt update; \
+	sudo apt upgrade -y; \
+	sudo apt install -y ros-$(ROS_DISTRO)-desktop ros-$(ROS_DISTRO)-rmw-cyclonedds-cpp ros-dev-tools python3-colcon-common-extensions; \
+	if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then \
+	        sudo rosdep init; \
+	fi; \
+	rosdep update; \
+	sudo tee /etc/profile.d/ros2-defaults.sh >/dev/null <<'EOF'; \
+# ROS 2 defaults provisioned by make ros2 \
+export LANG=en_US.UTF-8 \
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+export ROS_DOMAIN_ID=0 \
+export ROS_LOCALHOST_ONLY=0 \
+EOF \
+	sudo chmod 644 /etc/profile.d/ros2-defaults.sh; \
+	echo "ROS 2 $(ROS_DISTRO) installation completed with Cyclone DDS as the default RMW."; \
+	echo "Source /opt/ros/$(ROS_DISTRO)/setup.bash to begin using ROS 2."
 
 # Create workspace
 workspace:
@@ -49,9 +68,12 @@ workspace:
 # Source environment
 env:
 	@echo "To source the environment, run:"
-	@echo "source /opt/ros/$(ROS_DISTRO)/setup.bash && source $(WORKSPACE_PATH)/install/setup.bash"
+	@echo "source /etc/profile.d/ros2-defaults.sh"
+	@echo "source /opt/ros/$(ROS_DISTRO)/setup.bash"
+	@echo "source $(WORKSPACE_PATH)/install/setup.bash"
 	@echo ""
 	@echo "Or add to your ~/.bashrc:"
+	@echo "echo 'source /etc/profile.d/ros2-defaults.sh' >> ~/.bashrc"
 	@echo "echo 'source /opt/ros/$(ROS_DISTRO)/setup.bash' >> ~/.bashrc"
 	@echo "echo 'source $(WORKSPACE_PATH)/install/setup.bash' >> ~/.bashrc"
 
@@ -66,6 +88,6 @@ build: workspace
 clean:
 	@echo "Cleaning build artifacts..."
 	@if [ -d $(WORKSPACE_PATH) ]; then \
-		cd $(WORKSPACE_PATH) && rm -rf build install log; \
+	        cd $(WORKSPACE_PATH) && rm -rf build install log; \
 	fi
 	@echo "Clean completed!"
