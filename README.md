@@ -1,90 +1,95 @@
 # Psyched - Experimental Robot Framework
 
-An experimental robot framework built on ROS2 using the ament build system.
+Psyched is an experimental robot framework built on ROS 2. The repository now ships
+with **psh** (the *psyched shell*), a single-file Rust CLI that replaces the top-level
+Makefile workflows and makes day-to-day development and provisioning less painful.
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
-- Ubuntu 20.04/22.04 or compatible Linux distribution
-- sudo privileges for system installation
+Before running `psh`, make sure the following tools are available:
 
-### Installation and Setup
+- [Git](https://git-scm.com/) for cloning repositories
+- [Rust toolchain](https://rustup.rs/) providing `cargo` for building the CLI
+- `rosdep`, `colcon` and a ROS 2 distribution (defaults to `kilted`)
+- `systemd` for managing long-running module services (or run module launchers manually)
 
-1. **Install ROS2 Jazzy** (or your preferred distribution):
-   ```bash
-   make ros2
-   ```
+If you are missing a tool, `psh` will surface an actionable error message and a link to
+the recommended installation instructions.
 
-2. **Create and setup workspace**:
-   ```bash
-   make workspace
-   ```
-
-3. **Build the workspace**:
-   ```bash
-   make build
-   ```
-
-4. **Source the environment**:
-   ```bash
-   # Option 1: View source commands
-   make env
-   
-   # Option 2: Use helper script
-   source scripts/setup_env.sh
-   
-   # Option 3: Manual sourcing
-   source /opt/ros/jazzy/setup.bash
-   source /opt/psyched/install/setup.bash
-   ```
-
-### Usage
-
-After sourcing the environment, you can run the example nodes:
+## Installing and Updating `psh`
 
 ```bash
-# Run Python node
-ros2 run psyched psyched_node.py
+# Build in release mode from the repository root
+cargo build --release
 
-# Run C++ node  
-ros2 run psyched psyched_cpp_node
+# Install the compiled binary into ~/.local/bin
+cargo run -- install
 
-# Launch both nodes together
-ros2 launch psyched psyched_launch.py
+# Or perform the full clone → build → install pipeline
+cargo run -- update
 ```
 
-## Development
+By default, `psh` manages a checkout of this repository in `/opt/psyched` and installs
+its binary into `~/.local/bin`. Set the `PSH_REPO_DIR` and `PSH_INSTALL_DIR`
+environment variables if you prefer alternative locations.
 
-### Makefile Targets
+## Hosts and Modules
 
-- `make ros2` - Install ROS2 on the system (default: Jazzy)
-- `make workspace` - Create workspace at `/opt/psyched` 
-- `make env` - Show environment setup commands
-- `make build` - Install dependencies and build workspace
-- `make clean` - Clean build artifacts
+`psh` keeps declarative host definitions under [`hosts/`](hosts/). Each host is a TOML
+file that lists the modules that should be prepared and optionally launched on that
+machine. Two starter configurations are provided:
 
-### Environment Variables
+- `cerebellum.toml` — provisions and launches the `foot` module
+- `forebrain.toml` — provisions the `foot` module without enabling the service
 
-- `ROS_DISTRO` - ROS2 distribution (default: jazzy)
-- `WORKSPACE_PATH` - Workspace location (default: /opt/psyched)
+Apply a host configuration with:
 
-### Helper Scripts
+```bash
+psh host apply cerebellum
+```
 
-- `scripts/setup_env.sh` - Source ROS2 and workspace environment
-- `scripts/dev.sh` - Development helper (build, test, clean)
+### Module Lifecycle Commands
 
-## Package Structure
+Modules encapsulate ROS packages and their supporting services. The first module is the
+`foot` module, which automates the `create_robot` bring-up workflow. Interact with
+modules directly using:
+
+```bash
+# Clone dependencies and build the workspace for the module
+psh module setup foot
+
+# Remove module artefacts and disable its service
+psh module remove foot
+
+# Enable and start the module's systemd service
+psh module launch foot
+```
+
+The launch command writes a `psyched-foot.service` unit file to `/etc/systemd/system`
+and enables it so that the robot bring-up is executed automatically at boot.
+
+## Workspace Layout
 
 ```
 psyched/
-├── src/                    # ROS2 source packages
-│   └── psyched/           # Main psyched package
-│       ├── package.xml    # Package metadata
-│       ├── CMakeLists.txt # Build configuration
-│       ├── src/           # C++ source files
-│       ├── scripts/       # Python nodes
-│       └── launch/        # Launch files
-├── scripts/               # Top-level utility scripts
-├── Makefile              # Build automation
-└── README.md             # This file
+├── hosts/                 # Host configuration files consumed by psh
+├── psh.rs                 # Single-file Rust CLI source
+├── Cargo.toml             # Cargo metadata for the CLI
+├── Makefile               # Legacy targets (now powered by psh)
+├── scripts/               # Helper scripts for manual workflows
+└── src/                   # ROS 2 packages (ament build system)
 ```
+
+## Legacy Makefile Targets
+
+The existing Makefile remains available for compatibility. It mirrors the legacy
+workflows for situations where `psh` is unavailable. The important targets are:
+
+- `make ros2` — Install ROS 2 using the Debian packages
+- `make workspace` — Create and build the ROS workspace at `/opt/psyched`
+- `make env` — Print environment setup instructions
+- `make build` — Install dependencies and rebuild the workspace
+- `make clean` — Remove build artefacts
+
+However, new development should happen through the `psh` CLI to benefit from the
+consistent UX, automated dependency checks and host/module abstractions.

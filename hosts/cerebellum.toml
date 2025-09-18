@@ -1,0 +1,6 @@
+name = "cerebellum"
+
+[[modules]]
+name = "foot"
+setup = true
+launch = true
