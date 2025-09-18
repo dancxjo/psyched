@@ -47,7 +47,7 @@ curl -fsSL -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ro
 "${SUDO[@]}" apt upgrade -y
 
 "${SUDO[@]}" apt install -y \
-  ros-${ROS_DISTRO}-desktop \
+  ros-${ROS_DISTRO}-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   ros-dev-tools \
   python3-colcon-common-extensions

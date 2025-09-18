@@ -52,7 +52,7 @@ ros2:
 	sudo dpkg -i /tmp/ros2-apt-source.deb; \
 	sudo apt update; \
 	sudo apt upgrade -y; \
-	sudo apt install -y ros-$(ROS_DISTRO)-desktop ros-$(ROS_DISTRO)-rmw-cyclonedds-cpp ros-dev-tools python3-colcon-common-extensions; \
+	sudo apt install -y ros-$(ROS_DISTRO)-base ros-$(ROS_DISTRO)-rmw-cyclonedds-cpp ros-dev-tools python3-colcon-common-extensions; \
 	if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then \
 	        sudo rosdep init; \
 	fi; \
