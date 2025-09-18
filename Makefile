@@ -3,8 +3,17 @@
 # Default ROS 2 distribution
 ROS_DISTRO ?= kilted
 WORKSPACE_PATH ?= /opt/psyched
+LOCAL_WORKSPACE := $(CURDIR)
+SOURCE_DIR ?= $(LOCAL_WORKSPACE)/src
 
-.PHONY: help ros2 workspace env build clean
+CREATE_ROBOT_REPO ?= https://github.com/autonomylab/create_robot.git
+CREATE_ROBOT_PATH ?= $(SOURCE_DIR)/create_robot
+
+LIBCREATE_REPO ?= https://github.com/revyos-ros/libcreate.git
+LIBCREATE_BRANCH ?= fix-std-string
+LIBCREATE_PATH ?= $(SOURCE_DIR)/libcreate
+
+.PHONY: help ros2 workspace env build clean create_robot_clone create_robot_build create_robot_install create_robot_bringup
 
 # Default target
 help:
@@ -14,10 +23,15 @@ help:
 	@echo "  env       - Source ROS 2 and workspace environment"
 	@echo "  build     - Install dependencies and build the workspace"
 	@echo "  clean     - Clean build artifacts"
+	@echo "  create_robot_clone   - Clone create_robot and libcreate sources into $(SOURCE_DIR)"
+	@echo "  create_robot_build   - Install dependencies and build the local workspace with create_robot"
+	@echo "  create_robot_install - Build the workspace and source the local setup"
+	@echo "  create_robot_bringup - Launch the Create robot bringup"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  ROS_DISTRO      - ROS 2 distribution (default: $(ROS_DISTRO))"
 	@echo "  WORKSPACE_PATH  - Workspace location (default: $(WORKSPACE_PATH))"
+	@echo "  SOURCE_DIR      - Source tree used for local builds (default: $(SOURCE_DIR))"
 
 # Install ROS 2 using the official Debian packages for Ubuntu
 ros2:
@@ -91,3 +105,40 @@ clean:
 	        cd $(WORKSPACE_PATH) && rm -rf build install log; \
 	fi
 	@echo "Clean completed!"
+
+create_robot_clone:
+	@set -e; \
+	mkdir -p $(SOURCE_DIR); \
+	if [ ! -d $(CREATE_ROBOT_PATH)/.git ]; then \
+	        echo "Cloning create_robot into $(CREATE_ROBOT_PATH)..."; \
+	        git clone $(CREATE_ROBOT_REPO) $(CREATE_ROBOT_PATH); \
+	else \
+	        echo "create_robot already cloned at $(CREATE_ROBOT_PATH)."; \
+	fi; \
+	if [ ! -d $(LIBCREATE_PATH)/.git ]; then \
+	        echo "Cloning libcreate ($(LIBCREATE_BRANCH)) into $(LIBCREATE_PATH)..."; \
+	        git clone --branch $(LIBCREATE_BRANCH) --single-branch $(LIBCREATE_REPO) $(LIBCREATE_PATH); \
+	else \
+	        echo "libcreate already cloned at $(LIBCREATE_PATH)."; \
+	fi
+
+create_robot_build: create_robot_clone
+	@set -e; \
+	echo "Installing dependencies for create_robot workspace..."; \
+	. /opt/ros/$(ROS_DISTRO)/setup.bash; \
+	cd $(LOCAL_WORKSPACE) && rosdep install -i --from-path src --rosdistro $(ROS_DISTRO) -y; \
+	cd $(LOCAL_WORKSPACE) && colcon build --symlink-install
+
+create_robot_install: create_robot_build
+	@set -e; \
+	echo "Sourcing local workspace environment..."; \
+	. /opt/ros/$(ROS_DISTRO)/setup.bash; \
+	cd $(LOCAL_WORKSPACE) && . install/setup.bash; \
+	echo "Local environment configured for this shell. To persist, run 'source $(LOCAL_WORKSPACE)/install/setup.bash' in your terminal."
+
+create_robot_bringup: create_robot_install
+	@set -e; \
+	echo "Launching create_bringup create_1.launch..."; \
+	. /opt/ros/$(ROS_DISTRO)/setup.bash; \
+	cd $(LOCAL_WORKSPACE) && . install/setup.bash; \
+	ros2 launch create_bringup create_1.launch
