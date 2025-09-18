@@ -36,6 +36,8 @@ enum Commands {
     Build,
     /// Clone, build, and install the utility in one go
     Update,
+    /// Provision ROS 2 using the bundled installer script
+    Ros2(Ros2Args),
     /// Remove the installed utility and the cloned repository
     Remove,
     /// Manage host configurations
@@ -664,6 +666,7 @@ fn run() -> Result<()> {
         Commands::Clone => psh.clone_repo(),
         Commands::Build => psh.build(),
         Commands::Update => psh.update(),
+        Commands::Ros2(args) => psh.install_ros2(&args),
         Commands::Remove => psh.remove(),
         Commands::Host { command } => match command {
             HostCommands::Apply(args) => psh.host_apply(&args.hostname),

@@ -1,4 +1,5 @@
 name = "cerebellum"
+ros2_provision = true
 
 [[modules]]
 name = "foot"
