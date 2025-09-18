@@ -5,11 +5,13 @@ use serde::Deserialize;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const REPO_URL: &str = "https://github.com/dancxjo/psyched.git";
 const DEFAULT_REPO_PATH: &str = "/opt/psyched";
+const DEFAULT_SYSTEM_INSTALL_DIR: &str = "/usr/bin";
 const DEFAULT_INSTALL_SUBDIR: &str = ".local/bin";
 const DEFAULT_SYSTEMD_DIR: &str = "/etc/systemd/system";
 const FOOT_SERVICE_NAME: &str = "psyched-foot.service";
@@ -183,6 +185,7 @@ fn format_command(spec: &CommandSpec) -> String {
 struct Layout {
     repo_path: PathBuf,
     install_dir: PathBuf,
+    install_dir_overridden: bool,
     systemd_dir: PathBuf,
 }
 
@@ -192,9 +195,10 @@ impl Layout {
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from(DEFAULT_REPO_PATH));
 
-        let install_dir = env::var("PSH_INSTALL_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| default_install_dir());
+        let (install_dir, install_dir_overridden) = match env::var("PSH_INSTALL_DIR") {
+            Ok(dir) => (PathBuf::from(dir), true),
+            Err(_) => (default_install_dir(), false),
+        };
 
         let systemd_dir = env::var("PSH_SYSTEMD_DIR")
             .map(PathBuf::from)
@@ -203,15 +207,27 @@ impl Layout {
         Ok(Self {
             repo_path,
             install_dir,
+            install_dir_overridden,
             systemd_dir,
         })
     }
 
     #[cfg(test)]
     fn new(repo_path: PathBuf, install_dir: PathBuf, systemd_dir: PathBuf) -> Self {
+        Self::with_install_dir_source(repo_path, install_dir, systemd_dir, true)
+    }
+
+    #[cfg(test)]
+    fn with_install_dir_source(
+        repo_path: PathBuf,
+        install_dir: PathBuf,
+        systemd_dir: PathBuf,
+        install_dir_overridden: bool,
+    ) -> Self {
         Self {
             repo_path,
             install_dir,
+            install_dir_overridden,
             systemd_dir,
         }
     }
@@ -242,8 +258,21 @@ impl Layout {
 }
 
 fn default_install_dir() -> PathBuf {
+    PathBuf::from(DEFAULT_SYSTEM_INSTALL_DIR)
+}
+
+fn user_install_dir() -> PathBuf {
     let home = env::var("HOME").unwrap_or_else(|_| String::from("/root"));
     PathBuf::from(home).join(DEFAULT_INSTALL_SUBDIR)
+}
+
+fn copy_release_binary(release: &Path, target: &Path) -> io::Result<()> {
+    if let Some(dir) = target.parent() {
+        if !dir.exists() {
+            fs::create_dir_all(dir)?;
+        }
+    }
+    fs::copy(release, target).map(|_| ())
 }
 
 #[derive(Clone, Debug)]
@@ -266,17 +295,46 @@ impl<R: CommandRunner> Psh<R> {
             );
         }
         self.layout.ensure_install_dir()?;
-        let target = self.layout.installed_binary();
-        fs::copy(&release, &target).with_context(|| {
-            format!(
-                "failed to copy {} to {}",
-                release.display(),
-                target.display()
-            )
-        })?;
-        set_executable_permissions(&target)?;
-        println!("Installed {} to {}", release.display(), target.display());
-        Ok(())
+        let primary_target = self.layout.installed_binary();
+        match copy_release_binary(&release, &primary_target) {
+            Ok(()) => {
+                set_executable_permissions(&primary_target)?;
+                println!(
+                    "Installed {} to {}",
+                    release.display(),
+                    primary_target.display()
+                );
+                Ok(())
+            }
+            Err(err)
+                if err.kind() == io::ErrorKind::PermissionDenied
+                    && !self.layout.install_dir_overridden =>
+            {
+                let fallback_dir = user_install_dir();
+                let fallback_target = fallback_dir.join("psh");
+                copy_release_binary(&release, &fallback_target).with_context(|| {
+                    format!(
+                        "failed to copy {} to {}",
+                        release.display(),
+                        fallback_target.display()
+                    )
+                })?;
+                set_executable_permissions(&fallback_target)?;
+                println!(
+                    "Insufficient permissions for {}. Installed {} instead.",
+                    primary_target.display(),
+                    fallback_target.display()
+                );
+                Ok(())
+            }
+            Err(err) => Err::<(), io::Error>(err).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    release.display(),
+                    primary_target.display()
+                )
+            }),
+        }
     }
 
     fn clone_repo(&self) -> Result<()> {
@@ -770,6 +828,59 @@ mod tests {
         assert!(installed.exists());
         let contents = fs::read(installed).unwrap();
         assert_eq!(contents, b"fake binary");
+        env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_without_permissions_falls_back_to_user_dir() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = env_lock().lock().unwrap();
+        env::set_var("PSH_ALLOW_MISSING_DEPENDENCIES", "1");
+
+        let repo_dir = tempdir().unwrap();
+        let systemd_dir = tempdir().unwrap();
+        let restricted_root = tempdir().unwrap();
+        let primary_dir = restricted_root.path().join("bin");
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::set_permissions(&primary_dir, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let layout = Layout::with_install_dir_source(
+            repo_dir.path().into(),
+            primary_dir.clone(),
+            systemd_dir.path().into(),
+            false,
+        );
+
+        let runner = MockRunner::default();
+        let psh = Psh::new(layout.clone(), runner);
+
+        let release = layout.release_binary();
+        fs::create_dir_all(release.parent().unwrap()).unwrap();
+        fs::write(&release, b"fallback binary").unwrap();
+
+        let home_dir = tempdir().unwrap();
+        let original_home = env::var("HOME").ok();
+        env::set_var("HOME", home_dir.path());
+
+        let result = psh.install();
+        assert!(result.is_ok(), "install should succeed with fallback");
+
+        let fallback_path = home_dir
+            .path()
+            .join(DEFAULT_INSTALL_SUBDIR)
+            .join("psh");
+        assert!(fallback_path.exists(), "fallback binary should be installed");
+        assert!(!primary_dir.join("psh").exists(), "primary path should remain untouched");
+        let contents = fs::read(fallback_path).unwrap();
+        assert_eq!(contents, b"fallback binary");
+
+        if let Some(home) = original_home {
+            env::set_var("HOME", home);
+        } else {
+            env::remove_var("HOME");
+        }
         env::remove_var("PSH_ALLOW_MISSING_DEPENDENCIES");
     }
 
