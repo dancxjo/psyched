@@ -223,7 +223,20 @@ class VoiceNode(Node):
         
         # Check for both legacy piper-tts library and piper binary
         aplay_cmd = shutil.which('aplay') if self.get_parameter('aplay').value else None
+        
+        # Try to find piper binary with fallback locations
         piper_binary = shutil.which('piper')
+        if not piper_binary:
+            # Try common user installation locations as fallback
+            fallback_paths = [
+                os.path.expanduser('~/.local/bin/piper'),
+                '/usr/local/bin/piper',
+                '/opt/piper/bin/piper'
+            ]
+            for path in fallback_paths:
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    piper_binary = path
+                    break
         wav_out_dir = self.get_parameter('wav_out_dir').value
         volume = float(self.get_parameter('volume').value)
         length_scale = float(self.get_parameter('length_scale').value)
@@ -286,7 +299,7 @@ class VoiceNode(Node):
             success = False
             
             if piper_binary and os.path.exists(self.model_path) and os.path.exists(self.config_path):
-                success = self._speak_with_subprocess(text, aplay_cmd)
+                success = self._speak_with_subprocess(text, aplay_cmd, piper_binary)
             
             if not success and legacy_voice is not None:
                 success = self._speak_with_legacy(text, legacy_voice, syn_config, wav_out_dir, aplay_cmd)
@@ -302,13 +315,13 @@ class VoiceNode(Node):
             except Exception:
                 pass
 
-    def _speak_with_subprocess(self, text: str, aplay_cmd: str | None) -> bool:
+    def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_binary: str) -> bool:
         """Use subprocess piper binary for efficient speech synthesis."""
         try:
             # Launch Piper to produce RAW PCM to stdout, then pipe into aplay
             piper = subprocess.Popen(
                 [
-                    "piper",
+                    piper_binary,
                     "--model",
                     self.model_path,
                     "--config",
@@ -318,7 +331,7 @@ class VoiceNode(Node):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
             )
-        except FileNotFoundError:
+        except (FileNotFoundError, TypeError):
             return False
             
         if not aplay_cmd:
