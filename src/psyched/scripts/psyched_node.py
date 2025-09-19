@@ -1,1 +1,0 @@
-# moved to packages/psyched/scripts/psyched_node.py

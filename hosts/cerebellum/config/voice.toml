@@ -1,5 +1,5 @@
-engine=piper
-voice=en_US-joe-medium
+engine=espeak
+voice=en-us
 topic=/voice
 interrupt=/voice/interrupt
 resume=/voice/resume

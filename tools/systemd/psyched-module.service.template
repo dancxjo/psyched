@@ -3,7 +3,7 @@ Description=Psyched Module: {{MODULE_NAME}}
 After=network.target
 Wants=network.target
 StartLimitIntervalSec=300
-StartLimitBurst=5
+StartLimitBurst=3
 
 [Service]
 Type=exec
@@ -13,50 +13,27 @@ WorkingDirectory={{REPO_DIR}}
 Environment="HOME={{HOME_DIR}}"
 Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/piper/bin"
 Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
-Environment="VOICE_ENGINE=piper"
+Environment="VOICE_ENGINE=espeak"
+Environment="ESPEAK_VOICE=en-us"
 Environment="PIPER_MODEL=en_US-ryan-high"
-# Optional: set voices dir explicitly (node has same default)
 Environment="PIPER_VOICES_DIR=/opt/piper/voices"
-# Comprehensive pre-start diagnostics
-ExecStartPre=/bin/bash -c 'echo "=== PSYCHED SERVICE DEBUG: {{MODULE_NAME}} ==="'
-ExecStartPre=/bin/bash -c 'echo "User: $(whoami), Home: $HOME, Working Dir: $(pwd)"'
-ExecStartPre=/bin/bash -c 'echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-unset}"'
-ExecStartPre=/bin/bash -c 'echo "VOICE_ENGINE: ${VOICE_ENGINE:-unset}"'
-ExecStartPre=/bin/bash -c 'echo "PIPER_MODEL: ${PIPER_MODEL:-unset}"'
-ExecStartPre=/bin/bash -c 'echo "Checking module launch script..."'
-ExecStartPre=/bin/bash -c 'echo "PATH: $PATH"'
-ExecStartPre=/bin/bash -c 'echo "Piper binary check: $(which piper 2>/dev/null || echo "NOT FOUND IN PATH")"'
-ExecStartPre=/bin/bash -c 'echo "Manual piper check: $([[ -x /usr/bin/piper ]] && echo "/usr/bin/piper EXISTS" || echo "/usr/bin/piper NOT FOUND")"'
-ExecStartPre=/bin/bash -c 'echo "All piper candidates in PATH: $(command -v -a piper 2>/dev/null | tr "\n" " ")"'
-ExecStartPre=/bin/bash -c 'echo "espeak-ng binary check: $(which espeak-ng 2>/dev/null || echo "NOT FOUND IN PATH")"'
-ExecStartPre=/bin/bash -c 'echo "espeak binary check: $(which espeak 2>/dev/null || echo "NOT FOUND IN PATH")"'
-ExecStartPre=/bin/bash -c 'echo "MBROLA voices directory: $(ls -d /usr/share/mbrola* 2>/dev/null | tr "\n" " " || echo "NOT FOUND")"'
-ExecStartPre=/bin/bash -c 'if [[ ! -f "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not found!"; exit 1; fi'
-ExecStartPre=/bin/bash -c 'if [[ ! -x "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not executable!"; exit 1; fi'
-ExecStartPre=/bin/bash -c 'echo "Launch script found and executable"'
-ExecStartPre=/bin/bash -c 'echo "Setting up ROS environment..."'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS environment loaded successfully"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS_DISTRO: ${ROS_DISTRO:-unset}"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "Python executable: $(which python3)"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS installation check: $(ros2 --version 2>/dev/null || echo "ROS2 NOT FOUND")"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "python3 --version: $(python3 --version 2>&1)"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; echo "python -m piper --version: $(python3 -m piper --version 2>&1 || echo FAILED)"'
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; echo "piper --version: $(piper --version 2>&1 || echo FAILED)"'
-ExecStartPre=/bin/bash -c 'echo "=== PRE-START DIAGNOSTICS COMPLETE ==="'
-# Main service start with detailed logging
-ExecStart=/bin/bash -lc 'set -euo pipefail; echo "=== STARTING {{MODULE_NAME}} SERVICE ==="; eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; echo "Environment loaded, executing launch script..."; exec {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh'
-# Post-failure diagnostics
+# Minimal startup validation
+ExecStartPre=/bin/bash -c 'echo "=== STARTING {{MODULE_NAME}} SERVICE ==="'
+ExecStartPre=/bin/bash -c 'if [[ ! -x "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not executable at {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh"; exit 1; fi'
+ExecStartPre=/bin/bash -c 'echo "Launch script validated"'
+# Main service start with minimal overhead using cached environment
+ExecStart=/bin/bash -c 'set -euo pipefail; eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env_cached.sh)" >/dev/null 2>&1; echo "Environment loaded, executing launch script..."; exec {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh'
+# Cleanup on failure
 ExecStopPost=/bin/bash -c 'echo "=== SERVICE {{MODULE_NAME}} STOPPED (exit code: $EXIT_CODE) ==="'
-ExecStopPost=/bin/bash -c 'if [[ ${EXIT_CODE} -ne 0 ]]; then echo "ERROR: Service failed with exit code $EXIT_CODE"; fi'
-Restart=always
-RestartSec=10
+Restart=on-failure
+RestartSec=30
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=psyched-{{MODULE_NAME}}
 
-# Resource limits
-MemoryMax=2G
-CPUQuota=200%
+# Resource limits - reduced to prevent OOM
+MemoryMax=1G
+CPUQuota=100%
 
 # Security settings
 NoNewPrivileges=true

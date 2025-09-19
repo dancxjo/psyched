@@ -20,8 +20,8 @@ if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
 fi
 
-# Engine setup
-ENGINE="${VOICE_ENGINE:-piper}" # piper | espeak
+# Engine setup - default to espeak for reliability
+ENGINE="${VOICE_ENGINE:-espeak}" # espeak | piper
 
 if [[ "${ENGINE}" == "piper" ]]; then
   # Download and setup Piper voice model

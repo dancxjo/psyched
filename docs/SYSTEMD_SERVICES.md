@@ -120,7 +120,7 @@ sudo ./tools/manage_services.sh uninstall-all
 
 ## Host Configuration
 
-Configure which modules should run on each host by creating files in `hosts/[hostname]/enabled/`:
+Configure which modules should run on each host by symlinking the folders in modules to `hosts/[hostname]/enabled/`:
 
 ```
 hosts/

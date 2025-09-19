@@ -24,9 +24,7 @@ sudo apt-get install -y --no-install-recommends git \
     python3-venv \
     python3-pip \
     python3-setuptools \
-    python3-dev \
-    piper \
-    libgtk-3-dev
+    python3-dev
 
 # Do NOT install piper-tts globally; we'll install into the project venv below
 echo "[bootstrap] Skipping global pip install of piper-tts; will install in venv"
