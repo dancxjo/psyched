@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update
+.PHONY: help ros2 build bootstrap update say
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -9,11 +9,13 @@ help:
 	@echo "  build      - Resolve deps with rosdep, colcon build, and re-source env"
 	@echo "  bootstrap  - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo "  update     - git pull then run bootstrap"
+	@echo "  say        - Publish text to /voice topic (usage: make say TEXT=\"Hello world\")"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
 	@echo "  ./modules/foot/setup.sh && make build"
 	@echo "  ./modules/voice/setup.sh && make build"
+	@echo "  make say TEXT=\"Hello, this is a test\""
 
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=kilted
@@ -74,3 +76,19 @@ update:
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
 		echo "[update] Done."'
+
+# Publish text to the /voice topic for text-to-speech
+# Usage:
+#   make say TEXT="Hello world"
+#   make say TEXT="This is a longer message to speak"
+say:
+	@if [ -z "$(TEXT)" ]; then \
+		echo "Error: Please provide TEXT parameter. Usage: make say TEXT=\"Your message here\""; \
+		exit 1; \
+	fi
+	@bash -lc 'set -euo pipefail; \
+		echo "[say] Sourcing ROS environment..."; \
+		eval "$$(SETUP_ENV_MODE=print ./tools/setup_env.sh)"; \
+		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
+		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
+		echo "[say] Message published."'
