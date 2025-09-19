@@ -49,6 +49,40 @@ if [[ -d "$HOST_DIR" ]]; then
     echo "[bootstrap] Building workspace..."
     make build
 
+        # Ensure automatic environment setup in user's .bashrc (idempotent)
+        BASHRC="$HOME/.bashrc"
+        BASHRC_MARK_START="# >>> psyched auto-setup >>>"
+        BASHRC_MARK_END="# <<< psyched auto-setup <<<"
+        AUTO_BLOCK=$(cat <<'BRC'
+# >>> psyched auto-setup >>>
+# Automatically set up ROS 2 and project venv for this repository in interactive shells.
+# This is idempotent and safe if the repo directory moves; adjust PSYCHED_REPO if needed.
+PSYCHED_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+if [ -d "$PSYCHED_REPO" ] && [ -f "$PSYCHED_REPO/tools/setup_env.sh" ]; then
+    # Only run in interactive shells
+    case $- in
+        *i*)
+            if command -v bash >/dev/null 2>&1; then
+                eval "$(SETUP_ENV_MODE=print "$PSYCHED_REPO"/tools/setup_env.sh)"
+            fi
+            ;;
+    esac
+fi
+# <<< psyched auto-setup <<<
+BRC
+)
+
+        if ! grep -Fq "$BASHRC_MARK_START" "$BASHRC" 2>/dev/null; then
+                echo "[bootstrap] Adding auto-setup block to $BASHRC"
+                {
+                    echo "$BASHRC_MARK_START"
+                    echo "$AUTO_BLOCK"
+                    echo "$BASHRC_MARK_END"
+                } >> "$BASHRC"
+        else
+                echo "[bootstrap] Auto-setup block already present in $BASHRC; skipping"
+        fi
+
     # Add launch script to crontab (idempotent)
     LAUNCH_SCRIPT="$REPO_ROOT/tools/launch/launch.sh"
     if [[ -x "$LAUNCH_SCRIPT" || -f "$LAUNCH_SCRIPT" ]]; then
