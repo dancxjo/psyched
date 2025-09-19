@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Foot module setup: clone required repos into the workspace src/ and build via `psh build`.
+# Foot module setup: clone required repos into the workspace src/ and build via `make build`.
 
 REPO_DIR="$(pwd)"
 SOURCE_DIR="${REPO_DIR}/src"
@@ -27,7 +27,7 @@ if [ ! -d "${SOURCE_DIR}/libcreate/.git" ]; then
     git clone --branch "${LIBCREATE_BRANCH}" --single-branch "${LIBCREATE_REPO}" "${SOURCE_DIR}/libcreate"
 fi
 
-# Build the workspace using psh (rosdep + colcon)
-psh build
+# Build the workspace using make (rosdep + colcon)
+make build
 
 echo "Foot module setup complete."

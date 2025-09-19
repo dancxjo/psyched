@@ -31,6 +31,6 @@ if ! python3 -c 'import piper' >/dev/null 2>&1; then
 fi
 
 # Build the workspace
-psh build
+make build
 
 echo "Voice module setup complete."

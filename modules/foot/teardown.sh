@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_DIR="$(pwd)"
 SERVICE_NAME="psyched-foot.service"
-SYSTEMD_DIR="${PSH_SYSTEMD_DIR:-/etc/systemd/system}"
+SYSTEMD_DIR="${SYSTEMD_DIR:-${PSH_SYSTEMD_DIR:-/etc/systemd/system}}"
 SERVICE_PATH="${SYSTEMD_DIR}/${SERVICE_NAME}"
 
 for artifact in build install log; do

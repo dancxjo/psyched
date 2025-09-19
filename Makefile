@@ -5,15 +5,14 @@ SHELL := /bin/bash
 
 help:
 	@echo "Targets:"
-	@echo "  ros2   - Install ROS 2 using tools/install_ros2.sh"
-	@echo "  build  - Resolve deps with rosdep, colcon build, and re-source env"
-	@echo "  bootstrap - Run initial provisioning via tools/provision/bootstrap.sh"
+	@echo "  ros2       - Install ROS 2 using tools/install_ros2.sh"
+	@echo "  build      - Resolve deps with rosdep, colcon build, and re-source env"
+	@echo "  bootstrap  - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo ""
-	@echo "The legacy Makefile workflow has moved to psh."
 	@echo "Examples:"
-	@echo "  psh ros2"
-	@echo "  psh module setup foot"
-	@echo "  psh module remove foot"
+	@echo "  make ros2"
+	@echo "  ./modules/foot/setup.sh && make build"
+	@echo "  ./modules/voice/setup.sh && make build"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=jazzy
@@ -30,7 +29,7 @@ ros2:
 build:
 	@bash -lc 'set -euo pipefail; \
 		echo "[build] Sourcing ROS environment..."; \
-		eval "$$(PSH_ENV_MODE=print ./tools/setup_env.sh)"; \
+		eval "$$(SETUP_ENV_MODE=print ./tools/setup_env.sh)"; \
 		echo "[build] Updating rosdep..."; \
 		rosdep update; \
 		echo "[build] Installing dependencies with rosdep..."; \
@@ -38,7 +37,7 @@ build:
 		echo "[build] Running colcon build..."; \
 		colcon build --symlink-install; \
 	echo "[build] Re-sourcing environment..."; \
-	eval "$$(PSH_ENV_MODE=print ./tools/setup_env.sh)"; \
+	eval "$$(SETUP_ENV_MODE=print ./tools/setup_env.sh)"; \
 		echo "[build] Done."'
 
 # Bootstrap the host/dev environment
