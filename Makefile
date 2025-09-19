@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say get-piper-voices install-services uninstall-services update-services start-services start-services-debug stop-services status-services diagnose-service logs-service
+.PHONY: help ros2 build bootstrap update say get-piper-voices install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -16,8 +16,7 @@ help:
 	@echo "  install-services   - Install systemd services for enabled modules"
 	@echo "  uninstall-services - Remove all psyched systemd services"
 	@echo "  update-services    - Uninstall and reinstall services (for updates)"
-	@echo "  start-services     - Start all enabled module services"
-	@echo "  start-services-debug - Start services with detailed debugging output"
+	@echo "  start-services     - Start all enabled module services (with detailed logging)"
 	@echo "  stop-services      - Stop all psyched services"
 	@echo "  status-services    - Show status of all psyched services"
 	@echo "  diagnose-service   - Diagnose issues with a specific service (usage: make diagnose-service SERVICE=voice)"
@@ -30,7 +29,7 @@ help:
 	@echo "  make say TEXT=\"Hello, this is a test\""
 	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
 	@echo "  sudo make install-services"
-	@echo "  sudo make start-services-debug"
+	@echo "  sudo make start-services"
 	@echo "  make diagnose-service SERVICE=voice"
 	@echo "  make logs-service SERVICE=voice LINES=100"
 
@@ -104,8 +103,8 @@ update:
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
 		$(MAKE) install-services; \
-		echo "[update] Starting services with debug output..."; \
-		$(MAKE) start-services-debug || { \
+		echo "[update] Starting services..."; \
+		$(MAKE) start-services || { \
 			echo "[update] Service start failed. Check diagnostics:"; \
 			echo "  make diagnose-service SERVICE=<module_name>"; \
 			echo "  make logs-service SERVICE=<module_name>"; \
@@ -229,23 +228,14 @@ update-services:
 	@sudo -E ./tools/manage_services.sh install-enabled $(HOST)
 	@echo "[services] Services updated."
 
-# Start all enabled module services
+# Start all enabled module services (with detailed logging)
 # Usage:
 #   sudo make start-services
 #   sudo make start-services HOST=cerebellum
 start-services:
-	@echo "[services] Starting enabled module services..."
-	@sudo -E ./tools/manage_services.sh start-enabled $(HOST)
-	@echo "[services] Services started."
-
-# Start all enabled module services with detailed debugging
-# Usage:
-#   sudo make start-services-debug
-#   sudo make start-services-debug HOST=cerebellum
-start-services-debug:
-	@echo "[services] Starting enabled module services with detailed debugging..."
+	@echo "[services] Starting enabled module services with detailed logging..."
 	@sudo -E ./tools/manage_services.sh start-enabled-debug $(HOST)
-	@echo "[services] Services started with debug information."
+	@echo "[services] Services started."
 
 # Stop all psyched services
 # Usage:
