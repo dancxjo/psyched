@@ -40,11 +40,11 @@ fi
 if [ "\$CACHE_VALID" = "false" ]; then
     echo "Performing full environment setup..."
     
-    # Set up safe defaults
-    export AMENT_TRACE_SETUP_FILES="\${AMENT_TRACE_SETUP_FILES:-0}"
-    export AMENT_TRACE_SETUP_FILES_STDERR="\${AMENT_TRACE_SETUP_FILES_STDERR:-0}"
-    export COLCON_LOG_LEVEL="\${COLCON_LOG_LEVEL:-30}"
-    export BASH_XTRACEFD=""
+    # Set up safe defaults - disable all debug output
+    export AMENT_TRACE_SETUP_FILES=0
+    export AMENT_TRACE_SETUP_FILES_STDERR=0
+    export COLCON_LOG_LEVEL=30
+    unset BASH_XTRACEFD || true
     export PS4="+ "
     
     # Find Python executable

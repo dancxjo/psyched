@@ -20,29 +20,24 @@ return_or_exit() { return "\${1:-1}" 2>/dev/null || exit "\${1:-1}"; }
 safesource() {
     # shellcheck disable=SC1090
     set +u
-    # Disable ROS-specific debug output completely
-    local old_ament_trace="\${AMENT_TRACE_SETUP_FILES:-}"
-    local old_ament_stderr="\${AMENT_TRACE_SETUP_FILES_STDERR:-}"
-    local old_bash_xtracefd="\${BASH_XTRACEFD:-}"
-    local old_set_opts="\$(set +o)"
-    
+    # Disable ROS-specific debug output completely - never restore these
     export AMENT_TRACE_SETUP_FILES=0
     export AMENT_TRACE_SETUP_FILES_STDERR=0
-    unset BASH_XTRACEFD
+    unset BASH_XTRACEFD || true
+    local old_set_opts="\$(set +o)"
     set +x  # Disable bash tracing
     
     # Redirect both stdout and stderr from sourced script to suppress all verbose output
     # shellcheck source=/dev/null
     source "\$1" >/dev/null 2>&1
     
-    # Restore original values
-    export AMENT_TRACE_SETUP_FILES="\$old_ament_trace"
-    export AMENT_TRACE_SETUP_FILES_STDERR="\$old_ament_stderr"
-    if [ -n "\$old_bash_xtracefd" ]; then
-        export BASH_XTRACEFD="\$old_bash_xtracefd"
-    fi
+    # Restore original shell options but keep debug variables disabled
     eval "\$old_set_opts"
     set -u
+    # Ensure debug variables remain disabled after sourcing
+    export AMENT_TRACE_SETUP_FILES=0
+    export AMENT_TRACE_SETUP_FILES_STDERR=0
+    unset BASH_XTRACEFD || true
 }
 
 echo "Setting up ROS 2 environment..."
@@ -56,16 +51,16 @@ echo "Workspace (repo root): \$WORKSPACE_PATH"
 
 # Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
-# Disable all ROS setup debugging/tracing to prevent log pollution
-export AMENT_TRACE_SETUP_FILES="\${AMENT_TRACE_SETUP_FILES:-0}"
-export AMENT_TRACE_SETUP_FILES_STDERR="\${AMENT_TRACE_SETUP_FILES_STDERR:-0}"
+# Disable all ROS setup debugging/tracing to prevent log pollution - never enable these
+export AMENT_TRACE_SETUP_FILES=0
+export AMENT_TRACE_SETUP_FILES_STDERR=0
 export ROS_PYTHON_LOG_CONFIG_FILE="\${ROS_PYTHON_LOG_CONFIG_FILE:-}"
 # Disable colcon/ament verbose output
 export COLCON_LOG_LEVEL="\${COLCON_LOG_LEVEL:-30}"
-# The ROS setup scripts may be using 'set -x' or similar - disable bash tracing
-export BASH_XTRACEFD="\${BASH_XTRACEFD:-}"
+# Never set BASH_XTRACEFD - keep it unset to prevent bash tracing
+unset BASH_XTRACEFD || true
 # Ensure PS4 is not set to verbose mode that would show trace info
-export PS4="\${PS4:-+ }"
+export PS4="+ "
 
 # Provide a safe default Python executable for ROS/ament/colcon before sourcing ROS
 # This avoids unbound-variable errors in setup scripts when run under 'set -u'.

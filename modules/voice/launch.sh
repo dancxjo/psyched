@@ -5,6 +5,14 @@ set -euo pipefail
 
 # Launch the voice node. Requires that the workspace is built and env is sourced.
 
+# Completely suppress ROS/ament debug output and bash tracing
+export AMENT_TRACE_SETUP_FILES=0
+export AMENT_TRACE_SETUP_FILES_STDERR=0
+export COLCON_LOG_LEVEL=30
+unset BASH_XTRACEFD || true
+export PS4="+ "
+set +x  # Ensure bash tracing is disabled
+
 # Resolve host config file
 HOSTNAME_short="${HOST:-$(hostname -s)}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
