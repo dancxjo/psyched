@@ -17,6 +17,15 @@ emit_body() {
 # Helper: return from sourced contexts or exit when executed
 return_or_exit() { return "${1:-1}" 2>/dev/null || exit "${1:-1}"; }
 
+# Helper: safely source a script even under 'set -u' by temporarily disabling nounset
+safesource() {
+    # shellcheck disable=SC1090
+    set +u
+    # shellcheck source=/dev/null
+    source "$1"
+    set -u
+}
+
 echo "Setting up ROS 2 environment..."
 echo "ROS_DISTRO: ${ROS_DISTRO}"
 echo "Workspace (repo root): ${WORKSPACE_PATH}"
@@ -34,9 +43,15 @@ fi
 export AMENT_PYTHON_EXECUTABLE="${AMENT_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
 export COLCON_PYTHON_EXECUTABLE="${COLCON_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
 
+# Additional safe defaults for common variables used in setup scripts
+export AMENT_PREFIX_PATH="${AMENT_PREFIX_PATH:-}"
+export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-}"
+export ROS_PACKAGE_PATH="${ROS_PACKAGE_PATH:-}"
+export COLCON_CURRENT_PREFIX="${COLCON_CURRENT_PREFIX:-}"
+
 if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
     echo "Sourcing ROS 2 distro setup..."
-    source "/opt/ros/${ROS_DISTRO}/setup.bash"
+    safesource "/opt/ros/${ROS_DISTRO}/setup.bash"
 else
     echo "Error: ROS 2 setup not found at /opt/ros/${ROS_DISTRO}/setup.bash"
     echo "Run 'make ros2' first to install ROS 2"
@@ -77,7 +92,7 @@ if [ -f "${WORKSPACE_PATH}/install/setup.sh" ]; then
     echo "Sourcing workspace install/setup.sh..."
     # Prefer POSIX-compatible setup.sh per project convention
     # shellcheck source=/dev/null
-    source "${WORKSPACE_PATH}/install/setup.sh"
+    safesource "${WORKSPACE_PATH}/install/setup.sh"
 else
     echo "Warning: Workspace setup not found at ${WORKSPACE_PATH}/install/setup.sh"
     echo "Run 'make build' (after preparing src/ via module setup) to build the workspace first"
