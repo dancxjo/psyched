@@ -28,7 +28,8 @@ CPUQuota=200%
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths={{REPO_DIR}} {{HOME_DIR}}/.ros {{HOME_DIR}}/.cache/colcon_cd
+ReadWritePaths={{REPO_DIR}} {{HOME_DIR}}/.ros
+ReadWriteDirectories={{HOME_DIR}}/.cache
 
 [Install]
 WantedBy=multi-user.target
