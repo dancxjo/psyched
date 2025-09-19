@@ -209,10 +209,12 @@ impl<R: CommandRunner> App<R> {
 
         let workspace = self.layout.repo_path.to_string_lossy();
         let distro = crate::util::ros_distro();
+        let mode = std::env::var("PSH_ENV_MODE").unwrap_or_else(|_| "run".to_string());
         let command = format!(
-            "WORKSPACE_PATH={} ROS_DISTRO={} bash {}",
+            "WORKSPACE_PATH={} ROS_DISTRO={} PSH_ENV_MODE={} bash {}",
             sh_quote(&workspace),
             sh_quote(&distro),
+            sh_quote(&mode),
             sh_quote(&script.to_string_lossy()),
         );
 

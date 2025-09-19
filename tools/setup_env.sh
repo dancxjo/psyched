@@ -6,8 +6,22 @@ ROS_DISTRO=${ROS_DISTRO:-jazzy}
 WORKSPACE_PATH=${WORKSPACE_PATH:-/opt/psyched}
 PSH_ENV_MODE=${PSH_ENV_MODE:-run}
 
+return_or_exit() {
+    # Return with given code if sourced; otherwise exit the process.
+    local code=${1:-1}
+    return "$code" 2>/dev/null || exit "$code"
+}
+
 emit_body() {
     cat <<EOF
+# Helper: return from sourced contexts or exit when executed
+psh_return_or_exit() {
+    local code=
+    code=
+    code=${1:-1}
+    return "$code" 2>/dev/null || exit "$code"
+}
+
 echo "Setting up ROS2 environment..."
 echo "ROS_DISTRO: $ROS_DISTRO"
 echo "WORKSPACE_PATH: $WORKSPACE_PATH"
@@ -18,7 +32,7 @@ if [ -f "/opt/ros/$ROS_DISTRO/setup.bash" ]; then
 else
     echo "Error: ROS2 setup not found at /opt/ros/$ROS_DISTRO/setup.bash"
     echo "Run 'psh ros2' first to install ROS2"
-    exit 1
+    psh_return_or_exit 1
 fi
 
 if [ -f "$WORKSPACE_PATH/install/setup.bash" ]; then
