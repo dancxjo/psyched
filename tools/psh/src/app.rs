@@ -181,11 +181,34 @@ impl<R: CommandRunner> App<R> {
     }
 
     fn build(&self) -> Result<()> {
-        ensure_tool("cargo", "Install Rust toolchain via https://rustup.rs")?;
+        // Build the ROS 2 workspace: rosdep + colcon
+        ensure_tool("bash", "Install bash so build orchestration can run.")?;
+        ensure_tool(
+            "rosdep",
+            "Install rosdep (https://docs.ros.org) before continuing.",
+        )?;
+        ensure_tool("colcon", "Install colcon via https://colcon.readthedocs.io")?;
+
+        let distro = crate::util::ros_distro();
+        let psh = crate::util::psh_binary()?;
+        let env_eval = format!(
+            "source <(WORKSPACE_PATH={workspace} ROS_DISTRO={distro} PSH_ENV_MODE=print {psh} env)",
+            workspace = crate::util::sh_quote(&self.layout.repo_path.to_string_lossy()),
+            distro = crate::util::sh_quote(&distro),
+            psh = crate::util::sh_quote(&psh.to_string_lossy()),
+        );
+
+        // Run rosdep and colcon build inside a single bash -lc invocation
+        let body = format!(
+            "{env_eval} && rosdep install -i --from-path src --rosdistro {distro} -y && colcon build --symlink-install",
+            env_eval = env_eval,
+            distro = crate::util::sh_quote(&distro),
+        );
+
         self.runner.run(
-            &CommandSpec::new("cargo")
-                .arg("build")
-                .arg("--release")
+            &CommandSpec::new("bash")
+                .arg("-lc")
+                .arg(body)
                 .cwd(&self.layout.repo_path),
         )?;
         Ok(())
@@ -193,8 +216,19 @@ impl<R: CommandRunner> App<R> {
 
     fn update(&self) -> Result<()> {
         self.clone_repo()?;
-        self.build()?;
+        self.build_self()?;
         self.install()?;
+        Ok(())
+    }
+
+    fn build_self(&self) -> Result<()> {
+        ensure_tool("cargo", "Install Rust toolchain via https://rustup.rs")?;
+        self.runner.run(
+            &CommandSpec::new("cargo")
+                .arg("build")
+                .arg("--release")
+                .cwd(&self.layout.repo_path),
+        )?;
         Ok(())
     }
 

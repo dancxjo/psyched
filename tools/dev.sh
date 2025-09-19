@@ -1,15 +1,18 @@
 #!/bin/bash
-# Development script for psyched framework
+# Development script for the Psyched repository (ROS 2 workspace)
 
-WORKSPACE_PATH=${WORKSPACE_PATH:-/opt/psyched}
+if [ -z "${WORKSPACE_PATH:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    WORKSPACE_PATH="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 
 echo "Psyched Framework Development Helper"
 echo "===================================="
 
-# Check if workspace exists
+# Check if repo/workspace exists
 if [ ! -d "$WORKSPACE_PATH" ]; then
-    echo "Error: Workspace not found at $WORKSPACE_PATH"
-    echo "Run 'make workspace' to create it"
+    echo "Error: Repository/workspace not found at $WORKSPACE_PATH"
+    echo "Set WORKSPACE_PATH to your repo root or run from within the repo."
     exit 1
 fi
 

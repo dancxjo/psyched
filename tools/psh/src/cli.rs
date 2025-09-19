@@ -14,7 +14,7 @@ pub enum Commands {
     Install,
     /// Clone or update the canonical Psyched repository
     Clone,
-    /// Build the psh utility from source
+    /// Build the ROS 2 workspace (rosdep + colcon)
     Build,
     /// Clone, build, and install the utility in one go
     Update,
