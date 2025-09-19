@@ -11,7 +11,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/voice.launch.py']),
     ],
-    install_requires=['setuptools', 'piper-tts'],
+    # Piper library is optional; we rely on external binaries for piper/espeak.
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='you@example.com',

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Queue speech from the ``voice`` topic using Piper TTS.
+"""Queue speech from the ``voice`` topic using a TTS engine.
 
-Piper is a high‑quality, lightweight neural TTS. This service reads text from
-the ``voice`` topic, synthesizes speech with Piper, and plays audio via ALSA
-(``aplay``).
+Supports:
+- Piper (neural, requires model files)
+- espeak-ng (fast/robust, supports MBROLA voices)
+
+This service reads text from the ``voice`` topic, synthesizes speech with the
+selected engine, and plays audio via ALSA (``aplay``) when available.
 
 Examples:
     Run the service::
@@ -41,9 +44,15 @@ except Exception:  # pragma: no cover - allow import failure until deps installe
     PiperVoice = None  # type: ignore
     SynthesisConfig = None  # type: ignore
 
+# Engine defaults
+ENGINE = os.getenv("VOICE_ENGINE", "piper")  # piper | espeak
+
 # Default Piper voice model (downloaded during provisioning)
 PIPER_VOICES_DIR = os.getenv("PIPER_VOICES_DIR", "/opt/piper/voices")
 PIPER_MODEL = os.getenv("PIPER_MODEL", "en_US-ryan-high")
+
+# Default espeak-ng voice (use MBROLA voice like 'mb-us1' if installed)
+ESPEAK_VOICE = os.getenv("ESPEAK_VOICE", "en-us")
 
 
 @dataclass
@@ -69,6 +78,8 @@ class VoiceNode(Node):
         
         # Parameters - keep compatibility with existing node parameters
         self.declare_parameter('topic', '/voice')
+        # Engine selection: 'piper' or 'espeak'
+        self.declare_parameter('engine', os.environ.get('VOICE_ENGINE', 'piper'))
         self.declare_parameter('voice_path', os.environ.get('PIPER_VOICE', ''))
         self.declare_parameter('use_cuda', False)
         self.declare_parameter('volume', 1.0)
@@ -78,6 +89,12 @@ class VoiceNode(Node):
         self.declare_parameter('normalize_audio', True)
         self.declare_parameter('wav_out_dir', '')
         self.declare_parameter('aplay', True)
+        # espeak-ng parameters
+        self.declare_parameter('espeak_voice', os.environ.get('ESPEAK_VOICE', 'en-us'))
+        self.declare_parameter('espeak_rate', 170)   # words per minute
+        self.declare_parameter('espeak_pitch', 50)   # 0-99
+        self.declare_parameter('espeak_volume', 1.0) # 0.0-1.0 scales -a 0-200
+        self.declare_parameter('espeak_extra_args', '')
 
         # New voice model setup
         self.model = model
@@ -107,13 +124,18 @@ class VoiceNode(Node):
         self._resume_sub = self.create_subscription(Empty, '/voice/resume', self._on_resume, 1)
         self._clear_sub = self.create_subscription(Empty, '/voice/clear', self._on_clear, 1)
 
-        # Ensure Piper model files exist; attempt runtime fetch if missing
+        # Ensure Piper model files exist if using Piper; attempt runtime fetch if missing
         try:
-            self._ensure_piper_model()
-            # Reload sample rate if config just appeared
-            self.sample_rate = self._load_sample_rate(self.config_path)
+            engine = self.get_parameter('engine').get_parameter_value().string_value
         except Exception:
-            pass
+            engine = 'piper'
+        if engine == 'piper':
+            try:
+                self._ensure_piper_model()
+                # Reload sample rate if config just appeared
+                self.sample_rate = self._load_sample_rate(self.config_path)
+            except Exception:
+                pass
             
         # Start worker thread
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
@@ -225,19 +247,29 @@ class VoiceNode(Node):
         
         # Check for both legacy piper-tts library and piper binary
         aplay_cmd = shutil.which('aplay') if self.get_parameter('aplay').value else None
-        
-        # Resolve Piper command. Prefer current Python env (python -m piper),
+        engine = self.get_parameter('engine').get_parameter_value().string_value.lower().strip()
+        self.get_logger().info(f'Voice engine: {engine}')
+
+        # Resolve Piper command only if engine=piper. Prefer current Python env (python -m piper),
         # allow override via PIPER_CMD, then fall back to a system binary.
-        piper_cmd = self._resolve_piper_cmd()
-        self.get_logger().info(f'Final Piper command: {piper_cmd}')
-        self.get_logger().info(f'Model path: {self.model_path}, exists: {os.path.exists(self.model_path)}')
-        self.get_logger().info(f'Config path: {self.config_path}, exists: {os.path.exists(self.config_path)}')
+        piper_cmd = None
+        if engine == 'piper':
+            piper_cmd = self._resolve_piper_cmd()
+            self.get_logger().info(f'Final Piper command: {piper_cmd}')
+            self.get_logger().info(f'Model path: {self.model_path}, exists: {os.path.exists(self.model_path)}')
+            self.get_logger().info(f'Config path: {self.config_path}, exists: {os.path.exists(self.config_path)}')
         wav_out_dir = self.get_parameter('wav_out_dir').value
         volume = float(self.get_parameter('volume').value)
         length_scale = float(self.get_parameter('length_scale').value)
         noise_scale = float(self.get_parameter('noise_scale').value)
         noise_w_scale = float(self.get_parameter('noise_w_scale').value)
         normalize_audio = bool(self.get_parameter('normalize_audio').value)
+        # espeak settings
+        espeak_voice = self.get_parameter('espeak_voice').get_parameter_value().string_value
+        espeak_rate = int(self.get_parameter('espeak_rate').get_parameter_value().integer_value or 170)
+        espeak_pitch = int(self.get_parameter('espeak_pitch').get_parameter_value().integer_value or 50)
+        espeak_volume = float(self.get_parameter('espeak_volume').get_parameter_value().double_value or 1.0)
+        espeak_extra_args = self.get_parameter('espeak_extra_args').get_parameter_value().string_value
 
         # Setup synthesis config for legacy piper library
         syn_config = None
@@ -290,17 +322,20 @@ class VoiceNode(Node):
 
             self.get_logger().info(f'Speaking: {text}')
 
-            # Try subprocess piper first (more efficient), fall back to legacy
+            # Engine-specific synthesis
             success = False
-            
-            if piper_cmd and os.path.exists(self.model_path) and os.path.exists(self.config_path):
-                success = self._speak_with_subprocess(text, aplay_cmd, piper_cmd)
-            
-            if not success and legacy_voice is not None:
-                success = self._speak_with_legacy(text, legacy_voice, syn_config, wav_out_dir, aplay_cmd)
-                
-            if not success:
-                self.get_logger().warning('No working Piper installation found. Install piper binary or piper-tts library.')
+            if engine == 'espeak':
+                success = self._speak_with_espeak(text, aplay_cmd, espeak_voice, espeak_rate, espeak_pitch, espeak_volume, espeak_extra_args)
+                if not success:
+                    self.get_logger().warning('espeak-ng synthesis failed. Ensure espeak-ng is installed and voices are available.')
+            else:
+                # Piper path
+                if piper_cmd and os.path.exists(self.model_path) and os.path.exists(self.config_path):
+                    success = self._speak_with_subprocess(text, aplay_cmd, piper_cmd)
+                if not success and legacy_voice is not None:
+                    success = self._speak_with_legacy(text, legacy_voice, syn_config, wav_out_dir, aplay_cmd)
+                if not success:
+                    self.get_logger().warning('No working Piper installation found. Install piper binary or piper-tts library, or set engine=espeak.')
                 
             # Signal completion to upstream (e.g., chat service)
             try:
@@ -446,6 +481,68 @@ class VoiceNode(Node):
                 return cmd
 
         return None
+
+    def _speak_with_espeak(
+        self,
+        text: str,
+        aplay_cmd: str | None,
+        voice: str,
+        rate: int,
+        pitch: int,
+        volume_scale: float,
+        extra_args: str = "",
+    ) -> bool:
+        """Synthesize speech using espeak-ng, optionally piping WAV to aplay.
+
+        - voice: e.g., 'en-us' or MBROLA voice 'mb-us1' (requires espeak-ng-mbrola + mbrola-us1)
+        - rate: words per minute (default ~170)
+        - pitch: 0-99
+        - volume_scale: 0.0-1.0 mapped to espeak -a 0-200
+        - extra_args: raw string of additional arguments for espeak-ng
+        """
+        import shutil
+
+        espeak = shutil.which('espeak-ng') or shutil.which('espeak')
+        if not espeak:
+            return False
+
+        # Clamp and convert values
+        rate = max(80, min(450, int(rate)))
+        pitch = max(0, min(99, int(pitch)))
+        amp = int(max(0.0, min(1.5, float(volume_scale))) * 200)
+
+        base_cmd = [espeak, '-v', voice, '-s', str(rate), '-p', str(pitch), '-a', str(amp)]
+        if extra_args:
+            try:
+                base_cmd += shlex.split(extra_args)
+            except Exception:
+                # Fallback: append as single arg (harmless if invalid)
+                base_cmd.append(extra_args)
+
+        try:
+            if aplay_cmd:
+                # Stream WAV to aplay
+                speak = subprocess.Popen([*base_cmd, '--stdout', text], stdout=subprocess.PIPE)
+                aplay = subprocess.Popen([aplay_cmd, '-q', '-t', 'wav', '-'], stdin=speak.stdout)
+                self._procs = [aplay, speak]
+                aplay.wait()
+                try:
+                    speak.terminate()
+                except Exception:
+                    pass
+                self._procs.clear()
+                return True
+            else:
+                # Let espeak-ng play audio directly
+                speak = subprocess.run([*base_cmd, text], capture_output=True, text=True)
+                return speak.returncode == 0
+        except Exception as e:
+            self.get_logger().error(f'espeak-ng error: {e}')
+            try:
+                self._procs.clear()
+            except Exception:
+                pass
+            return False
 
     def _speak_with_legacy(self, text: str, voice, syn_config, wav_out_dir: str, aplay_cmd: str | None) -> bool:
         """Use legacy piper-tts library for speech synthesis."""

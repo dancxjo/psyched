@@ -20,42 +20,54 @@ if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
 fi
 
-# Download and setup voice model
-VOICE_DIR="${REPO_DIR}/voices"
-VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
-VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx"
+# Engine setup
+ENGINE="${VOICE_ENGINE:-piper}" # piper | espeak
 
-mkdir -p "${VOICE_DIR}"
+if [[ "${ENGINE}" == "piper" ]]; then
+  # Download and setup Piper voice model
+  VOICE_DIR="${REPO_DIR}/voices"
+  VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
+  VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx"
 
-# Download voice model if it doesn't exist
-if [ ! -f "${VOICE_MODEL}" ]; then
-  echo "Downloading Piper voice model..."
-  curl -L -o "${VOICE_MODEL}" "${VOICE_URL}"
-  echo "Voice model downloaded to ${VOICE_MODEL}"
-fi
-
-# Set PIPER_VOICE environment variable if not already set
-if [ -z "${PIPER_VOICE:-}" ]; then
-  export PIPER_VOICE="${VOICE_MODEL}"
-  echo "PIPER_VOICE set to ${VOICE_MODEL}"
-else
-  echo "PIPER_VOICE already set to ${PIPER_VOICE}"
-fi
-
-# Install runtime deps that rosdep won't handle (Python pip packages)
-# Install globally so systemd services can find it, fallback to user install
-if ! python3 -c 'import piper' >/dev/null 2>&1; then
-  echo "Installing piper-tts..."
-  # Try global install first (preferred for services)
-  if pip3 install piper-tts >/dev/null 2>&1; then
-    echo "Installed piper-tts globally"
-  elif sudo pip3 install piper-tts >/dev/null 2>&1; then
-    echo "Installed piper-tts globally with sudo"
+  mkdir -p "${VOICE_DIR}"
+  if [ ! -f "${VOICE_MODEL}" ]; then
+    echo "Downloading Piper voice model..."
+    curl -L -o "${VOICE_MODEL}" "${VOICE_URL}"
+    echo "Voice model downloaded to ${VOICE_MODEL}"
+  fi
+  if [ -z "${PIPER_VOICE:-}" ]; then
+    export PIPER_VOICE="${VOICE_MODEL}"
+    echo "PIPER_VOICE set to ${VOICE_MODEL}"
   else
-    echo "Global install failed, installing for user..."
-    pip3 install --user piper-tts
-    echo "Installed piper-tts for user (may need PATH adjustment for services)"
+    echo "PIPER_VOICE already set to ${PIPER_VOICE}"
+  fi
+
+  # Python library is optional but helpful for fallback
+  if ! python3 -c 'import piper' >/dev/null 2>&1; then
+    echo "Installing optional piper-tts library (for fallback)..."
+    if pip3 install piper-tts >/dev/null 2>&1 || sudo pip3 install piper-tts >/dev/null 2>&1; then
+      echo "Installed piper-tts"
+    else
+      echo "Skipping piper-tts install"
+    fi
+  fi
+else
+  # espeak-ng + MBROLA setup
+  echo "Configuring espeak-ng engine..."
+  # Try to install packages if not present
+  if ! command -v espeak-ng >/dev/null 2>&1 && ! command -v espeak >/dev/null 2>&1; then
+    echo "espeak-ng not found. Attempting to install..."
+    if command -v apt >/dev/null 2>&1; then
+      sudo apt update && sudo apt install -y espeak-ng mbrola mbrola-us1 || true
+    else
+      echo "Non-APT system; please install espeak-ng and MBROLA voices manually."
+    fi
+  fi
+  # Suggest environment variable for voice
+  if [ -z "${ESPEAK_VOICE:-}" ]; then
+    export ESPEAK_VOICE="en-us"
+    echo "ESPEAK_VOICE set to ${ESPEAK_VOICE} (set to mb-us1 if MBROLA installed)"
   fi
 fi
 
-echo "Voice module setup complete."
+echo "Voice module setup complete. ENGINE=${ENGINE}"
