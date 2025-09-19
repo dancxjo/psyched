@@ -34,7 +34,8 @@ build:
 		echo "[build] Updating rosdep..."; \
 		rosdep update; \
 		echo "[build] Installing dependencies with rosdep..."; \
-		rosdep install --from-paths src --ignore-src -r -y; \
+		cd src && rosdep install --from-paths . --ignore-src -r -y; \
+		cd ..; \
 		echo "[build] Running colcon build..."; \
 		colcon build --symlink-install; \
 	echo "[build] Re-sourcing environment..."; \
