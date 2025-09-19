@@ -11,13 +11,16 @@ User={{USER}}
 Group={{GROUP}}
 WorkingDirectory={{REPO_DIR}}
 Environment="HOME={{HOME_DIR}}"
-Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/piper/bin"
 Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
 # Comprehensive pre-start diagnostics
 ExecStartPre=/bin/bash -c 'echo "=== PSYCHED SERVICE DEBUG: {{MODULE_NAME}} ==="'
 ExecStartPre=/bin/bash -c 'echo "User: $(whoami), Home: $HOME, Working Dir: $(pwd)"'
 ExecStartPre=/bin/bash -c 'echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-unset}"'
 ExecStartPre=/bin/bash -c 'echo "Checking module launch script..."'
+ExecStartPre=/bin/bash -c 'echo "PATH: $PATH"'
+ExecStartPre=/bin/bash -c 'echo "Piper binary check: $(which piper 2>/dev/null || echo "NOT FOUND IN PATH")"'
+ExecStartPre=/bin/bash -c 'echo "Manual piper check: $([[ -x /usr/bin/piper ]] && echo "/usr/bin/piper EXISTS" || echo "/usr/bin/piper NOT FOUND")"'
 ExecStartPre=/bin/bash -c 'if [[ ! -f "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not found!"; exit 1; fi'
 ExecStartPre=/bin/bash -c 'if [[ ! -x "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not executable!"; exit 1; fi'
 ExecStartPre=/bin/bash -c 'echo "Launch script found and executable"'

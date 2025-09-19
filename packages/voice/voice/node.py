@@ -226,17 +226,29 @@ class VoiceNode(Node):
         
         # Try to find piper binary with fallback locations
         piper_binary = shutil.which('piper')
+        self.get_logger().info(f'piper binary search: shutil.which returned {piper_binary}')
         if not piper_binary:
             # Try common user installation locations as fallback
             fallback_paths = [
+                '/usr/bin/piper',
                 os.path.expanduser('~/.local/bin/piper'),
                 '/usr/local/bin/piper',
                 '/opt/piper/bin/piper'
             ]
             for path in fallback_paths:
+                self.get_logger().info(f'Checking fallback path: {path}')
                 if os.path.isfile(path) and os.access(path, os.X_OK):
                     piper_binary = path
+                    self.get_logger().info(f'Found piper at fallback path: {path}')
                     break
+                else:
+                    exists = os.path.isfile(path)
+                    executable = os.access(path, os.X_OK) if exists else False
+                    self.get_logger().info(f'Fallback path {path}: exists={exists}, executable={executable}')
+        
+        self.get_logger().info(f'Final piper binary: {piper_binary}')
+        self.get_logger().info(f'Model path: {self.model_path}, exists: {os.path.exists(self.model_path)}')
+        self.get_logger().info(f'Config path: {self.config_path}, exists: {os.path.exists(self.config_path)}')
         wav_out_dir = self.get_parameter('wav_out_dir').value
         volume = float(self.get_parameter('volume').value)
         length_scale = float(self.get_parameter('length_scale').value)

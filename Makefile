@@ -1,4 +1,10 @@
-.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
+.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-	@bash -lc 'set -euo pipefail; \
+		echo "[say] Sourcing minimal ROS environment..."; \
+		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
+		if [ -f install/setup.bash ]; then COLCON_TRACE="$${COLCON_TRACE:-}" source install/setup.bash >/dev/null 2>&1; fi; \
+		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
+		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\"" >/dev/null 2>&1; \
+		echo "[say] Message published."'s start-services stop-services status-services diagnose-service logs-service
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -150,10 +156,10 @@ pub-string:
 	fi
 	@bash -lc 'set -euo pipefail; \
 		echo "[pub-string] Sourcing minimal ROS environment..."; \
-		source /opt/ros/*/setup.bash 2>/dev/null || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
-		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
+		if [ -f install/setup.bash ]; then source install/setup.bash >/dev/null 2>&1; fi; \
 		echo "[pub-string] Publishing \"$(TEXT)\" to $(TOPIC) topic..."; \
-		ros2 topic pub --once $(TOPIC) std_msgs/msg/String "data: \"$(TEXT)\""; \
+		ros2 topic pub --once $(TOPIC) std_msgs/msg/String "data: \"$(TEXT)\"" >/dev/null 2>&1; \
 		echo "[pub-string] Message published to $(TOPIC)."'
 
 # Download additional Piper TTS voices from Hugging Face

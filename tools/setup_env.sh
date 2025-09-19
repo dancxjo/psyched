@@ -20,21 +20,28 @@ return_or_exit() { return "\${1:-1}" 2>/dev/null || exit "\${1:-1}"; }
 safesource() {
     # shellcheck disable=SC1090
     set +u
-    # Temporarily redirect stdout to suppress debug output while preserving stderr for errors
-    exec 3>&1  # Save stdout
-    exec 1>/dev/null  # Redirect stdout to /dev/null
-    # Disable ROS-specific debug output  
+    # Disable ROS-specific debug output completely
     local old_ament_trace="\${AMENT_TRACE_SETUP_FILES:-}"
     local old_ament_stderr="\${AMENT_TRACE_SETUP_FILES_STDERR:-}"
+    local old_bash_xtracefd="\${BASH_XTRACEFD:-}"
+    local old_set_opts="\$(set +o)"
+    
     export AMENT_TRACE_SETUP_FILES=0
     export AMENT_TRACE_SETUP_FILES_STDERR=0
+    unset BASH_XTRACEFD
+    set +x  # Disable bash tracing
+    
+    # Redirect both stdout and stderr from sourced script to suppress all verbose output
     # shellcheck source=/dev/null
-    source "\$1" 
+    source "\$1" >/dev/null 2>&1
+    
     # Restore original values
     export AMENT_TRACE_SETUP_FILES="\$old_ament_trace"
     export AMENT_TRACE_SETUP_FILES_STDERR="\$old_ament_stderr"
-    exec 1>&3  # Restore stdout
-    exec 3>&-  # Close fd 3
+    if [ -n "\$old_bash_xtracefd" ]; then
+        export BASH_XTRACEFD="\$old_bash_xtracefd"
+    fi
+    eval "\$old_set_opts"
     set -u
 }
 
