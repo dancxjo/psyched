@@ -41,7 +41,7 @@ except Exception:  # pragma: no cover - allow import failure until deps installe
 
 # Default Piper voice model (downloaded during provisioning)
 PIPER_VOICES_DIR = os.getenv("PIPER_VOICES_DIR", "/opt/piper/voices")
-PIPER_MODEL = os.getenv("PIPER_MODEL", "en_US-lessac-high")
+PIPER_MODEL = os.getenv("PIPER_MODEL", "en_US-ryan-high")
 
 
 @dataclass
