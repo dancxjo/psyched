@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say get-piper-voices install-services uninstall-services update-services start-services stop-services status-services
+.PHONY: help ros2 build bootstrap update say get-piper-voices install-services uninstall-services update-services start-services start-services-debug stop-services status-services diagnose-service logs-service
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -17,8 +17,11 @@ help:
 	@echo "  uninstall-services - Remove all psyched systemd services"
 	@echo "  update-services    - Uninstall and reinstall services (for updates)"
 	@echo "  start-services     - Start all enabled module services"
+	@echo "  start-services-debug - Start services with detailed debugging output"
 	@echo "  stop-services      - Stop all psyched services"
 	@echo "  status-services    - Show status of all psyched services"
+	@echo "  diagnose-service   - Diagnose issues with a specific service (usage: make diagnose-service SERVICE=voice)"
+	@echo "  logs-service       - Show recent logs for a service (usage: make logs-service SERVICE=voice [LINES=50])"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -27,7 +30,9 @@ help:
 	@echo "  make say TEXT=\"Hello, this is a test\""
 	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
 	@echo "  sudo make install-services"
-	@echo "  sudo make start-services"
+	@echo "  sudo make start-services-debug"
+	@echo "  make diagnose-service SERVICE=voice"
+	@echo "  make logs-service SERVICE=voice LINES=100"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=kilted
@@ -99,7 +104,13 @@ update:
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
 		$(MAKE) install-services; \
-		$(MAKE) start-services; \
+		echo "[update] Starting services with debug output..."; \
+		$(MAKE) start-services-debug || { \
+			echo "[update] Service start failed. Check diagnostics:"; \
+			echo "  make diagnose-service SERVICE=<module_name>"; \
+			echo "  make logs-service SERVICE=<module_name>"; \
+			exit 1; \
+		}; \
 		echo "[update] Done."'
 
 # Publish text to the /voice topic for text-to-speech
@@ -227,6 +238,15 @@ start-services:
 	@sudo -E ./tools/manage_services.sh start-enabled $(HOST)
 	@echo "[services] Services started."
 
+# Start all enabled module services with detailed debugging
+# Usage:
+#   sudo make start-services-debug
+#   sudo make start-services-debug HOST=cerebellum
+start-services-debug:
+	@echo "[services] Starting enabled module services with detailed debugging..."
+	@sudo -E ./tools/manage_services.sh start-enabled-debug $(HOST)
+	@echo "[services] Services started with debug information."
+
 # Stop all psyched services
 # Usage:
 #   sudo make stop-services
@@ -241,3 +261,27 @@ stop-services:
 status-services:
 	@echo "[services] Status of all psyched services:"
 	@./tools/manage_services.sh list
+
+# Diagnose issues with a specific service
+# Usage:
+#   make diagnose-service SERVICE=voice
+#   make diagnose-service SERVICE=foot
+diagnose-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: Please provide SERVICE parameter. Usage: make diagnose-service SERVICE=voice"; \
+		exit 1; \
+	fi
+	@echo "[services] Running diagnostics for service: $(SERVICE)"
+	@./tools/manage_services.sh diagnose $(SERVICE)
+
+# Show recent logs for a specific service
+# Usage:
+#   make logs-service SERVICE=voice
+#   make logs-service SERVICE=foot LINES=50
+logs-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: Please provide SERVICE parameter. Usage: make logs-service SERVICE=voice"; \
+		exit 1; \
+	fi
+	@echo "[services] Showing logs for service: $(SERVICE)"
+	@./tools/manage_services.sh logs $(SERVICE) $(LINES)

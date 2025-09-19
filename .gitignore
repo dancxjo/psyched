@@ -9,6 +9,7 @@ pyvenv.cfg
 
 
 voices/
+output.wav
 
 # External workspace sources (symlink-populated)
 src/

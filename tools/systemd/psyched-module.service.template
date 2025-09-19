@@ -12,8 +12,25 @@ Group={{GROUP}}
 WorkingDirectory={{REPO_DIR}}
 Environment="HOME={{HOME_DIR}}"
 Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
-ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS environment loaded"'
-ExecStart=/bin/bash -lc 'set -euo pipefail; eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; exec {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh'
+# Comprehensive pre-start diagnostics
+ExecStartPre=/bin/bash -c 'echo "=== PSYCHED SERVICE DEBUG: {{MODULE_NAME}} ==="'
+ExecStartPre=/bin/bash -c 'echo "User: $(whoami), Home: $HOME, Working Dir: $(pwd)"'
+ExecStartPre=/bin/bash -c 'echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-unset}"'
+ExecStartPre=/bin/bash -c 'echo "Checking module launch script..."'
+ExecStartPre=/bin/bash -c 'if [[ ! -f "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not found!"; exit 1; fi'
+ExecStartPre=/bin/bash -c 'if [[ ! -x "{{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh" ]]; then echo "ERROR: Launch script not executable!"; exit 1; fi'
+ExecStartPre=/bin/bash -c 'echo "Launch script found and executable"'
+ExecStartPre=/bin/bash -c 'echo "Setting up ROS environment..."'
+ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS environment loaded successfully"'
+ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS_DISTRO: ${ROS_DISTRO:-unset}"'
+ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "Python executable: $(which python3)"'
+ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS installation check: $(ros2 --version 2>/dev/null || echo "ROS2 NOT FOUND")"'
+ExecStartPre=/bin/bash -c 'echo "=== PRE-START DIAGNOSTICS COMPLETE ==="'
+# Main service start with detailed logging
+ExecStart=/bin/bash -lc 'set -euo pipefail; echo "=== STARTING {{MODULE_NAME}} SERVICE ==="; eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; echo "Environment loaded, executing launch script..."; exec {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh'
+# Post-failure diagnostics
+ExecStopPost=/bin/bash -c 'echo "=== SERVICE {{MODULE_NAME}} STOPPED (exit code: $EXIT_CODE) ==="'
+ExecStopPost=/bin/bash -c 'if [[ ${EXIT_CODE} -ne 0 ]]; then echo "ERROR: Service failed with exit code $EXIT_CODE"; fi'
 Restart=always
 RestartSec=10
 StandardOutput=journal
