@@ -1,3 +1,0 @@
-[workspace]
-members = ["tools/psh"]
-resolver = "2"
