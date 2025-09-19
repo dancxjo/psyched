@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say install-services uninstall-services update-services start-services stop-services status-services
+.PHONY: help ros2 build bootstrap update say get-piper-voices install-services uninstall-services update-services start-services stop-services status-services
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -10,6 +10,7 @@ help:
 	@echo "  bootstrap          - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo "  update             - git pull then run bootstrap"
 	@echo "  say                - Publish text to /voice topic (usage: make say TEXT=\"Hello world\")"
+	@echo "  get-piper-voices   - Download additional Piper TTS voices (usage: make get-piper-voices VOICES=\"voice1,voice2\")"
 	@echo ""
 	@echo "Service Management:"
 	@echo "  install-services   - Install systemd services for enabled modules"
@@ -24,6 +25,7 @@ help:
 	@echo "  ./modules/foot/setup.sh && make build"
 	@echo "  ./modules/voice/setup.sh && make build"
 	@echo "  make say TEXT=\"Hello, this is a test\""
+	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
 	@echo "  sudo make install-services"
 	@echo "  sudo make start-services"
 
@@ -102,6 +104,79 @@ say:
 		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
 		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
 		echo "[say] Message published."'
+
+# Download additional Piper TTS voices from Hugging Face
+# Usage:
+#   make get-piper-voices VOICES="en_US-amy-medium,en_US-ryan-high"
+#   make get-piper-voices VOICES="all"  # Downloads popular voices
+#   PIPER_VOICES_DIR=/custom/path make get-piper-voices VOICES="en_US-amy-medium"
+get-piper-voices:
+	@bash -lc 'set -euo pipefail; \
+		VOICES_DIR="$${PIPER_VOICES_DIR:-/opt/piper/voices}"; \
+		echo "[get-piper-voices] Target directory: $$VOICES_DIR"; \
+		mkdir -p "$$VOICES_DIR" || { echo "Error: Cannot create $$VOICES_DIR (try with sudo?)"; exit 1; }; \
+		if [ -z "$(VOICES)" ]; then \
+			echo "Usage: make get-piper-voices VOICES=\"voice1,voice2,...\""; \
+			echo ""; \
+			echo "Popular voices to try:"; \
+			echo "  en_US-amy-medium     - Clear female voice"; \
+			echo "  en_US-ryan-high      - Clear male voice"; \
+			echo "  en_US-joe-medium     - Deep male voice"; \
+			echo "  en_US-kathleen-low   - Warm female voice"; \
+			echo "  en_US-kimberly-low   - Soft female voice"; \
+			echo "  en_US-ljspeech-high  - High quality female"; \
+			echo "  en_US-norman-medium  - Older male voice"; \
+			echo "  en_US-arctic-medium  - Arctic voice dataset"; \
+			echo ""; \
+			echo "Or use: make get-piper-voices VOICES=\"popular\" for a curated selection"; \
+			exit 1; \
+		fi; \
+		if [ "$(VOICES)" = "popular" ]; then \
+			VOICE_LIST="en_US-amy-medium,en_US-ryan-high,en_US-joe-medium,en_US-kathleen-low"; \
+		elif [ "$(VOICES)" = "all" ]; then \
+			VOICE_LIST="en_US-amy-medium,en_US-ryan-high,en_US-joe-medium,en_US-kathleen-low,en_US-kimberly-low,en_US-ljspeech-high,en_US-norman-medium,en_US-arctic-medium"; \
+		else \
+			VOICE_LIST="$(VOICES)"; \
+		fi; \
+		echo "[get-piper-voices] Downloading voices: $$VOICE_LIST"; \
+		IFS="," read -ra VOICE_ARRAY <<< "$$VOICE_LIST"; \
+		for voice in "$${VOICE_ARRAY[@]}"; do \
+			voice=$$(echo "$$voice" | xargs); \
+			if [ -z "$$voice" ]; then continue; fi; \
+			echo "[get-piper-voices] Processing voice: $$voice"; \
+			MODEL_FILE="$$VOICES_DIR/$$voice.onnx"; \
+			CONFIG_FILE="$$VOICES_DIR/$$voice.onnx.json"; \
+			if [ -f "$$MODEL_FILE" ] && [ -f "$$CONFIG_FILE" ]; then \
+				echo "[get-piper-voices] Voice $$voice already exists, skipping..."; \
+				continue; \
+			fi; \
+			VOICE_PARTS=$$(echo "$$voice" | tr "-" " "); \
+			LANG_COUNTRY=$$(echo "$$VOICE_PARTS" | cut -d" " -f1); \
+			VOICE_NAME=$$(echo "$$VOICE_PARTS" | cut -d" " -f2); \
+			QUALITY=$$(echo "$$VOICE_PARTS" | cut -d" " -f3); \
+			LANG=$$(echo "$$LANG_COUNTRY" | cut -d"_" -f1); \
+			COUNTRY=$$(echo "$$LANG_COUNTRY" | cut -d"_" -f2); \
+			BASE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/$$LANG/$$LANG_COUNTRY/$$VOICE_NAME/$$QUALITY"; \
+			MODEL_URL="$$BASE_URL/$$voice.onnx?download=true"; \
+			CONFIG_URL="$$BASE_URL/$$voice.onnx.json?download=true"; \
+			echo "[get-piper-voices] Downloading $$voice.onnx..."; \
+			if ! curl -fsSL -o "$$MODEL_FILE" "$$MODEL_URL"; then \
+				echo "[get-piper-voices] Failed to download $$voice.onnx"; \
+				rm -f "$$MODEL_FILE"; \
+				continue; \
+			fi; \
+			echo "[get-piper-voices] Downloading $$voice.onnx.json..."; \
+			if ! curl -fsSL -o "$$CONFIG_FILE" "$$CONFIG_URL"; then \
+				echo "[get-piper-voices] Failed to download $$voice.onnx.json"; \
+				rm -f "$$CONFIG_FILE"; \
+				continue; \
+			fi; \
+			echo "[get-piper-voices] Successfully downloaded voice: $$voice"; \
+		done; \
+		echo "[get-piper-voices] Voice download complete!"; \
+		echo "[get-piper-voices] Available voices in $$VOICES_DIR:"; \
+		ls -1 "$$VOICES_DIR"/*.onnx 2>/dev/null | sed "s|$$VOICES_DIR/||g" | sed "s|\.onnx$$||g" || echo "  (none found)"; \
+		echo "[get-piper-voices] To use a voice, set PIPER_MODEL environment variable or update your voice configuration."'
 
 # Install systemd services for enabled modules
 # Usage:
