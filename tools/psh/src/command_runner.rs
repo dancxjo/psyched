@@ -67,7 +67,9 @@ impl CommandRunner for RealCommandRunner {
         }
 
         let display = format_command(spec);
-        println!("→ {}", display);
+        // Print command invocation to stderr to avoid polluting stdout,
+        // which may be consumed by callers (e.g., process substitution in bash).
+        eprintln!("→ {}", display);
 
         let status = command
             .status()
