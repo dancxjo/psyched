@@ -1,5 +1,5 @@
-engine=espeak
-voice=en-us
+engine=piper
+model=en_US-ryan-high
 topic=/voice
 interrupt=/voice/interrupt
 resume=/voice/resume
