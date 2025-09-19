@@ -30,7 +30,7 @@ class VoiceNode(Node):
         super().__init__('voice_node')
 
         # Parameters
-    self.declare_parameter('topic', '/voice')
+        self.declare_parameter('topic', '/voice')
         self.declare_parameter('voice_path', os.environ.get('PIPER_VOICE', ''))
         self.declare_parameter('use_cuda', False)
         self.declare_parameter('volume', 1.0)
@@ -45,18 +45,18 @@ class VoiceNode(Node):
         voice_path = self.get_parameter('voice_path').get_parameter_value().string_value
         use_cuda = self.get_parameter('use_cuda').get_parameter_value().bool_value
 
-    self._queue: queue.Queue[str] = queue.Queue()
+        self._queue: queue.Queue[str] = queue.Queue()
         self._stop_event = threading.Event()
-    self._unpaused = threading.Event()
-    self._unpaused.set()  # start unpaused
+        self._unpaused = threading.Event()
+        self._unpaused.set()  # start unpaused
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
 
-    self.subscription = self.create_subscription(String, topic, self._on_text, 10)
-    # Control topics
-    from std_msgs.msg import Empty  # lazy import to keep top tidy
-    self._pause_sub = self.create_subscription(Empty, '/voice/pause', self._on_pause, 1)
-    self._resume_sub = self.create_subscription(Empty, '/voice/resume', self._on_resume, 1)
-    self._clear_sub = self.create_subscription(Empty, '/voice/clear', self._on_clear, 1)
+        self.subscription = self.create_subscription(String, topic, self._on_text, 10)
+        # Control topics
+        from std_msgs.msg import Empty  # lazy import to keep top tidy
+        self._pause_sub = self.create_subscription(Empty, '/voice/pause', self._on_pause, 1)
+        self._resume_sub = self.create_subscription(Empty, '/voice/resume', self._on_resume, 1)
+        self._clear_sub = self.create_subscription(Empty, '/voice/clear', self._on_clear, 1)
 
         self._voice: PiperVoice | None = None
         if PiperVoice is None:
