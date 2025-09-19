@@ -1,6 +1,0 @@
-name = "forebrain"
-
-[[modules]]
-name = "foot"
-setup = true
-launch = false
