@@ -16,7 +16,12 @@ echo "[bootstrap] Repository root: $REPO_ROOT"
 # Ensure required system packages (Debian/Ubuntu)
 echo "[bootstrap] Installing required system packages..."
 sudo apt-get update -y
-sudo apt-get install -y --no-install-recommends git build-essential curl make
+sudo apt-get install -y --no-install-recommends git \
+    build-essential curl make \
+    python-is-python3 \
+    python3-venv \
+    python3-distutils \
+    python3-dev \
 
 # Ensure ROS2 is available
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."
