@@ -35,22 +35,22 @@ echo "Workspace (repo root): \$WORKSPACE_PATH"
 
 # Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
-export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES:-0}"
+export AMENT_TRACE_SETUP_FILES="\${AMENT_TRACE_SETUP_FILES:-0}"
 
 # Provide a safe default Python executable for ROS/ament/colcon before sourcing ROS
 # This avoids unbound-variable errors in setup scripts when run under 'set -u'.
-_PY3_PATH="$(command -v python3 2>/dev/null || true)"
-if [ -z "${_PY3_PATH}" ]; then
+_PY3_PATH="\$(command -v python3 2>/dev/null || true)"
+if [ -z "\${_PY3_PATH}" ]; then
     _PY3_PATH="python3"
 fi
-export AMENT_PYTHON_EXECUTABLE="${AMENT_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
-export COLCON_PYTHON_EXECUTABLE="${COLCON_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
+export AMENT_PYTHON_EXECUTABLE="\${AMENT_PYTHON_EXECUTABLE:-\${_PY3_PATH}}"
+export COLCON_PYTHON_EXECUTABLE="\${COLCON_PYTHON_EXECUTABLE:-\${_PY3_PATH}}"
 
 # Additional safe defaults for common variables used in setup scripts
-export AMENT_PREFIX_PATH="${AMENT_PREFIX_PATH:-}"
-export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-}"
-export ROS_PACKAGE_PATH="${ROS_PACKAGE_PATH:-}"
-export COLCON_CURRENT_PREFIX="${COLCON_CURRENT_PREFIX:-}"
+export AMENT_PREFIX_PATH="\${AMENT_PREFIX_PATH:-}"
+export CMAKE_PREFIX_PATH="\${CMAKE_PREFIX_PATH:-}"
+export ROS_PACKAGE_PATH="\${ROS_PACKAGE_PATH:-}"
+export COLCON_CURRENT_PREFIX="\${COLCON_CURRENT_PREFIX:-}"
 
 if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
     echo "Sourcing ROS 2 distro setup..."
