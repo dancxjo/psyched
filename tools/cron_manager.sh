@@ -148,33 +148,16 @@ echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting \$MODULE_NAME service on host \$H
 # Change to repo directory
 cd "\$REPO_DIR"
 
-# Minimal environment setup - avoid heavy ROS sourcing
+# Minimal environment setup
 export PATH="\$HOME/.local/bin:/usr/local/bin:\$PATH"
 export ROS_DOMAIN_ID=\${ROS_DOMAIN_ID:-0}
-
-# Default voice environment variables
-export VOICE_ENGINE=piper
-export ESPEAK_VOICE=mb-en1
-export PIPER_MODEL=en_US-ryan-high
-export PIPER_VOICES_DIR=/opt/piper/voices
 
 # Apply module-specific configuration from TOML file
 $(echo -e "$config_vars")
 
-# Log configuration being used
-echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Configuration applied for \$MODULE_NAME:" >> "\$LOG_FILE"
-$(echo -e "$config_vars" | sed 's/^export /echo "[$(date "+%Y-%m-%d %H:%M:%S")] - /' | sed 's/$/\" >> "\$LOG_FILE"/')
-
-# Only source ROS if absolutely necessary and do it minimally
-if [[ -f "/opt/ros/kilted/setup.bash" ]]; then
-    # Source ROS environment with minimal overhead
-    source "/opt/ros/kilted/setup.bash" 2>/dev/null || true
-    
-    # Only source workspace if it exists and is built
-    if [[ -f "\$REPO_DIR/install/setup.bash" ]]; then
-        source "\$REPO_DIR/install/setup.bash" 2>/dev/null || true
-    fi
-fi
+# Simple ROS setup - just source the essentials
+source "/opt/ros/kilted/setup.bash" 2>/dev/null || true
+source "\$REPO_DIR/install/setup.bash" 2>/dev/null || true
 
 # Execute the module launch script with output redirected to log
 echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Executing launch script..." >> "\$LOG_FILE"
@@ -190,22 +173,33 @@ install_cron_entry() {
     local wrapper_file="${WRAPPER_DIR}/psyched-${module_name}"
     
     # Create @reboot entry to start services immediately on system restart
-    local reboot_entry="@reboot sleep 30 && $wrapper_file >/dev/null 2>&1"
+    local reboot_entry="@reboot sleep 30 && $wrapper_file >/dev/null 2>&1 # psyched-${module_name}-reboot"
     
-    # Add reboot entry to crontab if not already present
-    (crontab -l 2>/dev/null || true; echo "$reboot_entry") | \
-    grep -v "# psyched-${module_name}" | \
-    { cat; echo "$reboot_entry # psyched-${module_name}-reboot"; } | \
-    crontab -
+    # Create a temp file with current crontab (if any) plus new entry
+    local temp_cron=$(mktemp)
+    (crontab -l 2>/dev/null || true) > "$temp_cron"
+    
+    # Remove any existing entries for this wrapper file
+    grep -v "$wrapper_file" "$temp_cron" > "${temp_cron}.new" 2>/dev/null || touch "${temp_cron}.new"
+    
+    # Add the new entry
+    echo "$reboot_entry" >> "${temp_cron}.new"
+    
+    # Install the new crontab
+    crontab "${temp_cron}.new"
+    
+    # Clean up temp files
+    rm -f "$temp_cron" "${temp_cron}.new"
     
     log_success "Installed reboot entry for $module_name"
 }
 
 remove_cron_entry() {
     local module_name="$1"
+    local wrapper_file="${WRAPPER_DIR}/psyched-${module_name}"
     
-    # Remove reboot entry
-    crontab -l 2>/dev/null | grep -v "# psyched-${module_name}-reboot" | crontab - || true
+    # Remove any entries for this module's wrapper file
+    crontab -l 2>/dev/null | grep -v "$wrapper_file" | crontab - || true
     
     # Remove wrapper and PID file
     rm -f "${WRAPPER_DIR}/psyched-${module_name}"

@@ -68,7 +68,7 @@ fi
 # Determine host (env var HOST overrides system hostname)
 HOST="${HOST:-$(hostname -s)}"
 HOST_DIR="$REPO_ROOT/hosts/$HOST"
-ENABLED_DIR="$HOST_DIR/enabled"
+ENABLED_DIR="$HOST_DIR/modules"
 echo "[bootstrap] Host: $HOST"
 
 if [[ -d "$HOST_DIR" ]]; then

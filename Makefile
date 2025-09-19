@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service restart-voice
+.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -14,15 +14,6 @@ help:
 	@echo "  get-piper-voices   - Download additional Piper TTS voices (usage: make get-piper-voices VOICES=\"voice1,voice2\")"
 	@echo "  check-piper        - Check Piper installation and available voices"
 	@echo ""
-	@echo "Service Management:"
-	@echo "  install-services   - Install cron-based services for enabled modules (no sudo required)"
-	@echo "  uninstall-services - Remove all psyched cron services"
-	@echo "  stop-services      - Stop all psyched cron services"
-	@echo "  status-services    - Show status of all psyched cron services"
-	@echo "  logs-service       - Show logs for a cron service (usage: make logs-service SERVICE=voice [LINES=50])"
-	@echo "  start-service      - Start a specific cron service (usage: make start-service SERVICE=voice)"
-	@echo "  stop-service       - Stop a specific cron service (usage: make stop-service SERVICE=voice)"
-	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
 	@echo "  ./modules/foot/setup.sh && make build"
@@ -30,9 +21,6 @@ help:
 	@echo "  make say TEXT=\"Hello, this is a test\""
 	@echo "  make pub-string TOPIC=/foot TEXT=\"Step command\""
 	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
-	@echo "  make install-services       # Install lightweight cron services"
-	@echo "  make status-services"
-	@echo "  make logs-service SERVICE=voice LINES=100"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=kilted
@@ -56,17 +44,12 @@ ros2:
 #       populates the install/ tree. We emulate the requested flow accordingly.
 build:
 	@bash -lc 'set -euo pipefail; \
-		echo "[build] Sourcing ROS environment..."; \
-		eval "$$(SETUP_ENV_MODE=print ./tools/setup_env.sh)"; \
-		echo "[build] Updating rosdep..."; \
+		source /opt/ros/kilted/setup.bash; \
 		rosdep update; \
-		echo "[build] Installing dependencies with rosdep..."; \
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
 		cd ..; \
-		echo "[build] Running colcon build..."; \
 		colcon build --symlink-install; \
-	echo "[build] Re-sourcing environment..."; \
-	eval "$$(SETUP_ENV_MODE=print ./tools/setup_env.sh)"; \
+		source install/setup.bash; \
 		echo "[build] Done."'
 
 # Bootstrap the host/dev environment
@@ -85,8 +68,6 @@ bootstrap:
 #   make update
 update:
 	@bash -lc 'set -euo pipefail; \
-		echo "[update] Stopping old services..."; \
-		$(MAKE) stop-services || true; \
 		echo "[update] Stashing local changes (including untracked)..."; \
 		STASH_CREATED=0; \
 		if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(shell git ls-files --others --exclude-standard)" ]; then \
@@ -97,10 +78,6 @@ update:
 		git pull --rebase; \
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
-		echo "[update] Installing lightweight cron-based services..."; \
-		$(MAKE) install-services; \
-		echo "[update] Services will start automatically within 1 minute."; \
-		echo "[update] Use: make status-services to check status"; \
 		echo "[update] Done."'
 
 # Publish text to the /voice topic for text-to-speech
@@ -114,10 +91,8 @@ say:
 		exit 1; \
 	fi
 	@set -euo pipefail; \
-		echo "[say] Sourcing minimal ROS environment..."; \
-		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
-		if [ -f install/setup.bash ]; then COLCON_TRACE="$${COLCON_TRACE:-}" source install/setup.bash >/dev/null 2>&1; fi; \
-		# Capture TEXT safely and escape for YAML double-quoted string
+		source /opt/ros/kilted/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
+		if [ -f install/setup.bash ]; then source install/setup.bash >/dev/null 2>&1; fi; \
 		TEXT_VAL=$$(printf '%s' "$(TEXT)"); \
 		yaml_escape() { local s="$$1"; s="$${s//\\/\\\\}"; s="$${s//\"/\\\"}"; printf '%s' "$$s"; }; \
 		ROS_YAML=$$(printf 'data: "%s"' "$$(yaml_escape "$$TEXT_VAL")"); \
@@ -140,8 +115,7 @@ pub-string:
 		exit 1; \
 	fi
 	@set -euo pipefail; \
-		echo "[pub-string] Sourcing minimal ROS environment..."; \
-		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
+		source /opt/ros/kilted/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
 		if [ -f install/setup.bash ]; then source install/setup.bash >/dev/null 2>&1; fi; \
 		TEXT_VAL=$$(printf '%s' "$(TEXT)"); \
 		yaml_escape() { local s="$$1"; s="$${s//\\/\\\\}"; s="$${s//\"/\\\"}"; printf '%s' "$$s"; }; \
@@ -316,69 +290,3 @@ check-piper:
 		echo "4. Test playback: aplay test.wav"; \
 		echo "5. Test ROS publishing: make say TEXT=\"Hello world\""; \
 		echo ""'
-
-# Install cron-based services for enabled modules (NO SUDO REQUIRED)
-# Usage:
-#   make install-services
-#   make install-services HOST=cerebellum
-install-services:
-	@echo "[services] Installing lightweight cron-based services for enabled modules..."
-	@./tools/cron_manager.sh install-enabled $(HOST)
-	@echo "[services] Cron services installed."
-
-# Remove all psyched cron services and stop running processes
-# Usage:
-#   make uninstall-services
-uninstall-services:
-	@echo "[services] Removing all psyched cron services..."
-	@./tools/cron_manager.sh uninstall-all
-	@echo "[services] All cron services removed."
-
-# Stop all running cron services
-# Usage:
-#   make stop-services
-stop-services:
-	@echo "[services] Stopping all psyched cron services..."
-	@./tools/cron_manager.sh stop-all
-	@echo "[services] Services stopped."
-
-# Show status of all cron services
-# Usage:
-#   make status-services
-status-services:
-	@echo "[services] Status of all psyched cron services:"
-	@./tools/cron_manager.sh status
-
-# Show recent logs for a cron service
-# Usage:
-#   make logs-service SERVICE=voice
-#   make logs-service SERVICE=foot LINES=50
-logs-service:
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "Error: Please provide SERVICE parameter. Usage: make logs-service SERVICE=voice"; \
-		exit 1; \
-	fi
-	@echo "[services] Showing logs for cron service: $(SERVICE)"
-	@./tools/cron_manager.sh logs $(SERVICE) $(LINES)
-
-# Start a specific cron service manually
-# Usage:
-#   make start-service SERVICE=voice
-start-service:
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "Error: Please provide SERVICE parameter. Usage: make start-service SERVICE=voice"; \
-		exit 1; \
-	fi
-	@echo "[services] Starting cron service: $(SERVICE)"
-	@./tools/cron_manager.sh start $(SERVICE)
-
-# Stop a specific cron service
-# Usage:
-#   make stop-service SERVICE=voice
-stop-service:
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "Error: Please provide SERVICE parameter. Usage: make stop-service SERVICE=voice"; \
-		exit 1; \
-	fi
-	@echo "[services] Stopping cron service: $(SERVICE)"
-	@./tools/cron_manager.sh stop $(SERVICE)
