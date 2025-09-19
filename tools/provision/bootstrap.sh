@@ -20,8 +20,9 @@ sudo apt-get install -y --no-install-recommends git \
     build-essential curl make \
     python-is-python3 \
     python3-venv \
+    python3-pip \
     python3-setuptools \
-    python3-dev \
+    python3-dev
 
 # Ensure ROS2 is available
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."

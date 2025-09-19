@@ -30,6 +30,30 @@ else
     return_or_exit 1
 fi
 
+# Ensure a common Python virtual environment for tools and Python packages
+VENV_DIR="${WORKSPACE_PATH}/.venv"
+if [ ! -d "${VENV_DIR}" ]; then
+    echo "Creating Python venv at ${VENV_DIR} (with system site packages)..."
+    if ! python3 -m venv --system-site-packages "${VENV_DIR}" 2>/dev/null; then
+        echo "python3-venv may be missing; try: 'sudo apt-get install python3-venv python3-pip'" >&2
+        return_or_exit 1
+    fi
+fi
+
+if [ -f "${VENV_DIR}/bin/activate" ]; then
+    # shellcheck source=/dev/null
+    source "${VENV_DIR}/bin/activate"
+    # Ensure pip is available inside the venv
+    if ! command -v pip >/dev/null 2>&1; then
+        echo "Bootstrapping pip in venv with ensurepip..."
+        python -m ensurepip --upgrade || true
+    fi
+    # Ensure core build tools are present
+    python -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+else
+    echo "Warning: venv activation script missing at ${VENV_DIR}/bin/activate" >&2
+fi
+
 if [ -f "${WORKSPACE_PATH}/install/setup.sh" ]; then
     echo "Sourcing workspace install/setup.sh..."
     # Prefer POSIX-compatible setup.sh per project convention
