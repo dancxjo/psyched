@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say speak pub-voice pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
+.PHONY: help ros2 build bootstrap update say speak pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -9,9 +9,8 @@ help:
 	@echo "  build              - Resolve deps with rosdep, colcon build, and re-source env"
 	@echo "  bootstrap          - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo "  update             - git pull then run bootstrap"
-	@echo "  say                - Publish text to /voice topic (usage: make say TEXT=\"Hello world\")"
+	@echo "  say                - Publish text to /voice topic with full env setup (usage: make say TEXT=\"Hello\")"
 	@echo "  speak              - Quick publish to /voice without deps (usage: make speak TEXT=\"Hello\")"
-	@echo "  pub-voice          - Direct publish to /voice topic (usage: make pub-voice TEXT=\"Hello\")"
 	@echo "  pub-string         - Publish to any topic (usage: make pub-string TOPIC=/voice TEXT=\"Hello\")"
 	@echo "  get-piper-voices   - Download additional Piper TTS voices (usage: make get-piper-voices VOICES=\"voice1,voice2\")"
 	@echo "  check-piper        - Check Piper installation and available voices"
@@ -30,9 +29,8 @@ help:
 	@echo "  make ros2"
 	@echo "  ./modules/foot/setup.sh && make build"
 	@echo "  ./modules/voice/setup.sh && make build"
-	@echo "  make say TEXT=\"Hello, this is a test\"  # Full build with deps"
-	@echo "  make speak TEXT=\"Quick hello\"          # Direct publish, no deps"
-	@echo "  make pub-voice TEXT=\"Direct voice\"     # Same as speak"
+	@echo "  make say TEXT=\"Hello, this is a test\"  # Full env setup"
+	@echo "  make speak TEXT=\"Quick hello\"          # Fast, lightweight"
 	@echo "  make pub-string TOPIC=/foot TEXT=\"Step command\""
 	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
 	@echo "  sudo make install-services"
@@ -120,7 +118,8 @@ update:
 		}; \
 		echo "[update] Done."'
 
-# Publish text to the /voice topic for text-to-speech
+# Publish text to the /voice topic for text-to-speech (with full environment setup)
+# This version runs the full environment setup including rosdep and build steps
 # Usage:
 #   make say TEXT="Hello world"
 #   make say TEXT="This is a longer message to speak"
@@ -136,8 +135,8 @@ say:
 		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
 		echo "[say] Message published."'
 
-# Quick publish to /voice topic without dependency installation
-# This is a lightweight alternative to 'say' that skips rosdep and build steps
+# Quick publish to /voice topic without dependency installation (lightweight)
+# This is the fast way to publish to /voice - skips rosdep and build steps
 # Usage:
 #   make speak TEXT="Hello world"
 #   make speak TEXT="Quick message"
@@ -153,11 +152,6 @@ speak:
 		echo "[speak] Publishing \"$(TEXT)\" to /voice topic..."; \
 		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
 		echo "[speak] Message published."'
-
-# Direct publish to /voice topic (alias for speak)
-# Usage:
-#   make pub-voice TEXT="Hello world"
-pub-voice: speak
 
 # Generic publish to any topic with string message
 # Usage:
