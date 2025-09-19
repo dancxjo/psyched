@@ -55,9 +55,60 @@ get_enabled_modules() {
     done
 }
 
+get_module_config() {
+    local module_name="$1"
+    local hostname="${2:-$(hostname -s)}"
+    local config_file="${REPO_DIR}/hosts/${hostname}/config/${module_name}.toml"
+    
+    if [[ -f "$config_file" ]]; then
+        echo "$config_file"
+        return 0
+    else
+        log_warning "No config file found for module '$module_name' on host '$hostname'"
+        return 1
+    fi
+}
+
+parse_toml_config() {
+    local config_file="$1"
+    local env_vars=""
+    
+    if [[ ! -f "$config_file" ]]; then
+        return 1
+    fi
+    
+    # Simple TOML parser - handles key=value pairs
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        
+        # Clean up key and value
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs | sed 's/^"//' | sed 's/"$//')
+        
+        # Convert to uppercase for environment variable
+        env_key=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+        
+        # Add to environment variables string
+        env_vars="${env_vars}export ${env_key}=\"${value}\"\n"
+    done < "$config_file"
+    
+    echo -e "$env_vars"
+}
+
 create_lightweight_wrapper() {
     local module_name="$1"
+    local hostname="${2:-$(hostname -s)}"
     local wrapper_file="${WRAPPER_DIR}/psyched-${module_name}"
+    
+    # Get module configuration
+    local config_file
+    config_file=$(get_module_config "$module_name" "$hostname" 2>/dev/null || echo "")
+    local config_vars=""
+    if [[ -n "$config_file" ]]; then
+        config_vars=$(parse_toml_config "$config_file")
+        log_info "Found configuration for $module_name: $config_file"
+    fi
     
     cat > "$wrapper_file" << EOF
 #!/usr/bin/env bash
@@ -68,6 +119,7 @@ set -euo pipefail
 
 MODULE_NAME="$module_name"
 REPO_DIR="$REPO_DIR"
+HOSTNAME="$hostname"
 PID_FILE="$PID_DIR/psyched-\${MODULE_NAME}.pid"
 LOG_FILE="$LOG_DIR/psyched-\${MODULE_NAME}.log"
 
@@ -91,7 +143,7 @@ fi
 echo \$\$ > "\$PID_FILE"
 
 # Start logging
-echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting \$MODULE_NAME service" >> "\$LOG_FILE"
+echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting \$MODULE_NAME service on host \$HOSTNAME" >> "\$LOG_FILE"
 
 # Change to repo directory
 cd "\$REPO_DIR"
@@ -99,10 +151,19 @@ cd "\$REPO_DIR"
 # Minimal environment setup - avoid heavy ROS sourcing
 export PATH="\$HOME/.local/bin:/usr/local/bin:\$PATH"
 export ROS_DOMAIN_ID=\${ROS_DOMAIN_ID:-0}
-export VOICE_ENGINE=espeak
-export ESPEAK_VOICE=en-us
+
+# Default voice environment variables
+export VOICE_ENGINE=piper
+export ESPEAK_VOICE=mb-en1
 export PIPER_MODEL=en_US-ryan-high
 export PIPER_VOICES_DIR=/opt/piper/voices
+
+# Apply module-specific configuration from TOML file
+$(echo -e "$config_vars")
+
+# Log configuration being used
+echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Configuration applied for \$MODULE_NAME:" >> "\$LOG_FILE"
+$(echo -e "$config_vars" | sed 's/^export /echo "[$(date "+%Y-%m-%d %H:%M:%S")] - /' | sed 's/$/\" >> "\$LOG_FILE"/')
 
 # Only source ROS if absolutely necessary and do it minimally
 if [[ -f "/opt/ros/kilted/setup.bash" ]]; then
@@ -121,36 +182,36 @@ exec "\$REPO_DIR/modules/\$MODULE_NAME/launch.sh" >> "\$LOG_FILE" 2>&1
 EOF
 
     chmod +x "$wrapper_file"
-    log_success "Created wrapper for $module_name"
+    log_success "Created wrapper for $module_name with host configuration"
 }
 
 install_cron_entry() {
     local module_name="$1"
     local wrapper_file="${WRAPPER_DIR}/psyched-${module_name}"
     
-    # Create cron entry that runs every minute and checks if service is running
-    local cron_entry="* * * * * $wrapper_file >/dev/null 2>&1"
+    # Create @reboot entry to start services immediately on system restart
+    local reboot_entry="@reboot sleep 30 && $wrapper_file >/dev/null 2>&1"
     
-    # Add to crontab if not already present
-    (crontab -l 2>/dev/null || true; echo "$cron_entry") | \
+    # Add reboot entry to crontab if not already present
+    (crontab -l 2>/dev/null || true; echo "$reboot_entry") | \
     grep -v "# psyched-${module_name}" | \
-    { cat; echo "$cron_entry # psyched-${module_name}"; } | \
+    { cat; echo "$reboot_entry # psyched-${module_name}-reboot"; } | \
     crontab -
     
-    log_success "Installed cron entry for $module_name"
+    log_success "Installed reboot entry for $module_name"
 }
 
 remove_cron_entry() {
     local module_name="$1"
     
-    # Remove cron entry
-    crontab -l 2>/dev/null | grep -v "# psyched-${module_name}" | crontab - || true
+    # Remove reboot entry
+    crontab -l 2>/dev/null | grep -v "# psyched-${module_name}-reboot" | crontab - || true
     
     # Remove wrapper and PID file
     rm -f "${WRAPPER_DIR}/psyched-${module_name}"
     rm -f "${PID_DIR}/psyched-${module_name}.pid"
     
-    log_success "Removed cron entry for $module_name"
+    log_success "Removed reboot entry for $module_name"
 }
 
 install_enabled() {
@@ -166,7 +227,7 @@ install_enabled() {
     fi
     
     get_enabled_modules "$hostname" | while read -r module; do
-        create_lightweight_wrapper "$module"
+        create_lightweight_wrapper "$module" "$hostname"
         install_cron_entry "$module"
     done
     
@@ -177,7 +238,7 @@ install_enabled() {
 uninstall_all() {
     log_info "Removing all psyched cron entries"
     
-    # Remove all psyched cron entries
+    # Remove all psyched cron entries (including reboot entries)
     crontab -l 2>/dev/null | grep -v "# psyched-" | crontab - || true
     
     # Clean up wrapper files and PID files
