@@ -1,7 +1,6 @@
 mod app;
 mod cli;
 mod command_runner;
-mod environment;
 mod host;
 mod layout;
 mod util;

@@ -7,10 +7,9 @@ use std::path::PathBuf;
 
 use crate::cli::{Commands, HostCommands, ModuleArgs, ModuleCommands, Ros2Args};
 use crate::command_runner::{CommandRunner, CommandSpec};
-use crate::environment::print_shell_setup;
 use crate::host::HostConfig;
 use crate::layout::{copy_release_binary, user_install_dir, Layout};
-use crate::util::{ensure_tool, set_executable_permissions};
+use crate::util::{ensure_tool, psh_binary, set_executable_permissions, sh_quote};
 
 const REPO_URL: &str = "https://github.com/dancxjo/psyched.git";
 
@@ -200,7 +199,29 @@ impl<R: CommandRunner> App<R> {
     }
 
     fn env(&self) -> Result<()> {
-        print_shell_setup(&self.layout);
+        let script = self.layout.setup_env_script();
+        if !script.exists() {
+            bail!(
+                "{} does not exist. Run `psh clone` first to fetch the repository or provide PSH_REPO_DIR.",
+                script.display()
+            );
+        }
+
+        let workspace = self.layout.repo_path.to_string_lossy();
+        let distro = crate::util::ros_distro();
+        let command = format!(
+            "WORKSPACE_PATH={} ROS_DISTRO={} bash {}",
+            sh_quote(&workspace),
+            sh_quote(&distro),
+            sh_quote(&script.to_string_lossy()),
+        );
+
+        self.runner.run(
+            &CommandSpec::new("bash")
+                .arg("-lc")
+                .arg(command)
+                .cwd(&self.layout.repo_path),
+        )?;
         Ok(())
     }
 
@@ -281,9 +302,6 @@ impl<R: CommandRunner> App<R> {
             ModuleAction::Launch => self.launch_module(name),
             ModuleAction::Setup | ModuleAction::Teardown => {
                 self.run_module_script(name, action)?;
-                if matches!(action, ModuleAction::Setup) {
-                    print_shell_setup(&self.layout);
-                }
                 Ok(())
             }
         }
@@ -325,12 +343,19 @@ impl<R: CommandRunner> App<R> {
         }
 
         let distro = crate::util::ros_distro();
+        let psh = psh_binary().with_context(|| "resolving current psh executable")?;
+        let env_eval = format!(
+            "source <(WORKSPACE_PATH={workspace} ROS_DISTRO={distro} PSH_ENV_MODE=print {psh} env)",
+            workspace = sh_quote(&self.layout.repo_path.to_string_lossy()),
+            distro = sh_quote(&distro),
+            psh = sh_quote(&psh.to_string_lossy()),
+        );
+
+        let launch_script = format!("./modules/{name}/launch.sh", name = name);
         let launch_cmd = format!(
-            "source /opt/ros/{distro}/setup.bash && \
-if [ -f install/setup.bash ]; then source install/setup.bash; fi && \
-./modules/{name}/launch.sh",
-            distro = distro,
-            name = name,
+            "{env_eval} && {launch}",
+            env_eval = env_eval,
+            launch = sh_quote(&launch_script),
         );
 
         self.runner.run(
@@ -567,13 +592,21 @@ mod tests {
     }
 
     #[test]
-    fn module_launch_sources_environment_before_invoking_script() {
+    fn module_launch_sources_via_psh_env_before_invoking_script() {
+        let _guard = env_lock().lock().unwrap();
+        env::set_var("PSH_SELF", "/usr/bin/psh-test");
+
         let repo_dir = tempdir().unwrap();
         let modules_dir = repo_dir.path().join("modules");
         let script_dir = modules_dir.join("dummy");
         fs::create_dir_all(&script_dir).unwrap();
         let launch_path = script_dir.join("launch.sh");
         fs::write(&launch_path, b"#!/bin/bash\nros2 launch foo bar\n").unwrap();
+
+        let tools_dir = repo_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+        let setup_env = tools_dir.join("setup_env.sh");
+        fs::write(&setup_env, b"#!/bin/bash\nexit 0\n").unwrap();
 
         let install_dir = tempdir().unwrap();
         let systemd_dir = tempdir().unwrap();
@@ -598,15 +631,30 @@ mod tests {
         assert_eq!(command.program, "bash");
         assert_eq!(command.args.first().map(String::as_str), Some("-lc"));
         let body = command.args.get(1).expect("launch command body");
-        assert!(body.contains("source /opt/ros"));
+        assert!(body.contains("PSH_ENV_MODE=print '/usr/bin/psh-test' env"));
         assert!(body.contains("modules/dummy/launch.sh"));
+
+        env::remove_var("PSH_SELF");
     }
 
     #[test]
-    fn env_prints_instructions() {
+    fn env_invokes_setup_env_script() {
         let layout = layout();
+        let tools_dir = layout.repo_path.join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+        let script = tools_dir.join("setup_env.sh");
+        fs::write(&script, b"#!/bin/bash\nexit 0\n").unwrap();
+
         let runner = MockRunner::default();
-        let app = App::new(layout, runner);
+        let app = App::new(layout, runner.clone());
         assert!(app.env().is_ok());
+
+        let commands = runner.commands();
+        assert_eq!(commands.len(), 1);
+        let command = &commands[0];
+        assert_eq!(command.program, "bash");
+        assert_eq!(command.args.first().map(String::as_str), Some("-lc"));
+        let body = command.args.get(1).expect("env command body");
+        assert!(body.contains("setup_env.sh"));
     }
 }

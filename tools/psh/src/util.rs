@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -58,4 +58,16 @@ pub fn set_executable_permissions(path: &Path) -> Result<()> {
         fs::set_permissions(path, permissions)?;
     }
     Ok(())
+}
+
+pub fn sh_quote(value: &str) -> String {
+    let escaped = value.replace('\'', "'\\''");
+    format!("'{escaped}'")
+}
+
+pub fn psh_binary() -> Result<PathBuf> {
+    if let Ok(path) = env::var("PSH_SELF") {
+        return Ok(PathBuf::from(path));
+    }
+    env::current_exe().with_context(|| "unable to determine path to current psh executable")
 }

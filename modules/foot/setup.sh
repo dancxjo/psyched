@@ -37,10 +37,10 @@ if [ ! -d "${LIBCREATE_DIR}/.git" ]; then
     git clone --branch "$LIBCREATE_BRANCH" --single-branch "$LIBCREATE_REPO" "$LIBCREATE_DIR"
 fi
 
-ROS_DISTRO="$DISTRO" bash -lc '
+WORKSPACE_PATH="$REPO_DIR" ROS_DISTRO="$DISTRO" bash -lc '
 set -euo pipefail
-source /opt/ros/${ROS_DISTRO}/setup.bash
-rosdep install -i --from-path src --rosdistro ${ROS_DISTRO} -y
+source <(PSH_ENV_MODE=print psh env)
+rosdep install -i --from-path src --rosdistro "${ROS_DISTRO}" -y
 colcon build --symlink-install
 colcon build --symlink-install --install-base install
 '
@@ -62,7 +62,7 @@ After=network.target
 Type=simple
 User=${SERVICE_USER}
 Environment=ROS_DOMAIN_ID=0
-ExecStart=/bin/bash -lc 'cd ${REPO_DIR} && source /opt/ros/${DISTRO}/setup.bash && if [ -f install/setup.bash ]; then source install/setup.bash; fi && ./modules/foot/launch.sh'
+ExecStart=/bin/bash -lc 'cd ${REPO_DIR} && source <(WORKSPACE_PATH=${REPO_DIR} ROS_DISTRO=${DISTRO} PSH_ENV_MODE=print psh env) && ./modules/foot/launch.sh'
 Restart=on-failure
 
 [Install]

@@ -80,6 +80,10 @@ impl Layout {
         self.repo_path.join("tools").join("install_ros2.sh")
     }
 
+    pub fn setup_env_script(&self) -> PathBuf {
+        self.repo_path.join("tools").join("setup_env.sh")
+    }
+
     pub fn hosts_dir(&self) -> PathBuf {
         self.repo_path.join("hosts")
     }
