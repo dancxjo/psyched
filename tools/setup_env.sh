@@ -13,7 +13,7 @@ SETUP_ENV_MODE=${SETUP_ENV_MODE:-run}
 emit_body() {
     cat <<EOF
 # Helper: return from sourced contexts or exit when executed
-return_or_exit() { return "${1:-1}" 2>/dev/null || exit "${1:-1}"; }
+return_or_exit() { return "\${1:-1}" 2>/dev/null || exit "\${1:-1}"; }
 
 # Helper: safely source a script even under 'set -u' by temporarily disabling nounset
 safesource() {
