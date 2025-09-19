@@ -60,20 +60,23 @@ if [[ -d "$HOST_DIR" ]]; then
         BASHRC="$HOME/.bashrc"
         BASHRC_MARK_START="# >>> psyched auto-setup >>>"
         BASHRC_MARK_END="# <<< psyched auto-setup <<<"
-            AUTO_BLOCK=$(cat <<BRC
-    # >>> psyched auto-setup >>>
-    # Automatically set up ROS 2 and project venv for this repository in interactive shells.
-    PSYCHED_REPO="$REPO_ROOT"
-    if [ -d "\$PSYCHED_REPO" ] && [ -f "\$PSYCHED_REPO/tools/setup_env.sh" ]; then
-        case \$- in
-            *i*)
-                eval "\$(SETUP_ENV_MODE=print \"\$PSYCHED_REPO\"/tools/setup_env.sh)"
-                ;;
-        esac
-    fi
-    # <<< psyched auto-setup <<<
-    BRC
-    )
+            AUTO_BLOCK=$(cat <<'BRC'
+# >>> psyched auto-setup >>>
+# Automatically set up ROS 2 and project venv for this repository in interactive shells.
+PSYCHED_REPO="__PSYCHED_REPO_PLACEHOLDER__"
+if [ -d "$PSYCHED_REPO" ] && [ -f "$PSYCHED_REPO/tools/setup_env.sh" ]; then
+    case $- in
+        *i*)
+            eval "$(SETUP_ENV_MODE=print "$PSYCHED_REPO"/tools/setup_env.sh)"
+            ;;
+    esac
+fi
+# <<< psyched auto-setup <<<
+BRC
+)
+
+            # Replace placeholder with actual path safely
+            AUTO_BLOCK="${AUTO_BLOCK//__PSYCHED_REPO_PLACEHOLDER__/$REPO_ROOT}"
 
             if grep -Fq "$BASHRC_MARK_START" "$BASHRC" 2>/dev/null; then
                     echo "[bootstrap] Updating auto-setup block in $BASHRC"

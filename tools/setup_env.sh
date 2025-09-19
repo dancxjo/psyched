@@ -2,14 +2,12 @@
 # Setup environment for the Psyched repository (used as the ROS 2 workspace).
 # This script can be executed directly or sourced.
 
+# Resolve script dir and default workspace (repo root)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_DEFAULT_WORKSPACE_PATH="$(cd "${_SCRIPT_DIR}/.." && pwd)"
+
+# Respect external overrides, default ROS distro
 ROS_DISTRO=${ROS_DISTRO:-jazzy}
-
-# Default WORKSPACE_PATH to the repo root (tools/..), unless overridden.
-if [ -z "${WORKSPACE_PATH:-}" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    WORKSPACE_PATH="$(cd "${SCRIPT_DIR}/.." && pwd)"
-fi
-
 SETUP_ENV_MODE=${SETUP_ENV_MODE:-run}
 
 emit_body() {
@@ -28,7 +26,12 @@ safesource() {
 
 echo "Setting up ROS 2 environment..."
 echo "ROS_DISTRO: ${ROS_DISTRO}"
-echo "Workspace (repo root): ${WORKSPACE_PATH}"
+
+# Default WORKSPACE_PATH to the repo root captured at print-time, unless overridden by caller
+if [ -z "\${WORKSPACE_PATH:-}" ]; then
+    WORKSPACE_PATH="${_DEFAULT_WORKSPACE_PATH}"
+fi
+echo "Workspace (repo root): \${WORKSPACE_PATH}"
 
 # Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
