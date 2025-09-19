@@ -43,6 +43,7 @@ build:
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
 		cd ..; \
 		colcon build --symlink-install; \
+		ln -sfn $(CURDIR)/hosts $(CURDIR)/install/hosts; \
 		source install/setup.bash; \
 		echo "[build] Done."'
 
