@@ -88,29 +88,28 @@ psh module launch foot
 The launch command writes a `psyched-foot.service` unit file to `/etc/systemd/system`
 and enables it so the robot bring-up runs automatically at boot.
 
+Each module is a folder under [`modules/`](modules/) containing lifecycle scripts such as
+`setup.sh`, `teardown.sh`, and `launch.sh`. `psh` simply executes these scripts inside the
+checked-out repository, keeping the coordinator lightweight while allowing modules to
+evolve independently.
+
 ## Workspace Layout
 
 ```
 psyched/
+├── Cargo.toml             # Workspace manifest (declares the tools/psh crate member)
 ├── hosts/                 # Host configuration files consumed by psh
-├── psh.rs                 # Single-file Rust CLI source
-├── Cargo.toml             # Cargo metadata for the CLI
-├── Makefile               # Legacy targets (now powered by psh)
-├── scripts/               # Helper scripts for manual workflows
-├── tools/                 # Provisioning helpers (install scripts, etc.)
+├── modules/               # Module entrypoints implemented as shell scripts
+├── tools/
+│   ├── install_ros2.sh    # Provision ROS 2 from Debian packages
+│   ├── setup_env.sh       # Interactive helper for sourcing environments
+│   └── psh/
+│       ├── Cargo.toml     # psh CLI crate metadata
+│       └── src/           # Rust sources (thin coordinator)
 └── src/                   # ROS 2 packages (ament build system)
 ```
 
-## Legacy Makefile Targets
+## CLI instead of Make
 
-The existing Makefile remains available for compatibility. It mirrors the legacy
-workflows for situations where `psh` is unavailable. The important targets are:
-
-- `make ros2` — Install ROS 2 using the Debian packages
-- `make workspace` — Create and build the ROS workspace at `/opt/psyched`
-- `make env` — Print environment setup instructions
-- `make build` — Install dependencies and rebuild the workspace
-- `make clean` — Remove build artefacts
-
-New development should happen through the `psh` CLI to benefit from the consistent UX,
-automated dependency checks, and host/module abstractions.
+The Makefile has been reduced to a stub that points to `psh`. Use the CLI for all
+automation; for example `psh ros2`, `psh module setup foot`, and `psh module remove foot`.
