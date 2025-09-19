@@ -188,7 +188,7 @@ class VoiceNode(Node):
             enable_ping = self.get_parameter('enable_ping').get_parameter_value().bool_value
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
             if enable_ping and ping_interval > 0:
-                self.create_timer(ping_interval, lambda: self.enqueue(String(data='ping')))
+                self.create_timer(ping_interval, lambda: self.enqueue(String(data='I am here.')))
         except Exception:
             pass
 
