@@ -58,15 +58,20 @@ else
   if ! command -v espeak-ng >/dev/null 2>&1 && ! command -v espeak >/dev/null 2>&1; then
     echo "espeak-ng not found. Attempting to install..."
     if command -v apt >/dev/null 2>&1; then
-      sudo apt update && sudo apt install -y espeak-ng mbrola mbrola-us1 || true
+      sudo apt update && sudo apt install -y espeak-ng mbrola || true
     else
       echo "Non-APT system; please install espeak-ng and MBROLA voices manually."
     fi
   fi
   # Suggest environment variable for voice
   if [ -z "${ESPEAK_VOICE:-}" ]; then
-    export ESPEAK_VOICE="en-us"
-    echo "ESPEAK_VOICE set to ${ESPEAK_VOICE} (set to mb-us1 if MBROLA installed)"
+    export ESPEAK_VOICE="mb-en1"
+    echo "ESPEAK_VOICE set to ${ESPEAK_VOICE}"
+  fi
+  # Attempt to install the requested MBROLA voice if on apt-based systems
+  if command -v apt >/dev/null 2>&1; then
+    # Common package name for English MBROLA voice
+    sudo apt install -y mbrola-en1 || true
   fi
 fi
 
