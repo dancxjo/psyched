@@ -1,2 +1,1 @@
-#!/usr/bin/env bash
-# Enable chat module on this host - setup & launch are handled by systemd via manage_services
+../../../modules/chat/

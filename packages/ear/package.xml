@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+    <name>ear</name>
+    <version>0.1.0</version>
+    <description>Capture microphone PCM audio and publish as audio_common_msgs/AudioData.</description>
+
+    <maintainer email="you@example.com">Psyched</maintainer>
+    <license>MIT</license>
+
+    <buildtool_depend>ament_cmake</buildtool_depend>
+    <buildtool_depend>ament_python</buildtool_depend>
+
+    <exec_depend>rclpy</exec_depend>
+    <exec_depend>audio_common_msgs</exec_depend>
+
+    <test_depend>ament_lint_auto</test_depend>
+    <test_depend>ament_lint_common</test_depend>
+
+    <export>
+        <build_type>ament_python</build_type>
+    </export>
+</package>
