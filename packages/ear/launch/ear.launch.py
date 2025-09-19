@@ -5,28 +5,28 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    topic = LaunchConfiguration('topic', default='/audio')
-    device = LaunchConfiguration('device', default='0')  # Integer for device ID
-    sample_rate = LaunchConfiguration('sample_rate', default='44100')  # More common sample rate
+    device_id = LaunchConfiguration('device_id', default='0')
+    sample_rate = LaunchConfiguration('sample_rate', default='44100')
     channels = LaunchConfiguration('channels', default='1')
-    chunk = LaunchConfiguration('chunk', default='1024')  # Smaller chunk size
+    chunk_size = LaunchConfiguration('chunk_size', default='1024')
+    silence_threshold = LaunchConfiguration('silence_threshold', default='500.0')
 
     return LaunchDescription([
-        DeclareLaunchArgument('topic', default_value=topic),
-        DeclareLaunchArgument('device', default_value=device),
+        DeclareLaunchArgument('device_id', default_value=device_id),
         DeclareLaunchArgument('sample_rate', default_value=sample_rate),
         DeclareLaunchArgument('channels', default_value=channels),
-        DeclareLaunchArgument('chunk', default_value=chunk),
+        DeclareLaunchArgument('chunk_size', default_value=chunk_size),
+        DeclareLaunchArgument('silence_threshold', default_value=silence_threshold),
         Node(
-            package='audio_common',
-            executable='audio_capturer_node',
+            package='ear',
+            executable='ear_node',
             name='ear',
             parameters=[{
-                'topic': topic,
-                'device': device,
+                'device_id': device_id,
                 'sample_rate': sample_rate,
                 'channels': channels,
-                'chunk': chunk,
+                'chunk_size': chunk_size,
+                'silence_threshold': silence_threshold,
             }],
             output='screen',
         )

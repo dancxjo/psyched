@@ -15,12 +15,12 @@ setup(
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='you@example.com',
-    description='Microphone PCM publisher using arecord, publishing audio_common_msgs/AudioData',
+    description='PyAudio-based microphone capture with silence detection',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'ear_node = ear.node:main',
+            'ear_node = ear.pyaudio_ear_node:main',
         ],
     },
 )
