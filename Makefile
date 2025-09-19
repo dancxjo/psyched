@@ -1,21 +1,31 @@
-.PHONY: help ros2 build bootstrap update say
+.PHONY: help ros2 build bootstrap update say install-services uninstall-services update-services start-services stop-services status-services
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
 
 help:
 	@echo "Targets:"
-	@echo "  ros2       - Install ROS 2 using tools/install_ros2.sh"
-	@echo "  build      - Resolve deps with rosdep, colcon build, and re-source env"
-	@echo "  bootstrap  - Run initial provisioning via tools/provision/bootstrap.sh"
-	@echo "  update     - git pull then run bootstrap"
-	@echo "  say        - Publish text to /voice topic (usage: make say TEXT=\"Hello world\")"
+	@echo "  ros2               - Install ROS 2 using tools/install_ros2.sh"
+	@echo "  build              - Resolve deps with rosdep, colcon build, and re-source env"
+	@echo "  bootstrap          - Run initial provisioning via tools/provision/bootstrap.sh"
+	@echo "  update             - git pull then run bootstrap"
+	@echo "  say                - Publish text to /voice topic (usage: make say TEXT=\"Hello world\")"
+	@echo ""
+	@echo "Service Management:"
+	@echo "  install-services   - Install systemd services for enabled modules"
+	@echo "  uninstall-services - Remove all psyched systemd services"
+	@echo "  update-services    - Uninstall and reinstall services (for updates)"
+	@echo "  start-services     - Start all enabled module services"
+	@echo "  stop-services      - Stop all psyched services"
+	@echo "  status-services    - Show status of all psyched services"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
 	@echo "  ./modules/foot/setup.sh && make build"
 	@echo "  ./modules/voice/setup.sh && make build"
 	@echo "  make say TEXT=\"Hello, this is a test\""
+	@echo "  sudo make install-services"
+	@echo "  sudo make start-services"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=kilted
@@ -92,3 +102,54 @@ say:
 		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
 		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
 		echo "[say] Message published."'
+
+# Install systemd services for enabled modules
+# Usage:
+#   sudo make install-services
+#   sudo make install-services HOST=cerebellum
+install-services:
+	@echo "[services] Installing systemd services for enabled modules..."
+	@sudo -E ./tools/manage_services.sh install-enabled $(HOST)
+	@echo "[services] Services installed and enabled."
+
+# Remove all psyched systemd services
+# Usage:
+#   sudo make uninstall-services
+uninstall-services:
+	@echo "[services] Removing all psyched systemd services..."
+	@sudo -E ./tools/manage_services.sh uninstall-all
+	@echo "[services] All services removed."
+
+# Update services (uninstall then reinstall) - useful after code updates
+# Usage:
+#   sudo make update-services
+#   sudo make update-services HOST=cerebellum
+update-services:
+	@echo "[services] Updating systemd services..."
+	@sudo -E ./tools/manage_services.sh uninstall-all
+	@sudo -E ./tools/manage_services.sh install-enabled $(HOST)
+	@echo "[services] Services updated."
+
+# Start all enabled module services
+# Usage:
+#   sudo make start-services
+#   sudo make start-services HOST=cerebellum
+start-services:
+	@echo "[services] Starting enabled module services..."
+	@sudo -E ./tools/manage_services.sh start-enabled $(HOST)
+	@echo "[services] Services started."
+
+# Stop all psyched services
+# Usage:
+#   sudo make stop-services
+stop-services:
+	@echo "[services] Stopping all psyched services..."
+	@sudo -E ./tools/manage_services.sh stop-all
+	@echo "[services] Services stopped."
+
+# Show status of all psyched services
+# Usage:
+#   make status-services
+status-services:
+	@echo "[services] Status of all psyched services:"
+	@./tools/manage_services.sh list

@@ -1,0 +1,34 @@
+[Unit]
+Description=Psyched Module: {{MODULE_NAME}}
+After=network.target
+Wants=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User={{USER}}
+Group={{GROUP}}
+WorkingDirectory={{REPO_DIR}}
+Environment="HOME={{HOME_DIR}}"
+Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
+ExecStartPre=/bin/bash -c 'eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)" && echo "ROS environment loaded"'
+ExecStart=/bin/bash -lc 'set -euo pipefail; eval "$$(SETUP_ENV_MODE=print {{REPO_DIR}}/tools/setup_env.sh)"; exec {{REPO_DIR}}/modules/{{MODULE_NAME}}/launch.sh'
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=psyched-{{MODULE_NAME}}
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{REPO_DIR}} {{HOME_DIR}}/.ros {{HOME_DIR}}/.cache/colcon_cd
+
+[Install]
+WantedBy=multi-user.target
