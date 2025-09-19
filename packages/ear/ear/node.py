@@ -20,6 +20,7 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.parameter import ParameterType
 from audio_common_msgs.msg import AudioData
 
 
@@ -42,15 +43,15 @@ class EarNode(Node):
         def _as_int(name: str, default: int) -> int:
             pv = self.get_parameter(name).get_parameter_value()
             # ParameterValue can carry integer_value or string_value depending on launch
-            if pv.type_ == pv.Type.INTEGER:
+            if pv.type == ParameterType.PARAMETER_INTEGER:
                 return int(pv.integer_value)
-            if pv.type_ == pv.Type.STRING and pv.string_value:
+            if pv.type == ParameterType.PARAMETER_STRING and pv.string_value:
                 try:
                     return int(pv.string_value)
                 except Exception:
                     pass
             # Try double as well
-            if pv.type_ == pv.Type.DOUBLE:
+            if pv.type == ParameterType.PARAMETER_DOUBLE:
                 try:
                     return int(pv.double_value)
                 except Exception:

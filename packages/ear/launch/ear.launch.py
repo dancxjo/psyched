@@ -5,26 +5,26 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    topic = LaunchConfiguration('topic', default='/audio/pcm')
-    device = LaunchConfiguration('device', default='default')
-    rate = LaunchConfiguration('rate', default='16000')
+    topic = LaunchConfiguration('topic', default='/audio')
+    device = LaunchConfiguration('device', default='0')  # Integer for device ID
+    sample_rate = LaunchConfiguration('sample_rate', default='44100')  # More common sample rate
     channels = LaunchConfiguration('channels', default='1')
-    chunk = LaunchConfiguration('chunk', default='2048')
+    chunk = LaunchConfiguration('chunk', default='1024')  # Smaller chunk size
 
     return LaunchDescription([
         DeclareLaunchArgument('topic', default_value=topic),
         DeclareLaunchArgument('device', default_value=device),
-        DeclareLaunchArgument('rate', default_value=rate),
+        DeclareLaunchArgument('sample_rate', default_value=sample_rate),
         DeclareLaunchArgument('channels', default_value=channels),
         DeclareLaunchArgument('chunk', default_value=chunk),
         Node(
-            package='ear',
-            executable='ear_node',
+            package='audio_common',
+            executable='audio_capturer_node',
             name='ear',
             parameters=[{
                 'topic': topic,
                 'device': device,
-                'rate': rate,
+                'sample_rate': sample_rate,
                 'channels': channels,
                 'chunk': chunk,
             }],

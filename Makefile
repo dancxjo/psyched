@@ -36,7 +36,8 @@ ros2:
 # Note: colcon does not have a separate "install" subcommand; the build step
 #       populates the install/ tree. We emulate the requested flow accordingly.
 build:
-	@bash -lc 'set -euo pipefail; \
+	@bash -lc 'set -eo pipefail; \
+		export AMENT_TRACE_SETUP_FILES=$${AMENT_TRACE_SETUP_FILES:-}; \
 		source /opt/ros/kilted/setup.bash; \
 		rosdep update; \
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
@@ -52,8 +53,6 @@ bootstrap:
 	@bash -lc 'set -euo pipefail; \
 		echo "[bootstrap] Running tools/provision/bootstrap.sh..."; \
 		./tools/provision/bootstrap.sh; \
-		echo "[bootstrap] Downloading popular piper voices..."; \
-		$(MAKE) get-piper-voices VOICES=popular || echo "[bootstrap] Warning: Could not download piper voices, continuing..."; \
 		echo "[bootstrap] Done."'
 
 # Update the repository and re-run bootstrap

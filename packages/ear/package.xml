@@ -12,6 +12,7 @@
 
     <exec_depend>rclpy</exec_depend>
     <exec_depend>audio_common_msgs</exec_depend>
+    <exec_depend>audio_common</exec_depend>
 
     <test_depend>ament_lint_auto</test_depend>
     <test_depend>ament_lint_common</test_depend>
