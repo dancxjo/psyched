@@ -31,7 +31,7 @@ echo "ROS_DISTRO: ${ROS_DISTRO}"
 if [ -z "\${WORKSPACE_PATH:-}" ]; then
     WORKSPACE_PATH="${_DEFAULT_WORKSPACE_PATH}"
 fi
-echo "Workspace (repo root): \${WORKSPACE_PATH}"
+echo "Workspace (repo root): \$WORKSPACE_PATH"
 
 # Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
@@ -62,18 +62,18 @@ else
 fi
 
 # Ensure a common Python virtual environment for tools and Python packages
-VENV_DIR="${WORKSPACE_PATH}/.venv"
-if [ ! -d "${VENV_DIR}" ]; then
-    echo "Creating Python venv at ${VENV_DIR} (with system site packages)..."
-    if ! python3 -m venv --system-site-packages "${VENV_DIR}" 2>/dev/null; then
+VENV_DIR="\$WORKSPACE_PATH/.venv"
+if [ ! -d "\$VENV_DIR" ]; then
+    echo "Creating Python venv at \$VENV_DIR (with system site packages)..."
+    if ! python3 -m venv --system-site-packages "\$VENV_DIR" 2>/dev/null; then
         echo "python3-venv may be missing; try: 'sudo apt-get install python3-venv python3-pip'" >&2
         return_or_exit 1
     fi
 fi
 
-if [ -f "${VENV_DIR}/bin/activate" ]; then
+if [ -f "\$VENV_DIR/bin/activate" ]; then
     # shellcheck source=/dev/null
-    source "${VENV_DIR}/bin/activate"
+    source "\$VENV_DIR/bin/activate"
     # Ensure pip is available inside the venv
     if ! command -v pip >/dev/null 2>&1; then
         echo "Bootstrapping pip in venv with ensurepip..."
@@ -83,21 +83,21 @@ if [ -f "${VENV_DIR}/bin/activate" ]; then
     python -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
 
     # Now that venv is active, ensure ROS/colcon use the venv's Python
-    if [ -x "${VENV_DIR}/bin/python" ]; then
-        export AMENT_PYTHON_EXECUTABLE="${VENV_DIR}/bin/python"
-        export COLCON_PYTHON_EXECUTABLE="${VENV_DIR}/bin/python"
+    if [ -x "\$VENV_DIR/bin/python" ]; then
+        export AMENT_PYTHON_EXECUTABLE="\$VENV_DIR/bin/python"
+        export COLCON_PYTHON_EXECUTABLE="\$VENV_DIR/bin/python"
     fi
 else
-    echo "Warning: venv activation script missing at ${VENV_DIR}/bin/activate" >&2
+    echo "Warning: venv activation script missing at \$VENV_DIR/bin/activate" >&2
 fi
 
-if [ -f "${WORKSPACE_PATH}/install/setup.sh" ]; then
+if [ -f "\$WORKSPACE_PATH/install/setup.sh" ]; then
     echo "Sourcing workspace install/setup.sh..."
     # Prefer POSIX-compatible setup.sh per project convention
     # shellcheck source=/dev/null
-    safesource "${WORKSPACE_PATH}/install/setup.sh"
+    safesource "\$WORKSPACE_PATH/install/setup.sh"
 else
-    echo "Warning: Workspace setup not found at ${WORKSPACE_PATH}/install/setup.sh"
+    echo "Warning: Workspace setup not found at \$WORKSPACE_PATH/install/setup.sh"
     echo "Run 'make build' (after preparing src/ via module setup) to build the workspace first"
 fi
 

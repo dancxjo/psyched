@@ -19,6 +19,7 @@ sudo apt-get update -y
 sudo apt-get install -y --no-install-recommends git \
     build-essential curl make \
     python-is-python3 \
+    python3-full \
     python3-venv \
     python3-pip \
     python3-setuptools \
