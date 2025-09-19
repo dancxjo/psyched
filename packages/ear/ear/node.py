@@ -75,8 +75,8 @@ class EarNode(Node):
             except Exception:
                 self._info_enabled = False
 
-    # Arecord process state
-    self._proc = None  # type: ignore[assignment]
+        # Arecord process state
+        self._proc = None  # type: ignore[assignment]
         self._stop_evt = threading.Event()
         self._thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._thread.start()
