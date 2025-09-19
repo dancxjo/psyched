@@ -25,7 +25,8 @@ sudo apt-get install -y --no-install-recommends git \
     python3-pip \
     python3-setuptools \
     python3-dev \
-    piper
+    piper \
+    libgtk-3-dev
 
 # Install Piper TTS globally for system services
 echo "[bootstrap] Installing Piper TTS globally..."
