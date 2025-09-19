@@ -38,6 +38,7 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from std_msgs.msg import Empty
+from std_msgs.msg import UInt32
 
 try:
     from piper import PiperVoice
@@ -127,6 +128,7 @@ class VoiceNode(Node):
 
         # Publishers and subscribers
         self._pub_done = self.create_publisher(String, 'voice_done', 10)
+        self.autophony_pub = self.create_publisher(UInt32, '/audio/autophony_duration', 10)
         self.create_subscription(String, topic, self.enqueue, 10)
         # Back-compat legacy interrupt topic: treat as pause (do not clear queue)
         self.create_subscription(String, 'voice_interrupt', lambda _msg: self._on_pause(None), 10)
@@ -397,6 +399,9 @@ class VoiceNode(Node):
 
             self.get_logger().info(f'Speaking: {text}')
 
+            # Publish autophony duration
+            start_time = time.time()
+            
             # Engine-specific synthesis
             success = False
             if engine == 'espeak':
@@ -419,6 +424,11 @@ class VoiceNode(Node):
                 self._pub_done.publish(done)
             except Exception:
                 pass
+
+            # Publish 0 autophony duration
+            autophony_msg = UInt32()
+            autophony_msg.data = 0
+            self.autophony_pub.publish(autophony_msg)
 
     def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_cmd: list[str]) -> bool:
         """Use subprocess piper binary for efficient speech synthesis."""
@@ -472,6 +482,15 @@ class VoiceNode(Node):
         except Exception:
             pass
             
+        # Publish autophony duration while speaking
+        start_time = time.time()
+        while aplay.poll() is None:
+            duration = int((time.time() - start_time) * 1000)
+            autophony_msg = UInt32()
+            autophony_msg.data = duration
+            self.autophony_pub.publish(autophony_msg)
+            time.sleep(0.1)
+
         # Wait for playback to finish
         aplay.wait()
         try:

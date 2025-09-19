@@ -29,5 +29,11 @@ def generate_launch_description():
                 'silence_threshold': silence_threshold,
             }],
             output='screen',
+        ),
+        Node(
+            package='ear',
+            executable='vad_node',
+            name='vad',
+            output='screen',
         )
     ])

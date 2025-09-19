@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update
+.PHONY: help ros2 build bootstrap update bringup
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -71,3 +71,9 @@ update:
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
 		echo "[update] Done."'
+
+bringup:
+	@bash -lc 'set -eo pipefail; \
+		source install/setup.bash; \
+		ros2 launch psyched bringup.launch.py'
+

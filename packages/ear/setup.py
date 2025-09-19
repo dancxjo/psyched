@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ear_node = ear.pyaudio_ear_node:main',
+            'vad_node = ear.vad_node:main',
         ],
     },
 )
