@@ -37,9 +37,10 @@ help:
 #   make ros2 ROS_DISTRO=kilted
 ros2:
 	@bash -lc 'set -euo pipefail; \
-		if command -v ros2 >/dev/null 2>&1; then \
+		if [ -d /opt/ros ] && [ $$(ls /opt/ros/ | wc -l) -gt 0 ]; then \
+			INSTALLED_DISTROS=$$(ls /opt/ros/ | tr "\n" " "); \
 			echo "[ros2] ROS 2 is already installed, skipping..."; \
-			ros2 doctor --report 2>/dev/null | head -n 3 || true; \
+			echo "[ros2] Found installed distros: $$INSTALLED_DISTROS"; \
 		else \
 			echo "[ros2] Installing ROS 2..."; \
 			./tools/install_ros2.sh; \
