@@ -7,6 +7,9 @@ lib/
 lib64
 pyvenv.cfg
 
+
+voices/
+
 # External workspace sources (symlink-populated)
 src/
 
