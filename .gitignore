@@ -2,6 +2,10 @@
 build/
 install/
 log/
+bin/
+lib/
+lib64
+pyvenv.cfg
 
 # External workspace sources (symlink-populated)
 src/
