@@ -26,6 +26,8 @@ import threading
 import pathlib
 import wave
 from dataclasses import dataclass
+import sys
+import shlex
 
 import rclpy
 from rclpy.node import Node
@@ -224,29 +226,10 @@ class VoiceNode(Node):
         # Check for both legacy piper-tts library and piper binary
         aplay_cmd = shutil.which('aplay') if self.get_parameter('aplay').value else None
         
-        # Try to find piper binary with fallback locations
-        piper_binary = shutil.which('piper')
-        self.get_logger().info(f'piper binary search: shutil.which returned {piper_binary}')
-        if not piper_binary:
-            # Try common user installation locations as fallback
-            fallback_paths = [
-                '/usr/bin/piper',
-                os.path.expanduser('~/.local/bin/piper'),
-                '/usr/local/bin/piper',
-                '/opt/piper/bin/piper'
-            ]
-            for path in fallback_paths:
-                self.get_logger().info(f'Checking fallback path: {path}')
-                if os.path.isfile(path) and os.access(path, os.X_OK):
-                    piper_binary = path
-                    self.get_logger().info(f'Found piper at fallback path: {path}')
-                    break
-                else:
-                    exists = os.path.isfile(path)
-                    executable = os.access(path, os.X_OK) if exists else False
-                    self.get_logger().info(f'Fallback path {path}: exists={exists}, executable={executable}')
-        
-        self.get_logger().info(f'Final piper binary: {piper_binary}')
+        # Resolve Piper command. Prefer current Python env (python -m piper),
+        # allow override via PIPER_CMD, then fall back to a system binary.
+        piper_cmd = self._resolve_piper_cmd()
+        self.get_logger().info(f'Final Piper command: {piper_cmd}')
         self.get_logger().info(f'Model path: {self.model_path}, exists: {os.path.exists(self.model_path)}')
         self.get_logger().info(f'Config path: {self.config_path}, exists: {os.path.exists(self.config_path)}')
         wav_out_dir = self.get_parameter('wav_out_dir').value
@@ -310,8 +293,8 @@ class VoiceNode(Node):
             # Try subprocess piper first (more efficient), fall back to legacy
             success = False
             
-            if piper_binary and os.path.exists(self.model_path) and os.path.exists(self.config_path):
-                success = self._speak_with_subprocess(text, aplay_cmd, piper_binary)
+            if piper_cmd and os.path.exists(self.model_path) and os.path.exists(self.config_path):
+                success = self._speak_with_subprocess(text, aplay_cmd, piper_cmd)
             
             if not success and legacy_voice is not None:
                 success = self._speak_with_legacy(text, legacy_voice, syn_config, wav_out_dir, aplay_cmd)
@@ -327,13 +310,13 @@ class VoiceNode(Node):
             except Exception:
                 pass
 
-    def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_binary: str) -> bool:
+    def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_cmd: list[str]) -> bool:
         """Use subprocess piper binary for efficient speech synthesis."""
         try:
             # Launch Piper to produce RAW PCM to stdout, then pipe into aplay
             piper = subprocess.Popen(
                 [
-                    piper_binary,
+                    *piper_cmd,
                     "--model",
                     self.model_path,
                     "--config",
@@ -387,6 +370,82 @@ class VoiceNode(Node):
             pass
         self._procs.clear()
         return True
+
+    def _validate_piper_cmd(self, cmd: list[str]) -> bool:
+        """Return True if running '--version' succeeds and doesn't show import errors."""
+        try:
+            res = subprocess.run([*cmd, "--version"], capture_output=True, text=True, timeout=5)
+            out = (res.stdout or "") + (res.stderr or "")
+            if res.returncode != 0:
+                self.get_logger().warning(f"Piper command failed validation (rc={res.returncode}): {cmd} -> {out.strip()}")
+                return False
+            if "ModuleNotFoundError" in out or "No module named 'piper" in out:
+                self.get_logger().warning(f"Piper command shows missing module: {cmd} -> {out.strip()}")
+                return False
+            return True
+        except Exception as e:
+            self.get_logger().warning(f"Piper command validation error for {cmd}: {e}")
+            return False
+
+    def _resolve_piper_cmd(self) -> list[str] | None:
+        """Determine a working Piper invocation.
+
+        Priority:
+        1. PIPER_CMD env (space-split respecting quotes)
+        2. Current Python: [sys.executable, '-m', 'piper'] if module is importable and validates
+        3. System 'piper' binary from PATH or common locations
+        """
+        # 1) Explicit override
+        override = os.getenv("PIPER_CMD")
+        if override:
+            try:
+                cmd = shlex.split(override)
+            except Exception:
+                cmd = [override]
+            self.get_logger().info(f"PIPER_CMD override provided: {cmd}")
+            if self._validate_piper_cmd(cmd):
+                return cmd
+            else:
+                self.get_logger().warning("PIPER_CMD override did not validate; will try other options")
+
+        # 2) Prefer current Python environment to avoid system/site mismatch
+        try:
+            import importlib.util  # local import
+            if importlib.util.find_spec("piper") is not None:
+                py_cmd = [sys.executable, "-m", "piper"]
+                if self._validate_piper_cmd(py_cmd):
+                    self.get_logger().info("Using 'python -m piper' in current environment")
+                    return py_cmd
+        except Exception:
+            pass
+
+        # 3) Try to find a system binary
+        import shutil
+        piper_binary = shutil.which('piper')
+        self.get_logger().info(f'piper binary search: shutil.which returned {piper_binary}')
+        candidates: list[list[str]] = []
+        if piper_binary:
+            candidates.append([piper_binary])
+        # Common fallbacks
+        fallback_paths = [
+            '/usr/bin/piper',
+            os.path.expanduser('~/.local/bin/piper'),
+            '/usr/local/bin/piper',
+            '/opt/piper/bin/piper'
+        ]
+        for path in fallback_paths:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                candidates.append([path])
+            else:
+                exists = os.path.isfile(path)
+                executable = os.access(path, os.X_OK) if exists else False
+                self.get_logger().info(f'Fallback path {path}: exists={exists}, executable={executable}')
+
+        for cmd in candidates:
+            if self._validate_piper_cmd(cmd):
+                return cmd
+
+        return None
 
     def _speak_with_legacy(self, text: str, voice, syn_config, wav_out_dir: str, aplay_cmd: str | None) -> bool:
         """Use legacy piper-tts library for speech synthesis."""

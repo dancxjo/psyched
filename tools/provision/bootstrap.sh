@@ -28,17 +28,8 @@ sudo apt-get install -y --no-install-recommends git \
     piper \
     libgtk-3-dev
 
-# Install Piper TTS globally for system services
-echo "[bootstrap] Installing Piper TTS globally..."
-if ! python3 -c 'import piper' >/dev/null 2>&1; then
-    if sudo pip3 install piper-tts >/dev/null 2>&1; then
-        echo "[bootstrap] Installed piper-tts globally"
-    else
-        echo "[bootstrap] Warning: Failed to install piper-tts globally. Modules will install locally."
-    fi
-else
-    echo "[bootstrap] Piper TTS already installed"
-fi
+# Do NOT install piper-tts globally; we'll install into the project venv below
+echo "[bootstrap] Skipping global pip install of piper-tts; will install in venv"
 
 # Ensure Piper voices directory with proper permissions
 echo "[bootstrap] Setting up Piper voices directory..."
@@ -61,6 +52,19 @@ echo "[bootstrap] Sourcing repo environment (ROS + venv)..."
 if ! eval "$(SETUP_ENV_MODE=print "$REPO_ROOT"/tools/setup_env.sh)"; then
     echo "[bootstrap] Error: failed to source repo environment." >&2
     exit 1
+fi
+
+# Ensure piper-tts is available in the venv used by services and development
+echo "[bootstrap] Ensuring piper-tts is installed in project venv..."
+if ! python3 -c 'import piper' >/dev/null 2>&1; then
+    pip install --no-input --upgrade pip >/dev/null 2>&1 || true
+    if pip install piper-tts >/dev/null 2>&1; then
+        echo "[bootstrap] Installed piper-tts in venv"
+    else
+        echo "[bootstrap] Warning: Failed to install piper-tts in venv; voice module will fall back to binary if available" >&2
+    fi
+else
+    echo "[bootstrap] piper-tts already present in venv"
 fi
 
 # Determine host (env var HOST overrides system hostname)
