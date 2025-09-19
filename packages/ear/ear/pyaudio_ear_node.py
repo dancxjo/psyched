@@ -71,7 +71,8 @@ class PyAudioEarNode(Node):
 
     def audio_callback(self, in_data, frame_count, time_info, status):
         """PyAudio callback for processing audio data."""
-        if status:
+        # paInputOverflow is status 2, which is a non-critical warning.
+        if status and status != 2:
             self.get_logger().warn(f'Audio callback status: {status}')
         
         # Publish raw audio data as bytes
