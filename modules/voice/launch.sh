@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail  # Remove 'u' flag to allow unbound variables initially
 
 "${BASH_SOURCE[0]}" &>/dev/null || true
 
@@ -12,6 +12,11 @@ export COLCON_LOG_LEVEL=30
 unset BASH_XTRACEFD || true
 export PS4="+ "
 set +x  # Ensure bash tracing is disabled
+
+# Handle potential unbound variables
+export COLCON_TRACE=${COLCON_TRACE:-0}
+export VSCODE_PYTHON_AUTOACTIVATE_GUARD=${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-0}
+export STARSHIP_SESSION_KEY=${STARSHIP_SESSION_KEY:-}
 
 # Resolve host config file
 HOSTNAME_short="${HOST:-$(hostname -s)}"
