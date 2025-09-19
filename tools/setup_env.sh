@@ -20,7 +20,7 @@ safesource() {
     # shellcheck disable=SC1090
     set +u
     # shellcheck source=/dev/null
-    source "$1"
+    source "\$1"
     set -u
 }
 
