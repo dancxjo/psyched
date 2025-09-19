@@ -129,7 +129,7 @@ say:
 	@bash -lc 'set -euo pipefail; \
 		echo "[say] Sourcing minimal ROS environment..."; \
 		source /opt/ros/*/setup.bash 2>/dev/null || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
-		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+		if [ -f install/setup.bash ]; then COLCON_TRACE="${COLCON_TRACE:-}" source install/setup.bash; fi; \
 		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
 		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
 		echo "[say] Message published."'
