@@ -1,10 +1,4 @@
-.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-	@bash -lc 'set -euo pipefail; \
-		echo "[say] Sourcing minimal ROS environment..."; \
-		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
-		if [ -f install/setup.bash ]; then COLCON_TRACE="$${COLCON_TRACE:-}" source install/setup.bash >/dev/null 2>&1; fi; \
-		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
-		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\"" >/dev/null 2>&1; \
-		echo "[say] Message published."'s start-services stop-services status-services diagnose-service logs-service
+.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -132,13 +126,17 @@ say:
 		echo "Error: Please provide TEXT parameter. Usage: make say TEXT=\"Your message here\""; \
 		exit 1; \
 	fi
-	@bash -lc 'set -euo pipefail; \
+	@set -euo pipefail; \
 		echo "[say] Sourcing minimal ROS environment..."; \
-		source /opt/ros/*/setup.bash 2>/dev/null || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
-		if [ -f install/setup.bash ]; then COLCON_TRACE="${COLCON_TRACE:-}" source install/setup.bash; fi; \
-		echo "[say] Publishing \"$(TEXT)\" to /voice topic..."; \
-		ros2 topic pub --once /voice std_msgs/msg/String "data: \"$(TEXT)\""; \
-		echo "[say] Message published."'
+		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
+		if [ -f install/setup.bash ]; then COLCON_TRACE="$${COLCON_TRACE:-}" source install/setup.bash >/dev/null 2>&1; fi; \
+		# Capture TEXT safely and escape for YAML double-quoted string
+		TEXT_VAL=$$(printf '%s' "$(TEXT)"); \
+		yaml_escape() { local s="$$1"; s="$${s//\\/\\\\}"; s="$${s//\"/\\\"}"; printf '%s' "$$s"; }; \
+		ROS_YAML=$$(printf 'data: "%s"' "$$((yaml_escape "$${TEXT_VAL}") )" 2>/dev/null || printf 'data: "%s"' "$$(yaml_escape "$$TEXT_VAL")"); \
+		echo "[say] Publishing to /voice topic..."; \
+		ros2 topic pub --once /voice std_msgs/msg/String "$$ROS_YAML" >/dev/null 2>&1; \
+		echo "[say] Message published."
 
 # Generic publish to any topic with string message
 # Usage:
@@ -154,13 +152,16 @@ pub-string:
 		echo "Error: Please provide TEXT parameter. Usage: make pub-string TOPIC=/topic_name TEXT=\"Your message here\""; \
 		exit 1; \
 	fi
-	@bash -lc 'set -euo pipefail; \
+	@set -euo pipefail; \
 		echo "[pub-string] Sourcing minimal ROS environment..."; \
 		source /opt/ros/*/setup.bash >/dev/null 2>&1 || { echo "Error: ROS 2 not found. Run: make ros2"; exit 1; }; \
 		if [ -f install/setup.bash ]; then source install/setup.bash >/dev/null 2>&1; fi; \
-		echo "[pub-string] Publishing \"$(TEXT)\" to $(TOPIC) topic..."; \
-		ros2 topic pub --once $(TOPIC) std_msgs/msg/String "data: \"$(TEXT)\"" >/dev/null 2>&1; \
-		echo "[pub-string] Message published to $(TOPIC)."'
+		TEXT_VAL=$$(printf '%s' "$(TEXT)"); \
+		yaml_escape() { local s="$$1"; s="$${s//\\/\\\\}"; s="$${s//\"/\\\"}"; printf '%s' "$$s"; }; \
+		ROS_YAML=$$(printf 'data: "%s"' "$$(yaml_escape "$$TEXT_VAL")"); \
+		echo "[pub-string] Publishing to $(TOPIC) topic..."; \
+		ros2 topic pub --once $(TOPIC) std_msgs/msg/String "$$ROS_YAML" >/dev/null 2>&1; \
+		echo "[pub-string] Message published to $(TOPIC)."
 
 # Download additional Piper TTS voices from Hugging Face
 # Usage:
