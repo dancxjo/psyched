@@ -145,12 +145,12 @@ uninstall_service() {
 start_service() {
     local module_name="$1"
     local service_name="${SERVICE_PREFIX}${module_name}.service"
-    local debug_mode="${2:-false}"
+    local debug_mode="${2:-true}"  # Default to debug mode
     
     log_info "Starting service '${service_name}'"
     
     if [[ "${debug_mode}" == "true" ]]; then
-        log_info "Debug mode: Starting service with detailed logging..."
+        log_info "Starting service with detailed logging..."
         # Clear any previous journal entries for this service
         journalctl --vacuum-time=1s --quiet || true
         
@@ -344,7 +344,7 @@ uninstall_all_services() {
 
 start_enabled_services() {
     local hostname="${1:-$(hostname)}"
-    local debug_mode="${2:-false}"
+    local debug_mode="${2:-true}"  # Default to debug mode
     
     log_info "Starting services for enabled modules on host '${hostname}'"
     
@@ -358,10 +358,6 @@ start_enabled_services() {
     get_enabled_modules "${hostname}" | while read -r module; do
         if ! start_service "${module}" "${debug_mode}"; then
             failed_services+=("${module}")
-            if [[ "${debug_mode}" == "false" ]]; then
-                log_error "Service '${SERVICE_PREFIX}${module}.service' failed to start"
-                log_info "Run with debug mode for detailed diagnostics: sudo make start-services-debug"
-            fi
         fi
     done
     
@@ -395,15 +391,15 @@ Usage: $0 <command> [options]
 Commands:
     install <module>        Install systemd service for a specific module
     uninstall <module>      Uninstall systemd service for a specific module
-    start <module>          Start a specific module service
-    start-debug <module>    Start a specific module service with detailed debugging
+    start <module>          Start a specific module service (with detailed logging)
+    start-quiet <module>    Start a specific module service (minimal output)
     stop <module>           Stop a specific module service
     status <module>         Show status of a specific module service
     
     install-enabled [host]  Install services for all enabled modules (default: current hostname)
     uninstall-all          Uninstall all psyched services
-    start-enabled [host]   Start all enabled module services (default: current hostname)
-    start-enabled-debug [host] Start all enabled services with detailed debugging
+    start-enabled [host]   Start all enabled module services (with detailed logging)
+    start-enabled-quiet [host] Start all enabled services (minimal output)
     stop-all              Stop all psyched services
     
     diagnose <module>      Run comprehensive diagnostics on a specific module service
@@ -417,9 +413,10 @@ Commands:
 Examples:
     sudo $0 install-enabled              # Install services for enabled modules
     sudo $0 install voice               # Install service for voice module
-    sudo $0 start-enabled               # Start all enabled services
-    sudo $0 start-enabled-debug         # Start services with detailed debugging
-    sudo $0 start-debug voice           # Start voice service with debug output
+    sudo $0 start-enabled               # Start all enabled services (with detailed logging)
+    sudo $0 start-enabled-quiet         # Start services with minimal output
+    sudo $0 start voice                 # Start voice service (with detailed logging)
+    sudo $0 start-quiet voice           # Start voice service (minimal output)
     sudo $0 stop voice                  # Stop voice service
     sudo $0 status foot                 # Show status of foot service
     $0 diagnose voice                  # Run diagnostics on voice service (no sudo)
@@ -464,7 +461,7 @@ case "${1:-help}" in
             show_help
             exit 1
         fi
-        start_service "$2"
+        start_service "$2" "true"
         ;;
     
     stop)
@@ -498,22 +495,22 @@ case "${1:-help}" in
     
     start-enabled)
         check_root
-        start_enabled_services "${2:-}" "false"
-        ;;
-    
-    start-enabled-debug)
-        check_root
         start_enabled_services "${2:-}" "true"
         ;;
     
-    start-debug)
+    start-quiet)
         check_root
         if [[ -z "${2:-}" ]]; then
             log_error "Module name required"
             show_help
             exit 1
         fi
-        start_service "$2" "true"
+        start_service "$2" "false"
+        ;;
+    
+    start-enabled-quiet)
+        check_root
+        start_enabled_services "${2:-}" "false"
         ;;
     
     diagnose)

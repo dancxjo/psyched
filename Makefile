@@ -234,7 +234,7 @@ update-services:
 #   sudo make start-services HOST=cerebellum
 start-services:
 	@echo "[services] Starting enabled module services with detailed logging..."
-	@sudo -E ./tools/manage_services.sh start-enabled-debug $(HOST)
+	@sudo -E ./tools/manage_services.sh start-enabled $(HOST)
 	@echo "[services] Services started."
 
 # Stop all psyched services
