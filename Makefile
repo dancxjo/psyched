@@ -15,15 +15,13 @@ help:
 	@echo "  check-piper        - Check Piper installation and available voices"
 	@echo ""
 	@echo "Service Management:"
-	@echo "  install-services   - Install systemd services for enabled modules"
-	@echo "  uninstall-services - Remove all psyched systemd services"
-	@echo "  update-services    - Uninstall and reinstall services (for updates)"
-	@echo "  start-services     - Start all enabled module services (with detailed logging)"
-	@echo "  stop-services      - Stop all psyched services"
-	@echo "  status-services    - Show status of all psyched services"
-	@echo "  diagnose-service   - Diagnose issues with a specific service (usage: make diagnose-service SERVICE=voice)"
-	@echo "  logs-service       - Show recent logs for a service (usage: make logs-service SERVICE=voice [LINES=50])"
-	@echo "  restart-voice      - Restart the psyched-voice systemd service"
+	@echo "  install-services   - Install cron-based services for enabled modules (no sudo required)"
+	@echo "  uninstall-services - Remove all psyched cron services"
+	@echo "  stop-services      - Stop all psyched cron services"
+	@echo "  status-services    - Show status of all psyched cron services"
+	@echo "  logs-service       - Show logs for a cron service (usage: make logs-service SERVICE=voice [LINES=50])"
+	@echo "  start-service      - Start a specific cron service (usage: make start-service SERVICE=voice)"
+	@echo "  stop-service       - Stop a specific cron service (usage: make stop-service SERVICE=voice)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -32,9 +30,8 @@ help:
 	@echo "  make say TEXT=\"Hello, this is a test\""
 	@echo "  make pub-string TOPIC=/foot TEXT=\"Step command\""
 	@echo "  make get-piper-voices VOICES=\"en_US-amy-medium,en_US-ryan-high\""
-	@echo "  sudo make install-services"
-	@echo "  sudo make start-services"
-	@echo "  make diagnose-service SERVICE=voice"
+	@echo "  make install-services       # Install lightweight cron services"
+	@echo "  make status-services"
 	@echo "  make logs-service SERVICE=voice LINES=100"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
@@ -89,7 +86,7 @@ bootstrap:
 update:
 	@bash -lc 'set -euo pipefail; \
 		echo "[update] Stopping old services..."; \
-		$(MAKE) stop-services; \
+		$(MAKE) stop-services || true; \
 		echo "[update] Stashing local changes (including untracked)..."; \
 		STASH_CREATED=0; \
 		if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(shell git ls-files --others --exclude-standard)" ]; then \
@@ -100,14 +97,10 @@ update:
 		git pull --rebase; \
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
+		echo "[update] Installing lightweight cron-based services..."; \
 		$(MAKE) install-services; \
-		echo "[update] Starting services..."; \
-		$(MAKE) start-services || { \
-			echo "[update] Service start failed. Check diagnostics:"; \
-			echo "  make diagnose-service SERVICE=<module_name>"; \
-			echo "  make logs-service SERVICE=<module_name>"; \
-			exit 1; \
-		}; \
+		echo "[update] Services will start automatically within 1 minute."; \
+		echo "[update] Use: make status-services to check status"; \
 		echo "[update] Done."'
 
 # Publish text to the /voice topic for text-to-speech
@@ -324,70 +317,39 @@ check-piper:
 		echo "5. Test ROS publishing: make say TEXT=\"Hello world\""; \
 		echo ""'
 
-# Install systemd services for enabled modules
+# Install cron-based services for enabled modules (NO SUDO REQUIRED)
 # Usage:
-#   sudo make install-services
-#   sudo make install-services HOST=cerebellum
+#   make install-services
+#   make install-services HOST=cerebellum
 install-services:
-	@echo "[services] Installing systemd services for enabled modules..."
-	@sudo -E ./tools/manage_services.sh install-enabled $(HOST)
-	@echo "[services] Services installed and enabled."
+	@echo "[services] Installing lightweight cron-based services for enabled modules..."
+	@./tools/cron_manager.sh install-enabled $(HOST)
+	@echo "[services] Cron services installed."
 
-# Remove all psyched systemd services
+# Remove all psyched cron services and stop running processes
 # Usage:
-#   sudo make uninstall-services
+#   make uninstall-services
 uninstall-services:
-	@echo "[services] Removing all psyched systemd services..."
-	@sudo -E ./tools/manage_services.sh uninstall-all
-	@echo "[services] All services removed."
+	@echo "[services] Removing all psyched cron services..."
+	@./tools/cron_manager.sh uninstall-all
+	@echo "[services] All cron services removed."
 
-# Update services (uninstall then reinstall) - useful after code updates
+# Stop all running cron services
 # Usage:
-#   sudo make update-services
-#   sudo make update-services HOST=cerebellum
-update-services:
-	@echo "[services] Updating systemd services..."
-	@sudo -E ./tools/manage_services.sh uninstall-all
-	@sudo -E ./tools/manage_services.sh install-enabled $(HOST)
-	@echo "[services] Services updated."
-
-# Start all enabled module services (with detailed logging)
-# Usage:
-#   sudo make start-services
-#   sudo make start-services HOST=cerebellum
-start-services:
-	@echo "[services] Starting enabled module services with detailed logging..."
-	@sudo -E ./tools/manage_services.sh start-enabled $(HOST)
-	@echo "[services] Services started."
-
-# Stop all psyched services
-# Usage:
-#   sudo make stop-services
+#   make stop-services
 stop-services:
-	@echo "[services] Stopping all psyched services..."
-	@sudo -E ./tools/manage_services.sh stop-all
+	@echo "[services] Stopping all psyched cron services..."
+	@./tools/cron_manager.sh stop-all
 	@echo "[services] Services stopped."
 
-# Show status of all psyched services
+# Show status of all cron services
 # Usage:
 #   make status-services
 status-services:
-	@echo "[services] Status of all psyched services:"
-	@./tools/manage_services.sh list
+	@echo "[services] Status of all psyched cron services:"
+	@./tools/cron_manager.sh status
 
-# Diagnose issues with a specific service
-# Usage:
-#   make diagnose-service SERVICE=voice
-#   make diagnose-service SERVICE=foot
-diagnose-service:
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "Error: Please provide SERVICE parameter. Usage: make diagnose-service SERVICE=voice"; \
-		exit 1; \
-	fi
-	@echo "[services] Running diagnostics for service: $(SERVICE)"
-	@./tools/manage_services.sh diagnose $(SERVICE)
-
-# Show recent logs for a specific service
+# Show recent logs for a cron service
 # Usage:
 #   make logs-service SERVICE=voice
 #   make logs-service SERVICE=foot LINES=50
@@ -396,13 +358,27 @@ logs-service:
 		echo "Error: Please provide SERVICE parameter. Usage: make logs-service SERVICE=voice"; \
 		exit 1; \
 	fi
-	@echo "[services] Showing logs for service: $(SERVICE)"
-	@./tools/manage_services.sh logs $(SERVICE) $(LINES)
+	@echo "[services] Showing logs for cron service: $(SERVICE)"
+	@./tools/cron_manager.sh logs $(SERVICE) $(LINES)
 
-# Restart only the voice service
+# Start a specific cron service manually
 # Usage:
-#   sudo make restart-voice
-restart-voice:
-	@echo "[services] Restarting psyched-voice.service..."
-	@sudo systemctl restart psyched-voice.service
-	@echo "[services] Restarted. Use: make logs-service SERVICE=voice LINES=100 to tail logs."
+#   make start-service SERVICE=voice
+start-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: Please provide SERVICE parameter. Usage: make start-service SERVICE=voice"; \
+		exit 1; \
+	fi
+	@echo "[services] Starting cron service: $(SERVICE)"
+	@./tools/cron_manager.sh start $(SERVICE)
+
+# Stop a specific cron service
+# Usage:
+#   make stop-service SERVICE=voice
+stop-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: Please provide SERVICE parameter. Usage: make stop-service SERVICE=voice"; \
+		exit 1; \
+	fi
+	@echo "[services] Stopping cron service: $(SERVICE)"
+	@./tools/cron_manager.sh stop $(SERVICE)
