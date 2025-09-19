@@ -188,7 +188,7 @@ class VoiceNode(Node):
             enable_ping = self.get_parameter('enable_ping').get_parameter_value().bool_value
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
             if enable_ping and ping_interval > 0:
-                self.create_timer(ping_interval, lambda: self.enqueue(String(data='I am here.')))
+                self.create_timer(ping_interval, self._send_fortune_ping)
         except Exception:
             pass
 
@@ -287,6 +287,26 @@ class VoiceNode(Node):
         except queue.Empty:
             pass
         self.get_logger().info(f'Cleared {cleared} queued utterance(s)')
+
+    def _send_fortune_ping(self) -> None:
+        """Send a fortune as a periodic ping message."""
+        try:
+            fortune_text = None
+            try:
+                fortune_bin = shutil.which('fortune')
+                if fortune_bin:
+                    res = subprocess.run([fortune_bin, '-s'], capture_output=True, text=True, timeout=3)
+                    fortune_text = (res.stdout or '').strip()
+            except Exception:
+                fortune_text = None
+
+            if fortune_text:
+                self.enqueue(String(data=fortune_text))
+            else:
+                # Fallback to original message if fortune is unavailable
+                self.enqueue(String(data='I am here.'))
+        except Exception:
+            pass
 
     def destroy_node(self):
         """Clean shutdown."""
