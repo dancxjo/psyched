@@ -36,6 +36,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
+from std_msgs.msg import Empty
 
 try:
     from piper import PiperVoice
@@ -75,7 +76,7 @@ class VoiceNode(Node):
 
     def __init__(self, model: str = PIPER_MODEL, voices_dir: str = PIPER_VOICES_DIR) -> None:
         super().__init__('voice')
-        
+
         # Parameters - keep compatibility with existing node parameters
         self.declare_parameter('topic', '/voice')
         # Engine selection: 'piper' or 'espeak'
@@ -99,6 +100,11 @@ class VoiceNode(Node):
         self.declare_parameter('espeak_pitch', 50)   # 0-99
         self.declare_parameter('espeak_volume', 1.0) # 0.0-1.0 scales -a 0-200
         self.declare_parameter('espeak_extra_args', '')
+        # Control topics (configurable)
+        self.declare_parameter('pause_topic', '/voice/interrupt')  # treat interrupt as pause by default
+        self.declare_parameter('resume_topic', '/voice/resume')
+        self.declare_parameter('clear_topic', '/voice/clear')
+        self.declare_parameter('interrupt_topic', '/voice/interrupt')
 
         # New voice model setup
         self.model = model
@@ -120,13 +126,20 @@ class VoiceNode(Node):
         # Publishers and subscribers
         self._pub_done = self.create_publisher(String, "voice_done", 10)
         self.create_subscription(String, topic, self.enqueue, 10)
-        self.create_subscription(String, "voice_interrupt", self.interrupt, 10)
-        
-        # Control topics (compatibility)
-        from std_msgs.msg import Empty
-        self._pause_sub = self.create_subscription(Empty, '/voice/pause', self._on_pause, 1)
-        self._resume_sub = self.create_subscription(Empty, '/voice/resume', self._on_resume, 1)
-        self._clear_sub = self.create_subscription(Empty, '/voice/clear', self._on_clear, 1)
+        # Back-compat legacy interrupt topic: treat as pause (do not clear queue)
+        self.create_subscription(String, "voice_interrupt", lambda _msg: self._on_pause(None), 10)
+
+        # Control topics (configurable)
+        pause_topic = self.get_parameter('pause_topic').get_parameter_value().string_value or '/voice/interrupt'
+        resume_topic = self.get_parameter('resume_topic').get_parameter_value().string_value or '/voice/resume'
+        clear_topic = self.get_parameter('clear_topic').get_parameter_value().string_value or '/voice/clear'
+        interrupt_topic = self.get_parameter('interrupt_topic').get_parameter_value().string_value or '/voice/interrupt'
+
+        self._pause_sub = self.create_subscription(Empty, pause_topic, self._on_pause, 1)
+        self._resume_sub = self.create_subscription(Empty, resume_topic, self._on_resume, 1)
+        self._clear_sub = self.create_subscription(Empty, clear_topic, self._on_clear, 1)
+        # Preferred interrupt topic as Empty
+        self._interrupt_sub = self.create_subscription(Empty, interrupt_topic, self._on_pause, 1)
 
         # Ensure Piper model files exist if using Piper; attempt runtime fetch if missing
         try:
@@ -161,7 +174,7 @@ class VoiceNode(Node):
             enable_ping = self.get_parameter('enable_ping').get_parameter_value().bool_value
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
             if enable_ping and ping_interval > 0:
-                self.create_timer(ping_interval, lambda: self.enqueue(String(data="I'm alive. So so alive.")))
+                self.create_timer(ping_interval, lambda: self.enqueue(String(data='ping')))
                 
         except Exception:
             pass
@@ -238,6 +251,13 @@ class VoiceNode(Node):
     def _on_pause(self, _msg) -> None:
         if self._unpaused.is_set():
             self.get_logger().info('Voice paused')
+        # Stop any ongoing playback but keep queued items
+        for p in self._procs:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        self._procs.clear()
         self._unpaused.clear()
 
     def _on_resume(self, _msg) -> None:

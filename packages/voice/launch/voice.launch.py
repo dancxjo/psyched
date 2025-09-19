@@ -39,6 +39,16 @@ def generate_launch_description():
     enable_ping_arg = DeclareLaunchArgument('enable_ping', default_value='true', description='Enable periodic ping')
     ping_interval_arg = DeclareLaunchArgument('ping_interval_sec', default_value='30', description='Ping interval in seconds')
 
+    # Control topics
+    pause_topic_arg = DeclareLaunchArgument('pause_topic', default_value='/voice/interrupt')
+    resume_topic_arg = DeclareLaunchArgument('resume_topic', default_value='/voice/resume')
+    clear_topic_arg = DeclareLaunchArgument('clear_topic', default_value='/voice/clear')
+    interrupt_topic_arg = DeclareLaunchArgument('interrupt_topic', default_value='/voice/interrupt')
+
+    # Piper model args (forwarded to the Python executable)
+    model_arg = DeclareLaunchArgument('model', default_value=EnvironmentVariable(name='PIPER_MODEL', default_value='en_US-ryan-high'))
+    voices_dir_arg = DeclareLaunchArgument('voices_dir', default_value=EnvironmentVariable(name='PIPER_VOICES_DIR', default_value='/opt/piper/voices'))
+
     node = Node(
         package='voice',
         executable='voice_node',
@@ -55,11 +65,17 @@ def generate_launch_description():
             'espeak_pitch': LaunchConfiguration('espeak_pitch'),
             'espeak_volume': LaunchConfiguration('espeak_volume'),
             'espeak_extra_args': LaunchConfiguration('espeak_extra_args'),
+            # control topics
+            'pause_topic': LaunchConfiguration('pause_topic'),
+            'resume_topic': LaunchConfiguration('resume_topic'),
+            'clear_topic': LaunchConfiguration('clear_topic'),
+            'interrupt_topic': LaunchConfiguration('interrupt_topic'),
             # startup/heartbeat
             'startup_greeting': LaunchConfiguration('startup_greeting'),
             'enable_ping': LaunchConfiguration('enable_ping'),
             'ping_interval_sec': LaunchConfiguration('ping_interval_sec'),
-        }]
+        }],
+        arguments=['--model', LaunchConfiguration('model'), '--voices-dir', LaunchConfiguration('voices_dir')]
     )
 
     return LaunchDescription([
@@ -72,8 +88,14 @@ def generate_launch_description():
         espeak_pitch_arg,
         espeak_volume_arg,
         espeak_extra_args_arg,
+        pause_topic_arg,
+        resume_topic_arg,
+        clear_topic_arg,
+        interrupt_topic_arg,
         startup_greeting_arg,
         enable_ping_arg,
         ping_interval_arg,
+        model_arg,
+        voices_dir_arg,
         node
     ])
