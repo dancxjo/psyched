@@ -1,0 +1,6 @@
+engine=piper
+voice=en_US-joe-medium
+topic=/voice
+interrupt=/voice/interrupt
+resume=/voice/resume
+clear=/voice/clear
