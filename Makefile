@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap
+.PHONY: help ros2 build bootstrap update
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -8,6 +8,7 @@ help:
 	@echo "  ros2       - Install ROS 2 using tools/install_ros2.sh"
 	@echo "  build      - Resolve deps with rosdep, colcon build, and re-source env"
 	@echo "  bootstrap  - Run initial provisioning via tools/provision/bootstrap.sh"
+	@echo "  update     - git pull then run bootstrap"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -48,3 +49,27 @@ bootstrap:
 		echo "[bootstrap] Running tools/provision/bootstrap.sh..."; \
 		./tools/provision/bootstrap.sh; \
 		echo "[bootstrap] Done."'
+
+# Update the repository and re-run bootstrap
+# Usage:
+#   make update
+update:
+	@bash -lc 'set -euo pipefail; \
+		echo "[update] Stashing local changes (including untracked)..."; \
+		STASH_CREATED=0; \
+		if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(shell git ls-files --others --exclude-standard)" ]; then \
+			git stash push -u -m "pre-update" >/dev/null; \
+			STASH_CREATED=1; \
+		fi; \
+		echo "[update] Pulling latest changes (rebase)..."; \
+		git pull --rebase; \
+		if [ $$STASH_CREATED -eq 1 ]; then \
+			echo "[update] Restoring stashed changes..."; \
+			if ! git stash pop; then \
+				echo "[update] Conflict when popping stash. Resolve conflicts then re-run make bootstrap."; \
+				exit 1; \
+			fi; \
+		fi; \
+		echo "[update] Running bootstrap..."; \
+		$(MAKE) bootstrap; \
+		echo "[update] Done."'
