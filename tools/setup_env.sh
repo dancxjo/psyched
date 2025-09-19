@@ -6,21 +6,10 @@ ROS_DISTRO=${ROS_DISTRO:-jazzy}
 WORKSPACE_PATH=${WORKSPACE_PATH:-/opt/psyched}
 PSH_ENV_MODE=${PSH_ENV_MODE:-run}
 
-return_or_exit() {
-    # Return with given code if sourced; otherwise exit the process.
-    local code=${1:-1}
-    return "$code" 2>/dev/null || exit "$code"
-}
-
 emit_body() {
     cat <<EOF
 # Helper: return from sourced contexts or exit when executed
-psh_return_or_exit() {
-    local code=
-    code=
-    code=${1:-1}
-    return "$code" 2>/dev/null || exit "$code"
-}
+psh_return_or_exit() { return "${1:-1}" 2>/dev/null || exit "${1:-1}"; }
 
 echo "Setting up ROS2 environment..."
 echo "ROS_DISTRO: $ROS_DISTRO"

@@ -18,8 +18,8 @@ pub enum Commands {
     Build,
     /// Clone, build, and install the utility in one go
     Update,
-    /// Print environment sourcing instructions for the workspace
-    Env,
+    /// Print or apply environment setup for the workspace
+    Env(EnvArgs),
     /// Provision ROS 2 using the bundled installer script
     Ros2(Ros2Args),
     /// Remove the installed utility and the cloned repository
@@ -74,4 +74,11 @@ pub struct Ros2Args {
     /// Optional override for the install script path
     #[arg(long, value_hint = ValueHint::FilePath)]
     pub script: Option<PathBuf>,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct EnvArgs {
+    /// Print the environment setup script instead of running it
+    #[arg(long)]
+    pub print: bool,
 }

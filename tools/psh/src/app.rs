@@ -5,7 +5,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-use crate::cli::{Commands, HostCommands, ModuleArgs, ModuleCommands, Ros2Args};
+use crate::cli::{Commands, EnvArgs, HostCommands, ModuleArgs, ModuleCommands, Ros2Args};
 use crate::command_runner::{CommandRunner, CommandSpec};
 use crate::host::HostConfig;
 use crate::layout::{copy_release_binary, user_install_dir, Layout};
@@ -36,7 +36,7 @@ impl<R: CommandRunner> App<R> {
             Commands::Clone => self.clone_repo(),
             Commands::Build => self.build(),
             Commands::Update => self.update(),
-            Commands::Env => self.env(),
+            Commands::Env(args) => self.env(&args),
             Commands::Ros2(args) => self.install_ros2(&args),
             Commands::Remove => self.remove(),
             Commands::Host { command } => match command {
@@ -198,8 +198,18 @@ impl<R: CommandRunner> App<R> {
         Ok(())
     }
 
-    fn env(&self) -> Result<()> {
-        let script = self.layout.setup_env_script();
+    fn env(&self, args: &EnvArgs) -> Result<()> {
+        let (script, workspace_path) = {
+            let default = self.layout.setup_env_script();
+            if default.exists() {
+                (default, self.layout.repo_path.clone())
+            } else {
+                // If running inside a cloned repo but PSH_REPO_DIR isn't set, allow tools/setup_env.sh relative to CWD
+                let cwd = std::env::current_dir().unwrap_or_else(|_| self.layout.repo_path.clone());
+                let candidate = cwd.join("tools").join("setup_env.sh");
+                (candidate, cwd)
+            }
+        };
         if !script.exists() {
             bail!(
                 "{} does not exist. Run `psh clone` first to fetch the repository or provide PSH_REPO_DIR.",
@@ -207,9 +217,13 @@ impl<R: CommandRunner> App<R> {
             );
         }
 
-        let workspace = self.layout.repo_path.to_string_lossy();
+        let workspace = workspace_path.to_string_lossy();
         let distro = crate::util::ros_distro();
-        let mode = std::env::var("PSH_ENV_MODE").unwrap_or_else(|_| "run".to_string());
+        let mode = if args.print {
+            "print".to_string()
+        } else {
+            std::env::var("PSH_ENV_MODE").unwrap_or_else(|_| "run".to_string())
+        };
         let command = format!(
             "WORKSPACE_PATH={} ROS_DISTRO={} PSH_ENV_MODE={} bash {}",
             sh_quote(&workspace),
@@ -218,12 +232,12 @@ impl<R: CommandRunner> App<R> {
             sh_quote(&script.to_string_lossy()),
         );
 
-        self.runner.run(
-            &CommandSpec::new("bash")
-                .arg("-lc")
-                .arg(command)
-                .cwd(&self.layout.repo_path),
-        )?;
+        let cwd = script
+            .parent()
+            .unwrap_or_else(|| workspace_path.as_path())
+            .to_path_buf();
+        self.runner
+            .run(&CommandSpec::new("bash").arg("-lc").arg(command).cwd(&cwd))?;
         Ok(())
     }
 
@@ -649,7 +663,7 @@ mod tests {
 
         let runner = MockRunner::default();
         let app = App::new(layout, runner.clone());
-        assert!(app.env().is_ok());
+        assert!(app.env(&crate::cli::EnvArgs::default()).is_ok());
 
         let commands = runner.commands();
         assert_eq!(commands.len(), 1);
