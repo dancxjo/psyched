@@ -17,6 +17,7 @@ echo "[bootstrap] Repository root: $REPO_ROOT"
 echo "[bootstrap] Installing required system packages..."
 sudo apt-get update -y
 sudo apt-get install -y --no-install-recommends git \
+    alsa-utils ffmpeg \
     build-essential curl make \
     python-is-python3 \
     python3-full \
