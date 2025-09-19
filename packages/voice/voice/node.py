@@ -31,6 +31,7 @@ import wave
 from dataclasses import dataclass
 import sys
 import shlex
+import shutil
 
 import rclpy
 from rclpy.node import Node
@@ -112,7 +113,8 @@ class VoiceNode(Node):
         self.model_path = os.path.join(self.voices_dir, f"{self.model}.onnx")
         self.config_path = os.path.join(self.voices_dir, f"{self.model}.onnx.json")
         self.sample_rate = self._load_sample_rate(self.config_path)
-        
+
+        # Internal state
         self._queue: queue.Queue[str] = queue.Queue()
         # Track both piper and aplay for interruption
         self._procs: list[subprocess.Popen] = []
@@ -122,12 +124,12 @@ class VoiceNode(Node):
 
         # Topic setup
         topic = self.get_parameter('topic').get_parameter_value().string_value
-        
+
         # Publishers and subscribers
-        self._pub_done = self.create_publisher(String, "voice_done", 10)
+        self._pub_done = self.create_publisher(String, 'voice_done', 10)
         self.create_subscription(String, topic, self.enqueue, 10)
         # Back-compat legacy interrupt topic: treat as pause (do not clear queue)
-        self.create_subscription(String, "voice_interrupt", lambda _msg: self._on_pause(None), 10)
+        self.create_subscription(String, 'voice_interrupt', lambda _msg: self._on_pause(None), 10)
 
         # Control topics (configurable)
         pause_topic = self.get_parameter('pause_topic').get_parameter_value().string_value or '/voice/interrupt'
@@ -153,19 +155,31 @@ class VoiceNode(Node):
                 self.sample_rate = self._load_sample_rate(self.config_path)
             except Exception:
                 pass
-            
+
         # Start worker thread
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
         self._worker.start()
-        
+
         self.get_logger().info(f'Voice node listening on topic: {topic}')
         self.get_logger().info(f'Using Piper model: {self.model}')
 
-        # Enqueue a startup greeting
+        # Enqueue a startup fortune (fallback to greeting if fortune unavailable)
         try:
-            greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
-            if greeting:
-                self.enqueue(String(data=greeting))
+            fortune_text = None
+            try:
+                fortune_bin = shutil.which('fortune')
+                if fortune_bin:
+                    res = subprocess.run([fortune_bin, '-s'], capture_output=True, text=True, timeout=3)
+                    fortune_text = (res.stdout or '').strip()
+            except Exception:
+                fortune_text = None
+
+            if fortune_text:
+                self.enqueue(String(data=fortune_text))
+            else:
+                greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
+                if greeting:
+                    self.enqueue(String(data=greeting))
         except Exception:
             pass
 
@@ -175,7 +189,6 @@ class VoiceNode(Node):
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
             if enable_ping and ping_interval > 0:
                 self.create_timer(ping_interval, lambda: self.enqueue(String(data='ping')))
-                
         except Exception:
             pass
 
