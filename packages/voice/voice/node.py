@@ -162,7 +162,7 @@ class VoiceNode(Node):
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
             if enable_ping and ping_interval > 0:
                 self.create_timer(ping_interval, lambda: self.enqueue(String(data="I'm alive. So so alive.")))
-                self.get_logger().info(f'Heartbeat ping enabled every {ping_interval}s')
+                
         except Exception:
             pass
 

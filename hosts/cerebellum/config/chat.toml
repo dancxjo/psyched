@@ -1,0 +1,7 @@
+system_prompt=You_are_a_helpful_assistant._Reply_in_one_concise_sentence.
+conversation_topic=/conversation
+voice_topic=/voice
+model=gemma3
+ollama_host=http://localhost:11434
+max_history=20
+
