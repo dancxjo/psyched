@@ -32,7 +32,14 @@ help:
 # Install ROS 2 via the provisioning script. You can override the distro:
 #   make ros2 ROS_DISTRO=kilted
 ros2:
-	@bash -lc 'set -euo pipefail; ./tools/install_ros2.sh'
+	@bash -lc 'set -euo pipefail; \
+		if command -v ros2 >/dev/null 2>&1; then \
+			echo "[ros2] ROS 2 is already installed, skipping..."; \
+			ros2 --version; \
+		else \
+			echo "[ros2] Installing ROS 2..."; \
+			./tools/install_ros2.sh; \
+		fi'
 
 # Build the workspace:
 #   1) Ensure ROS 2 environment is sourced (via tools/setup_env.sh)
@@ -63,6 +70,8 @@ bootstrap:
 	@bash -lc 'set -euo pipefail; \
 		echo "[bootstrap] Running tools/provision/bootstrap.sh..."; \
 		./tools/provision/bootstrap.sh; \
+		echo "[bootstrap] Downloading popular piper voices..."; \
+		$(MAKE) get-piper-voices VOICES=popular || echo "[bootstrap] Warning: Could not download piper voices, continuing..."; \
 		echo "[bootstrap] Done."'
 
 # Update the repository and re-run bootstrap
