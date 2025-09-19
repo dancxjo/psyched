@@ -28,6 +28,13 @@ sudo apt-get install -y --no-install-recommends git \
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."
 make ros2
 
+# Source repository environment (ROS + venv) so module setups use venv, not system Python
+echo "[bootstrap] Sourcing repo environment (ROS + venv)..."
+if ! eval "$(SETUP_ENV_MODE=print "$REPO_ROOT"/tools/setup_env.sh)"; then
+    echo "[bootstrap] Error: failed to source repo environment." >&2
+    exit 1
+fi
+
 # Determine host (env var HOST overrides system hostname)
 HOST="${HOST:-$(hostname -s)}"
 HOST_DIR="$REPO_ROOT/hosts/$HOST"
@@ -49,39 +56,40 @@ if [[ -d "$HOST_DIR" ]]; then
     echo "[bootstrap] Building workspace..."
     make build
 
-        # Ensure automatic environment setup in user's .bashrc (idempotent)
+            # Ensure automatic environment setup in user's .bashrc (replace if present)
         BASHRC="$HOME/.bashrc"
         BASHRC_MARK_START="# >>> psyched auto-setup >>>"
         BASHRC_MARK_END="# <<< psyched auto-setup <<<"
-        AUTO_BLOCK=$(cat <<'BRC'
-# >>> psyched auto-setup >>>
-# Automatically set up ROS 2 and project venv for this repository in interactive shells.
-# This is idempotent and safe if the repo directory moves; adjust PSYCHED_REPO if needed.
-PSYCHED_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-if [ -d "$PSYCHED_REPO" ] && [ -f "$PSYCHED_REPO/tools/setup_env.sh" ]; then
-    # Only run in interactive shells
-    case $- in
-        *i*)
-            if command -v bash >/dev/null 2>&1; then
-                eval "$(SETUP_ENV_MODE=print "$PSYCHED_REPO"/tools/setup_env.sh)"
-            fi
-            ;;
-    esac
-fi
-# <<< psyched auto-setup <<<
-BRC
-)
+            AUTO_BLOCK=$(cat <<BRC
+    # >>> psyched auto-setup >>>
+    # Automatically set up ROS 2 and project venv for this repository in interactive shells.
+    PSYCHED_REPO="$REPO_ROOT"
+    if [ -d "\$PSYCHED_REPO" ] && [ -f "\$PSYCHED_REPO/tools/setup_env.sh" ]; then
+        case \$- in
+            *i*)
+                eval "\$(SETUP_ENV_MODE=print \"\$PSYCHED_REPO\"/tools/setup_env.sh)"
+                ;;
+        esac
+    fi
+    # <<< psyched auto-setup <<<
+    BRC
+    )
 
-        if ! grep -Fq "$BASHRC_MARK_START" "$BASHRC" 2>/dev/null; then
-                echo "[bootstrap] Adding auto-setup block to $BASHRC"
-                {
-                    echo "$BASHRC_MARK_START"
-                    echo "$AUTO_BLOCK"
-                    echo "$BASHRC_MARK_END"
-                } >> "$BASHRC"
-        else
-                echo "[bootstrap] Auto-setup block already present in $BASHRC; skipping"
-        fi
+            if grep -Fq "$BASHRC_MARK_START" "$BASHRC" 2>/dev/null; then
+                    echo "[bootstrap] Updating auto-setup block in $BASHRC"
+                    awk -v start="$BASHRC_MARK_START" -v end="$BASHRC_MARK_END" 'BEGIN{skip=0} {
+                        if ($0==start) {skip=1; next}
+                        if ($0==end) {skip=0; next}
+                        if (!skip) print
+                    }' "$BASHRC" > "$BASHRC.tmp" && mv "$BASHRC.tmp" "$BASHRC"
+            else
+                    echo "[bootstrap] Adding auto-setup block to $BASHRC"
+            fi
+            {
+                echo "$BASHRC_MARK_START"
+                echo "$AUTO_BLOCK"
+                echo "$BASHRC_MARK_END"
+            } >> "$BASHRC"
 
     # Add launch script to crontab (idempotent)
     LAUNCH_SCRIPT="$REPO_ROOT/tools/launch/launch.sh"

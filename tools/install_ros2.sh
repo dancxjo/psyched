@@ -7,11 +7,12 @@
 #
 # Usage examples:
 #   ROS_DISTRO=jazzy ./install_ros2.sh
-#   ./install_ros2.sh            # uses ROS_DISTRO (defaults to kilted)
+#   ROS_DISTRO=rolling ./install_ros2.sh
+#   ./install_ros2.sh            # uses ROS_DISTRO (defaults to jazzy)
 #
 set -euo pipefail
 
-ROS_DISTRO=${ROS_DISTRO:-kilted}
+ROS_DISTRO=${ROS_DISTRO:-jazzy}
 
 SUDO=(sudo)
 if [[ $(id -u) -eq 0 ]]; then
