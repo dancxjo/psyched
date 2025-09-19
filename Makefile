@@ -1,4 +1,4 @@
-.PHONY: help ros2 build
+.PHONY: help ros2 build bootstrap
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -7,6 +7,7 @@ help:
 	@echo "Targets:"
 	@echo "  ros2   - Install ROS 2 using tools/install_ros2.sh"
 	@echo "  build  - Resolve deps with rosdep, colcon build, and re-source env"
+	@echo "  bootstrap - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo ""
 	@echo "The legacy Makefile workflow has moved to psh."
 	@echo "Examples:"
@@ -39,3 +40,12 @@ build:
 	echo "[build] Re-sourcing environment..."; \
 	eval "$$(PSH_ENV_MODE=print ./tools/setup_env.sh)"; \
 		echo "[build] Done."'
+
+# Bootstrap the host/dev environment
+# Usage:
+#   make bootstrap
+bootstrap:
+	@bash -lc 'set -euo pipefail; \
+		echo "[bootstrap] Running tools/provision/bootstrap.sh..."; \
+		./tools/provision/bootstrap.sh; \
+		echo "[bootstrap] Done."'

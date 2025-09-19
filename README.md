@@ -106,7 +106,49 @@ psyched/
 │   └── psh/
 │       ├── Cargo.toml     # psh CLI crate metadata
 │       └── src/           # Rust sources (thin coordinator)
-└── src/                   # ROS 2 packages (ament build system)
+├── packages/              # Tracked ROS 2 packages (ament)
+│   ├── psyched/           # Example C++/Python package
+│   └── voice/             # ament_python package (Piper TTS)
+└── src/                   # Populated at setup time with symlinks to packages/
+
+Notes on src/ vs packages/:
+- Keep your packages under `packages/` in git.
+- Module `setup.sh` scripts create a fresh `src/` and symlink the needed packages in.
+- The entire `src/` dir is ignored by git to enable per-module curated workspaces.
+
+### Voice module (Piper TTS)
+
+The `voice` package is an `ament_python` node that subscribes to a `std_msgs/String`
+topic and speaks queued messages via [Piper TTS](https://pypi.org/project/piper-tts/).
+
+Quick start:
+
+```bash
+# Optional: download a voice and set PIPER_VOICE env var
+python3 -m piper.download_voices en_US-lessac-medium
+export PIPER_VOICE="$HOME/.local/share/piper/voices/en/en_US-lessac-medium.onnx"
+
+# Prepare and build workspace for the voice module
+psh module setup voice
+
+# In a new shell (or after sourcing env), launch the node
+ros2 launch voice voice.launch.py
+
+# In another terminal, publish a message
+ros2 topic pub -1 /voice std_msgs/String '{data: "Hello from Psyched"}'
+
+# Control topics (std_msgs/Empty)
+ros2 topic pub -1 /voice/pause std_msgs/Empty '{}'
+ros2 topic pub -1 /voice/resume std_msgs/Empty '{}'
+ros2 topic pub -1 /voice/clear std_msgs/Empty '{}'
+```
+
+Parameters:
+- `topic` (default `/voice`): subscription topic for text
+- `voice_path` (default `$PIPER_VOICE`): `.onnx` voice model path
+- `use_cuda` (default `false`): enable GPU if `onnxruntime-gpu` is installed
+- `wav_out_dir` (optional): write WAVs to this dir (also tries to play via `aplay`)
+- `aplay` (default `true`): play audio via `aplay` if available
 ```
 
 ## CLI instead of Make

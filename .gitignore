@@ -3,9 +3,8 @@ build/
 install/
 log/
 
-# External workspace sources
-src/create_robot/
-src/libcreate/
+# External workspace sources (symlink-populated)
+src/
 
 # Python cache
 __pycache__/
