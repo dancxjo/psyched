@@ -70,6 +70,8 @@ bootstrap:
 #   make update
 update:
 	@bash -lc 'set -euo pipefail; \
+		echo "[update] Stopping old services..."; \
+		$(MAKE) stop-services; \
 		echo "[update] Stashing local changes (including untracked)..."; \
 		STASH_CREATED=0; \
 		if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(shell git ls-files --others --exclude-standard)" ]; then \
@@ -87,6 +89,8 @@ update:
 		fi; \
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
+		$(MAKE) install-services; \
+		$(MAKE) start-services; \
 		echo "[update] Done."'
 
 # Publish text to the /voice topic for text-to-speech
