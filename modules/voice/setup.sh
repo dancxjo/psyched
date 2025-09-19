@@ -30,7 +30,4 @@ if ! python3 -c 'import piper' >/dev/null 2>&1; then
   pip3 install --user piper-tts
 fi
 
-# Build the workspace
-make build
-
 echo "Voice module setup complete."
