@@ -13,10 +13,16 @@ WorkingDirectory={{REPO_DIR}}
 Environment="HOME={{HOME_DIR}}"
 Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/piper/bin"
 Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
+Environment="VOICE_ENGINE=piper"
+Environment="PIPER_MODEL=en_US-ryan-high"
+# Optional: set voices dir explicitly (node has same default)
+Environment="PIPER_VOICES_DIR=/opt/piper/voices"
 # Comprehensive pre-start diagnostics
 ExecStartPre=/bin/bash -c 'echo "=== PSYCHED SERVICE DEBUG: {{MODULE_NAME}} ==="'
 ExecStartPre=/bin/bash -c 'echo "User: $(whoami), Home: $HOME, Working Dir: $(pwd)"'
 ExecStartPre=/bin/bash -c 'echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-unset}"'
+ExecStartPre=/bin/bash -c 'echo "VOICE_ENGINE: ${VOICE_ENGINE:-unset}"'
+ExecStartPre=/bin/bash -c 'echo "PIPER_MODEL: ${PIPER_MODEL:-unset}"'
 ExecStartPre=/bin/bash -c 'echo "Checking module launch script..."'
 ExecStartPre=/bin/bash -c 'echo "PATH: $PATH"'
 ExecStartPre=/bin/bash -c 'echo "Piper binary check: $(which piper 2>/dev/null || echo "NOT FOUND IN PATH")"'
