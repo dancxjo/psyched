@@ -97,13 +97,6 @@ update:
 		fi; \
 		echo "[update] Pulling latest changes (rebase)..."; \
 		git pull --rebase; \
-		if [ $$STASH_CREATED -eq 1 ]; then \
-			echo "[update] Restoring stashed changes..."; \
-			if ! git stash pop; then \
-				echo "[update] Conflict when popping stash. Resolve conflicts then re-run make bootstrap."; \
-				exit 1; \
-			fi; \
-		fi; \
 		echo "[update] Running bootstrap..."; \
 		$(MAKE) bootstrap; \
 		$(MAKE) install-services; \
@@ -133,7 +126,7 @@ say:
 		# Capture TEXT safely and escape for YAML double-quoted string
 		TEXT_VAL=$$(printf '%s' "$(TEXT)"); \
 		yaml_escape() { local s="$$1"; s="$${s//\\/\\\\}"; s="$${s//\"/\\\"}"; printf '%s' "$$s"; }; \
-		ROS_YAML=$$(printf 'data: "%s"' "$$((yaml_escape "$${TEXT_VAL}") )" 2>/dev/null || printf 'data: "%s"' "$$(yaml_escape "$$TEXT_VAL")"); \
+		ROS_YAML=$$(printf 'data: "%s"' "$$(yaml_escape "$$TEXT_VAL")"); \
 		echo "[say] Publishing to /voice topic..."; \
 		ros2 topic pub --once /voice std_msgs/msg/String "$$ROS_YAML" >/dev/null 2>&1; \
 		echo "[say] Message published."
