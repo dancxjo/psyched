@@ -89,6 +89,10 @@ class VoiceNode(Node):
         self.declare_parameter('normalize_audio', True)
         self.declare_parameter('wav_out_dir', '')
         self.declare_parameter('aplay', True)
+        # Startup/heartbeat messages
+        self.declare_parameter('startup_greeting', os.environ.get('VOICE_STARTUP_GREETING', 'Hello, voice is online'))
+        self.declare_parameter('enable_ping', True)
+        self.declare_parameter('ping_interval_sec', 30)
         # espeak-ng parameters
         self.declare_parameter('espeak_voice', os.environ.get('ESPEAK_VOICE', 'en-us'))
         self.declare_parameter('espeak_rate', 170)   # words per minute
@@ -143,6 +147,24 @@ class VoiceNode(Node):
         
         self.get_logger().info(f'Voice node listening on topic: {topic}')
         self.get_logger().info(f'Using Piper model: {self.model}')
+
+        # Enqueue a startup greeting
+        try:
+            greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
+            if greeting:
+                self.enqueue(String(data=greeting))
+        except Exception:
+            pass
+
+        # Periodic ping timer
+        try:
+            enable_ping = self.get_parameter('enable_ping').get_parameter_value().bool_value
+            ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
+            if enable_ping and ping_interval > 0:
+                self.create_timer(ping_interval, lambda: self.enqueue(String(data='ping')))
+                self.get_logger().info(f'Heartbeat ping enabled every {ping_interval}s')
+        except Exception:
+            pass
 
     @staticmethod
     def _load_sample_rate(config_path: str) -> int:
@@ -407,15 +429,47 @@ class VoiceNode(Node):
         return True
 
     def _validate_piper_cmd(self, cmd: list[str]) -> bool:
-        """Return True if running '--version' succeeds and doesn't show import errors."""
-        try:
-            res = subprocess.run([*cmd, "--version"], capture_output=True, text=True, timeout=5)
+        """Validate a Piper command without synthesizing audio.
+
+        Strategy:
+        - Prefer running with ``--help`` (should be fast and rc=0)
+        - If CLI insists on a model (some Python module wrappers do), retry
+          with ``-m <model> [--config <config>] --help`` if files exist.
+        - Reject if output shows missing module errors.
+        """
+        def _run_check(args: list[str]) -> tuple[int, str]:
+            res = subprocess.run(args, capture_output=True, text=True, timeout=5)
             out = (res.stdout or "") + (res.stderr or "")
-            if res.returncode != 0:
-                self.get_logger().warning(f"Piper command failed validation (rc={res.returncode}): {cmd} -> {out.strip()}")
+            return res.returncode, out
+
+        try:
+            # 1) Basic --help
+            rc, out = _run_check([*cmd, "--help"])
+            missing_mod = ("ModuleNotFoundError" in out) or ("No module named 'piper" in out)
+            requires_model = ("the following arguments are required: -m/--model" in out) or ("required: -m/--model" in out)
+            if rc == 0 and not missing_mod:
+                return True
+
+            # 2) Retry with model/config if present
+            if (requires_model or rc != 0) and os.path.exists(self.model_path):
+                args = [*cmd, "-m", self.model_path, "--help"]
+                # Include config when available (harmless for most builds)
+                if os.path.exists(self.config_path):
+                    args = [*cmd, "-m", self.model_path, "--config", self.config_path, "--help"]
+                rc2, out2 = _run_check(args)
+                missing_mod2 = ("ModuleNotFoundError" in out2) or ("No module named 'piper" in out2)
+                if rc2 == 0 and not missing_mod2:
+                    return True
+                self.get_logger().warning(
+                    f"Piper command failed validation (rc={rc2}): {args} -> {out2.strip()}"
+                )
                 return False
-            if "ModuleNotFoundError" in out or "No module named 'piper" in out:
-                self.get_logger().warning(f"Piper command shows missing module: {cmd} -> {out.strip()}")
+
+            # Fallthrough: report first attempt
+            if rc != 0 or missing_mod:
+                self.get_logger().warning(
+                    f"Piper command failed validation (rc={rc}): {[*cmd, '--help']} -> {out.strip()}"
+                )
                 return False
             return True
         except Exception as e:

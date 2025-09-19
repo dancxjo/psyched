@@ -30,6 +30,15 @@ def generate_launch_description():
     espeak_volume_arg = DeclareLaunchArgument('espeak_volume', default_value='1.0')
     espeak_extra_args_arg = DeclareLaunchArgument('espeak_extra_args', default_value='')
 
+    # Startup greeting and heartbeat ping
+    startup_greeting_arg = DeclareLaunchArgument(
+        'startup_greeting',
+        default_value=EnvironmentVariable(name='VOICE_STARTUP_GREETING', default_value='Hello, voice is online'),
+        description='Greeting spoken when the node starts'
+    )
+    enable_ping_arg = DeclareLaunchArgument('enable_ping', default_value='true', description='Enable periodic ping')
+    ping_interval_arg = DeclareLaunchArgument('ping_interval_sec', default_value='30', description='Ping interval in seconds')
+
     node = Node(
         package='voice',
         executable='voice_node',
@@ -46,6 +55,10 @@ def generate_launch_description():
             'espeak_pitch': LaunchConfiguration('espeak_pitch'),
             'espeak_volume': LaunchConfiguration('espeak_volume'),
             'espeak_extra_args': LaunchConfiguration('espeak_extra_args'),
+            # startup/heartbeat
+            'startup_greeting': LaunchConfiguration('startup_greeting'),
+            'enable_ping': LaunchConfiguration('enable_ping'),
+            'ping_interval_sec': LaunchConfiguration('ping_interval_sec'),
         }]
     )
 
@@ -59,5 +72,8 @@ def generate_launch_description():
         espeak_pitch_arg,
         espeak_volume_arg,
         espeak_extra_args_arg,
+        startup_greeting_arg,
+        enable_ping_arg,
+        ping_interval_arg,
         node
     ])

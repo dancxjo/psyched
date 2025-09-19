@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service
+.PHONY: help ros2 build bootstrap update say pub-string get-piper-voices check-piper install-services uninstall-services update-services start-services stop-services status-services diagnose-service logs-service restart-voice
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -23,6 +23,7 @@ help:
 	@echo "  status-services    - Show status of all psyched services"
 	@echo "  diagnose-service   - Diagnose issues with a specific service (usage: make diagnose-service SERVICE=voice)"
 	@echo "  logs-service       - Show recent logs for a service (usage: make logs-service SERVICE=voice [LINES=50])"
+	@echo "  restart-voice      - Restart the psyched-voice systemd service"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -397,3 +398,11 @@ logs-service:
 	fi
 	@echo "[services] Showing logs for service: $(SERVICE)"
 	@./tools/manage_services.sh logs $(SERVICE) $(LINES)
+
+# Restart only the voice service
+# Usage:
+#   sudo make restart-voice
+restart-voice:
+	@echo "[services] Restarting psyched-voice.service..."
+	@sudo systemctl restart psyched-voice.service
+	@echo "[services] Restarted. Use: make logs-service SERVICE=voice LINES=100 to tail logs."
