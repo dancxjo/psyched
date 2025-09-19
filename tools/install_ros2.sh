@@ -6,13 +6,13 @@
 # overridden via the ROS_DISTRO environment variable.
 #
 # Usage examples:
-#   ROS_DISTRO=jazzy ./install_ros2.sh
+#   ROS_DISTRO=kilted ./install_ros2.sh
 #   ROS_DISTRO=rolling ./install_ros2.sh
-#   ./install_ros2.sh            # uses ROS_DISTRO (defaults to jazzy)
+#   ./install_ros2.sh            # uses ROS_DISTRO (defaults to kilted)
 #
 set -euo pipefail
 
-ROS_DISTRO=${ROS_DISTRO:-jazzy}
+ROS_DISTRO=${ROS_DISTRO:-kilted}
 
 SUDO=(sudo)
 if [[ $(id -u) -eq 0 ]]; then

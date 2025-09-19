@@ -7,7 +7,7 @@ _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _DEFAULT_WORKSPACE_PATH="$(cd "${_SCRIPT_DIR}/.." && pwd)"
 
 # Respect external overrides, default ROS distro
-ROS_DISTRO=${ROS_DISTRO:-jazzy}
+ROS_DISTRO=${ROS_DISTRO:-kilted}
 SETUP_ENV_MODE=${SETUP_ENV_MODE:-run}
 
 emit_body() {

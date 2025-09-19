@@ -16,7 +16,7 @@ help:
 	@echo "  ./modules/voice/setup.sh && make build"
 
 # Install ROS 2 via the provisioning script. You can override the distro:
-#   make ros2 ROS_DISTRO=jazzy
+#   make ros2 ROS_DISTRO=kilted
 ros2:
 	@bash -lc 'set -euo pipefail; ./tools/install_ros2.sh'
 
