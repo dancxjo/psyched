@@ -77,7 +77,7 @@ fi
 
 # Install fortune-mod and some extra fortunes if available
 if command -v apt >/dev/null 2>&1; then
-  sudo apt install -y fortune-mod fortunes fortunes-off fortunes-min || true
+  sudo apt install -y fortune-mod fortunes fortunes-min || true
 fi
 
 echo "Voice module setup complete. ENGINE=${ENGINE}"
