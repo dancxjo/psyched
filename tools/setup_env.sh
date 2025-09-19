@@ -21,6 +21,10 @@ echo "Setting up ROS 2 environment..."
 echo "ROS_DISTRO: ${ROS_DISTRO}"
 echo "Workspace (repo root): ${WORKSPACE_PATH}"
 
+# Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
+# Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
+export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES:-0}"
+
 if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
     echo "Sourcing ROS 2 distro setup..."
     source "/opt/ros/${ROS_DISTRO}/setup.bash"
