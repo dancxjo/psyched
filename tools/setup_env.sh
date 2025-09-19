@@ -25,6 +25,15 @@ echo "Workspace (repo root): ${WORKSPACE_PATH}"
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
 export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES:-0}"
 
+# Provide a safe default Python executable for ROS/ament/colcon before sourcing ROS
+# This avoids unbound-variable errors in setup scripts when run under 'set -u'.
+_PY3_PATH="$(command -v python3 2>/dev/null || true)"
+if [ -z "${_PY3_PATH}" ]; then
+    _PY3_PATH="python3"
+fi
+export AMENT_PYTHON_EXECUTABLE="${AMENT_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
+export COLCON_PYTHON_EXECUTABLE="${COLCON_PYTHON_EXECUTABLE:-${_PY3_PATH}}"
+
 if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
     echo "Sourcing ROS 2 distro setup..."
     source "/opt/ros/${ROS_DISTRO}/setup.bash"
@@ -54,6 +63,12 @@ if [ -f "${VENV_DIR}/bin/activate" ]; then
     fi
     # Ensure core build tools are present
     python -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+
+    # Now that venv is active, ensure ROS/colcon use the venv's Python
+    if [ -x "${VENV_DIR}/bin/python" ]; then
+        export AMENT_PYTHON_EXECUTABLE="${VENV_DIR}/bin/python"
+        export COLCON_PYTHON_EXECUTABLE="${VENV_DIR}/bin/python"
+    fi
 else
     echo "Warning: venv activation script missing at ${VENV_DIR}/bin/activate" >&2
 fi
