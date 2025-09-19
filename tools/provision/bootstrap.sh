@@ -26,6 +26,30 @@ sudo apt-get install -y --no-install-recommends git \
     python3-setuptools \
     python3-dev
 
+# Install Piper TTS globally for system services
+echo "[bootstrap] Installing Piper TTS globally..."
+if ! python3 -c 'import piper' >/dev/null 2>&1; then
+    if sudo pip3 install piper-tts >/dev/null 2>&1; then
+        echo "[bootstrap] Installed piper-tts globally"
+    else
+        echo "[bootstrap] Warning: Failed to install piper-tts globally. Modules will install locally."
+    fi
+else
+    echo "[bootstrap] Piper TTS already installed"
+fi
+
+# Ensure Piper voices directory with proper permissions
+echo "[bootstrap] Setting up Piper voices directory..."
+PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-/opt/piper/voices}"
+if sudo mkdir -p "$PIPER_VOICES_DIR" >/dev/null 2>&1; then
+    # Make the directory writable by the current user and group for downloads
+    sudo chown "$USER:$USER" "$PIPER_VOICES_DIR" || true
+    sudo chmod 755 "$PIPER_VOICES_DIR" || true
+    echo "[bootstrap] Piper voices directory ready at $PIPER_VOICES_DIR"
+else
+    echo "[bootstrap] Warning: Could not create $PIPER_VOICES_DIR directory"
+fi
+
 # Ensure ROS2 is available
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."
 make ros2

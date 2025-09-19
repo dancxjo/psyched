@@ -43,8 +43,19 @@ else
 fi
 
 # Install runtime deps that rosdep won't handle (Python pip packages)
+# Install globally so systemd services can find it, fallback to user install
 if ! python3 -c 'import piper' >/dev/null 2>&1; then
-  pip3 install --user piper-tts
+  echo "Installing piper-tts..."
+  # Try global install first (preferred for services)
+  if pip3 install piper-tts >/dev/null 2>&1; then
+    echo "Installed piper-tts globally"
+  elif sudo pip3 install piper-tts >/dev/null 2>&1; then
+    echo "Installed piper-tts globally with sudo"
+  else
+    echo "Global install failed, installing for user..."
+    pip3 install --user piper-tts
+    echo "Installed piper-tts for user (may need PATH adjustment for services)"
+  fi
 fi
 
 echo "Voice module setup complete."

@@ -11,7 +11,7 @@ User={{USER}}
 Group={{GROUP}}
 WorkingDirectory={{REPO_DIR}}
 Environment="HOME={{HOME_DIR}}"
-Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH={{HOME_DIR}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="ROS_DOMAIN_ID={{ROS_DOMAIN_ID}}"
 # Comprehensive pre-start diagnostics
 ExecStartPre=/bin/bash -c 'echo "=== PSYCHED SERVICE DEBUG: {{MODULE_NAME}} ==="'
