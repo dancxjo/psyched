@@ -16,11 +16,25 @@ emit_body() {
 return_or_exit() { return "\${1:-1}" 2>/dev/null || exit "\${1:-1}"; }
 
 # Helper: safely source a script even under 'set -u' by temporarily disabling nounset
+# Also suppress verbose debug output that pollutes logs
 safesource() {
     # shellcheck disable=SC1090
     set +u
+    # Temporarily redirect stdout to suppress debug output while preserving stderr for errors
+    exec 3>&1  # Save stdout
+    exec 1>/dev/null  # Redirect stdout to /dev/null
+    # Disable ROS-specific debug output  
+    local old_ament_trace="\${AMENT_TRACE_SETUP_FILES:-}"
+    local old_ament_stderr="\${AMENT_TRACE_SETUP_FILES_STDERR:-}"
+    export AMENT_TRACE_SETUP_FILES=0
+    export AMENT_TRACE_SETUP_FILES_STDERR=0
     # shellcheck source=/dev/null
-    source "\$1"
+    source "\$1" 
+    # Restore original values
+    export AMENT_TRACE_SETUP_FILES="\$old_ament_trace"
+    export AMENT_TRACE_SETUP_FILES_STDERR="\$old_ament_stderr"
+    exec 1>&3  # Restore stdout
+    exec 3>&-  # Close fd 3
     set -u
 }
 
@@ -35,7 +49,16 @@ echo "Workspace (repo root): \$WORKSPACE_PATH"
 
 # Ensure variables expected by ROS setup scripts exist to avoid 'set -u' issues
 # Some ROS 2 setup files reference AMENT_TRACE_SETUP_FILES without guarding for unset
+# Disable all ROS setup debugging/tracing to prevent log pollution
 export AMENT_TRACE_SETUP_FILES="\${AMENT_TRACE_SETUP_FILES:-0}"
+export AMENT_TRACE_SETUP_FILES_STDERR="\${AMENT_TRACE_SETUP_FILES_STDERR:-0}"
+export ROS_PYTHON_LOG_CONFIG_FILE="\${ROS_PYTHON_LOG_CONFIG_FILE:-}"
+# Disable colcon/ament verbose output
+export COLCON_LOG_LEVEL="\${COLCON_LOG_LEVEL:-30}"
+# The ROS setup scripts may be using 'set -x' or similar - disable bash tracing
+export BASH_XTRACEFD="\${BASH_XTRACEFD:-}"
+# Ensure PS4 is not set to verbose mode that would show trace info
+export PS4="\${PS4:-+ }"
 
 # Provide a safe default Python executable for ROS/ament/colcon before sourcing ROS
 # This avoids unbound-variable errors in setup scripts when run under 'set -u'.
