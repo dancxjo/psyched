@@ -39,7 +39,7 @@ ros2:
 	@bash -lc 'set -euo pipefail; \
 		if command -v ros2 >/dev/null 2>&1; then \
 			echo "[ros2] ROS 2 is already installed, skipping..."; \
-			ros2 doctor --report | head -n 3; \
+			ros2 doctor --report 2>/dev/null | head -n 3 || true; \
 		else \
 			echo "[ros2] Installing ROS 2..."; \
 			./tools/install_ros2.sh; \
