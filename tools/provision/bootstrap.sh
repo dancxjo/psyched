@@ -20,7 +20,7 @@ sudo apt-get install -y --no-install-recommends git \
     build-essential curl make \
     python-is-python3 \
     python3-venv \
-    python3-distutils \
+    python3-setuptools \
     python3-dev \
 
 # Ensure ROS2 is available
