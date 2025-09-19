@@ -20,9 +20,26 @@ if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
 fi
 
-# Ensure Piper voice model path is pointed via env var if available
+# Download and setup voice model
+VOICE_DIR="${REPO_DIR}/voices"
+VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
+VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx"
+
+mkdir -p "${VOICE_DIR}"
+
+# Download voice model if it doesn't exist
+if [ ! -f "${VOICE_MODEL}" ]; then
+  echo "Downloading Piper voice model..."
+  curl -L -o "${VOICE_MODEL}" "${VOICE_URL}"
+  echo "Voice model downloaded to ${VOICE_MODEL}"
+fi
+
+# Set PIPER_VOICE environment variable if not already set
 if [ -z "${PIPER_VOICE:-}" ]; then
-  echo "Note: PIPER_VOICE env var not set. Set it to a .onnx voice file for TTS."
+  export PIPER_VOICE="${VOICE_MODEL}"
+  echo "PIPER_VOICE set to ${VOICE_MODEL}"
+else
+  echo "PIPER_VOICE already set to ${PIPER_VOICE}"
 fi
 
 # Install runtime deps that rosdep won't handle (Python pip packages)
