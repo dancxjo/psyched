@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config: source ../../config/voice.env from real script location
+# Config: source hosts/<host>/config/voice.env if present relative to repo root, else fallback to ./config/voice.env
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname "$REAL_PATH")"
-MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
-CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
-if [ -f "$CONF_FILE" ]; then
+SCRIPT_DIR="$(dirname "$REAL_PATH")"          # .../modules/voice
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+CONF_FILE=""
+if [ -f "${REPO_DIR}/hosts/${HOST_SHORT}/config/voice.env" ]; then
+	CONF_FILE="${REPO_DIR}/hosts/${HOST_SHORT}/config/voice.env"
+elif [ -f "${REPO_DIR}/hosts/$(hostname -s)/config/voice.env" ]; then
+	CONF_FILE="${REPO_DIR}/hosts/$(hostname -s)/config/voice.env"
+elif [ -f "${REPO_DIR}/config/voice.env" ]; then
+	CONF_FILE="${REPO_DIR}/config/voice.env"
+fi
+if [ -n "$CONF_FILE" ] && [ -f "$CONF_FILE" ]; then
 	# shellcheck disable=SC1090
 	. "$CONF_FILE"
 fi
@@ -22,9 +30,9 @@ MODEL_VAL="${VOICE_MODEL:-en_US-ryan-high}"
 ros2 launch voice voice.launch.py \
 	engine:="${ENGINE_VAL}" \
 	topic:="${TOPIC_VAL}" \
-	pause:="${PAUSE_VAL}" \
-	resume:="${RESUME_VAL}" \
-	clear:="${CLEAR_VAL}" \
-	interrupt:="${INTERRUPT_VAL}" \
+	pause_topic:="${PAUSE_VAL}" \
+	resume_topic:="${RESUME_VAL}" \
+	clear_topic:="${CLEAR_VAL}" \
+	interrupt_topic:="${INTERRUPT_VAL}" \
 	model:="${MODEL_VAL}" \
 	${@:-}
