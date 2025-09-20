@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pilot - Robot Control Interface</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Pilot Control Interface</h1>
+            <div class="status" id="status">
+                <span class="status-indicator" id="statusIndicator">⚪</span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="control-panel">
+                <div class="joystick-section">
+                    <h2>Movement Control</h2>
+                    <div class="joystick-container">
+                        <div id="joystick" class="joystick">
+                            <div id="joystickKnob" class="joystick-knob"></div>
+                        </div>
+                        <div class="joystick-labels">
+                            <span class="label-forward">Forward</span>
+                            <span class="label-left">Left</span>
+                            <span class="label-right">Right</span>
+                            <span class="label-backward">Backward</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h2>Control Information</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Linear X:</label>
+                            <span id="linearX">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Linear Y:</label>
+                            <span id="linearY">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Angular Z:</label>
+                            <span id="angularZ">0.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="controls">
+                        <button id="stopButton" class="stop-button">🛑 Emergency Stop</button>
+                        <button id="resetButton" class="reset-button">🔄 Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="instructions">
+                <h3>Instructions</h3>
+                <ul>
+                    <li>Drag the joystick knob to control robot movement</li>
+                    <li>Forward/backward motion controls linear velocity</li>
+                    <li>Left/right motion controls angular velocity (turning)</li>
+                    <li>Release the knob to stop movement</li>
+                    <li>Use Emergency Stop for immediate halt</li>
+                </ul>
+            </div>
+        </main>
+
+        <footer>
+            <div class="connection-info">
+                <div>Web: <span id="webAddress"></span></div>
+                <div>WebSocket: <span id="wsAddress"></span></div>
+                <div>Publishing to: <strong>/cmd_vel</strong></div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="joystick.js"></script>
+</body>
+</html>

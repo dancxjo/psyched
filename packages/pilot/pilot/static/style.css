@@ -1,0 +1,311 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+header h1 {
+    color: white;
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.status {
+    color: white;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.status-indicator {
+    font-size: 1.5rem;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status.connected .status-indicator {
+    color: #4CAF50;
+    animation: none;
+}
+
+.status.disconnected .status-indicator {
+    color: #f44336;
+}
+
+/* Main content */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.control-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+    .control-panel {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+.joystick-section, .info-section {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.joystick-section h2, .info-section h2 {
+    color: #333;
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Joystick */
+.joystick-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.joystick {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #e0e0e0, #ffffff);
+    box-shadow: 
+        inset 10px 10px 20px #d0d0d0,
+        inset -10px -10px 20px #ffffff,
+        0 0 0 3px #667eea;
+    position: relative;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.joystick.dragging {
+    cursor: grabbing;
+}
+
+.joystick-knob {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #667eea, #764ba2);
+    box-shadow: 
+        5px 5px 10px rgba(0, 0, 0, 0.2),
+        -2px -2px 6px rgba(255, 255, 255, 0.7);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.1s ease;
+    cursor: inherit;
+}
+
+.joystick-labels {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -10px;
+}
+
+.joystick-labels span {
+    position: absolute;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #667eea;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.label-forward { top: 0; left: 50%; transform: translateX(-50%); }
+.label-backward { bottom: 0; left: 50%; transform: translateX(-50%); }
+.label-left { left: 0; top: 50%; transform: translateY(-50%); }
+.label-right { right: 0; top: 50%; transform: translateY(-50%); }
+
+/* Info section */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.info-item {
+    background: linear-gradient(145deg, #f0f0f0, #ffffff);
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 
+        3px 3px 6px rgba(0, 0, 0, 0.1),
+        -1px -1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.info-item label {
+    display: block;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.info-item span {
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.stop-button, .reset-button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 
+        3px 3px 6px rgba(0, 0, 0, 0.1),
+        -1px -1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.stop-button {
+    background: linear-gradient(145deg, #ff6b6b, #ee5a52);
+    color: white;
+}
+
+.stop-button:hover {
+    background: linear-gradient(145deg, #ee5a52, #ff6b6b);
+    transform: translateY(-2px);
+    box-shadow: 
+        5px 5px 10px rgba(0, 0, 0, 0.2),
+        -2px -2px 6px rgba(255, 255, 255, 0.8);
+}
+
+.reset-button {
+    background: linear-gradient(145deg, #4ecdc4, #44a08d);
+    color: white;
+}
+
+.reset-button:hover {
+    background: linear-gradient(145deg, #44a08d, #4ecdc4);
+    transform: translateY(-2px);
+    box-shadow: 
+        5px 5px 10px rgba(0, 0, 0, 0.2),
+        -2px -2px 6px rgba(255, 255, 255, 0.8);
+}
+
+/* Instructions */
+.instructions {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.instructions h3 {
+    color: #333;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.instructions ul {
+    list-style: none;
+    padding: 0;
+}
+
+.instructions li {
+    padding: 8px 0;
+    padding-left: 25px;
+    position: relative;
+    color: #555;
+    line-height: 1.4;
+}
+
+.instructions li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: #667eea;
+    font-weight: bold;
+}
+
+/* Footer */
+footer {
+    margin-top: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.connection-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    color: white;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.connection-info div {
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
