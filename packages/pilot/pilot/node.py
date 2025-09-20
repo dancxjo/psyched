@@ -41,7 +41,7 @@ class PilotNode(Node):
         self.declare_parameter('web_port', 8080)
         self.declare_parameter('websocket_port', 8081)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
-    self.declare_parameter('voice_topic', '/voice')
+        self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
 
         def _get_param_value(name):
@@ -67,12 +67,12 @@ class PilotNode(Node):
         self.web_port = _as_int(_get_param_value('web_port'), 8080)
         self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
-    self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
+        self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
         
-    # Publishers
+        # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
-    self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+        self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
 
         # Web and WebSocket servers
         self.web_server = None
@@ -94,8 +94,8 @@ class PilotNode(Node):
         self.get_logger().info(f'  Static path: {self.static_path}')
         self.get_logger().info(f'  Web interface: http://{self.host}:{self.web_port}')
         self.get_logger().info(f'  WebSocket: ws://{self.host}:{self.websocket_port}')
-    self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
-    self.get_logger().info(f'  Voice topic: {self.voice_topic}')
+        self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
+        self.get_logger().info(f'  Voice topic: {self.voice_topic}')
     
     def _find_static_path(self) -> Path:
         """Find the static files directory."""

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Generate systemd service units for the current host based on hosts/<host>/modules symlinks.
+# - Writes fresh unit files under hosts/<host>/systemd/psyched-<module>.service
+# - Deprovisions removed modules by deleting stale unit files and disabling installed services
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
+OUTPUT_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/systemd"
+SYSTEMD_DIR_DEFAULT="/etc/systemd/system"
+SYSTEMD_DIR="${SYSTEMD_DIR:-${PSH_SYSTEMD_DIR:-${SYSTEMD_DIR_DEFAULT}}}"
+SERVICE_USER_DEFAULT="$(stat -c %U "${REPO_DIR}" 2>/dev/null || id -un)"
+SERVICE_USER="${SERVICE_USER:-${SERVICE_USER_DEFAULT}}"
+
+mkdir -p "${OUTPUT_DIR}"
+
+if [ ! -d "${MODULES_DIR}" ]; then
+  echo "[systemd_generate] No modules directory for host '${HOST_SHORT}' at ${MODULES_DIR}. Nothing to generate." >&2
+  # If there are existing unit files, consider deprovisioning all psyched-* for this host
+  shopt -s nullglob
+  existing_units=("${OUTPUT_DIR}/psyched-"*.service)
+  shopt -u nullglob
+  for unit_path in "${existing_units[@]:-}"; do
+    unit_file="$(basename "$unit_path")"
+    service_name="$unit_file"
+    # Try to disable running service; ignore errors if systemd not present
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl disable --now "$service_name" >/dev/null 2>&1 || true
+    fi
+    rm -f "$unit_path" || true
+    echo "[systemd_generate] Deprovisioned ${unit_file} (no modules dir)."
+  done
+  exit 0
+fi
+
+# Gather current module names from host symlinks
+shopt -s nullglob
+modules=("${MODULES_DIR}"/*)
+shopt -u nullglob
+
+declare -A wanted
+if [ ${#modules[@]} -gt 0 ]; then
+  for module in "${modules[@]}"; do
+    [ -d "$module" ] || continue
+    name="$(basename "$module")"
+    wanted["$name"]=1
+  done
+fi
+
+# Deprovision stale unit files in OUTPUT_DIR not matching current modules
+shopt -s nullglob
+existing_units=("${OUTPUT_DIR}/psyched-"*.service)
+shopt -u nullglob
+for unit_path in "${existing_units[@]:-}"; do
+  unit_file="$(basename "$unit_path")"
+  mod_name="${unit_file#psyched-}"
+  mod_name="${mod_name%.service}"
+  if [ -z "${wanted["$mod_name"]+x}" ]; then
+    # Attempt to stop/disable installed service and remove both installed and host copy
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl disable --now "$unit_file" >/dev/null 2>&1 || true
+    fi
+    installed_path="${SYSTEMD_DIR}/${unit_file}"
+    if [ -f "$installed_path" ]; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo rm -f "$installed_path" || true
+      else
+        rm -f "$installed_path" || true
+      fi
+      echo "[systemd_generate] Removed installed ${installed_path}"
+    fi
+    rm -f "$unit_path" || true
+    echo "[systemd_generate] Deprovisioned ${unit_file} (module removed)."
+  fi
+done
+
+# Generate unit files for current modules
+if [ ${#modules[@]} -eq 0 ]; then
+  echo "[systemd_generate] No modules configured under ${MODULES_DIR}."
+  echo "[systemd_generate] Unit deprovisioning complete; nothing to generate."
+  exit 0
+fi
+
+for module in "${modules[@]}"; do
+  [ -d "$module" ] || continue
+  name="$(basename "$module")"
+  service_name="psyched-${name}.service"
+  launch_path="${MODULES_DIR}/${name}/launch.sh"
+  shutdown_path="${MODULES_DIR}/${name}/shutdown.sh"
+
+  cat >"${OUTPUT_DIR}/${service_name}" <<UNIT
+[Unit]
+Description=Psyched ${name} Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${REPO_DIR}
+Environment=HOST=${HOST_SHORT}
+ExecStart=${launch_path}
+ExecStop=${shutdown_path}
+Restart=on-failure
+RestartSec=2
+User=${SERVICE_USER}
+KillMode=control-group
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  echo "[systemd_generate] Wrote ${OUTPUT_DIR}/${service_name}"
+
+done
+
+echo "[systemd_generate] Done. Unit files are in ${OUTPUT_DIR}."
