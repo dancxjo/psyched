@@ -41,7 +41,7 @@ ros2:
 build:
 	@bash -lc 'set -eo pipefail; \
 		export AMENT_TRACE_SETUP_FILES=$${AMENT_TRACE_SETUP_FILES:-}; \
-		source /opt/ros/kilted/setup.bash; \
+		source ./tools/setup_env.sh; \
 		rosdep update; \
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
 		cd ..; \

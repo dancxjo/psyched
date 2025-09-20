@@ -8,11 +8,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_SHORT="${HOST:-$(hostname -s)}"
 MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
 
-# Optionally source the workspace environment if available
-if [ -f "${REPO_DIR}/install/setup.bash" ]; then
+# Optionally source ROS and workspace environments if available
+if [ -f "${REPO_DIR}/tools/setup_env.sh" ]; then
   # shellcheck disable=SC1091
   set +u
-  source "${REPO_DIR}/install/setup.bash"
+  source "${REPO_DIR}/tools/setup_env.sh"
   set -u
 fi
 

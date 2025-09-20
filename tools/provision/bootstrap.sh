@@ -47,7 +47,7 @@ make ros2
 
 # Source repository environment (ROS + venv) so module setups use venv, not system Python
 echo "[bootstrap] Sourcing repo environment (ROS + venv)..."
-if ! eval "$(SETUP_ENV_MODE=print "$REPO_ROOT"/tools/setup_env.sh)"; then
+if ! eval "$(SETUP_ENV_MODE=print bash \"$REPO_ROOT\"/tools/setup_env.sh)"; then
     echo "[bootstrap] Error: failed to source repo environment." >&2
     exit 1
 fi
@@ -97,7 +97,7 @@ PSYCHED_REPO="__PSYCHED_REPO_PLACEHOLDER__"
 if [ -d "$PSYCHED_REPO" ] && [ -f "$PSYCHED_REPO/tools/setup_env.sh" ]; then
     case $- in
         *i*)
-            eval "$(SETUP_ENV_MODE=print "$PSYCHED_REPO"/tools/setup_env.sh)"
+            eval "$(SETUP_ENV_MODE=print bash \"$PSYCHED_REPO\"/tools/setup_env.sh)"
             ;;
     esac
 fi

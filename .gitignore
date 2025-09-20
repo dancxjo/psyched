@@ -7,7 +7,7 @@ lib/
 lib64
 pyvenv.cfg
 
-log/
+log/*
 
 voices/
 output.wav
