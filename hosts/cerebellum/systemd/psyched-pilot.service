@@ -6,8 +6,8 @@ After=network.target
 Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
-ExecStart=/home/pete/psyched/hosts/cerebellum/modules/pilot/launch.sh
-ExecStop=/home/pete/psyched/hosts/cerebellum/modules/pilot/shutdown.sh
+ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/pilot/launch.sh
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/pilot/shutdown.sh
 Restart=on-failure
 RestartSec=2
 User=pete

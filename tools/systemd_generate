@@ -84,11 +84,13 @@ if [ ${#modules[@]} -eq 0 ]; then
 fi
 
 for module in "${modules[@]}"; do
+
   [ -d "$module" ] || continue
   name="$(basename "$module")"
   service_name="psyched-${name}.service"
   launch_path="${MODULES_DIR}/${name}/launch.sh"
   shutdown_path="${MODULES_DIR}/${name}/shutdown.sh"
+  entrypoint="${REPO_DIR}/tools/systemd_entrypoint.sh"
 
   cat >"${OUTPUT_DIR}/${service_name}" <<UNIT
 [Unit]
@@ -99,8 +101,8 @@ After=network.target
 Type=simple
 WorkingDirectory=${REPO_DIR}
 Environment=HOST=${HOST_SHORT}
-ExecStart=${launch_path}
-ExecStop=${shutdown_path}
+ExecStart=${entrypoint} ${launch_path}
+ExecStop=${entrypoint} ${shutdown_path}
 Restart=on-failure
 RestartSec=2
 User=${SERVICE_USER}
