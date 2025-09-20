@@ -69,13 +69,13 @@ class PilotNode(Node):
         
         # Publisher for cmd_vel
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
-        
-    # Web and WebSocket servers
+
+        # Web and WebSocket servers
         self.web_server = None
         self.websocket_server = None
         self.web_thread = None
         self.websocket_thread = None
-    self._ws_loop = None  # asyncio loop used by WS server
+        self._ws_loop = None  # asyncio loop used by WS server
         
         # Connected WebSocket clients
         self.connected_clients = set()
@@ -162,20 +162,22 @@ class PilotNode(Node):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             self._ws_loop = loop
-            
-            start_server = websockets.serve(
-                self._websocket_handler,
-                self.host,
-                self.websocket_port
-            )
-            
-            self.get_logger().info(f'WebSocket server started on {self.host}:{self.websocket_port}')
-            loop.run_until_complete(start_server)
+
+            async def ws_main():
+                self.get_logger().info(f'Starting WebSocket server on {self.host}:{self.websocket_port}')
+                # Use async context manager so the server lives as long as the task
+                async with websockets.serve(self._websocket_handler, self.host, self.websocket_port):
+                    self.get_logger().info(f'WebSocket server started on {self.host}:{self.websocket_port}')
+                    # Wait forever
+                    await asyncio.Event().wait()
+
+            # Start the server task and run the loop forever
+            loop.create_task(ws_main())
             loop.run_forever()
         except Exception as e:
             self.get_logger().error(f'WebSocket server error: {e}')
     
-    async def _websocket_handler(self, websocket: WebSocketServerProtocol, path: str):
+    async def _websocket_handler(self, websocket: WebSocketServerProtocol, path: Optional[str] = None):
         """Handle WebSocket connections."""
         self.connected_clients.add(websocket)
         self.get_logger().info(f'Client connected: {websocket.remote_address}')
