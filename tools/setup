@@ -4,7 +4,7 @@ set -euo pipefail
 # Setup all modules for this host by running each module's setup.sh in the background.
 # It scans hosts/$(hostname -s)/modules/* and executes $module/setup.sh &
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_SHORT="${HOST:-$(hostname -s)}"
 MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
 

@@ -4,7 +4,7 @@ set -euo pipefail
 # Teardown all modules for this host by running each module's teardown.sh in the background.
 # It scans hosts/$(hostname -s)/modules/* and executes $module/teardown.sh &
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_SHORT="${HOST:-$(hostname -s)}"
 MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
 
