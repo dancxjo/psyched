@@ -36,5 +36,4 @@ if [ -f "${SYSTEMD_DIR}/${SERVICE_NAME}" ]; then
         rm -f "${SYSTEMD_DIR}/${SERVICE_NAME}" || true
     fi
 fi
-fi
-fi
+ 

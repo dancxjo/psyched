@@ -97,6 +97,12 @@ fi
 # Ensure ffmpeg is present (used by audio processing/playback in voice)
 if command -v apt >/dev/null 2>&1; then
   sudo apt-get update -y >/dev/null 2>&1 || true
-      # Save Piper voices in user-local directory
-      PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-$HOME/.local/piper/voices}"
-      mkdir -p "$PIPER_VOICES_DIR" || true
+  sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1 || true
+
+
+# Install fortune-mod and some extra fortunes if available
+if command -v apt >/dev/null 2>&1; then
+  sudo apt install -y fortune-mod fortunes fortunes-min || true
+fi
+
+echo "Voice module setup complete. ENGINE=${ENGINE}"
