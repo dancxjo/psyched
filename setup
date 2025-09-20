@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Setup all modules for this host by running each module's setup.sh in the background.
+# It scans hosts/$(hostname -s)/modules/* and executes $module/setup.sh &
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
+
+# Optionally source the workspace environment if available
+if [ -f "${REPO_DIR}/install/setup.bash" ]; then
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/install/setup.bash"
+fi
+
+# Nothing to do if modules dir missing or empty
+if [ ! -d "${MODULES_DIR}" ]; then
+  echo "[setup] No modules directory for host '${HOST_SHORT}' at ${MODULES_DIR}. Nothing to setup." >&2
+  exit 0
+fi
+
+shopt -s nullglob
+modules=("${MODULES_DIR}"/*)
+shopt -u nullglob
+
+if [ ${#modules[@]} -eq 0 ]; then
+  echo "[setup] No modules configured under ${MODULES_DIR}." >&2
+  exit 0
+fi
+
+for module in "${modules[@]}"; do
+  if [ -d "$module" ] && [ -x "$module/setup.sh" ]; then
+    echo "[setup] Running setup for $(basename "$module")..."
+    ( cd "$module" && "./setup.sh" ) &
+  elif [ -d "$module" ] && [ -f "$module/setup.sh" ]; then
+    echo "[setup] Running setup for $(basename "$module") (non-exec setup.sh)..."
+    ( cd "$module" && bash "./setup.sh" ) &
+  else
+    echo "[setup] Skipping $(basename "$module"): no setup.sh found" >&2
+  fi
+done
+
+# Exit immediately; children continue in background.
+echo "[setup] All setup commands dispatched in background."
+exit 0

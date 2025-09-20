@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update bringup
+.PHONY: help ros2 build bootstrap update bringup setup teardown
 
 # Use bash for richer shell features where needed
 SHELL := /bin/bash
@@ -9,6 +9,9 @@ help:
 	@echo "  build              - Resolve deps with rosdep, colcon build, and re-source env"
 	@echo "  bootstrap          - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo "  update             - git pull then run bootstrap"
+	@echo "  bringup            - Launch all host modules in background via ./bringup"
+	@echo "  setup              - Run setup.sh for all host modules via ./setup"
+	@echo "  teardown           - Run teardown.sh for all host modules via ./teardown"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -75,6 +78,16 @@ update:
 
 bringup:
 	@bash -lc 'set -eo pipefail; \
-		source install/setup.bash; \
-		ros2 launch psyched bringup.launch.py'
+		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+		./bringup'
+
+setup:
+	@bash -lc 'set -eo pipefail; \
+		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+		./setup'
+
+teardown:
+	@bash -lc 'set -eo pipefail; \
+		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+		./teardown'
 

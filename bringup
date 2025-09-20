@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Bring up all modules for this host by launching each module's launch.sh in the background.
+# It scans hosts/$(hostname -s)/modules/* and executes $module/launch.sh &
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
+
+# Optionally source the workspace environment if available
+if [ -f "${REPO_DIR}/install/setup.bash" ]; then
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/install/setup.bash"
+fi
+
+# Nothing to do if modules dir missing or empty
+if [ ! -d "${MODULES_DIR}" ]; then
+  echo "[bringup] No modules directory for host '${HOST_SHORT}' at ${MODULES_DIR}. Nothing to launch." >&2
+  exit 0
+fi
+
+shopt -s nullglob
+modules=("${MODULES_DIR}"/*)
+shopt -u nullglob
+
+if [ ${#modules[@]} -eq 0 ]; then
+  echo "[bringup] No modules configured under ${MODULES_DIR}." >&2
+  exit 0
+fi
+
+for module in "${modules[@]}"; do
+  # Each entry is expected to be a directory containing launch.sh
+  if [ -d "$module" ] && [ -x "$module/launch.sh" ]; then
+    echo "[bringup] Launching $(basename "$module")..."
+    ( cd "$module" && "./launch.sh" ) &
+  elif [ -d "$module" ] && [ -f "$module/launch.sh" ]; then
+    echo "[bringup] Launching $(basename "$module") (non-exec launch.sh)..."
+    ( cd "$module" && bash "./launch.sh" ) &
+  else
+    echo "[bringup] Skipping $(basename "$module"): no launch.sh found" >&2
+  fi
+done
+
+# Exit immediately; children continue in background.
+echo "[bringup] All launch commands dispatched in background."
+exit 0
