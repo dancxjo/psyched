@@ -48,6 +48,15 @@
                         <button id="stopButton" class="stop-button">🛑 Emergency Stop</button>
                         <button id="resetButton" class="reset-button">🔄 Reset</button>
                     </div>
+
+                    <div class="voice-controls">
+                        <h3>Voice</h3>
+                        <div class="voice-row">
+                            <input id="voiceInput" type="text" placeholder="Type something for the robot to say..." />
+                            <button id="voiceSendButton" class="voice-button">📣 Speak</button>
+                        </div>
+                        <div id="voiceHint" class="voice-hint">Press Enter to send</div>
+                    </div>
                 </div>
             </div>
 
@@ -68,6 +77,7 @@
                 <div>Web: <span id="webAddress"></span></div>
                 <div>WebSocket: <span id="wsAddress"></span></div>
                 <div>Publishing to: <strong id="cmdVelTopic">/cmd_vel</strong></div>
+                <div>Voice topic: <strong id="voiceTopic">/voice</strong></div>
             </div>
         </footer>
     </div>

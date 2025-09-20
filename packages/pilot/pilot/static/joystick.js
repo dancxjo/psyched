@@ -30,7 +30,8 @@ class PilotController {
     init() {
         this.setupWebSocket();
         this.setupJoystick();
-        this.setupButtons();
+    this.setupButtons();
+    this.setupVoice();
         this.updateAddressDisplay();
 
         // Send periodic keep-alive
@@ -135,6 +136,33 @@ class PilotController {
 
         resetButton.addEventListener('click', () => {
             this.resetJoystick();
+        });
+    }
+
+    setupVoice() {
+        const input = document.getElementById('voiceInput');
+        const button = document.getElementById('voiceSendButton');
+        if (!input || !button) return;
+
+        const send = () => {
+            const text = (input.value || '').trim();
+            if (!text) return;
+            if (!this.isConnected || !this.websocket) return;
+            try {
+                this.websocket.send(JSON.stringify({ type: 'voice', text }));
+                // optimistic clear
+                input.value = '';
+            } catch (e) {
+                console.error('Failed to send voice message:', e);
+            }
+        };
+
+        button.addEventListener('click', send);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                send();
+            }
         });
     }
 
@@ -339,11 +367,17 @@ class PilotController {
                     } else {
                         console.log('Ping response received');
                     }
+                    if (message.voice_topic) {
+                        this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
+                    }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {
                         this.updateCmdVelTopic(message.cmd_vel_topic, message.publisher_matched_count);
                         this.updateStatus(`Connected to ${message.cmd_vel_topic}`, 'connected');
+                    }
+                    if (message.voice_topic) {
+                        this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
                     break;
                 default:
@@ -356,6 +390,13 @@ class PilotController {
 
     updateCmdVelTopic(topic, count) {
         const el = document.getElementById('cmdVelTopic');
+        if (el) {
+            el.textContent = topic + (typeof count === 'number' ? ` (${count} subscribers)` : '');
+        }
+    }
+
+    updateVoiceTopic(topic, count) {
+        const el = document.getElementById('voiceTopic');
         if (el) {
             el.textContent = topic + (typeof count === 'number' ? ` (${count} subscribers)` : '');
         }

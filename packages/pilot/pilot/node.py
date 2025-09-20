@@ -18,6 +18,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 
 try:
     import websockets
@@ -40,6 +41,7 @@ class PilotNode(Node):
         self.declare_parameter('web_port', 8080)
         self.declare_parameter('websocket_port', 8081)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
+    self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
 
         def _get_param_value(name):
@@ -65,10 +67,12 @@ class PilotNode(Node):
         self.web_port = _as_int(_get_param_value('web_port'), 8080)
         self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
+    self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
         
-        # Publisher for cmd_vel
+    # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
+    self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
 
         # Web and WebSocket servers
         self.web_server = None
@@ -90,7 +94,8 @@ class PilotNode(Node):
         self.get_logger().info(f'  Static path: {self.static_path}')
         self.get_logger().info(f'  Web interface: http://{self.host}:{self.web_port}')
         self.get_logger().info(f'  WebSocket: ws://{self.host}:{self.websocket_port}')
-        self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
+    self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
+    self.get_logger().info(f'  Voice topic: {self.voice_topic}')
     
     def _find_static_path(self) -> Path:
         """Find the static files directory."""
@@ -186,7 +191,9 @@ class PilotNode(Node):
             status_msg = {
                 'type': 'status',
                 'cmd_vel_topic': self.cmd_vel_topic,
-                'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0
+                'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0,
+                'voice_topic': self.voice_topic,
+                'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
             }
             await websocket.send(json.dumps(status_msg))
         except Exception as e:
@@ -248,9 +255,29 @@ class PilotNode(Node):
                 response = {
                     'type': 'pong',
                     'cmd_vel_topic': self.cmd_vel_topic,
-                    'publisher_matched_count': sub_count
+                    'publisher_matched_count': sub_count,
+                    'voice_topic': self.voice_topic,
+                    'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
                 }
                 await websocket.send(json.dumps(response))
+            elif msg_type == 'voice':
+                # Publish text to voice topic
+                text = data.get('text')
+                if isinstance(text, str) and text.strip():
+                    try:
+                        msg = String()
+                        msg.data = text.strip()
+                        self.voice_publisher.publish(msg)
+                    except Exception as e:
+                        self.get_logger().warn(f'Failed to publish voice text: {e}')
+                    # Send acknowledgment
+                    ack = {
+                        'type': 'ack',
+                        'voice': {
+                            'text': text.strip()
+                        }
+                    }
+                    await websocket.send(json.dumps(ack))
                 
         except Exception as e:
             self.get_logger().warn(f'Error handling WebSocket message: {e}')

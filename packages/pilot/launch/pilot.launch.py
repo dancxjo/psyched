@@ -28,6 +28,12 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_CMD_VEL_TOPIC', default_value='/cmd_vel'),
         description='Topic name for publishing cmd_vel messages'
     )
+
+    voice_topic_arg = DeclareLaunchArgument(
+        'voice_topic',
+        default_value=EnvironmentVariable(name='PILOT_VOICE_TOPIC', default_value='/voice'),
+        description='Topic name for publishing voice text'
+    )
     
     host_arg = DeclareLaunchArgument(
         'host',
@@ -45,6 +51,7 @@ def generate_launch_description():
             'web_port': LaunchConfiguration('web_port'),
             'websocket_port': LaunchConfiguration('websocket_port'),
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
+            'voice_topic': LaunchConfiguration('voice_topic'),
             'host': LaunchConfiguration('host'),
         }]
     )
@@ -53,6 +60,7 @@ def generate_launch_description():
         web_port_arg,
         websocket_port_arg,
         cmd_vel_topic_arg,
+        voice_topic_arg,
         host_arg,
         pilot_node,
     ])
