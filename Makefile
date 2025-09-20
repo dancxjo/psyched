@@ -39,15 +39,14 @@ ros2:
 # Note: colcon does not have a separate "install" subcommand; the build step
 #       populates the install/ tree. We emulate the requested flow accordingly.
 build:
-	@bash -lc 'set -eo pipefail; \
-		export AMENT_TRACE_SETUP_FILES=$${AMENT_TRACE_SETUP_FILES:-}; \
+	@bash -lc 'set -e; \
 		source ./tools/setup_env.sh; \
 		rosdep update; \
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
 		cd ..; \
 		colcon build --symlink-install; \
 		ln -sfn $(CURDIR)/hosts $(CURDIR)/install/hosts; \
-		source install/setup.bash; \
+		. install/setup.bash || true; \
 		echo "[build] Done."'
 
 # Bootstrap the host/dev environment

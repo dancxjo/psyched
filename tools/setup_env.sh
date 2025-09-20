@@ -11,8 +11,6 @@
 #     or
 #       SETUP_ENV_MODE=source bash /path/to/tools/setup_env.sh
 
-set -euo pipefail
-
 MODE=${SETUP_ENV_MODE:-source}
 
 # Determine repository root

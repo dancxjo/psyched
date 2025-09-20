@@ -21,13 +21,12 @@ sudo apt-get install -y --no-install-recommends git \
     build-essential curl make \
     python-is-python3 \
     python3-full \
-    python3-venv \
     python3-pip \
     python3-setuptools \
     python3-dev
 
-# Do NOT install piper-tts globally; we'll install into the project venv below
-echo "[bootstrap] Skipping global pip install of piper-tts; will install in venv"
+# Prefer system-wide packages; Python modules will be installed globally (no venv)
+echo "[bootstrap] Using system-wide Python (no virtualenv)"
 
 # Ensure Piper voices directory with proper permissions
 echo "[bootstrap] Setting up Piper voices directory..."
@@ -45,24 +44,34 @@ fi
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."
 make ros2
 
-# Source repository environment (ROS + venv) so module setups use venv, not system Python
-echo "[bootstrap] Sourcing repo environment (ROS + venv)..."
-if ! eval "$(SETUP_ENV_MODE=print bash \"$REPO_ROOT\"/tools/setup_env.sh)"; then
-    echo "[bootstrap] Error: failed to source repo environment." >&2
-    exit 1
+# Source repository environment (ROS + workspace) for builds and module setups
+echo "[bootstrap] Sourcing repo environment (ROS + workspace)..."
+if [ -f "$REPO_ROOT/tools/setup_env.sh" ]; then
+    # shellcheck disable=SC1090
+    source "$REPO_ROOT/tools/setup_env.sh"
+else
+    echo "[bootstrap] Warning: tools/setup_env.sh not found; continuing without sourcing" >&2
 fi
 
-# Ensure piper-tts is available in the venv used by services and development
-echo "[bootstrap] Ensuring piper-tts is installed in project venv..."
+# Ensure piper-tts is available system-wide
+echo "[bootstrap] Ensuring piper-tts is installed (system-wide)..."
 if ! python3 -c 'import piper' >/dev/null 2>&1; then
-    pip install --break-system-packages --no-input --upgrade pip >/dev/null 2>&1 || true
-    if pip install --break-system-packages piper-tts >/dev/null 2>&1; then
-        echo "[bootstrap] Installed piper-tts in venv"
+    # Upgrade pip quietly if allowed
+    pip3 install --break-system-packages --no-input --upgrade pip >/dev/null 2>&1 || true
+    if pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
+        echo "[bootstrap] Installed piper-tts via pip3"
     else
-        echo "[bootstrap] Warning: Failed to install piper-tts in venv; voice module will fall back to binary if available" >&2
+        echo "[bootstrap] Warning: Failed to install piper-tts via pip3 (may require sudo). Trying sudo..." >&2
+        if command -v sudo >/dev/null 2>&1; then
+            if sudo pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
+                echo "[bootstrap] Installed piper-tts via sudo pip3"
+            else
+                echo "[bootstrap] Warning: sudo pip3 install of piper-tts failed. Voice module may fallback to a binary if available." >&2
+            fi
+        fi
     fi
 else
-    echo "[bootstrap] piper-tts already present in venv"
+    echo "[bootstrap] piper-tts already present"
 fi
 
 # Determine host (env var HOST overrides system hostname)
@@ -91,7 +100,7 @@ if [[ -d "$HOST_DIR" ]]; then
         BASHRC_MARK_START="# >>> psyched auto-setup >>>"
         BASHRC_MARK_END="# <<< psyched auto-setup <<<"
             AUTO_BLOCK=$(cat <<'BRC'
-# Automatically set up ROS 2 and project venv for this repository in interactive shells.
+# Automatically set up ROS 2 and this workspace environment in interactive shells.
 PSYCHED_REPO="__PSYCHED_REPO_PLACEHOLDER__"
 if [ -d "$PSYCHED_REPO" ] && [ -f "$PSYCHED_REPO/tools/setup_env.sh" ]; then
     case $- in
