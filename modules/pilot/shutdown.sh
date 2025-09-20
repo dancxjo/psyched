@@ -31,9 +31,11 @@ kill_with_pattern() {
       fi
     done
 
-    if [ ${#still_alive[@]:-0} -gt 0 ]; then
+    # If any processes remain after timeout, force kill them.
+    # Note: with 'set -u', referencing an unset array is an error; ensure the array is initialized.
+    if [ ${#still_alive[@]} -gt 0 ]; then
       echo "[pilot/shutdown] Forcing stop (SIGKILL) for remaining processes"
-      for pid in "${still_alive[@]:-}"; do
+      for pid in "${still_alive[@]}"; do
         if [ -n "$pid" ]; then
           kill -KILL "$pid" 2>/dev/null || true
         fi

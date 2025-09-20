@@ -32,7 +32,7 @@ kill_with_pattern() {
   done
 
   echo "[foot/shutdown] Forcing stop (SIGKILL) for remaining processes"
-  for pid in "${still_alive[@]:-}"; do
+  for pid in "${still_alive[@]}"; do
     if [ -n "$pid" ]; then
       kill -KILL "$pid" 2>/dev/null || true
     fi
