@@ -45,7 +45,7 @@ if [[ "${ENGINE}" == "piper" ]]; then
   # Python library is optional but helpful for fallback
   if ! python3 -c 'import piper' >/dev/null 2>&1; then
     echo "Installing optional piper-tts library (for fallback)..."
-    if pip3 install piper-tts >/dev/null 2>&1 || sudo pip3 install piper-tts >/dev/null 2>&1; then
+    if pip3 install --break-system-packages piper-tts >/dev/null 2>&1 || sudo pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
       echo "Installed piper-tts"
     else
       echo "Skipping piper-tts install"

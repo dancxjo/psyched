@@ -11,7 +11,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/ear.launch.py']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'pyaudio', 'webrtcvad'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='you@example.com',

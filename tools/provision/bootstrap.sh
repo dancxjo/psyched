@@ -55,8 +55,8 @@ fi
 # Ensure piper-tts is available in the venv used by services and development
 echo "[bootstrap] Ensuring piper-tts is installed in project venv..."
 if ! python3 -c 'import piper' >/dev/null 2>&1; then
-    pip install --no-input --upgrade pip >/dev/null 2>&1 || true
-    if pip install piper-tts >/dev/null 2>&1; then
+    pip install --break-system-packages --no-input --upgrade pip >/dev/null 2>&1 || true
+    if pip install --break-system-packages piper-tts >/dev/null 2>&1; then
         echo "[bootstrap] Installed piper-tts in venv"
     else
         echo "[bootstrap] Warning: Failed to install piper-tts in venv; voice module will fall back to binary if available" >&2
