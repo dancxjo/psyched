@@ -29,12 +29,12 @@ ln -sfn "${PKG_DIR}/pilot" "${SRC_DIR}/pilot"
 # Check if websockets library is available
 echo "[pilot/setup] Checking Python dependencies..."
 if ! python3 -c 'import websockets' >/dev/null 2>&1; then
-  echo "[pilot/setup] Installing websockets library..."
-  if pip3 install websockets >/dev/null 2>&1 || sudo pip3 install websockets >/dev/null 2>&1; then
+  echo "[pilot/setup] Installing websockets library (with --break-system-packages)..."
+  if pip3 install --break-system-packages websockets >/dev/null 2>&1 || sudo pip3 install --break-system-packages websockets >/dev/null 2>&1; then
     echo "[pilot/setup] websockets installed successfully"
   else
     echo "[pilot/setup] Warning: Failed to install websockets. You may need to install it manually:"
-    echo "[pilot/setup]   pip install websockets"
+    echo "[pilot/setup]   pip3 install --break-system-packages websockets"
   fi
 else
   echo "[pilot/setup] websockets library already available"

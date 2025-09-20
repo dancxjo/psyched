@@ -24,12 +24,6 @@
                         <div id="joystick" class="joystick">
                             <div id="joystickKnob" class="joystick-knob"></div>
                         </div>
-                        <div class="joystick-labels">
-                            <span class="label-forward">Forward</span>
-                            <span class="label-left">Left</span>
-                            <span class="label-right">Right</span>
-                            <span class="label-backward">Backward</span>
-                        </div>
                     </div>
                 </div>
 
@@ -73,7 +67,7 @@
             <div class="connection-info">
                 <div>Web: <span id="webAddress"></span></div>
                 <div>WebSocket: <span id="wsAddress"></span></div>
-                <div>Publishing to: <strong>/cmd_vel</strong></div>
+                <div>Publishing to: <strong id="cmdVelTopic">/cmd_vel</strong></div>
             </div>
         </footer>
     </div>

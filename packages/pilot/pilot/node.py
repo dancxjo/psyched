@@ -36,25 +36,46 @@ class PilotNode(Node):
     def __init__(self):
         super().__init__('pilot_node')
         
-        # Parameters
+        # Parameters (robust to string/typed inputs from launch substitutions)
         self.declare_parameter('web_port', 8080)
         self.declare_parameter('websocket_port', 8081)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('host', '0.0.0.0')
-        
-        self.web_port = self.get_parameter('web_port').get_parameter_value().integer_value
-        self.websocket_port = self.get_parameter('websocket_port').get_parameter_value().integer_value
-        self.cmd_vel_topic = self.get_parameter('cmd_vel_topic').get_parameter_value().string_value
-        self.host = self.get_parameter('host').get_parameter_value().string_value
+
+        def _get_param_value(name):
+            # rclpy returns a Python value at .value regardless of declared type
+            try:
+                return self.get_parameter(name).value
+            except Exception:
+                return None
+
+        def _as_int(val, default):
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return default
+
+        def _as_str(val, default):
+            try:
+                s = str(val)
+                return s if s else default
+            except Exception:
+                return default
+
+        self.web_port = _as_int(_get_param_value('web_port'), 8080)
+        self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
+        self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
+        self.host = _as_str(_get_param_value('host'), '0.0.0.0')
         
         # Publisher for cmd_vel
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         
-        # Web and WebSocket servers
+    # Web and WebSocket servers
         self.web_server = None
         self.websocket_server = None
         self.web_thread = None
         self.websocket_thread = None
+    self._ws_loop = None  # asyncio loop used by WS server
         
         # Connected WebSocket clients
         self.connected_clients = set()
@@ -65,7 +86,8 @@ class PilotNode(Node):
         # Start servers
         self.start_servers()
         
-        self.get_logger().info(f'Pilot node started:')
+        self.get_logger().info('Pilot node started:')
+        self.get_logger().info(f'  Static path: {self.static_path}')
         self.get_logger().info(f'  Web interface: http://{self.host}:{self.web_port}')
         self.get_logger().info(f'  WebSocket: ws://{self.host}:{self.websocket_port}')
         self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
@@ -110,9 +132,14 @@ class PilotNode(Node):
         """Run the HTTP web server."""
         try:
             handler = self._create_http_handler()
-            with socketserver.TCPServer((self.host, self.web_port), handler) as httpd:
-                self.get_logger().info(f'Web server started on {self.host}:{self.web_port}')
+            # Prefer a threading server to avoid blocking
+            HTTPServer = getattr(http.server, 'ThreadingHTTPServer', http.server.HTTPServer)
+            httpd = HTTPServer((self.host, self.web_port), handler)
+            self.get_logger().info(f'Web server started on {self.host}:{self.web_port}')
+            try:
                 httpd.serve_forever()
+            finally:
+                httpd.server_close()
         except Exception as e:
             self.get_logger().error(f'Web server error: {e}')
     
@@ -134,6 +161,7 @@ class PilotNode(Node):
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            self._ws_loop = loop
             
             start_server = websockets.serve(
                 self._websocket_handler,
@@ -151,6 +179,16 @@ class PilotNode(Node):
         """Handle WebSocket connections."""
         self.connected_clients.add(websocket)
         self.get_logger().info(f'Client connected: {websocket.remote_address}')
+        # Send initial status message so UI can show connected state and topic
+        try:
+            status_msg = {
+                'type': 'status',
+                'cmd_vel_topic': self.cmd_vel_topic,
+                'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0
+            }
+            await websocket.send(json.dumps(status_msg))
+        except Exception as e:
+            self.get_logger().warn(f'Failed to send initial status: {e}')
         
         try:
             async for message in websocket:
@@ -200,8 +238,16 @@ class PilotNode(Node):
                 await websocket.send(json.dumps(response))
                 
             elif msg_type == 'ping':
-                # Handle ping
-                response = {'type': 'pong'}
+                # Handle ping with detailed status
+                try:
+                    sub_count = self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0
+                except Exception:
+                    sub_count = 0
+                response = {
+                    'type': 'pong',
+                    'cmd_vel_topic': self.cmd_vel_topic,
+                    'publisher_matched_count': sub_count
+                }
                 await websocket.send(json.dumps(response))
                 
         except Exception as e:
