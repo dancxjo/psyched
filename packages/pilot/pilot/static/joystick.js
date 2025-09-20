@@ -114,10 +114,10 @@ class PilotController {
         document.addEventListener('mouseup', this.onJoystickEnd.bind(this));
 
         // Touch events
-    this.joystick.addEventListener('touchstart', this.onJoystickStart.bind(this), { passive: false });
-    document.addEventListener('touchmove', this.onJoystickMove.bind(this), { passive: false });
-    document.addEventListener('touchend', this.onJoystickEnd.bind(this), { passive: false });
-    document.addEventListener('touchcancel', this.onJoystickEnd.bind(this), { passive: false });
+        this.joystick.addEventListener('touchstart', this.onJoystickStart.bind(this), { passive: false });
+        document.addEventListener('touchmove', this.onJoystickMove.bind(this), { passive: false });
+        document.addEventListener('touchend', this.onJoystickEnd.bind(this), { passive: false });
+        document.addEventListener('touchcancel', this.onJoystickEnd.bind(this), { passive: false });
 
         // Prevent context menu
         this.joystick.addEventListener('contextmenu', e => e.preventDefault());
