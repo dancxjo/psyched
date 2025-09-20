@@ -1,0 +1,9 @@
+# Pilot module configuration for cerebellum host
+
+# Web interface settings
+web_port=8080
+websocket_port=8081
+host=0.0.0.0
+
+# ROS2 topic configuration
+cmd_vel_topic=/cmd_vel
