@@ -20,6 +20,14 @@ if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
 fi
 
+# Load config
+CONF_DIR="${REPO_DIR}/hosts/cerebellum/config"
+CONF_FILE="${CONF_DIR}/voice.env"
+if [ -f "$CONF_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONF_FILE"
+fi
+
 # Engine setup - default to espeak for reliability
 ENGINE="${VOICE_ENGINE:-espeak}" # espeak | piper
 

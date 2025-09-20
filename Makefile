@@ -9,9 +9,9 @@ help:
 	@echo "  build              - Resolve deps with rosdep, colcon build, and re-source env"
 	@echo "  bootstrap          - Run initial provisioning via tools/provision/bootstrap.sh"
 	@echo "  update             - git pull then run bootstrap"
-	@echo "  bringup            - Launch all host modules in background via ./bringup"
-	@echo "  setup              - Run setup.sh for all host modules via ./setup"
-	@echo "  teardown           - Run teardown.sh for all host modules via ./teardown"
+	@echo "  bringup            - Launch all host modules in background via ./tools/bringup"
+	@echo "  setup              - Run setup.sh for all host modules via ./tools/setup"
+	@echo "  teardown           - Run teardown.sh for all host modules via ./tools/teardown"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make ros2"
@@ -77,11 +77,11 @@ update:
 		echo "[update] Done."'
 
 bringup:
-	@bash -lc 'set -eo pipefail; ./bringup'
+	@bash -lc 'set -eo pipefail; ./tools/bringup'
 
 setup:
-	@bash -lc 'set -eo pipefail; ./setup'
+	@bash -lc 'set -eo pipefail; ./tools/setup'
 
 teardown:
-	@bash -lc 'set -eo pipefail; ./teardown'
+	@bash -lc 'set -eo pipefail; ./tools/teardown'
 

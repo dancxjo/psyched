@@ -9,6 +9,13 @@ echo "[pilot/teardown] Stopping pilot web interface..."
 pkill -f "pilot_node" || true
 
 # Kill any processes using the pilot ports
+HOSTNAME_short="${HOST:-$(hostname -s)}"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/pilot.env"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+fi
 PILOT_WEB_PORT="${PILOT_WEB_PORT:-8080}"
 PILOT_WS_PORT="${PILOT_WS_PORT:-8081}"
 

@@ -3,19 +3,14 @@ set -euo pipefail
 
 HOSTNAME_short="${HOST:-$(hostname -s)}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CFG_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/foot.toml"
+ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/foot.env"
 
-cfg_get() {
-	local key="$1"; local def_val="${2:-}"
-	if [ -f "$CFG_FILE" ]; then
-		local line
-		line="$(grep -E "^${key}=" "$CFG_FILE" | tail -n1 || true)"
-		if [ -n "$line" ]; then echo "${line#*=}"; return 0; fi
-	fi
-	echo "$def_val"
-}
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+fi
 
-TOPIC_VAL="$(cfg_get topic "/foot")"
+TOPIC_VAL="${FOOT_TOPIC:-/foot}"
 
 # Export for any nodes that may read env
 export FOOT_TOPIC="$TOPIC_VAL"

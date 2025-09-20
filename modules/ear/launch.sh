@@ -5,31 +5,20 @@ set -euo pipefail
 
 # Launch the ear node. Requires that the workspace is built and env is sourced.
 
-# Resolve host config file
 HOSTNAME_short="${HOST:-$(hostname -s)}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CFG_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/ear.toml"
+ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/ear.env"
 
-# Minimal parser for simple key=value lines
-cfg_get() {
-  local key="$1"
-  local def_val="${2:-}"
-  if [ -f "$CFG_FILE" ]; then
-    local line
-    line="$(grep -E "^${key}=" "$CFG_FILE" | tail -n1 || true)"
-    if [ -n "$line" ]; then
-      echo "${line#*=}"
-      return 0
-    fi
-  fi
-  echo "$def_val"
-}
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+fi
 
-TOPIC_VAL="$(cfg_get topic "/audio/pcm")"
-DEVICE_VAL="$(cfg_get device "default")"
-RATE_VAL="$(cfg_get rate "16000")"
-CHANNELS_VAL="$(cfg_get channels "1")"
-CHUNK_VAL="$(cfg_get chunk "2048")"
+TOPIC_VAL="${EAR_TOPIC:-/audio/pcm}"
+DEVICE_VAL="${EAR_DEVICE:-default}"
+RATE_VAL="${EAR_RATE:-16000}"
+CHANNELS_VAL="${EAR_CHANNELS:-1}"
+CHUNK_VAL="${EAR_CHUNK:-2048}"
 
 ros2 launch ear ear.launch.py \
   topic:="${TOPIC_VAL}" \
