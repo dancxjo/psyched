@@ -45,14 +45,22 @@ if [[ "${ENGINE}" == "piper" ]]; then
 
   # Download and setup Piper voice model
   VOICE_DIR="${PIPER_VOICES_DIR}"
-  VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
-  VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx"
+  VOICE_MODEL_BASENAME="${VOICE_MODEL:-en_US-john-medium}"
+  VOICE_MODEL="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx"
+  VOICE_CFG="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx.json"
+  VOICE_URL="${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true}"
+  VOICE_CFG_URL="${PIPER_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true}"
 
   mkdir -p "${VOICE_DIR}"
   if [ ! -f "${VOICE_MODEL}" ]; then
     echo "Downloading Piper voice model..."
-    curl -L -o "${VOICE_MODEL}" "${VOICE_URL}"
+    curl -fsSL -o "${VOICE_MODEL}" "${VOICE_URL}"
     echo "Voice model downloaded to ${VOICE_MODEL}"
+  fi
+  if [ ! -f "${VOICE_CFG}" ]; then
+    echo "Downloading Piper voice config..."
+    curl -fsSL -o "${VOICE_CFG}" "${VOICE_CFG_URL}"
+    echo "Voice config downloaded to ${VOICE_CFG}"
   fi
   if [ -z "${PIPER_VOICE:-}" ]; then
     export PIPER_VOICE="${VOICE_MODEL}"

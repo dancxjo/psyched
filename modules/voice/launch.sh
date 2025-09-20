@@ -27,6 +27,9 @@ CLEAR_VAL="${VOICE_CLEAR:-/voice/clear}"
 INTERRUPT_VAL="${VOICE_INTERRUPT:-/voice/interrupt}"
 MODEL_VAL="${VOICE_MODEL:-en_US-ryan-high}"
 
+# Prefer configured PIPER_VOICES_DIR, else fall back to repo voices dir
+VOICES_DIR_VAL="${PIPER_VOICES_DIR:-${REPO_DIR}/voices}"
+
 ros2 launch voice voice.launch.py \
 	engine:="${ENGINE_VAL}" \
 	topic:="${TOPIC_VAL}" \
@@ -35,4 +38,5 @@ ros2 launch voice voice.launch.py \
 	clear_topic:="${CLEAR_VAL}" \
 	interrupt_topic:="${INTERRUPT_VAL}" \
 	model:="${MODEL_VAL}" \
+	voices_dir:="${VOICES_DIR_VAL}" \
 	${@:-}
