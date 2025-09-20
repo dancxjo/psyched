@@ -11,6 +11,8 @@ class PilotController {
         this.joystickKnob = null;
         this.throttleSlider = null;
         this.isSliderDragging = false;
+        this.throttleDecayId = null;
+        this.lastDecayTs = null;
         this.isDragging = false;
         this.joystickCenter = { x: 0, y: 0 };
         this.joystickRadius = 0;
@@ -265,20 +267,14 @@ class PilotController {
 
         const onStart = (e) => {
             this.isSliderDragging = true;
+            this.stopThrottleDecay();
             e.preventDefault();
         };
         const onEnd = (e) => {
             if (!this.isSliderDragging) return;
             this.isSliderDragging = false;
-            // Spring back to 0 to reflect actual wheel speed
-            this.throttleSlider.value = '0';
-            const angularZ = this.currentVelocity.angular.z || 0;
-            this.currentVelocity = {
-                linear: { x: 0, y: 0, z: 0 },
-                angular: { x: 0, y: 0, z: angularZ }
-            };
-            this.updateVelocityDisplay();
-            this.sendVelocityCommand();
+            // Start smooth decay to 0 after releasing the slider
+            this.startThrottleDecay();
             e.preventDefault();
         };
         this.throttleSlider.addEventListener('mousedown', onStart);
@@ -295,6 +291,58 @@ class PilotController {
         // Map directly to m/s based on maxLinearVel
         const maxLinearVel = 1.0;
         return v * maxLinearVel;
+    }
+
+    startThrottleDecay() {
+        // Smoothly reduce slider value toward 0 after release
+        this.stopThrottleDecay();
+        const epsilon = 0.005; // stop threshold in slider units [-1..1]
+        const decayPerSecond = 2.5; // linear decay units per second
+        const step = (ts) => {
+            if (this.isSliderDragging) { this.stopThrottleDecay(); return; }
+            if (this.lastDecayTs == null) this.lastDecayTs = ts;
+            const dt = Math.max(0, (ts - this.lastDecayTs) / 1000);
+            this.lastDecayTs = ts;
+            let v = parseFloat(this.throttleSlider.value);
+            if (Number.isNaN(v)) v = 0;
+            if (Math.abs(v) <= epsilon) {
+                this.throttleSlider.value = '0';
+                // Update velocity to exact zero
+                const angularZ = this.currentVelocity.angular.z || 0;
+                this.currentVelocity = {
+                    linear: { x: 0, y: 0, z: 0 },
+                    angular: { x: 0, y: 0, z: angularZ }
+                };
+                this.updateVelocityDisplay();
+                this.sendVelocityCommand();
+                this.stopThrottleDecay();
+                return;
+            }
+            const delta = Math.sign(v) * decayPerSecond * dt;
+            let newV = v - delta;
+            // Prevent overshoot past 0
+            if (Math.sign(v) !== Math.sign(newV)) newV = 0;
+            this.throttleSlider.value = String(Math.max(-1, Math.min(1, newV)));
+            // Reflect in velocity and send
+            const angularZ = this.currentVelocity.angular.z || 0;
+            this.currentVelocity = {
+                linear: { x: this.getThrottleValue(), y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: angularZ }
+            };
+            this.updateVelocityDisplay();
+            this.sendVelocityCommand();
+            this.throttleDecayId = window.requestAnimationFrame(step);
+        };
+        this.lastDecayTs = null;
+        this.throttleDecayId = window.requestAnimationFrame(step);
+    }
+
+    stopThrottleDecay() {
+        if (this.throttleDecayId != null) {
+            window.cancelAnimationFrame(this.throttleDecayId);
+            this.throttleDecayId = null;
+        }
+        this.lastDecayTs = null;
     }
 
     updateVelocitiesFromInput(event) {
@@ -405,6 +453,7 @@ class PilotController {
         if (this.throttleSlider) {
             this.throttleSlider.value = '0';
         }
+        this.stopThrottleDecay();
 
         this.currentVelocity = {
             linear: { x: 0, y: 0, z: 0 },
