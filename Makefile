@@ -77,17 +77,11 @@ update:
 		echo "[update] Done."'
 
 bringup:
-	@bash -lc 'set -eo pipefail; \
-		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
-		./bringup'
+	@bash -lc 'set -eo pipefail; ./bringup'
 
 setup:
-	@bash -lc 'set -eo pipefail; \
-		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
-		./setup'
+	@bash -lc 'set -eo pipefail; ./setup'
 
 teardown:
-	@bash -lc 'set -eo pipefail; \
-		if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
-		./teardown'
+	@bash -lc 'set -eo pipefail; ./teardown'
 

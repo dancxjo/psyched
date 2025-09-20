@@ -11,7 +11,9 @@ MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
 # Optionally source the workspace environment if available
 if [ -f "${REPO_DIR}/install/setup.bash" ]; then
   # shellcheck disable=SC1091
+  set +u
   source "${REPO_DIR}/install/setup.bash"
+  set -u
 fi
 
 # Nothing to do if modules dir missing or empty
