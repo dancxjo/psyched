@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Config: source ../../config/voice.env from real script location
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
+CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
+if [ -f "$CONF_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONF_FILE"
+fi
+
 # Voice module setup: build local packages using a fresh src/ populated by symlinks.
 
 REPO_DIR="$(pwd)"
@@ -18,14 +28,6 @@ ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
 # Optionally include core psyched package too
 if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
-fi
-
-# Load config
-CONF_DIR="${REPO_DIR}/hosts/cerebellum/config"
-CONF_FILE="${CONF_DIR}/voice.env"
-if [ -f "$CONF_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$CONF_FILE"
 fi
 
 # Engine setup - default to espeak for reliability

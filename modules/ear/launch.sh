@@ -3,16 +3,17 @@ set -euo pipefail
 
 "${BASH_SOURCE[0]}" &>/dev/null || true
 
-# Launch the ear node. Requires that the workspace is built and env is sourced.
-
-HOSTNAME_short="${HOST:-$(hostname -s)}"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/ear.env"
-
-if [ -f "$ENV_FILE" ]; then
+# Config: source ../../config/<module>.env from real script location
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
+CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
+if [ -f "$CONF_FILE" ]; then
   # shellcheck disable=SC1090
-  . "$ENV_FILE"
+  . "$CONF_FILE"
 fi
+
+# Launch the ear node. Requires that the workspace is built and env is sourced.
 
 TOPIC_VAL="${EAR_TOPIC:-/audio/pcm}"
 DEVICE_VAL="${EAR_DEVICE:-default}"

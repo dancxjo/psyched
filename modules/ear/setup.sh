@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Config: source ../../config/ear.env from real script location
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
+CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
+if [ -f "$CONF_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONF_FILE"
+fi
+
 # Ear module setup: link package(s) into src/ and ensure ALSA utils.
 
 REPO_DIR="$(pwd)"

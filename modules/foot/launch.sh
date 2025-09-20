@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOSTNAME_short="${HOST:-$(hostname -s)}"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/foot.env"
-
-if [ -f "$ENV_FILE" ]; then
+# Config: source ../../config/<module>.env from real script location
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
+CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
+if [ -f "$CONF_FILE" ]; then
   # shellcheck disable=SC1090
-  . "$ENV_FILE"
+  . "$CONF_FILE"
 fi
 
 TOPIC_VAL="${FOOT_TOPIC:-/foot}"

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Config: source ../../config/chat.env if present
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONF_FILE="${SCRIPT_DIR}/../../config/chat.env"
+if [ -f "$CONF_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONF_FILE"
+fi
+
 # Chat module setup: ensure packages are linked and Ollama with a configured model (default tinyllama) is installed
 
 REPO_DIR="$(pwd)"
@@ -68,13 +76,6 @@ if command -v ollama >/dev/null 2>&1; then
       echo "[chat/setup] ollama already running"
     fi
   fi
-fi
-
-CONF_DIR="${REPO_DIR}/hosts/cerebellum/config"
-CONF_FILE="${CONF_DIR}/chat.env"
-if [ -f "$CONF_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$CONF_FILE"
 fi
 
 OLLAMA_MODEL="${OLLAMA_MODEL:-tinyllama}"

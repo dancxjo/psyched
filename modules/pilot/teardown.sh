@@ -8,13 +8,14 @@ echo "[pilot/teardown] Stopping pilot web interface..."
 # Kill any running pilot nodes
 pkill -f "pilot_node" || true
 
-# Kill any processes using the pilot ports
-HOSTNAME_short="${HOST:-$(hostname -s)}"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${REPO_DIR}/hosts/${HOSTNAME_short}/config/pilot.env"
-if [ -f "$ENV_FILE" ]; then
+# Config: source ../../config/<module>.env from real script location
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
+CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
+if [ -f "$CONF_FILE" ]; then
   # shellcheck disable=SC1090
-  . "$ENV_FILE"
+  . "$CONF_FILE"
 fi
 PILOT_WEB_PORT="${PILOT_WEB_PORT:-8080}"
 PILOT_WS_PORT="${PILOT_WS_PORT:-8081}"

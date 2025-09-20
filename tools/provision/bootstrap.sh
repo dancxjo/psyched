@@ -125,7 +125,7 @@ BRC
             } >> "$BASHRC"
 
     # Add launch script to crontab (idempotent)
-    LAUNCH_SCRIPT="$REPO_ROOT/tools/launch/launch.sh"
+    LAUNCH_SCRIPT="$REPO_ROOT/tools/launch.sh"
     if [[ -x "$LAUNCH_SCRIPT" || -f "$LAUNCH_SCRIPT" ]]; then
         CRON_ENTRY="@reboot sleep 30 && $LAUNCH_SCRIPT &"
         if ! crontab -l 2>/dev/null | grep -Fqx "$CRON_ENTRY"; then
