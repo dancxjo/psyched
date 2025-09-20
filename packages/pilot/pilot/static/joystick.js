@@ -9,6 +9,7 @@ class PilotController {
         this.isConnected = false;
         this.joystick = null;
         this.joystickKnob = null;
+        this.throttleSlider = null;
         this.isDragging = false;
         this.joystickCenter = { x: 0, y: 0 };
         this.joystickRadius = 0;
@@ -32,6 +33,7 @@ class PilotController {
         this.setupJoystick();
         this.setupButtons();
         this.setupVoice();
+        this.setupSlider();
         this.updateAddressDisplay();
 
         // Send periodic keep-alive
@@ -106,14 +108,16 @@ class PilotController {
         this.maxKnobDistance = this.joystickRadius - 30; // Account for knob size
 
         // Mouse events
-        this.joystickKnob.addEventListener('mousedown', this.onJoystickStart.bind(this));
+        // Allow starting drag from knob or anywhere inside joystick circle
+        this.joystick.addEventListener('mousedown', this.onJoystickStart.bind(this));
         document.addEventListener('mousemove', this.onJoystickMove.bind(this));
         document.addEventListener('mouseup', this.onJoystickEnd.bind(this));
 
         // Touch events
-        this.joystickKnob.addEventListener('touchstart', this.onJoystickStart.bind(this));
-        document.addEventListener('touchmove', this.onJoystickMove.bind(this));
-        document.addEventListener('touchend', this.onJoystickEnd.bind(this));
+    this.joystick.addEventListener('touchstart', this.onJoystickStart.bind(this), { passive: false });
+    document.addEventListener('touchmove', this.onJoystickMove.bind(this), { passive: false });
+    document.addEventListener('touchend', this.onJoystickEnd.bind(this), { passive: false });
+    document.addEventListener('touchcancel', this.onJoystickEnd.bind(this), { passive: false });
 
         // Prevent context menu
         this.joystick.addEventListener('contextmenu', e => e.preventDefault());
@@ -187,12 +191,88 @@ class PilotController {
             y: rect.top + rect.height / 2
         };
 
+        // Immediately position knob to the touch/click point if it's within the joystick circle
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+        const deltaX = clientX - this.joystickCenter.x;
+        const deltaY = clientY - this.joystickCenter.y;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (distance <= this.joystickRadius) {
+            // Clamp within maxKnobDistance
+            const limitedDistance = Math.min(distance, this.maxKnobDistance);
+            const angle = Math.atan2(deltaY, deltaX);
+            const knobX = limitedDistance * Math.cos(angle);
+            const knobY = limitedDistance * Math.sin(angle);
+            this.joystickKnob.style.transform = `translate(${knobX - 30}px, ${knobY - 30}px)`;
+
+            // Update velocities once on start
+            this.updateVelocitiesFromInput({ clientX, clientY });
+        }
+
         event.preventDefault();
     }
 
     onJoystickMove(event) {
         if (!this.isDragging) return;
 
+        this.updateVelocitiesFromInput(event);
+
+        event.preventDefault();
+    }
+
+    onJoystickEnd(event) {
+        if (!this.isDragging) return;
+
+        this.isDragging = false;
+        this.joystick.classList.remove('dragging');
+
+        // Return knob to center with smooth animation
+        this.joystickKnob.style.transform = 'translate(-50%, -50%)';
+
+        // Stop turn, keep throttle where slider is (no auto zero of linear x)
+        const linearX = this.getThrottleValue();
+        this.currentVelocity = {
+            linear: { x: linearX, y: 0, z: 0 },
+            angular: { x: 0, y: 0, z: 0 }
+        };
+
+        this.updateVelocityDisplay();
+        this.sendVelocityCommand();
+
+        event.preventDefault();
+    }
+
+    setupSlider() {
+        this.throttleSlider = document.getElementById('throttleSlider');
+        if (!this.throttleSlider) return;
+
+        // Normalize slider value is already in [-1,1]
+        const onChange = () => {
+            const linearX = this.getThrottleValue();
+            // Preserve current angular z from joystick position
+            const angularZ = this.currentVelocity.angular.z || 0;
+            this.currentVelocity = {
+                linear: { x: linearX, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: angularZ }
+            };
+            this.updateVelocityDisplay();
+            this.sendVelocityCommand();
+        };
+        this.throttleSlider.addEventListener('input', onChange, { passive: true });
+        this.throttleSlider.addEventListener('change', onChange, { passive: true });
+    }
+
+    getThrottleValue() {
+        if (!this.throttleSlider) return 0;
+        const v = parseFloat(this.throttleSlider.value);
+        if (Number.isNaN(v)) return 0;
+        // Map directly to m/s based on maxLinearVel
+        const maxLinearVel = 1.0;
+        return v * maxLinearVel;
+    }
+
+    updateVelocitiesFromInput(event) {
         const clientX = event.touches ? event.touches[0].clientX : event.clientX;
         const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
@@ -211,17 +291,15 @@ class PilotController {
         // Update knob position
         this.joystickKnob.style.transform = `translate(${knobX - 30}px, ${knobY - 30}px)`;
 
-        // Calculate normalized velocities (-1 to 1)
+        // Calculate normalized turn (-1 to 1) from X only
         const normalizedX = knobX / this.maxKnobDistance;
-        const normalizedY = -knobY / this.maxKnobDistance; // Invert Y for forward/backward
 
-        // Map to cmd_vel (adjust max velocities as needed)
-        const maxLinearVel = 1.0; // m/s
+        // Map to cmd_vel
         const maxAngularVel = 2.0; // rad/s
 
         this.currentVelocity = {
             linear: {
-                x: normalizedY * maxLinearVel, // Forward/backward
+                x: this.getThrottleValue(), // Forward/backward from slider
                 y: 0.0,
                 z: 0.0
             },
@@ -234,29 +312,6 @@ class PilotController {
 
         this.updateVelocityDisplay();
         this.sendVelocityCommand();
-
-        event.preventDefault();
-    }
-
-    onJoystickEnd(event) {
-        if (!this.isDragging) return;
-
-        this.isDragging = false;
-        this.joystick.classList.remove('dragging');
-
-        // Return knob to center with smooth animation
-        this.joystickKnob.style.transform = 'translate(-50%, -50%)';
-
-        // Stop the robot
-        this.currentVelocity = {
-            linear: { x: 0, y: 0, z: 0 },
-            angular: { x: 0, y: 0, z: 0 }
-        };
-
-        this.updateVelocityDisplay();
-        this.sendVelocityCommand();
-
-        event.preventDefault();
     }
 
     updateVelocityDisplay() {
@@ -320,6 +375,11 @@ class PilotController {
         this.isDragging = false;
         this.joystick.classList.remove('dragging');
         this.joystickKnob.style.transform = 'translate(-50%, -50%)';
+
+        // Center slider too
+        if (this.throttleSlider) {
+            this.throttleSlider.value = '0';
+        }
 
         this.currentVelocity = {
             linear: { x: 0, y: 0, z: 0 },

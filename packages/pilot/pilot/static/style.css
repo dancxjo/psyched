@@ -170,6 +170,106 @@ main {
 .label-left { left: 0; top: 50%; transform: translateY(-50%); }
 .label-right { right: 0; top: 50%; transform: translateY(-50%); }
 
+/* Drive layout: slider + joystick */
+.drive-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    align-items: center;
+    gap: 24px;
+}
+
+.slider-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.slider-title {
+    font-weight: 700;
+    color: #333;
+}
+
+.slider-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vertical-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 200px; /* becomes height when rotated */
+    height: 30px; /* becomes width when rotated */
+    transform: rotate(-90deg);
+    border-radius: 12px;
+    background: linear-gradient(145deg, #f0f0f0, #ffffff);
+    box-shadow:
+        inset 4px 4px 8px rgba(0,0,0,0.1),
+        inset -4px -4px 8px rgba(255,255,255,0.8);
+}
+
+.vertical-range::-webkit-slider-runnable-track {
+    height: 8px;
+    background: #cfd7ff;
+    border-radius: 8px;
+}
+.vertical-range::-moz-range-track {
+    height: 8px;
+    background: #cfd7ff;
+    border-radius: 8px;
+}
+.vertical-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(145deg, #667eea, #764ba2);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    margin-top: -7px; /* align with 8px track when rotated */
+}
+.vertical-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(145deg, #667eea, #764ba2);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+.slider-scale {
+    position: absolute;
+    right: -30px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #667eea;
+    pointer-events: none;
+}
+.slider-scale .scale-mid { position: absolute; top: 50%; transform: translateY(-50%); }
+
+/* Responsive orientation handling */
+@media (max-width: 900px) and (orientation: landscape) {
+    .drive-grid {
+        grid-template-columns: 120px 1fr; /* slider left, joystick right */
+        gap: 16px;
+    }
+    .joystick { width: 180px; height: 180px; }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+    .drive-grid { grid-template-columns: 1fr; }
+    .slider-section { order: 1; }
+    .joystick-container { order: 2; }
+    .vertical-range { width: 240px; }
+}
+
 /* Info section */
 .info-grid {
     display: grid;
