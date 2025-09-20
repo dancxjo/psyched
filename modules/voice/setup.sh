@@ -98,7 +98,7 @@ fi
 if command -v apt >/dev/null 2>&1; then
   sudo apt-get update -y >/dev/null 2>&1 || true
   sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1 || true
-
+fi
 
 # Install fortune-mod and some extra fortunes if available
 if command -v apt >/dev/null 2>&1; then

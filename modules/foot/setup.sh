@@ -12,13 +12,6 @@ if [ -f "$CONF_FILE" ]; then
     . "$CONF_FILE"
 fi
 
-# Shared module helpers
-MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
-if [ -f "$MODULE_LIB" ]; then
-    # shellcheck disable=SC1090
-    . "$MODULE_LIB"
-fi
-
 
 REPO_DIR="$(pwd)"
 SOURCE_DIR="${REPO_DIR}/src"
