@@ -30,8 +30,8 @@ class PilotController {
     init() {
         this.setupWebSocket();
         this.setupJoystick();
-    this.setupButtons();
-    this.setupVoice();
+        this.setupButtons();
+        this.setupVoice();
         this.updateAddressDisplay();
 
         // Send periodic keep-alive

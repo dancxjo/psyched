@@ -33,10 +33,10 @@ def generate_launch_description():
     # Startup greeting and heartbeat ping
     startup_greeting_arg = DeclareLaunchArgument(
         'startup_greeting',
-        default_value=EnvironmentVariable(name='VOICE_STARTUP_GREETING', default_value='Hello, voice is online'),
+        default_value=EnvironmentVariable(name='VOICE_STARTUP_GREETING', default_value='Voice initialized.'),
         description='Greeting spoken when the node starts'
     )
-    enable_ping_arg = DeclareLaunchArgument('enable_ping', default_value='true', description='Enable periodic ping')
+    enable_ping_arg = DeclareLaunchArgument('enable_ping', default_value='false', description='Enable periodic ping')
     ping_interval_arg = DeclareLaunchArgument('ping_interval_sec', default_value='30', description='Ping interval in seconds')
 
     # Control topics
