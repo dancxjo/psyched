@@ -8,7 +8,7 @@ echo "[pilot/teardown] Stopping pilot web interface..."
 # Kill any running pilot nodes
 pkill -f "pilot_node" || true
 
-# Config: source ../../config/<module>.env from real script location
+# Config: source ../../config/<module>.env and module helpers
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$REAL_PATH")"
 MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
@@ -16,6 +16,11 @@ CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
 if [ -f "$CONF_FILE" ]; then
   # shellcheck disable=SC1090
   . "$CONF_FILE"
+fi
+MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
+if [ -f "$MODULE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$MODULE_LIB"
 fi
 PILOT_WEB_PORT="${PILOT_WEB_PORT:-8080}"
 PILOT_WS_PORT="${PILOT_WS_PORT:-8081}"

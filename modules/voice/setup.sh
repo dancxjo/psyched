@@ -11,6 +11,13 @@ if [ -f "$CONF_FILE" ]; then
   . "$CONF_FILE"
 fi
 
+# Shared module helpers
+MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
+if [ -f "$MODULE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$MODULE_LIB"
+fi
+
 # Voice module setup: build local packages using a fresh src/ populated by symlinks.
 
 REPO_DIR="$(pwd)"
@@ -19,8 +26,7 @@ PKG_DIR="${REPO_DIR}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-# Clean current src to ensure only desired packages are linked
-find "${SRC_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+psh_clean_src "${SRC_DIR}"
 
 # Link the packages we want in this module
 ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"

@@ -1,3 +1,16 @@
+# Shared module helpers
+MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
+if [ -f "$MODULE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$MODULE_LIB"
+fi
+
+REPO_DIR="$(pwd)"
+SRC_DIR="${REPO_DIR}/src"
+PKG_DIR="${REPO_DIR}/packages"
+
+mkdir -p "${SRC_DIR}" "${PKG_DIR}"
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -17,10 +30,8 @@ PKG_DIR="${REPO_DIR}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-# Clean current src and link chat, voice, and msgs packages
-find "${SRC_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-ln -sfn "${PKG_DIR}/chat" "${SRC_DIR}/chat"
-ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+psh_clean_src "${SRC_DIR}"
+psh_link_pkgs "${REPO_DIR}" chat psyched_msgs
 if [ -d "${PKG_DIR}/voice" ]; then
   ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
 fi
