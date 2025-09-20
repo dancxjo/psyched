@@ -14,10 +14,9 @@ cd "$REPO_ROOT"
 echo "[bootstrap] Repository root: $REPO_ROOT"
 
 # Ensure required system packages (Debian/Ubuntu)
-echo "[bootstrap] Installing required system packages..."
+echo "[bootstrap] Installing required baseline system packages..."
 sudo apt-get update -y
 sudo apt-get install -y --no-install-recommends git \
-    alsa-utils ffmpeg \
     build-essential curl make \
     python-is-python3 \
     python3-full \
@@ -27,18 +26,6 @@ sudo apt-get install -y --no-install-recommends git \
 
 # Prefer system-wide packages; Python modules will be installed globally (no venv)
 echo "[bootstrap] Using system-wide Python (no virtualenv)"
-
-# Ensure Piper voices directory with proper permissions
-echo "[bootstrap] Setting up Piper voices directory..."
-PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-/opt/piper/voices}"
-if sudo mkdir -p "$PIPER_VOICES_DIR" >/dev/null 2>&1; then
-    # Make the directory writable by the current user and group for downloads
-    sudo chown "$USER:$USER" "$PIPER_VOICES_DIR" || true
-    sudo chmod 755 "$PIPER_VOICES_DIR" || true
-    echo "[bootstrap] Piper voices directory ready at $PIPER_VOICES_DIR"
-else
-    echo "[bootstrap] Warning: Could not create $PIPER_VOICES_DIR directory"
-fi
 
 # Ensure ROS2 is available
 echo "[bootstrap] Ensuring ROS2 via 'make ros2'..."
@@ -53,47 +40,16 @@ else
     echo "[bootstrap] Warning: tools/setup_env.sh not found; continuing without sourcing" >&2
 fi
 
-# Ensure piper-tts is available system-wide
-echo "[bootstrap] Ensuring piper-tts is installed (system-wide)..."
-if ! python3 -c 'import piper' >/dev/null 2>&1; then
-    # Upgrade pip quietly if allowed
-    pip3 install --break-system-packages --no-input --upgrade pip >/dev/null 2>&1 || true
-    if pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
-        echo "[bootstrap] Installed piper-tts via pip3"
-    else
-        echo "[bootstrap] Warning: Failed to install piper-tts via pip3 (may require sudo). Trying sudo..." >&2
-        if command -v sudo >/dev/null 2>&1; then
-            if sudo pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
-                echo "[bootstrap] Installed piper-tts via sudo pip3"
-            else
-                echo "[bootstrap] Warning: sudo pip3 install of piper-tts failed. Voice module may fallback to a binary if available." >&2
-            fi
-        fi
-    fi
-else
-    echo "[bootstrap] piper-tts already present"
-fi
+# Module-specific dependencies (e.g., audio, TTS) are handled by each module's setup.sh
 
 # Determine host (env var HOST overrides system hostname)
 HOST="${HOST:-$(hostname -s)}"
 HOST_DIR="$REPO_ROOT/hosts/$HOST"
-ENABLED_DIR="$HOST_DIR/modules"
 echo "[bootstrap] Host: $HOST"
 
 if [[ -d "$HOST_DIR" ]]; then
-    # Source all enabled modules (skip if none)
-    shopt -s nullglob
-    for module in "$ENABLED_DIR"/*; do
-        if [[ -f "$module/setup.sh" ]]; then
-            echo "[bootstrap] Running host module setup: $module/setup.sh"
-            # shellcheck source=/dev/null
-            source "$module/setup.sh"
-        fi
-    done
-    shopt -u nullglob
-
-    echo "[bootstrap] Building workspace..."
-    make build
+    echo "[bootstrap] Running host module setups via tools/setup..."
+    "$REPO_ROOT/tools/setup"
 
             # Ensure automatic environment setup in user's .bashrc (replace if present)
         BASHRC="$HOME/.bashrc"

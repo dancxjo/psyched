@@ -48,6 +48,16 @@ fi
 ENGINE="${VOICE_ENGINE:-espeak}" # espeak | piper
 
 if [[ "${ENGINE}" == "piper" ]]; then
+  # Ensure Piper voices directory with proper permissions (system-wide default)
+  PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-/opt/piper/voices}"
+  if command -v sudo >/dev/null 2>&1; then
+    sudo mkdir -p "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
+    sudo chown "$USER:$USER" "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
+    sudo chmod 755 "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
+  else
+    mkdir -p "$PIPER_VOICES_DIR" || true
+  fi
+
   # Download and setup Piper voice model
   VOICE_DIR="${REPO_DIR}/voices"
   VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
@@ -97,6 +107,12 @@ else
     # Common package name for English MBROLA voice
     sudo apt install -y mbrola-en1 || true
   fi
+fi
+
+# Ensure ffmpeg is present (used by audio processing/playback in voice)
+if command -v apt >/dev/null 2>&1; then
+  sudo apt-get update -y >/dev/null 2>&1 || true
+  sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1 || true
 fi
 
 # Install fortune-mod and some extra fortunes if available

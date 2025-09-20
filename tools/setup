@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Setup all modules for this host by running each module's setup.sh in the background.
-# It scans hosts/$(hostname -s)/modules/* and executes $module/setup.sh &
+# Setup all modules for this host by running each module's setup.sh, waiting for
+# completion, and then invoking a single workspace build once at the end.
+# It scans hosts/$(hostname -s)/modules/* and executes $module/setup.sh.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_SHORT="${HOST:-$(hostname -s)}"
@@ -31,18 +32,34 @@ if [ ${#modules[@]} -eq 0 ]; then
   exit 0
 fi
 
+status=0
 for module in "${modules[@]}"; do
   if [ -d "$module" ] && [ -x "$module/setup.sh" ]; then
     echo "[setup] Running setup for $(basename "$module")..."
-    ( cd "$module" && "./setup.sh" ) &
+    ( cd "$module" && "./setup.sh" ) || status=$?
   elif [ -d "$module" ] && [ -f "$module/setup.sh" ]; then
     echo "[setup] Running setup for $(basename "$module") (non-exec setup.sh)..."
-    ( cd "$module" && bash "./setup.sh" ) &
+    ( cd "$module" && bash "./setup.sh" ) || status=$?
   else
     echo "[setup] Skipping $(basename "$module"): no setup.sh found" >&2
   fi
 done
 
-# Exit immediately; children continue in background.
-echo "[setup] All setup commands dispatched in background."
+if [ $status -ne 0 ]; then
+  echo "[setup] One or more module setups failed (last status=$status). Aborting build." >&2
+  exit $status
+fi
+
+# After all module setups succeed, perform a single build with a simple lock to
+# prevent multiple overlapping spins.
+LOCK_DIR="${REPO_DIR}/.build.lock"
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  trap 'rmdir "$LOCK_DIR" >/dev/null 2>&1 || true' EXIT
+  echo "[setup] Building workspace (single pass)..."
+  make build
+  echo "[setup] Build complete."
+else
+  echo "[setup] Another build appears to be in progress (lock present). Skipping build."
+fi
+
 exit 0
