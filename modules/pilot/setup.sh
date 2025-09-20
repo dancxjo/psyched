@@ -11,12 +11,6 @@ if [ -f "$CONF_FILE" ]; then
   . "$CONF_FILE"
 fi
 
-# Shared module helpers
-MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
-if [ -f "$MODULE_LIB" ]; then
-  # shellcheck disable=SC1090
-  . "$MODULE_LIB"
-fi
 
 # Pilot module setup: build local packages using a fresh src/ populated by symlinks.
 
@@ -25,8 +19,6 @@ SRC_DIR="${REPO_DIR}/src"
 PKG_DIR="${REPO_DIR}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
-
-psh_clean_src "${SRC_DIR}"
 
 # Link the packages we want in this module
 ln -sfn "${PKG_DIR}/pilot" "${SRC_DIR}/pilot"

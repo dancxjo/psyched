@@ -19,13 +19,6 @@ if [ -n "$CONF_FILE" ] && [ -f "$CONF_FILE" ]; then
   . "$CONF_FILE"
 fi
 
-# Shared module helpers
-MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
-if [ -f "$MODULE_LIB" ]; then
-  # shellcheck disable=SC1090
-  . "$MODULE_LIB"
-fi
-
 # Voice module setup: build local packages using a fresh src/ populated by symlinks.
 
 REPO_DIR="$(pwd)"
@@ -33,8 +26,6 @@ SRC_DIR="${REPO_DIR}/src"
 PKG_DIR="${REPO_DIR}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
-
-psh_clean_src "${SRC_DIR}"
 
 # Link the packages we want in this module
 ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
@@ -48,18 +39,12 @@ fi
 ENGINE="${VOICE_ENGINE:-espeak}" # espeak | piper
 
 if [[ "${ENGINE}" == "piper" ]]; then
-  # Ensure Piper voices directory with proper permissions (system-wide default)
-  PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-/opt/piper/voices}"
-  if command -v sudo >/dev/null 2>&1; then
-    sudo mkdir -p "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
-    sudo chown "$USER:$USER" "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
-    sudo chmod 755 "$PIPER_VOICES_DIR" >/dev/null 2>&1 || true
-  else
-    mkdir -p "$PIPER_VOICES_DIR" || true
-  fi
+  # Save Piper voices in user-local directory
+  PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-$HOME/.local/piper/voices}"
+  mkdir -p "$PIPER_VOICES_DIR" || true
 
   # Download and setup Piper voice model
-  VOICE_DIR="${REPO_DIR}/voices"
+  VOICE_DIR="${PIPER_VOICES_DIR}"
   VOICE_MODEL="${VOICE_DIR}/en_US-john-medium.onnx"
   VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx"
 
@@ -112,12 +97,6 @@ fi
 # Ensure ffmpeg is present (used by audio processing/playback in voice)
 if command -v apt >/dev/null 2>&1; then
   sudo apt-get update -y >/dev/null 2>&1 || true
-  sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1 || true
-fi
-
-# Install fortune-mod and some extra fortunes if available
-if command -v apt >/dev/null 2>&1; then
-  sudo apt install -y fortune-mod fortunes fortunes-min || true
-fi
-
-echo "Voice module setup complete. ENGINE=${ENGINE}"
+      # Save Piper voices in user-local directory
+      PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-$HOME/.local/piper/voices}"
+      mkdir -p "$PIPER_VOICES_DIR" || true

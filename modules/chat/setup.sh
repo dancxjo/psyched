@@ -1,21 +1,11 @@
-# Shared module helpers
-MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
-if [ -f "$MODULE_LIB" ]; then
-  # shellcheck disable=SC1090
-  . "$MODULE_LIB"
-fi
-
-REPO_DIR="$(pwd)"
-SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
-
-mkdir -p "${SRC_DIR}" "${PKG_DIR}"
-
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config: source ../../config/chat.env if present
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Determine script location and repo-relative paths
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$REAL_PATH")"
+
+# Optional per-module config
 CONF_FILE="${SCRIPT_DIR}/../../config/chat.env"
 if [ -f "$CONF_FILE" ]; then
   # shellcheck disable=SC1090
@@ -23,15 +13,14 @@ if [ -f "$CONF_FILE" ]; then
 fi
 
 # Chat module setup: ensure packages are linked and Ollama with a configured model (default tinyllama) is installed
-
 REPO_DIR="$(pwd)"
 SRC_DIR="${REPO_DIR}/src"
 PKG_DIR="${REPO_DIR}/packages"
-
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-psh_clean_src "${SRC_DIR}"
-psh_link_pkgs "${REPO_DIR}" chat psyched_msgs
+# Link required packages into src/
+ln -sfn "${PKG_DIR}/chat" "${SRC_DIR}/chat"
+ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
 if [ -d "${PKG_DIR}/voice" ]; then
   ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
 fi

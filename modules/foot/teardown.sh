@@ -11,15 +11,30 @@ if [ -f "$CONF_FILE" ]; then
     . "$CONF_FILE"
 fi
 
-# Shared module helpers
-MODULE_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/tools/lib/module.sh"
-if [ -f "$MODULE_LIB" ]; then
-    # shellcheck disable=SC1090
-    . "$MODULE_LIB"
-fi
-
 REPO_DIR="$(pwd)"
 SERVICE_NAME="psyched-foot.service"
-psh_remove_artifacts "$REPO_DIR"
-psh_remove_src_entries "$REPO_DIR" create_robot libcreate
-psh_systemd_disable "$SERVICE_NAME"
+# Remove common build artifacts
+for a in build install log; do
+    [ -d "${REPO_DIR}/$a" ] && rm -rf "${REPO_DIR}/$a"
+done
+
+# Remove specific src entries
+SRC_DIR="${REPO_DIR}/src"
+for d in create_robot libcreate; do
+    [ -L "${SRC_DIR}/$d" ] || [ -d "${SRC_DIR}/$d" ] && rm -rf "${SRC_DIR}/$d"
+done
+
+# Disable/remove systemd service if possible
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+fi
+SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+if [ -f "${SYSTEMD_DIR}/${SERVICE_NAME}" ]; then
+    if command -v sudo >/dev/null 2>&1; then
+        sudo rm -f "${SYSTEMD_DIR}/${SERVICE_NAME}" || true
+    else
+        rm -f "${SYSTEMD_DIR}/${SERVICE_NAME}" || true
+    fi
+fi
+fi
+fi
