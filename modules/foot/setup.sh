@@ -13,7 +13,13 @@ if [ -f "$CONF_FILE" ]; then
 fi
 
 
-REPO_DIR="$(pwd)"
+# Determine repository root regardless of current working directory
+if REPO_DIR_GIT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+    REPO_DIR="$REPO_DIR_GIT_ROOT"
+else
+    # Fallback: modules/<name> is two levels below repo root
+    REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 SOURCE_DIR="${REPO_DIR}/src"
 
 CREATE_ROBOT_REPO="https://github.com/autonomylab/create_robot.git"
@@ -26,6 +32,32 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 mkdir -p "${SOURCE_DIR}"
+echo "[foot/setup] Using repo root: ${REPO_DIR}"
+echo "[foot/setup] Populating source dir: ${SOURCE_DIR}"
+
+# Clean up any stale module-local clones that could cause duplicate packages
+LOCAL_MODULE_SRC_DIR="${SCRIPT_DIR}/src"
+if [ -d "${LOCAL_MODULE_SRC_DIR}" ]; then
+    for d in create_robot libcreate; do
+        if [ -d "${LOCAL_MODULE_SRC_DIR}/$d" ]; then
+            echo "[foot/setup] Removing stale module-local clone: ${LOCAL_MODULE_SRC_DIR}/$d (to avoid colcon duplicates)"
+            rm -rf "${LOCAL_MODULE_SRC_DIR}/$d"
+        fi
+    done
+    rmdir "${LOCAL_MODULE_SRC_DIR}" 2>/dev/null || true
+fi
+
+# Clean up any stale module-local clones that could cause duplicate packages
+LOCAL_MODULE_SRC_DIR="${SCRIPT_DIR}/src"
+if [ -d "${LOCAL_MODULE_SRC_DIR}" ]; then
+    for d in create_robot libcreate; do
+        if [ -d "${LOCAL_MODULE_SRC_DIR}/$d" ]; then
+            echo "[foot/setup] Removing stale module-local clone: ${LOCAL_MODULE_SRC_DIR}/$d (to avoid colcon duplicates)"
+            rm -rf "${LOCAL_MODULE_SRC_DIR}/$d"
+        fi
+    done
+    rmdir "${LOCAL_MODULE_SRC_DIR}" 2>/dev/null || true
+fi
 
 # Clone create_robot if missing
 if [ ! -d "${SOURCE_DIR}/create_robot/.git" ]; then
