@@ -17,6 +17,19 @@ if [ -d "${PKG_DIR}/voice" ]; then
   ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
 fi
 
+# Install Python dependencies for chat module
+echo "[chat/setup] Installing Python dependencies..."
+if ! python3 -c 'import requests' >/dev/null 2>&1; then
+  echo "[chat/setup] Installing requests library..."
+  if pip3 install --break-system-packages requests >/dev/null 2>&1 || sudo pip3 install --break-system-packages requests >/dev/null 2>&1; then
+    echo "[chat/setup] Installed requests"
+  else
+    echo "[chat/setup] Warning: Failed to install requests; chat module may not function properly" >&2
+  fi
+else
+  echo "[chat/setup] requests already present"
+fi
+
 echo "[chat/setup] Ensuring Ollama is installed..."
 if ! command -v ollama >/dev/null 2>&1; then
   echo "[chat/setup] Installing Ollama..."
