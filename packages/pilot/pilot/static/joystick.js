@@ -10,6 +10,7 @@ class PilotController {
         this.joystick = null;
         this.joystickKnob = null;
         this.throttleSlider = null;
+        this.isSliderDragging = false;
         this.isDragging = false;
         this.joystickCenter = { x: 0, y: 0 };
         this.joystickRadius = 0;
@@ -261,6 +262,30 @@ class PilotController {
         };
         this.throttleSlider.addEventListener('input', onChange, { passive: true });
         this.throttleSlider.addEventListener('change', onChange, { passive: true });
+
+        const onStart = (e) => {
+            this.isSliderDragging = true;
+            e.preventDefault();
+        };
+        const onEnd = (e) => {
+            if (!this.isSliderDragging) return;
+            this.isSliderDragging = false;
+            // Spring back to 0 to reflect actual wheel speed
+            this.throttleSlider.value = '0';
+            const angularZ = this.currentVelocity.angular.z || 0;
+            this.currentVelocity = {
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: angularZ }
+            };
+            this.updateVelocityDisplay();
+            this.sendVelocityCommand();
+            e.preventDefault();
+        };
+        this.throttleSlider.addEventListener('mousedown', onStart);
+        this.throttleSlider.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchend', onEnd, { passive: false });
+        document.addEventListener('touchcancel', onEnd, { passive: false });
     }
 
     getThrottleValue() {

@@ -180,15 +180,16 @@ main {
 
 .slider-section {
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* ensure label is on top */
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 10px;
 }
 
 .slider-title {
     font-weight: 700;
     color: #333;
+    margin-bottom: 6px;
 }
 
 .slider-wrapper {
