@@ -182,6 +182,7 @@ class VoiceNode(Node):
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
         self._worker.start()
 
+        topic = self.get_parameter('topic').get_parameter_value().string_value
         self.get_logger().info(f'Voice node listening on topic: {topic}')
         self.get_logger().info(f'Using Piper model: {self.model}')
 
