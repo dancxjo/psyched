@@ -1,6 +1,12 @@
 /*
-    LCARS-inspired theme for Pilot UI
-    Colors and layout based on LCARS design language: rounded paddles, capsules, segmented bars.
+  LCARS-inspired theme for Pilot UI
+  Colors and layout based on LCARS design language: rounded paddles, capsules, segmented bars.
+
+  References:
+  - LCARS UI and design resources: https://www.thelcars.com/
+    Useful color charts and Okudagram examples for spacing, rounding, and segmentation.
+    Color inspiration includes Peach (#FFCC99), Orange (#FF9966), Red (#FF6666), Gold (#FFCC66),
+    Purple (#CC99FF), Blue (#6699FF), and Cyan (#66CCFF), combined on a black background.
 */
 
 /* Reset and base styles */
@@ -64,6 +70,25 @@ header {
         linear-gradient(90deg, var(--lcars-peach) 0 24%, transparent 24%) left center / 100% 100% no-repeat,
         linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
     border: var(--border) solid rgba(255,255,255,0.08);
+}
+
+/* Right-side segmented bars across the header to evoke LCARS consoles */
+header::after {
+  content: '';
+  position: absolute;
+  right: 18px; top: 14px; bottom: 14px;
+  width: 180px;
+  background:
+    linear-gradient(180deg, var(--lcars-purple), var(--lcars-purple)) 0 0/100% 18% no-repeat,
+    linear-gradient(180deg, transparent, transparent) 0 18%/100% 6% no-repeat,
+    linear-gradient(180deg, var(--lcars-blue), var(--lcars-blue)) 0 24%/100% 18% no-repeat,
+    linear-gradient(180deg, transparent, transparent) 0 42%/100% 6% no-repeat,
+    linear-gradient(180deg, var(--lcars-gold), var(--lcars-gold)) 0 48%/100% 18% no-repeat,
+    linear-gradient(180deg, transparent, transparent) 0 66%/100% 6% no-repeat,
+    linear-gradient(180deg, var(--lcars-orange), var(--lcars-orange)) 0 72%/100% 18% no-repeat;
+  border-radius: var(--radius-lg);
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 header h1 {
@@ -284,6 +309,14 @@ main { flex: 1; display: flex; flex-direction: column; gap: 20px; }
   padding: 12px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.08);
+}
+.info-item::before {
+  content: '';
+  display: block;
+  height: 6px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lcars-purple), var(--lcars-blue), var(--lcars-cyan));
 }
 .info-item label { display: block; font-weight: 800; color: var(--lcars-muted); margin-bottom: 6px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: .6px; }
 .info-item span { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 1.2rem; font-weight: 900; color: var(--lcars-gold); }
