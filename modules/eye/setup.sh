@@ -66,7 +66,8 @@ patch_cmake_include_usr() {
     if [ ! -f "$cmake_file" ]; then
         return 0
     fi
-    if grep -Eq "^[[:space:]]*include_directories\(.*(/usr/include)" "$cmake_file"; then
+    # Avoid fragile regex with parentheses; use fixed-string contains checks
+    if grep -Fq "include_directories(/usr/include" "$cmake_file"; then
         return 0
     fi
     echo "[eye/setup] Patching $cmake_file to include /usr/include"
@@ -89,6 +90,13 @@ patch_cmake_include_usr() {
 patch_cmake_include_usr "${SOURCE_DIR}/kinect_ros2/CMakeLists.txt"
 patch_cmake_include_usr "${SOURCE_DIR}/libfreenect/CMakeLists.txt"
 
+# Ensure required system dependencies are present (libusb headers, pkg-config)
+echo "[eye/setup] Ensuring system dependencies for libfreenect (libusb-1.0-0-dev, pkg-config)..."
+if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -y >/dev/null 2>&1 || true
+    sudo apt-get install -y libusb-1.0-0-dev pkg-config >/dev/null
+fi
+
 # Build and install libfreenect so that kinect_ros2 can link against it.
 echo "[eye/setup] Building libfreenect..."
 (
@@ -96,7 +104,7 @@ echo "[eye/setup] Building libfreenect..."
     cd "${SOURCE_DIR}/libfreenect"
     mkdir -p build
     cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr ..
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_EXAMPLES=OFF -DBUILD_FAKENECT=OFF ..
     make -j"${NPROC:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
     if command -v sudo >/dev/null 2>&1; then
         sudo make install
