@@ -23,16 +23,17 @@ fi
 
 REPO_DIR="$(pwd)"
 SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
+# Packages are now located under modules/<module>/packages/<module>
+PKG_DIR="${REPO_DIR}/modules/${SCRIPT_DIR##*/}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-# Link the packages we want in this module
+# Link the packages we want in this module (module name -> directory name)
 ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
 
-# Optionally include core psyched package too
-if [ -d "${PKG_DIR}/psyched" ]; then
-  ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
+# Optionally include core psyched package too (kept at repo root if present)
+if [ -d "${REPO_DIR}/packages/psyched" ]; then
+  ln -sfn "${REPO_DIR}/packages/psyched" "${SRC_DIR}/psyched"
 fi
 
 # Engine setup - default to espeak for reliability

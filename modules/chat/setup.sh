@@ -15,14 +15,28 @@ fi
 # Chat module setup: ensure packages are linked and Ollama with a configured model (default tinyllama) is installed
 REPO_DIR="$(pwd)"
 SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
-mkdir -p "${SRC_DIR}" "${PKG_DIR}"
+# Prefer module-local packages under modules/chat/packages, fall back to repo-level packages/
+PKG_DIR_MODULE="${REPO_DIR}/modules/chat/packages"
+PKG_DIR_REPO="${REPO_DIR}/packages"
+mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}" "${PKG_DIR_REPO}"
 
-# Link required packages into src/
-ln -sfn "${PKG_DIR}/chat" "${SRC_DIR}/chat"
-ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
-if [ -d "${PKG_DIR}/voice" ]; then
-  ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
+# Link required packages into src/ (prefer module-local)
+if [ -d "${PKG_DIR_MODULE}/chat" ]; then
+  ln -sfn "${PKG_DIR_MODULE}/chat" "${SRC_DIR}/chat"
+else
+  ln -sfn "${PKG_DIR_REPO}/chat" "${SRC_DIR}/chat"
+fi
+
+if [ -d "${PKG_DIR_MODULE}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR_MODULE}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+elif [ -d "${PKG_DIR_REPO}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR_REPO}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+fi
+
+if [ -d "${PKG_DIR_MODULE}/voice" ]; then
+  ln -sfn "${PKG_DIR_MODULE}/voice" "${SRC_DIR}/voice"
+elif [ -d "${PKG_DIR_REPO}/voice" ]; then
+  ln -sfn "${PKG_DIR_REPO}/voice" "${SRC_DIR}/voice"
 fi
 
 # Install Python dependencies for chat module

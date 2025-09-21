@@ -16,12 +16,13 @@ fi
 
 REPO_DIR="$(pwd)"
 SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
+# Packages located under modules/<module>/packages/<module>
+PKG_DIR="${REPO_DIR}/modules/${MODULE_NAME}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-# Link the packages we want in this module
-ln -sfn "${PKG_DIR}/pilot" "${SRC_DIR}/pilot"
+# Link the packages we want in this module (modules/pilot/packages/pilot -> src/pilot)
+ln -sfn "${PKG_DIR}/${MODULE_NAME}" "${SRC_DIR}/${MODULE_NAME}"
 
 # Include geometry_msgs dependency (part of ROS2 common interfaces)
 # and any other core dependencies needed

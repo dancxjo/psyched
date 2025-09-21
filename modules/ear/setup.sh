@@ -16,7 +16,8 @@ fi
 
 REPO_DIR="$(pwd)"
 SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
+# Packages are now located under modules/<module>/packages/<module>
+PKG_DIR="${REPO_DIR}/modules/${MODULE_NAME}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
@@ -25,8 +26,8 @@ if [ -d "${PKG_DIR}/psyched" ]; then
   ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
 fi
 
-# Link the ear package
-ln -sfn "${PKG_DIR}/ear" "${SRC_DIR}/ear"
+# Link the module package into src/ (e.g. modules/ear/packages/ear -> src/ear)
+ln -sfn "${PKG_DIR}/${MODULE_NAME}" "${SRC_DIR}/${MODULE_NAME}"
 
 # Install Python dependencies for ear module
 echo "[ear/setup] Installing Python dependencies..."

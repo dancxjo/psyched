@@ -12,10 +12,12 @@ workspace.
   best practice that future agents should remember.
 
 ## Repository orientation
-- `packages/` – ROS 2 packages (mostly Python). Each subdirectory is its own
-  node package.
-- `modules/` – Shell scripts that provision and launch packages for a given
-  host.
+- `packages/` – (Legacy) top-level ROS 2 packages. New structure favors
+  module-local packages under `modules/<module>/packages/<pkg>`.
+- `modules/` – Module containers and shell scripts that provision and launch
+  packages for a given host. Each module should place its ROS2 package(s)
+  under `modules/<module>/packages/` so its `setup.sh` can link them into
+  the repository `src/` directory before building.
 - `hosts/` – Host-specific configuration, symlinks, and generated systemd units.
 - `tools/` – Provisioning helpers (ROS installation, bringup orchestration,
   diagnostics, etc.).
@@ -49,6 +51,21 @@ workspace.
   summary. If you must skip a check, state why.
 - Smoke-test launch or setup scripts when you modify them (e.g.
   `./modules/<module>/setup.sh --help`).
+
+Important workflow note:
+
+- Before running the host/module setup step, remove any existing `./src` so
+  module `setup.sh` scripts can recreate it deterministically by symlinking
+  module-local packages into `src/`:
+
+```bash
+rm -rf ./src
+HOST=<your-host> ./tools/setup
+make build
+```
+
+This ensures old or stale package copies don't cause colcon build duplicates
+or conflicting package sources.
 
 ## Git etiquette
 - Stay on the default branch unless explicitly instructed otherwise.

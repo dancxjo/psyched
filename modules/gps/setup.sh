@@ -18,13 +18,24 @@ else
   REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 SRC_DIR="${REPO_DIR}/src"
-PKG_DIR="${REPO_DIR}/packages"
+# Prefer module-local package directory modules/<module>/packages, fall back to repo packages/
+PKG_DIR_MODULE="${REPO_DIR}/modules/${MODULE_NAME}/packages"
+PKG_DIR_REPO="${REPO_DIR}/packages"
 
-mkdir -p "${SRC_DIR}" "${PKG_DIR}"
+mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}" "${PKG_DIR_REPO}"
 
-# Link required packages into src/ (will be created later by package scaffold)
-ln -sfn "${PKG_DIR}/ublox_gps" "${SRC_DIR}/ublox_gps"
-ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+# Link required packages into src/ (prefer module-local)
+if [ -d "${PKG_DIR_MODULE}/ublox_gps" ]; then
+  ln -sfn "${PKG_DIR_MODULE}/ublox_gps" "${SRC_DIR}/ublox_gps"
+else
+  ln -sfn "${PKG_DIR_REPO}/ublox_gps" "${SRC_DIR}/ublox_gps"
+fi
+
+if [ -d "${PKG_DIR_MODULE}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR_MODULE}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+elif [ -d "${PKG_DIR_REPO}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR_REPO}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+fi
 
 # System setup for u-blox 7 using gpsd
 # - Install gpsd and clients

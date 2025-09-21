@@ -60,13 +60,13 @@ hosts/
 ### Installation
 
 1. **Clone the repository:**
-   ```bash
+1. **Clone the repository:**
    git clone https://github.com/dancxjo/psyched.git
    cd psyched
    ```
 
 2. **Bootstrap the system (first-time setup):**
-   ```bash
+3. **Configure your host:**
    make bootstrap
    ```
    This installs ROS2, system dependencies, and sets up the basic environment.
@@ -75,10 +75,23 @@ hosts/
    ```bash
    # Check available host configurations
    ls hosts/
-   
-   # Use existing configuration or create new one
-   HOST=cerebellum ./tools/setup
-   ```
+4. **Prepare and build the workspace:**
+
+    Important: module setup scripts create a clean `src/` tree by symlinking
+    module-local packages into the repository `src/` directory. To ensure a
+    deterministic setup, delete any existing `./src` folder before running the
+    setup step so it can be recreated from scratch:
+
+    ```bash
+    rm -rf ./src
+    HOST=cerebellum ./tools/setup   # or run individual module setup scripts
+    make build
+    ```
+
+    Each module is expected to place its ROS2 package(s) under
+    `modules/<module>/packages/<pkg>` (for example: `modules/ear/packages/ear`).
+    The module's `setup.sh` will symlink the module-local package(s) into
+    `src/` so `colcon build` (invoked by `make build`) will build them.
 
 4. **Build the workspace:**
    ```bash
@@ -97,10 +110,14 @@ hosts/
 
 3. **Check system status:**
    ```bash
-   make systemd-status
-   ```
-
-## Module Details
+1. Create module directory: `modules/mymodule/`
+2. Add ROS2 package(s) under module-local packages directory:
+    `modules/mymodule/packages/mymodule` (and any additional package folders as
+    needed)
+3. Create setup script: `modules/mymodule/setup.sh` that links the module-local
+    packages into the repository `src/` directory (see examples in
+    `modules/*/setup.sh`)
+4. Link in host config: `ln -s ../../modules/mymodule hosts/myhost/modules/mymodule`
 
 ### Pilot Module
 - **Purpose**: Web-based robot control interface
