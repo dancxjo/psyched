@@ -363,7 +363,7 @@ main {
 
 .voice-row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto; /* input, Speak, Marco */
     gap: 10px;
 }
 
@@ -390,6 +390,12 @@ main {
 
 .voice-button:hover {
     transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+    .voice-row {
+        grid-template-columns: 1fr; /* stack on narrow screens */
+    }
 }
 
 .voice-hint {

@@ -149,6 +149,7 @@ class PilotController {
     setupVoice() {
         const input = document.getElementById('voiceInput');
         const button = document.getElementById('voiceSendButton');
+        const marco = document.getElementById('marcoButton');
         if (!input || !button) return;
 
         const send = () => {
@@ -165,6 +166,16 @@ class PilotController {
         };
 
         button.addEventListener('click', send);
+        if (marco) {
+            marco.addEventListener('click', () => {
+                if (!this.isConnected || !this.websocket) return;
+                try {
+                    this.websocket.send(JSON.stringify({ type: 'voice', text: 'Polo!' }));
+                } catch (e) {
+                    console.error('Failed to send marco message:', e);
+                }
+            });
+        }
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
