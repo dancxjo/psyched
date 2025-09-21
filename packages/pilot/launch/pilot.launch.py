@@ -59,6 +59,21 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_RUN_SEPARATE_WS', default_value='true'),
         description='Launch the separate websocket node (recommended)'
     )
+    host_health_enable_arg = DeclareLaunchArgument(
+        'enable_host_health',
+        default_value=EnvironmentVariable(name='PILOT_ENABLE_HOST_HEALTH', default_value='true'),
+        description='Enable the host health publisher node'
+    )
+    host_health_period_arg = DeclareLaunchArgument(
+        'host_health_period_sec',
+        default_value=EnvironmentVariable(name='PILOT_HOST_HEALTH_PERIOD', default_value='2.0'),
+        description='Publish period for host health metrics'
+    )
+    host_health_topic_arg = DeclareLaunchArgument(
+        'host_health_topic',
+        default_value=EnvironmentVariable(name='PILOT_HOST_HEALTH_TOPIC', default_value='host/health'),
+        description='Topic for host health metrics'
+    )
     
     # Pilot node
     pilot_node = Node(
@@ -91,6 +106,18 @@ def generate_launch_description():
             'host': LaunchConfiguration('host'),
         }]
     )
+
+    host_health_node = Node(
+        package='pilot',
+        executable='host_health',
+        name='host_health',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('enable_host_health')),
+        parameters=[{
+            'publish_topic': LaunchConfiguration('host_health_topic'),
+            'period_sec': LaunchConfiguration('host_health_period_sec'),
+        }]
+    )
     
     return LaunchDescription([
         web_port_arg,
@@ -101,6 +128,10 @@ def generate_launch_description():
         enable_http_arg,
         enable_ws_arg,
         run_separate_ws_arg,
+        host_health_enable_arg,
+        host_health_period_arg,
+        host_health_topic_arg,
         pilot_node,
         websocket_node,
+        host_health_node,
     ])
