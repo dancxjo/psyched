@@ -40,6 +40,8 @@ from std_msgs.msg import String
 from std_msgs.msg import Empty
 from std_msgs.msg import UInt32
 
+from voice.utils import fetch_fortune_text
+
 try:
     from piper import PiperVoice
     from piper import SynthesisConfig
@@ -122,6 +124,8 @@ class VoiceNode(Node):
         self._stop_event = threading.Event()
         self._unpaused = threading.Event()
         self._unpaused.set()  # start unpaused
+        self._worker: threading.Thread | None = None
+        self._runtime_started = False
         # Runtime volume (0.0 - 2.0), initialized from parameter 'volume'
         try:
             self.volume = float(self.get_parameter('volume').value)
@@ -130,13 +134,13 @@ class VoiceNode(Node):
         self.volume = max(0.0, min(2.0, self.volume))
 
         # Topic setup
-        topic = self.get_parameter('topic').get_parameter_value().string_value
+        self.topic = self.get_parameter('topic').get_parameter_value().string_value
 
 
         # Publishers and subscribers
         self._pub_done = self.create_publisher(String, 'voice_done', 10)
         self.autophony_pub = self.create_publisher(UInt32, '/audio/autophony_duration', 10)
-        self.create_subscription(String, topic, self.enqueue, 10)
+        self.create_subscription(String, self.topic, self.enqueue, 10)
         # Back-compat legacy interrupt topic: treat as pause (do not clear queue)
         self.create_subscription(String, 'voice_interrupt', lambda _msg: self._on_pause(None), 10)
 
@@ -156,64 +160,77 @@ class VoiceNode(Node):
         from std_msgs.msg import Float32
         self._volume_sub = self.create_subscription(Float32, '/voice/volume', self._on_volume, 1)
 
-    def _on_volume(self, msg):
+        # Bring up runtime worker immediately so the node is responsive before
+        # any external configuration messages arrive.
+        self._initialize_runtime()
+
+    def _on_volume(self, msg) -> None:
+        """Update the playback volume while keeping the worker alive."""
+        self._initialize_runtime()
         try:
             new_volume = float(getattr(msg, 'data', 1.0))
-            self.get_logger().info(f'Voice volume set to {new_volume}')
-            # TODO: Apply volume to engine (self.volume)
-            self.volume = new_volume
-        except Exception as e:
-            self.get_logger().warning(f'Failed to set volume: {e}')
+        except Exception as exc:
+            self.get_logger().warning(f'Failed to set volume: {exc}')
+            return
+        new_volume = max(0.0, min(2.0, new_volume))
+        if abs(new_volume - self.volume) < 1e-3:
+            return
+        self.volume = new_volume
+        self.get_logger().info(f'Voice volume set to {self.volume:.2f}')
 
-        # Ensure Piper model files exist if using Piper; attempt runtime fetch if missing
+    def _initialize_runtime(self) -> None:
+        """Start background worker and announce readiness if not already running."""
+        if self._runtime_started:
+            return
+        self._runtime_started = True
+
         try:
             engine = self.get_parameter('engine').get_parameter_value().string_value
         except Exception:
             engine = 'piper'
+
         if engine == 'piper':
             try:
                 self._ensure_piper_model()
                 # Reload sample rate if config just appeared
                 self.sample_rate = self._load_sample_rate(self.config_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.get_logger().debug(f'Piper model check failed: {exc}')
 
-        # Start worker thread
         self._worker = threading.Thread(target=self._run_worker, daemon=True)
         self._worker.start()
 
-        topic = self.get_parameter('topic').get_parameter_value().string_value
-        self.get_logger().info(f'Voice node listening on topic: {topic}')
+        self.get_logger().info(f'Voice node listening on topic: {self.topic}')
         self.get_logger().info(f'Using Piper model: {self.model}')
 
-        # Enqueue a startup fortune (fallback to greeting if fortune unavailable)
+        self._announce_startup_message()
+        self._setup_ping_timer()
+
+    def _announce_startup_message(self) -> None:
+        """Queue an initial utterance so operators know the node is alive."""
         try:
-            fortune_text = None
-            try:
-                fortune_bin = shutil.which('fortune')
-                if fortune_bin:
-                    res = subprocess.run([fortune_bin, '-s'], capture_output=True, text=True, timeout=3)
-                    fortune_text = (res.stdout or '').strip()
-            except Exception:
-                fortune_text = None
-
-            if fortune_text:
-                self.enqueue(String(data=fortune_text))
-            else:
-                greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
-                if greeting:
-                    self.enqueue(String(data=greeting))
+            fortune_text = fetch_fortune_text()
         except Exception:
-            pass
+            fortune_text = None
+        if fortune_text:
+            self.enqueue(String(data=fortune_text))
+            return
+        try:
+            greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
+        except Exception:
+            greeting = ''
+        if greeting:
+            self.enqueue(String(data=greeting))
 
-        # Periodic ping timer
+    def _setup_ping_timer(self) -> None:
+        """Configure the optional periodic "ping" notification."""
         try:
             enable_ping = self.get_parameter('enable_ping').get_parameter_value().bool_value
             ping_interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
-            if enable_ping and ping_interval > 0:
-                self.create_timer(ping_interval, self._send_fortune_ping)
         except Exception:
-            pass
+            return
+        if enable_ping and ping_interval > 0:
+            self.create_timer(ping_interval, self._send_fortune_ping)
 
     @staticmethod
     def _load_sample_rate(config_path: str) -> int:
@@ -314,29 +331,24 @@ class VoiceNode(Node):
     def _send_fortune_ping(self) -> None:
         """Send a fortune as a periodic ping message."""
         try:
-            fortune_text = None
-            try:
-                fortune_bin = shutil.which('fortune')
-                if fortune_bin:
-                    res = subprocess.run([fortune_bin, '-s'], capture_output=True, text=True, timeout=3)
-                    fortune_text = (res.stdout or '').strip()
-            except Exception:
-                fortune_text = None
-
-            if fortune_text:
-                self.enqueue(String(data=fortune_text))
-            else:
-                # Fallback to original message if fortune is unavailable
-                self.enqueue(String(data='I am here.'))
+            fortune_text = fetch_fortune_text()
         except Exception:
-            pass
+            fortune_text = None
+        message = fortune_text or 'I am here.'
+        try:
+            self.enqueue(String(data=message))
+        except Exception:
+            self.get_logger().debug('Failed to enqueue ping message', exc_info=True)
 
     def destroy_node(self):
         """Clean shutdown."""
         self.interrupt()  # Stop any ongoing speech
         self._stop_event.set()
         self._unpaused.set()  # ensure worker can exit if paused
-        self._worker.join(timeout=5)
+        worker = self._worker
+        if worker is not None:
+            worker.join(timeout=5)
+            self._worker = None
         return super().destroy_node()
 
     def _run_worker(self):
