@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pilot - Robot Control Interface</title>
+    <!-- LCARS CSS (MIT) from jsDelivr CDN: https://github.com/joernweissenborn/lcars -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joernweissenborn/lcars/css/lcars.css">
+    <!-- Local overrides and app styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="lcars-black-bg">
+    <div class="container">
+        <header>
+            <h1>🤖 Pilot Control Interface</h1>
+            <div class="status" id="status">
+                <span class="status-indicator" id="statusIndicator">⚪</span>
+                <span id="statusText">Connecting...</span>
+                <div class="battery" id="batteryWidget" title="Battery status">
+                    <div class="battery-icon">
+                        <div class="battery-cap"></div>
+                        <div class="battery-body">
+                            <div class="battery-fill" id="batteryFill" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <div class="battery-text">
+                        <span id="batteryPercent">--%</span>
+                        <span id="batteryState" class="battery-state">--</span>
+                    </div>
+                </div>
+                <div class="host-health-panel" id="hostHealthPanel">
+                    <button class="host-health-toggle" id="hostHealthToggle" aria-expanded="true" aria-controls="hostHealthWidget" title="Show/Hide system health">System ▾</button>
+                    <div class="host-health" id="hostHealthWidget" title="Host health">
+                        <span class="host-chip" id="cpuChip">CPU --%</span>
+                        <span class="host-chip" id="tempChip">Temp --°C / --°F</span>
+                        <span class="host-chip" id="memChip">Mem --%</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="estop-bar">
+            <button id="stopButton" class="lcars-element rounded button lcars-red-alert-bg estop-button" title="Immediate halt">🛑 Emergency Stop</button>
+        </div>
+
+        <main>
+            <div class="control-panel">
+                <div class="joystick-section">
+                    <h2>Movement Control</h2>
+                    <div class="drive-grid">
+                        <div class="dpad-section">
+                            <div class="slider-title">D-Pad</div>
+                            <div id="dpad" class="dpad-grid" aria-label="Directional pad controls">
+                                <div></div>
+                                <button id="dpadUp" class="dpad-btn up" aria-label="Forward">▲</button>
+                                <div></div>
+                                <button id="dpadLeft" class="dpad-btn left" aria-label="Left">◀</button>
+                                <div class="dpad-center" aria-hidden="true"></div>
+                                <button id="dpadRight" class="dpad-btn right" aria-label="Right">▶</button>
+                                <div></div>
+                                <button id="dpadDown" class="dpad-btn down" aria-label="Backward">▼</button>
+                                <div></div>
+                            </div>
+                        </div>
+
+                        <div class="joystick-container">
+                            <div id="joystick" class="joystick">
+                                <div id="joystickKnob" class="joystick-knob"></div>
+                                <!-- IMU overlay: robot icon, accel arrow, gyro ring -->
+                                <svg id="imuOverlay" class="imu-overlay" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                                    <defs>
+                                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                            <polygon points="0 0, 6 3, 0 6" fill="#e53935"></polygon>
+                                        </marker>
+                                    </defs>
+                                    <!-- Gyro base circle -->
+                                    <circle cx="100" cy="100" r="88" fill="none" stroke="#e0e7ff" stroke-width="2" opacity="0.6" />
+                                    <!-- Gyro Z arc shows angular velocity magnitude/direction -->
+                                    <path id="imuGyroZ" d="" fill="none" stroke="#ff9800" stroke-width="6" stroke-linecap="round" opacity="0.85" />
+
+                                    <!-- Acceleration vector in XY plane -->
+                                    <line id="imuAccelVec" x1="100" y1="100" x2="100" y2="100" stroke="#e53935" stroke-width="4" marker-end="url(#arrowhead)" opacity="0.85" />
+
+                                    <!-- Robot body at center, rotated by yaw -->
+                                    <g id="imuRobot" transform="translate(100,100)">
+                                        <g id="imuRobotYaw" transform="rotate(0)">
+                                            <!-- a rounded rectangle body -->
+                                            <rect x="-22" y="-30" width="44" height="60" rx="10" ry="10" fill="#667eea" opacity="0.9" />
+                                            <!-- heading indicator (front) -->
+                                            <polygon points="0,-38 8,-24 -8,-24" fill="#ffd54f" opacity="0.95" />
+                                            <!-- wheels -->
+                                            <rect x="-28" y="-18" width="6" height="36" rx="2" fill="#455a64" />
+                                            <rect x="22" y="-18" width="6" height="36" rx="2" fill="#455a64" />
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Moved auxiliary controls under movement commands -->
+                    <div class="aux-controls">
+                        <div class="controls">
+                            <button id="resetButton" class="reset-button">🔄 Reset</button>
+                        </div>
+
+                        <div class="voice-controls">
+                            <h3>Voice</h3>
+                            <div class="voice-row">
+                                <input id="voiceInput" type="text" placeholder="Type something for the robot to say..." />
+                                <button id="voiceSendButton" class="voice-button">📣 Speak</button>
+                                <button id="marcoButton" class="voice-button" title="Robot will say 'Polo!'">Marco?</button>
+                            </div>
+                            <div class="voice-row">
+                                <button id="voicePause" class="voice-button" title="Pause speech">⏸ Pause</button>
+                                <button id="voiceResume" class="voice-button" title="Resume speech">▶ Resume</button>
+                                <button id="voiceClear" class="voice-button" title="Clear queue">🧹 Clear</button>
+                                <label for="voiceVolume" class="voice-label">Volume</label>
+                                <input id="voiceVolume" type="range" min="0" max="200" value="100" />
+                                <span id="voiceVolumeValue">100%</span>
+                            </div>
+                            <div id="voiceHint" class="voice-hint">Press Enter to send</div>
+                        </div>
+
+                        <!-- Services controls moved into each log block below -->
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h2>Control Information</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Linear X:</label>
+                            <span id="linearX">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Linear Y:</label>
+                            <span id="linearY">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Angular Z:</label>
+                            <span id="angularZ">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Mode</label>
+                            <span id="robotMode">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Speed (m/s)</label>
+                            <span id="robotSpeed">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Bumper</label>
+                            <span id="robotBumper">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Cliff</label>
+                            <span id="robotCliff">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>IR Omni</label>
+                            <span id="robotIrOmni">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Diagnostics</label>
+                            <span id="robotDiag">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Battery %</label>
+                            <span id="batteryPercentInfo">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Voltage (V)</label>
+                            <span id="batteryVoltage">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Current (A)</label>
+                            <span id="batteryCurrent">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Temperature</label>
+                            <span id="batteryTemp">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>State</label>
+                            <span id="batteryStateInfo">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Speaking (ms)</label>
+                            <span id="voiceSpeakingMs">0</span>
+                        </div>
+                        <div class="info-item">
+                            <label>VAD Speech (ms)</label>
+                            <span id="vadSpeechMs">0</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Mic</label>
+                            <span id="micInfo">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>GPS Fix</label>
+                            <span id="gpsFixStatus">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Latitude</label>
+                            <span id="gpsLat">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Longitude</label>
+                            <span id="gpsLon">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Altitude (m)</label>
+                            <span id="gpsAlt">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="conversation">
+                <h3>Conversation</h3>
+                <div id="conversationLog" class="conversation-log" aria-live="polite"></div>
+            </div>
+
+        </main>
+
+
+        <!-- Logs moved after instructions: always open and stacked vertically -->
+        <section id="servicesLogs" class="services-logs" aria-live="polite" aria-label="Service logs"></section>
+
+        <footer>
+            <div class="connection-info">
+                <div>Web: <span id="webAddress"></span></div>
+                <div>WebSocket: <span id="wsAddress"></span></div>
+                <div>Publishing to: <strong id="cmdVelTopic">/cmd_vel</strong></div>
+                <div>Voice topic: <strong id="voiceTopic">/voice</strong></div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="joystick.js"></script>
+</body>
+</html>
