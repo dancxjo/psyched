@@ -41,6 +41,18 @@ class PilotController {
         this.setupDpad();
         this.updateAddressDisplay();
 
+        // Battery DOM refs
+        this.batteryEls = {
+            fill: document.getElementById('batteryFill'),
+            percent: document.getElementById('batteryPercent'),
+            state: document.getElementById('batteryState'),
+            percentInfo: document.getElementById('batteryPercentInfo'),
+            voltage: document.getElementById('batteryVoltage'),
+            current: document.getElementById('batteryCurrent'),
+            temp: document.getElementById('batteryTemp'),
+            stateInfo: document.getElementById('batteryStateInfo'),
+        };
+
         // Send periodic keep-alive
         setInterval(() => this.sendPing(), 5000);
     }
@@ -591,6 +603,9 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    if (message.battery) {
+                        this.updateBattery(message.battery);
+                    }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {
@@ -600,6 +615,12 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    if (message.battery) {
+                        this.updateBattery(message.battery);
+                    }
+                    break;
+                case 'battery':
+                    this.updateBattery(message);
                     break;
                 default:
                     console.log('Unknown message type:', message.type);
@@ -620,6 +641,52 @@ class PilotController {
         const el = document.getElementById('voiceTopic');
         if (el) {
             el.textContent = topic + (typeof count === 'number' ? ` (${count} subscribers)` : '');
+        }
+    }
+
+    updateBattery(payload) {
+        // payload may include: percent, voltage, current, temperature, charging_state, charge_ratio
+        const els = this.batteryEls;
+        if (!els) return;
+
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const percent = typeof payload.percent === 'number' && isFinite(payload.percent)
+            ? clamp(payload.percent, 0, 100)
+            : null;
+
+        if (els.fill && percent != null) {
+            els.fill.style.width = `${percent}%`;
+            // Change fill color smoothly by adjusting background position along gradient
+            // Already gradient-based; width reflects SoC.
+        }
+        const pctText = percent != null ? `${percent.toFixed(0)}%` : '--%';
+        if (els.percent) els.percent.textContent = pctText;
+        if (els.percentInfo) els.percentInfo.textContent = pctText;
+
+        if (els.voltage && typeof payload.voltage === 'number') {
+            els.voltage.textContent = payload.voltage.toFixed(2);
+        }
+        if (els.current && typeof payload.current === 'number') {
+            els.current.textContent = payload.current.toFixed(2);
+        }
+        if (els.temp && typeof payload.temperature === 'number') {
+            els.temp.textContent = String(payload.temperature);
+        }
+
+        const stateStr = this.formatChargingState(payload.charging_state);
+        if (els.state) els.state.textContent = stateStr;
+        if (els.stateInfo) els.stateInfo.textContent = stateStr;
+    }
+
+    formatChargingState(code) {
+        switch (code) {
+            case 0: return 'Not charging';
+            case 1: return 'Reconditioning';
+            case 2: return 'Full';
+            case 3: return 'Trickle';
+            case 4: return 'Waiting';
+            case 5: return 'Fault';
+            default: return '--';
         }
     }
 }

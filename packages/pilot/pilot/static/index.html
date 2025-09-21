@@ -13,6 +13,18 @@
             <div class="status" id="status">
                 <span class="status-indicator" id="statusIndicator">⚪</span>
                 <span id="statusText">Connecting...</span>
+                <div class="battery" id="batteryWidget" title="Battery status">
+                    <div class="battery-icon">
+                        <div class="battery-cap"></div>
+                        <div class="battery-body">
+                            <div class="battery-fill" id="batteryFill" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <div class="battery-text">
+                        <span id="batteryPercent">--%</span>
+                        <span id="batteryState" class="battery-state">--</span>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -58,6 +70,26 @@
                         <div class="info-item">
                             <label>Angular Z:</label>
                             <span id="angularZ">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Battery %</label>
+                            <span id="batteryPercentInfo">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Voltage (V)</label>
+                            <span id="batteryVoltage">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Current (A)</label>
+                            <span id="batteryCurrent">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Temperature (°C)</label>
+                            <span id="batteryTemp">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>State</label>
+                            <span id="batteryStateInfo">--</span>
                         </div>
                     </div>
                     

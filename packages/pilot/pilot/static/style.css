@@ -67,6 +67,56 @@ header h1 {
     color: #f44336;
 }
 
+/* Battery widget */
+.battery {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 14px;
+    background: rgba(255,255,255,0.12);
+    padding: 6px 10px;
+    border-radius: 12px;
+}
+.battery-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+}
+.battery-cap {
+    width: 4px;
+    height: 10px;
+    background: #fff;
+    border-radius: 2px;
+    margin-left: 4px;
+}
+.battery-body {
+    width: 48px;
+    height: 18px;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    background: rgba(0,0,0,0.15);
+}
+.battery-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #f44336 0%, #ff9800 50%, #4CAF50 100%);
+    transition: width 0.3s ease;
+}
+.battery-text {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.battery-text #batteryPercent {
+    font-weight: 700;
+}
+.battery-state {
+    opacity: 0.9;
+}
+
 /* Main content */
 main {
     flex: 1;

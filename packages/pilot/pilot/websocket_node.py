@@ -14,7 +14,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import Twist
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32, Int16
+from create_msgs.msg import ChargingState
 
 try:
     import websockets
@@ -46,6 +47,27 @@ class PilotWebSocketNode(Node):
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+
+        # Battery topics (from create_driver)
+        # Note: topics are relative to create_driver node namespace
+        self._battery = {
+            'voltage': None,
+            'current': None,
+            'charge': None,
+            'capacity': None,
+            'charge_ratio': None,
+            'temperature': None,
+            'charging_state': None,
+        }
+        self._battery_lock = threading.Lock()
+        # Subscriptions
+        self.create_subscription(Float32, 'battery/voltage', self._on_batt_voltage, 10)
+        self.create_subscription(Float32, 'battery/current', self._on_batt_current, 10)
+        self.create_subscription(Float32, 'battery/charge', self._on_batt_charge, 10)
+        self.create_subscription(Float32, 'battery/capacity', self._on_batt_capacity, 10)
+        self.create_subscription(Float32, 'battery/charge_ratio', self._on_batt_ratio, 10)
+        self.create_subscription(Int16, 'battery/temperature', self._on_batt_temp, 10)
+        self.create_subscription(ChargingState, 'battery/charging_state', self._on_batt_state, 10)
 
         # asyncio context in dedicated thread
         self._loop = None
@@ -112,6 +134,10 @@ class PilotWebSocketNode(Node):
                 'voice_topic': self.voice_topic,
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
             }
+            # include latest battery snapshot if available
+            with self._battery_lock:
+                if any(v is not None for v in self._battery.values()):
+                    status_msg['battery'] = self._format_battery()
             await websocket.send(json.dumps(status_msg))
         except Exception:
             pass
@@ -147,7 +173,17 @@ class PilotWebSocketNode(Node):
                     sub_count = self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0
                 except Exception:
                     sub_count = 0
-                await websocket.send(json.dumps({'type': 'pong', 'cmd_vel_topic': self.cmd_vel_topic, 'publisher_matched_count': sub_count, 'voice_topic': self.voice_topic, 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0}))
+                pong = {
+                    'type': 'pong',
+                    'cmd_vel_topic': self.cmd_vel_topic,
+                    'publisher_matched_count': sub_count,
+                    'voice_topic': self.voice_topic,
+                    'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0
+                }
+                with self._battery_lock:
+                    if any(v is not None for v in self._battery.values()):
+                        pong['battery'] = self._format_battery()
+                await websocket.send(json.dumps(pong))
             elif t == 'voice':
                 text = data.get('text')
                 if isinstance(text, str) and text.strip():
@@ -157,6 +193,78 @@ class PilotWebSocketNode(Node):
                     await websocket.send(json.dumps({'type': 'ack', 'voice': {'text': msg.data}}))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
+
+    # Battery callbacks
+    def _broadcast_battery(self):
+        if not self.connected_clients:
+            return
+        msg = {'type': 'battery', **self._format_battery()}
+        data = json.dumps(msg)
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        # schedule in loop thread-safe
+        if self._loop:
+            asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    def _format_battery(self):
+        # Compute percentage if possible
+        percent = None
+        try:
+            if self._battery['charge_ratio'] is not None:
+                percent = float(self._battery['charge_ratio']) * 100.0
+            elif self._battery['charge'] is not None and self._battery['capacity'] is not None and self._battery['capacity']:
+                percent = (float(self._battery['charge']) / float(self._battery['capacity'])) * 100.0
+        except Exception:
+            percent = None
+        return {
+            'voltage': self._battery['voltage'],
+            'current': self._battery['current'],
+            'charge': self._battery['charge'],
+            'capacity': self._battery['capacity'],
+            'charge_ratio': self._battery['charge_ratio'],
+            'temperature': self._battery['temperature'],
+            'charging_state': getattr(self._battery['charging_state'], 'state', self._battery['charging_state']) if self._battery['charging_state'] is not None else None,
+            'percent': percent
+        }
+
+    def _on_batt_voltage(self, msg: Float32):
+        with self._battery_lock:
+            self._battery['voltage'] = float(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_current(self, msg: Float32):
+        with self._battery_lock:
+            self._battery['current'] = float(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_charge(self, msg: Float32):
+        with self._battery_lock:
+            self._battery['charge'] = float(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_capacity(self, msg: Float32):
+        with self._battery_lock:
+            self._battery['capacity'] = float(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_ratio(self, msg: Float32):
+        with self._battery_lock:
+            self._battery['charge_ratio'] = float(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_temp(self, msg: Int16):
+        with self._battery_lock:
+            self._battery['temperature'] = int(msg.data)
+        self._broadcast_battery()
+
+    def _on_batt_state(self, msg: ChargingState):
+        with self._battery_lock:
+            self._battery['charging_state'] = msg
+        self._broadcast_battery()
 
     def destroy_node(self):
         # signal shutdown of server
