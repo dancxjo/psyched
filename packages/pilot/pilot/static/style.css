@@ -595,3 +595,36 @@ footer {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 8px;
 }
+
+/* Sticky E-Stop bar below header */
+.estop-bar {
+    position: sticky;
+    top: 10px;
+    z-index: 1000;
+    margin-bottom: 20px;
+}
+
+.estop-button {
+    display: block;
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    border-radius: 14px;
+    border: none;
+    color: #fff;
+    background: linear-gradient(145deg, #ff3b3b, #cc1f1f);
+    box-shadow:
+        0 8px 16px rgba(204, 31, 31, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.estop-button:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(145deg, #cc1f1f, #ff3b3b);
+}
+
+.estop-button:active {
+    transform: translateY(0);
+}
