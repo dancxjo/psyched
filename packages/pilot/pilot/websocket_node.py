@@ -194,6 +194,9 @@ class PilotWebSocketNode(Node):
         # Systemd services discovery
         self._systemd_units = self._discover_systemd_units()
 
+        # Module controls discovery
+        self._modules = self._discover_modules()
+
         # asyncio context in dedicated thread
         self._loop = None
         self._server = None
@@ -276,6 +279,11 @@ class PilotWebSocketNode(Node):
                     status_msg['systemd_services'] = services
             except Exception as e:
                 self.get_logger().warn(f'Failed to get systemd status: {e}')
+            # include module configurations
+            try:
+                status_msg['modules'] = self._modules
+            except Exception as e:
+                self.get_logger().warn(f'Failed to get modules: {e}')
             # include latest battery snapshot if available
             with self._battery_lock:
                 if any(v is not None for v in self._battery.values()):
@@ -354,6 +362,11 @@ class PilotWebSocketNode(Node):
                     services = self._list_systemd_status()
                     if services:
                         pong['systemd_services'] = services
+                except Exception:
+                    pass
+                # include modules snapshot
+                try:
+                    pong['modules'] = self._modules
                 except Exception:
                     pass
                 await websocket.send(json.dumps(pong))
@@ -754,6 +767,87 @@ class PilotWebSocketNode(Node):
     # -----------------------------
     # Systemd helpers
     # -----------------------------
+    def _discover_modules(self):
+        """Discover modules and load their pilot control configurations."""
+        try:
+            host_short = self._host_short or 'host'
+            repo_root = Path(__file__).resolve().parents[3]  # .../packages/pilot/pilot -> repo
+            modules_dir = repo_root / 'hosts' / host_short / 'modules'
+            
+            if not modules_dir.exists():
+                self.get_logger().warn(f'No modules directory found at {modules_dir}')
+                return {}
+                
+            modules = {}
+            for module_link in modules_dir.iterdir():
+                if not module_link.is_symlink():
+                    continue
+                    
+                module_name = module_link.name
+                module_path = module_link.resolve()
+                
+                # Look for pilot_controls.json in the module directory
+                controls_file = module_path / 'pilot_controls.json'
+                if controls_file.exists():
+                    try:
+                        with open(controls_file, 'r') as f:
+                            controls_config = json.loads(f.read())
+                        
+                        # Expand environment variables in control values
+                        controls_config = self._expand_env_vars(controls_config)
+                        
+                        modules[module_name] = {
+                            'name': controls_config.get('name', module_name.title()),
+                            'description': controls_config.get('description', f'{module_name.title()} module'),
+                            'controls': controls_config.get('controls', []),
+                            'systemd_unit': f'psyched-{module_name}.service'
+                        }
+                        self.get_logger().info(f'Loaded pilot controls for module: {module_name}')
+                    except Exception as e:
+                        self.get_logger().warn(f'Failed to load pilot controls for {module_name}: {e}')
+                        # Create minimal module entry without controls
+                        modules[module_name] = {
+                            'name': module_name.title(),
+                            'description': f'{module_name.title()} module',
+                            'controls': [],
+                            'systemd_unit': f'psyched-{module_name}.service'
+                        }
+                else:
+                    # Module without pilot controls - just show basic info
+                    modules[module_name] = {
+                        'name': module_name.title(),
+                        'description': f'{module_name.title()} module',
+                        'controls': [],
+                        'systemd_unit': f'psyched-{module_name}.service'
+                    }
+            
+            return modules
+        except Exception as e:
+            self.get_logger().warn(f'Failed to discover modules: {e}')
+            return {}
+            
+    def _expand_env_vars(self, config):
+        """Recursively expand environment variables in configuration values."""
+        import re
+        
+        def expand_value(value):
+            if isinstance(value, str):
+                # Replace ${VAR:-default} patterns
+                pattern = r'\$\{([^}:]+)(?::-(.*?))?\}'
+                def replacer(match):
+                    var_name = match.group(1)
+                    default_value = match.group(2) or ''
+                    return os.environ.get(var_name, default_value)
+                return re.sub(pattern, replacer, value)
+            elif isinstance(value, dict):
+                return {k: expand_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [expand_value(item) for item in value]
+            else:
+                return value
+                
+        return expand_value(config)
+
     def _discover_systemd_units(self):
         try:
             # services present under hosts/<host_short>/systemd
