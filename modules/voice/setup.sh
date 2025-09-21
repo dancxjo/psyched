@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sudo pip install piper-tts --break-system-packages || true
-
 # Config: source hosts/<host>/config/voice.env if present relative to repo root, else fallback to ./config/voice.env
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$REAL_PATH")"          # .../modules/voice
@@ -56,31 +54,60 @@ if [[ "${ENGINE}" == "piper" ]]; then
   # Save Piper voices in user-local directory
   PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-$HOME/.local/piper/voices}"
   mkdir -p "$PIPER_VOICES_DIR" || true
-
-  # Download and setup Piper voice model
-  VOICE_DIR="${PIPER_VOICES_DIR}"
+  # Prefer using the centralized installer helper which handles network failures
+  INSTALLER="${REPO_DIR}/tools/install_piper.sh"
   VOICE_MODEL_BASENAME="${VOICE_MODEL:-en_US-john-medium}"
-  VOICE_MODEL="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx"
-  VOICE_CFG="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx.json"
-  VOICE_URL="${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true}"
-  VOICE_CFG_URL="${PIPER_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true}"
-
-  mkdir -p "${VOICE_DIR}"
-  if [ ! -f "${VOICE_MODEL}" ]; then
-    echo "Downloading Piper voice model..."
-    curl -fsSL -o "${VOICE_MODEL}" "${VOICE_URL}"
-    echo "Voice model downloaded to ${VOICE_MODEL}"
-  fi
-  if [ ! -f "${VOICE_CFG}" ]; then
-    echo "Downloading Piper voice config..."
-    curl -fsSL -o "${VOICE_CFG}" "${VOICE_CFG_URL}"
-    echo "Voice config downloaded to ${VOICE_CFG}"
-  fi
-  if [ -z "${PIPER_VOICE:-}" ]; then
-    export PIPER_VOICE="${VOICE_MODEL}"
-    echo "PIPER_VOICE set to ${VOICE_MODEL}"
+  export VOICE_MODEL_BASENAME
+  if [ -x "${INSTALLER}" ]; then
+    echo "[voice/setup] Running Piper installer helper: ${INSTALLER}"
+    if ! "${INSTALLER}"; then
+      echo "[voice/setup] Warning: Piper installer returned non-zero. You may need to manually place model files in ${PIPER_VOICES_DIR}" >&2
+    fi
+  elif [ -f "${INSTALLER}" ]; then
+    echo "[voice/setup] Installer helper found but not executable; running with bash: ${INSTALLER}"
+    if ! bash "${INSTALLER}"; then
+      echo "[voice/setup] Warning: Piper installer returned non-zero. You may need to manually place model files in ${PIPER_VOICES_DIR}" >&2
+    fi
   else
-    echo "PIPER_VOICE already set to ${PIPER_VOICE}"
+    echo "[voice/setup] Installer helper not found: ${INSTALLER}. Falling back to inline download logic." >&2
+    # Inline fallback (best-effort)
+    VOICE_DIR="${PIPER_VOICES_DIR}"
+    VOICE_MODEL="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx"
+    VOICE_CFG="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx.json"
+    VOICE_URL="${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true}"
+    VOICE_CFG_URL="${PIPER_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true}"
+
+    mkdir -p "${VOICE_DIR}"
+    if [ ! -f "${VOICE_MODEL}" ]; then
+      echo "[voice/setup] Attempting to download Piper voice model..."
+      if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsSL -o "${VOICE_MODEL}" "${VOICE_URL}"; then
+          echo "[voice/setup] Warning: could not download Piper model. Place the ONNX file at: ${VOICE_MODEL}" >&2
+        fi
+      else
+        echo "[voice/setup] curl not available; please fetch the model and place it at: ${VOICE_MODEL}" >&2
+      fi
+    fi
+    if [ ! -f "${VOICE_CFG}" ]; then
+      echo "[voice/setup] Attempting to download Piper voice config..."
+      if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsSL -o "${VOICE_CFG}" "${VOICE_CFG_URL}"; then
+          echo "[voice/setup] Warning: could not download Piper config. Place the JSON at: ${VOICE_CFG}" >&2
+        fi
+      else
+        echo "[voice/setup] curl not available; please fetch the config and place it at: ${VOICE_CFG}" >&2
+      fi
+    fi
+    if [ -z "${PIPER_VOICE:-}" ]; then
+      if [ -f "${VOICE_MODEL}" ]; then
+        export PIPER_VOICE="${VOICE_MODEL}"
+        echo "PIPER_VOICE set to ${VOICE_MODEL}"
+      else
+        echo "[voice/setup] PIPER_VOICE not set and model not present. Set PIPER_VOICE to the ONNX file path when available." >&2
+      fi
+    else
+      echo "PIPER_VOICE already set to ${PIPER_VOICE}"
+    fi
   fi
 
   # Python library is optional but helpful for fallback

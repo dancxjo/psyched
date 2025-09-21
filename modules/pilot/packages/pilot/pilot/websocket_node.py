@@ -216,6 +216,15 @@ class PilotWebSocketNode(Node):
         self._thread.start()
         self.get_logger().info(f'WebSocket node starting on ws://{self.host}:{self.websocket_port}')
 
+        # Periodic snapshot broadcaster (push stacked data to clients)
+        # Ensures UI receives all current measurements in a single, ordered payload
+        # even when individual sensors update at different rates.
+        # Runs at 20 Hz to match UI expectations.
+        try:
+            self._snapshot_timer = self.create_timer(1.0 / 20.0, self._broadcast_snapshot)
+        except Exception:
+            self._snapshot_timer = None
+
     def _run_ws_loop(self):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -841,6 +850,74 @@ class PilotWebSocketNode(Node):
                     pass
         if self._loop:
             asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    # -----------------------------
+    # Snapshot broadcaster (stacked messages)
+    # -----------------------------
+    def _build_snapshot(self):
+        """Return a dict with the ordered snapshot of sensor/module state."""
+        snap = {'type': 'snapshot'}
+
+        # IMU (last)
+        snap['imu'] = self._imu_last if self._imu_last is not None else None
+
+        # GPS
+        snap['gps_fix'] = self._gps_fix if self._gps_fix is not None else None
+
+        # Battery
+        with self._battery_lock:
+            if any(v is not None for v in self._battery.values()):
+                snap['battery'] = self._format_battery()
+            else:
+                snap['battery'] = None
+
+        # Robot snapshot
+        with self._robot_lock:
+            snap['robot_status'] = self._format_robot_status()
+
+        # Host health
+        with self._host_lock:
+            snap['host_health'] = self._host_health
+
+        # Audio
+        snap['audio'] = self._audio
+
+        # Modules and systemd services (small lists)
+        try:
+            snap['modules'] = self._modules
+        except Exception:
+            snap['modules'] = None
+        try:
+            services = self._list_systemd_status()
+            snap['systemd_services'] = services
+        except Exception:
+            snap['systemd_services'] = None
+
+        return snap
+
+    def _broadcast_snapshot(self):
+        # Build deterministic snapshot and send to all connected clients
+        if not self.connected_clients or self._loop is None:
+            return
+        snap = self._build_snapshot()
+        # Ensure ordering of keys for predictable parsing on the frontend
+        # (Python 3.7+ preserves insertion order)
+        try:
+            data = json.dumps(snap)
+        except Exception:
+            return
+
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+
+        try:
+            asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+        except Exception:
+            pass
 
     def destroy_node(self):
         # signal shutdown of server

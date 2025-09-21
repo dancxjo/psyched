@@ -764,6 +764,17 @@ class PilotController {
                         this.updateModules(message.modules);
                     }
                     break;
+                case 'snapshot':
+                    // Full stacked snapshot from backend: reuse existing update helpers
+                    if (message.imu) this.updateImu(message.imu);
+                    if (message.battery) this.updateBattery(message.battery);
+                    if (message.robot_status) this.updateRobotStatus(message.robot_status);
+                    if (message.host_health) this.updateHostHealth(message.host_health);
+                    if (message.audio) this.updateAudioStatus(message.audio);
+                    if (message.gps_fix) this.updateGps(message.gps_fix);
+                    if (Array.isArray(message.systemd_services)) this.updateServicesList(message.systemd_services);
+                    if (message.modules) this.updateModules(message.modules);
+                    break;
                 case 'status':
                     if (message.cmd_vel_topic) {
                         this.updateCmdVelTopic(message.cmd_vel_topic, message.publisher_matched_count);

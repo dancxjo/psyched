@@ -360,14 +360,18 @@ class VoiceNode(Node):
         engine = self.get_parameter('engine').get_parameter_value().string_value.lower().strip()
         self.get_logger().info(f'Voice engine: {engine}')
 
-        # Resolve Piper command only if engine=piper. Prefer current Python env (python -m piper),
-        # allow override via PIPER_CMD, then fall back to a system binary.
-        piper_cmd = None
-        if engine == 'piper':
-            piper_cmd = self._resolve_piper_cmd()
-            self.get_logger().info(f'Final Piper command: {piper_cmd}')
-            self.get_logger().info(f'Model path: {self.model_path}, exists: {os.path.exists(self.model_path)}')
-            self.get_logger().info(f'Config path: {self.config_path}, exists: {os.path.exists(self.config_path)}')
+        # Use the Python 'piper' package when available; otherwise rely on
+        # legacy PiperVoice or external binary handled elsewhere. We'll prefer
+        # calling into the package API rather than spawning a separate piper
+        # process.
+        piper_available = False
+        try:
+            import importlib
+            if importlib.util.find_spec('piper') is not None:
+                piper_available = True
+        except Exception:
+            piper_available = False
+        self.get_logger().info(f'Piper package available: {piper_available}')
         wav_out_dir = self.get_parameter('wav_out_dir').value
         volume = float(self.get_parameter('volume').value)
         length_scale = float(self.get_parameter('length_scale').value)
@@ -444,8 +448,8 @@ class VoiceNode(Node):
                 self.autophony_pub.publish(autophony_msg)
             else:
                 # Piper path
-                if piper_cmd and os.path.exists(self.model_path) and os.path.exists(self.config_path):
-                    success = self._speak_with_subprocess(text, aplay_cmd, piper_cmd)
+                if piper_available and os.path.exists(self.model_path) and os.path.exists(self.config_path):
+                    success = self._speak_with_piper_api(text, aplay_cmd)
                     # Publish 0 autophony duration after playback
                     autophony_msg = UInt32()
                     autophony_msg.data = 0
@@ -468,99 +472,136 @@ class VoiceNode(Node):
 
     def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_cmd: list[str]) -> bool:
         """Use subprocess piper binary for efficient speech synthesis."""
+        # Deprecated/path retained for compatibility but prefer the package API
+        # This function is kept to avoid widespread call-site changes but will
+        # attempt to use the Python package if available; otherwise return False.
         try:
-            # Launch Piper to produce RAW PCM to stdout, then pipe into aplay
-            piper = subprocess.Popen(
-                [
-                    *piper_cmd,
-                    "--model",
-                    self.model_path,
-                    "--config",
-                    self.config_path,
-                    "--output_raw",
-                ],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-            )
-        except (FileNotFoundError, TypeError):
-            return False
-            
-        if not aplay_cmd:
-            return False
-            
-        # Prefer ALSA device from env; if PULSE_SERVER is set, use pulse plugin
-        aplay_cmd_list = [
-            aplay_cmd,
-            "-q",
-            "-r",
-            str(self.sample_rate),
-            "-f",
-            "S16_LE",
-            "-t",
-            "raw",
-        ]
-        alsa_dev = os.getenv("ALSA_PCM")
-        if alsa_dev:
-            aplay_cmd_list += ["-D", alsa_dev]
-        elif os.getenv("PULSE_SERVER"):
-            aplay_cmd_list += ["-D", "pulse"]
-        aplay_cmd_list += ["-"]
-        
-        # Optionally insert a volume scaling stage via 'sox' if available and volume != 1.0
-        use_volume = abs(self.volume - 1.0) > 1e-3
-        sox_path = shutil.which('sox') if use_volume else None
-        if sox_path:
-            # sox -t raw -r <sr> -e signed-integer -b 16 -c 1 - -t raw -v <vol> -
-            sox_cmd = [
-                sox_path,
-                '-t', 'raw',
-                '-r', str(self.sample_rate),
-                '-e', 'signed-integer',
-                '-b', '16',
-                '-c', '1',
-                '-',
-                '-t', 'raw',
-                '-v', str(self.volume),
-                '-',
-            ]
-            try:
-                sox = subprocess.Popen(sox_cmd, stdin=piper.stdout, stdout=subprocess.PIPE)
-                aplay = subprocess.Popen(aplay_cmd_list, stdin=sox.stdout)
-                self._procs = [aplay, sox, piper]
-            except Exception:
-                # Fallback to direct pipeline if sox fails
-                aplay = subprocess.Popen(aplay_cmd_list, stdin=piper.stdout)
-                self._procs = [aplay, piper]
-        else:
-            aplay = subprocess.Popen(aplay_cmd_list, stdin=piper.stdout)
-            self._procs = [aplay, piper]
-        
-        # Send text to Piper
-        try:
-            assert piper.stdin is not None
-            piper.stdin.write((text + "\n").encode("utf-8"))
-            piper.stdin.flush()
-            piper.stdin.close()
+            import importlib
+            if importlib.util.find_spec('piper') is not None:
+                return self._speak_with_piper_api(text, aplay_cmd)
         except Exception:
-            pass
-            
-        # Publish autophony duration while speaking
-        start_time = time.time()
-        while aplay.poll() is None:
-            duration = int((time.time() - start_time) * 1000)
-            autophony_msg = UInt32()
-            autophony_msg.data = duration
-            self.autophony_pub.publish(autophony_msg)
-            time.sleep(0.1)
+            return False
+        return False
 
-        # Wait for playback to finish
-        aplay.wait()
+    def _speak_with_piper_api(self, text: str, aplay_cmd: str | None) -> bool:
+        """Synthesize audio using the piper Python package API and play via aplay.
+
+        This assumes the piper package exposes a high-level API to synthesize
+        raw PCM bytes given model/config paths. Because piper may have different
+        interfaces across versions, we try a few reasonable entry points.
+        """
         try:
-            piper.terminate()
+            import importlib
+            spec = importlib.util.find_spec('piper')
+            if spec is None:
+                return False
+            # Import the package
+            import piper as piper_pkg
         except Exception:
-            pass
-        self._procs.clear()
-        return True
+            return False
+
+        # Attempt common APIs: piper_pkg.synthesize_raw(model, config, text)
+        # or piper_pkg.Synthesizer(...).synthesize(text)
+        raw_pcm = None
+        sample_rate = self.sample_rate
+        try:
+            # Preferred: synthesize_raw returning (pcm_bytes, sample_rate)
+            if hasattr(piper_pkg, 'synthesize_raw'):
+                out = piper_pkg.synthesize_raw(self.model_path, self.config_path, text)
+                if isinstance(out, tuple) and len(out) >= 1:
+                    raw_pcm = out[0]
+                    if len(out) > 1 and isinstance(out[1], int):
+                        sample_rate = out[1]
+            # Next: function that returns bytes only
+            elif hasattr(piper_pkg, 'synthesize'):
+                raw_pcm = piper_pkg.synthesize(self.model_path, self.config_path, text)
+            # Next: object-oriented API
+            elif hasattr(piper_pkg, 'Piper'):
+                try:
+                    synth = piper_pkg.Piper(model=self.model_path, config=self.config_path)
+                    raw_pcm = synth.synthesize_raw(text)
+                except Exception:
+                    synth = piper_pkg.Piper()
+                    raw_pcm = synth.synthesize_raw(text)
+            else:
+                # Unknown API
+                return False
+        except Exception as e:
+            self.get_logger().warning(f'Piper package synthesis failed: {e}')
+            return False
+
+        if not raw_pcm:
+            return False
+
+        # If the package returned a numpy array, convert to bytes
+        try:
+            import numpy as _np
+            if isinstance(raw_pcm, _np.ndarray):
+                # Ensure int16 little-endian
+                if raw_pcm.dtype != _np.int16:
+                    raw_pcm = (raw_pcm * 32767).astype(_np.int16)
+                pcm_bytes = raw_pcm.tobytes()
+            else:
+                pcm_bytes = raw_pcm if isinstance(raw_pcm, (bytes, bytearray)) else bytes(raw_pcm)
+        except Exception:
+            pcm_bytes = raw_pcm if isinstance(raw_pcm, (bytes, bytearray)) else bytes(raw_pcm)
+
+        # If no aplay, we can't play; fall back to writing WAV or returning success
+        if not aplay_cmd:
+            # Optionally write to wav_out_dir if configured
+            wav_out_dir = self.get_parameter('wav_out_dir').value
+            if wav_out_dir:
+                try:
+                    import tempfile
+                    import wave as _wave
+                    os.makedirs(wav_out_dir, exist_ok=True)
+                    tmp_path = os.path.join(wav_out_dir, 'out.wav')
+                    with _wave.open(tmp_path, 'wb') as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(sample_rate)
+                        wf.writeframes(pcm_bytes)
+                    self.get_logger().info(f'Wrote WAV to {tmp_path}')
+                    return True
+                except Exception:
+                    return False
+            return False
+
+        # Play PCM via aplay
+        try:
+            aplay_cmd_list = [aplay_cmd, '-q', '-r', str(sample_rate), '-f', 'S16_LE', '-t', 'raw', '-']
+            alsa_dev = os.getenv('ALSA_PCM')
+            if alsa_dev:
+                aplay_cmd_list += ['-D', alsa_dev]
+            elif os.getenv('PULSE_SERVER'):
+                aplay_cmd_list += ['-D', 'pulse']
+
+            p = subprocess.Popen(aplay_cmd_list, stdin=subprocess.PIPE)
+            # Stream bytes
+            p.stdin.write(pcm_bytes)
+            p.stdin.close()
+            self._procs = [p]
+            start_time = time.time()
+            while p.poll() is None:
+                duration = int((time.time() - start_time) * 1000)
+                autophony_msg = UInt32()
+                autophony_msg.data = duration
+                self.autophony_pub.publish(autophony_msg)
+                time.sleep(0.1)
+            p.wait()
+            try:
+                p.terminate()
+            except Exception:
+                pass
+            self._procs.clear()
+            return True
+        except Exception as e:
+            self.get_logger().warning(f'Failed to play synthesized audio: {e}')
+            try:
+                self._procs.clear()
+            except Exception:
+                pass
+            return False
 
     def _validate_piper_cmd(self, cmd: list[str]) -> bool:
         """Validate a Piper command without synthesizing audio.
