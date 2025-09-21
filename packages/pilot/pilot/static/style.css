@@ -273,6 +273,10 @@ main { flex: 1; display: flex; flex-direction: column; gap: 20px; }
 .dpad-btn.up, .dpad-btn.down { background: #ccc; }
 .dpad-btn.left, .dpad-btn.right { background: #bbb; color: #111; }
 .dpad-btn:active { transform: translateY(1px); }
+.dpad-btn:active {
+  filter: brightness(0.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.2);
+}
 .dpad-center { width: 32px; height: 32px; border-radius: 50%; background: var(--lcars-blue); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
 
 /* Info section */
@@ -311,9 +315,19 @@ main { flex: 1; display: flex; flex-direction: column; gap: 20px; }
 
 .stop-button { background: var(--lcars-red); color: #1a0000; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
 .stop-button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.stop-button:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.2);
+}
 
 .reset-button { background: var(--lcars-cyan); color: #001318; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
 .reset-button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.reset-button:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.2);
+}
 
 /* Voice controls */
 .voice-controls { margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); }
@@ -322,6 +336,11 @@ main { flex: 1; display: flex; flex-direction: column; gap: 20px; }
 #voiceInput { padding: 12px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--lcars-text); font-size: 1rem; }
 .voice-button { background: var(--lcars-purple); color: #120a1f; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
 .voice-button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.voice-button:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.2);
+}
 @media (max-width: 480px) { .voice-row { grid-template-columns: 1fr; } }
 .voice-hint { margin-top: 6px; text-align: center; color: var(--lcars-muted); font-size: 0.85rem; }
 
@@ -341,7 +360,15 @@ footer { margin-top: 20px; background: var(--lcars-panel); border-radius: var(--
 .estop-bar { position: sticky; top: 10px; z-index: 1000; margin-bottom: 14px; }
 .estop-button { display: block; width: 100%; padding: 16px 24px; font-size: 1.1rem; font-weight: 900; letter-spacing: 0.5px; border-radius: 999px; border: none; color: #1a0000; background: var(--lcars-red); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.4); }
 .estop-button:hover { transform: translateY(-1px); filter: brightness(1.05); }
-.estop-button:active { transform: translateY(0); }
+.estop-button:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.2);
+}
+/* Ensure LCARS E-Stop stays red and darkens when pressed (override lcars :active color) */
+.lcars-element.estop-button.button:active {
+  background-color: #b00; /* darker red */
+}
 
 /* Services logs section (always open, stacked) */
 .services-logs {
