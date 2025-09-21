@@ -173,12 +173,12 @@ main {
 /* Drive layout: slider + joystick */
 .drive-grid {
     display: grid;
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: 160px 1fr;
     align-items: center;
     gap: 24px;
 }
 
-.slider-section {
+.slider-section, .dpad-section {
     display: flex;
     flex-direction: column; /* ensure label is on top */
     align-items: center;
@@ -210,6 +210,7 @@ main {
     box-shadow:
         inset 4px 4px 8px rgba(0,0,0,0.1),
         inset -4px -4px 8px rgba(255,255,255,0.8);
+    touch-action: none;
 }
 
 .vertical-range::-webkit-slider-runnable-track {
@@ -258,7 +259,7 @@ main {
 /* Responsive orientation handling */
 @media (max-width: 900px) and (orientation: landscape) {
     .drive-grid {
-        grid-template-columns: 120px 1fr; /* slider left, joystick right */
+        grid-template-columns: 160px 1fr; /* dpad left, joystick right */
         gap: 16px;
     }
     .joystick { width: 180px; height: 180px; }
@@ -266,9 +267,43 @@ main {
 
 @media (max-width: 600px) and (orientation: portrait) {
     .drive-grid { grid-template-columns: 1fr; }
-    .slider-section { order: 1; }
+    .slider-section, .dpad-section { order: 1; }
     .joystick-container { order: 2; }
     .vertical-range { width: 240px; }
+}
+
+/* D-Pad */
+.dpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(3, 48px);
+    gap: 6px;
+    place-items: center;
+    touch-action: none;
+}
+.dpad-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    border: none;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(145deg, #667eea, #764ba2);
+    box-shadow:
+        3px 3px 6px rgba(0, 0, 0, 0.15),
+        -1px -1px 3px rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    user-select: none;
+}
+.dpad-btn:active {
+    transform: translateY(1px);
+}
+.dpad-center {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #cfd7ff;
 }
 
 /* Info section */

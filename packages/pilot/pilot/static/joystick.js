@@ -13,6 +13,7 @@ class PilotController {
         this.isSliderDragging = false;
         this.throttleDecayId = null;
         this.lastDecayTs = null;
+        this.sliderLoopId = null;
         this.isDragging = false;
         this.joystickCenter = { x: 0, y: 0 };
         this.joystickRadius = 0;
@@ -36,7 +37,8 @@ class PilotController {
         this.setupJoystick();
         this.setupButtons();
         this.setupVoice();
-        this.setupSlider();
+        // Throttle slider removed; use D-Pad instead
+        this.setupDpad();
         this.updateAddressDisplay();
 
         // Send periodic keep-alive
@@ -257,58 +259,107 @@ class PilotController {
         event.preventDefault();
     }
 
-    setupSlider() {
-        this.throttleSlider = document.getElementById('throttleSlider');
-        if (!this.throttleSlider) return;
+    setupSlider() { /* removed */ }
 
-        // Normalize slider value is already in [-1,1]
-        const onChange = () => {
-            const linearX = this.getThrottleValue();
-            // Preserve current angular z from joystick position
-            const angularZ = this.currentVelocity.angular.z || 0;
+    setupDpad() {
+        const up = document.getElementById('dpadUp');
+        const down = document.getElementById('dpadDown');
+        const left = document.getElementById('dpadLeft');
+        const right = document.getElementById('dpadRight');
+        if (!up || !down || !left || !right) return;
+
+        // State of pressed buttons
+        this.dpadState = { up: false, down: false, left: false, right: false };
+        this.dpadLoopId = null;
+
+        const setPressed = (key, pressed) => {
+            this.dpadState[key] = pressed;
+            if (pressed) {
+                this.startDpadLoop();
+            } else if (!this.dpadState.up && !this.dpadState.down && !this.dpadState.left && !this.dpadState.right) {
+                this.stopDpadLoop();
+                // When released all, stop motion
+                this.currentVelocity = {
+                    linear: { x: 0, y: 0, z: 0 },
+                    angular: { x: 0, y: 0, z: 0 }
+                };
+                this.updateVelocityDisplay();
+                this.sendVelocityCommand();
+            }
+        };
+
+        const makeHandlers = (key) => ({
+            down: (e) => { e.preventDefault(); setPressed(key, true); },
+            up: (e) => { e.preventDefault(); setPressed(key, false); }
+        });
+
+        const u = makeHandlers('up');
+        const d = makeHandlers('down');
+        const l = makeHandlers('left');
+        const r = makeHandlers('right');
+
+        // Mouse
+        up.addEventListener('mousedown', u.down);
+        down.addEventListener('mousedown', d.down);
+        left.addEventListener('mousedown', l.down);
+        right.addEventListener('mousedown', r.down);
+        document.addEventListener('mouseup', (e) => {
+            u.up(e); d.up(e); l.up(e); r.up(e);
+        });
+        // Touch
+        up.addEventListener('touchstart', u.down, { passive: false });
+        down.addEventListener('touchstart', d.down, { passive: false });
+        left.addEventListener('touchstart', l.down, { passive: false });
+        right.addEventListener('touchstart', r.down, { passive: false });
+        const touchEndAll = (e) => { u.up(e); d.up(e); l.up(e); r.up(e); };
+        document.addEventListener('touchend', touchEndAll, { passive: false });
+        document.addEventListener('touchcancel', touchEndAll, { passive: false });
+    }
+
+    startDpadLoop() {
+        if (this.dpadLoopId != null) return;
+        const maxLinearVel = 0.7; // m/s for forward/backward via D-pad
+        const maxAngularVel = 1.8; // rad/s for turning via D-pad
+        const step = () => {
+            const forward = this.dpadState.up ? 1 : 0;
+            const backward = this.dpadState.down ? 1 : 0;
+            const left = this.dpadState.left ? 1 : 0;
+            const right = this.dpadState.right ? 1 : 0;
+
+            // Compute velocities: allow combos (e.g., forward + left)
+            const x = (forward - backward) * maxLinearVel;
+            const z = (right - left) * maxAngularVel * -1; // negative for left positive convention
+
             this.currentVelocity = {
-                linear: { x: linearX, y: 0, z: 0 },
-                angular: { x: 0, y: 0, z: angularZ }
+                linear: { x, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z }
             };
             this.updateVelocityDisplay();
             this.sendVelocityCommand();
-        };
-        this.throttleSlider.addEventListener('input', onChange, { passive: true });
-        this.throttleSlider.addEventListener('change', onChange, { passive: true });
 
-        const onStart = (e) => {
-            this.isSliderDragging = true;
-            this.stopThrottleDecay();
-            e.preventDefault();
+            if (!this.dpadState.up && !this.dpadState.down && !this.dpadState.left && !this.dpadState.right) {
+                this.stopDpadLoop();
+                return;
+            }
+            this.dpadLoopId = window.requestAnimationFrame(step);
         };
-        const onEnd = (e) => {
-            if (!this.isSliderDragging) return;
-            this.isSliderDragging = false;
-            // Start smooth decay to 0 after releasing the slider
-            this.startThrottleDecay();
-            e.preventDefault();
-        };
-        this.throttleSlider.addEventListener('mousedown', onStart);
-        this.throttleSlider.addEventListener('touchstart', onStart, { passive: false });
-        document.addEventListener('mouseup', onEnd);
-        document.addEventListener('touchend', onEnd, { passive: false });
-        document.addEventListener('touchcancel', onEnd, { passive: false });
+        this.dpadLoopId = window.requestAnimationFrame(step);
     }
 
-    getThrottleValue() {
-        if (!this.throttleSlider) return 0;
-        const v = parseFloat(this.throttleSlider.value);
-        if (Number.isNaN(v)) return 0;
-        // Map directly to m/s based on maxLinearVel
-        const maxLinearVel = 1.0;
-        return v * maxLinearVel;
+    stopDpadLoop() {
+        if (this.dpadLoopId != null) {
+            window.cancelAnimationFrame(this.dpadLoopId);
+            this.dpadLoopId = null;
+        }
     }
+
+    getThrottleValue() { return 0; }
 
     startThrottleDecay() {
         // Smoothly reduce slider value toward 0 after release
         this.stopThrottleDecay();
         const epsilon = 0.005; // stop threshold in slider units [-1..1]
-        const decayPerSecond = 2.5; // linear decay units per second
+        const decayPerSecond = 1.5; // linear decay units per second (gentler)
         const step = (ts) => {
             if (this.isSliderDragging) { this.stopThrottleDecay(); return; }
             if (this.lastDecayTs == null) this.lastDecayTs = ts;
@@ -356,6 +407,31 @@ class PilotController {
         this.lastDecayTs = null;
     }
 
+    startSliderDragLoop() {
+        // Continuously reflect slider value in cmd_vel while dragging
+        if (this.sliderLoopId != null) return;
+        const step = () => {
+            if (!this.isSliderDragging) { this.stopSliderDragLoop(); return; }
+            const linearX = this.getThrottleValue();
+            const angularZ = this.currentVelocity.angular.z || 0;
+            this.currentVelocity = {
+                linear: { x: linearX, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: angularZ }
+            };
+            this.updateVelocityDisplay();
+            this.sendVelocityCommand();
+            this.sliderLoopId = window.requestAnimationFrame(step);
+        };
+        this.sliderLoopId = window.requestAnimationFrame(step);
+    }
+
+    stopSliderDragLoop() {
+        if (this.sliderLoopId != null) {
+            window.cancelAnimationFrame(this.sliderLoopId);
+            this.sliderLoopId = null;
+        }
+    }
+
     updateVelocitiesFromInput(event) {
         const clientX = event.touches ? event.touches[0].clientX : event.clientX;
         const clientY = event.touches ? event.touches[0].clientY : event.clientY;
@@ -383,7 +459,7 @@ class PilotController {
 
         this.currentVelocity = {
             linear: {
-                x: this.getThrottleValue(), // Forward/backward from slider
+                x: this.currentVelocity.linear.x || 0.0, // Keep current linear x (from D-pad)
                 y: 0.0,
                 z: 0.0
             },
