@@ -18,23 +18,22 @@ else
   REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 SRC_DIR="${REPO_DIR}/src"
-# Prefer module-local package directory modules/<module>/packages, fall back to repo packages/
 PKG_DIR_MODULE="${REPO_DIR}/modules/${MODULE_NAME}/packages"
-PKG_DIR_REPO="${REPO_DIR}/packages"
 
-mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}" "${PKG_DIR_REPO}"
+mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}"
 
-# Link required packages into src/ (prefer module-local)
+# Link required packages into src/ from module-local packages only. If missing,
+# print warnings so the user can fix the module package layout.
 if [ -d "${PKG_DIR_MODULE}/ublox_gps" ]; then
   ln -sfn "${PKG_DIR_MODULE}/ublox_gps" "${SRC_DIR}/ublox_gps"
 else
-  ln -sfn "${PKG_DIR_REPO}/ublox_gps" "${SRC_DIR}/ublox_gps"
+  echo "[gps/setup] Warning: module-local package not found: ${PKG_DIR_MODULE}/ublox_gps" >&2
 fi
 
 if [ -d "${PKG_DIR_MODULE}/psyched_msgs" ]; then
   ln -sfn "${PKG_DIR_MODULE}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
-elif [ -d "${PKG_DIR_REPO}/psyched_msgs" ]; then
-  ln -sfn "${PKG_DIR_REPO}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+else
+  echo "[gps/setup] Warning: module-local package not found: ${PKG_DIR_MODULE}/psyched_msgs" >&2
 fi
 
 # System setup for u-blox 7 using gpsd
