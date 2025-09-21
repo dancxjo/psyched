@@ -40,12 +40,13 @@ shopt -s nullglob
 modules=("${MODULES_DIR}"/*)
 shopt -u nullglob
 
-declare -A wanted
+# Build a plain list of module basenames (avoid associative arrays for portability)
+module_names=()
 if [ ${#modules[@]} -gt 0 ]; then
   for module in "${modules[@]}"; do
     [ -d "$module" ] || continue
     name="$(basename "$module")"
-    wanted["$name"]=1
+    module_names+=("$name")
   done
 fi
 
@@ -57,7 +58,15 @@ for unit_path in "${existing_units[@]:-}"; do
   unit_file="$(basename "$unit_path")"
   mod_name="${unit_file#psyched-}"
   mod_name="${mod_name%.service}"
-  if [ -z "${wanted["$mod_name"]+x}" ]; then
+  # Check membership in module_names
+  wanted_found=false
+  for nm in "${module_names[@]:-}"; do
+    if [ "$nm" = "$mod_name" ]; then
+      wanted_found=true
+      break
+    fi
+  done
+  if [ "$wanted_found" != "true" ]; then
     # Attempt to stop/disable installed service and remove both installed and host copy
     if command -v systemctl >/dev/null 2>&1; then
       systemctl disable --now "$unit_file" >/dev/null 2>&1 || true

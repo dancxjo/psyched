@@ -98,7 +98,7 @@ fi
 # Python dependency for client node (gps3)
 if ! python3 -c 'import gps3' >/dev/null 2>&1; then
   echo "[gps/setup] Installing gps3 Python client library"
-  if pip3 install --break-system-packages gps3 >/dev/null 2>&1 || sudo pip3 install --break-system-packages gps3 >/dev/null 2>&1; then
+  if sudo pip3 install --break-system-packages gps3 >/dev/null 2>&1 || sudo pip3 install --break-system-packages gps3 >/dev/null 2>&1; then
     echo "[gps/setup] Installed gps3"
   else
     echo "[gps/setup] Warning: Failed to install gps3; ublox_gps node may not run until installed" >&2
