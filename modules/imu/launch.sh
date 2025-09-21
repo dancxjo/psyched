@@ -12,7 +12,7 @@ if [ -f "$CONF_FILE" ]; then
 fi
 
 # Optional param file override; default uses package share config/params.yaml
-PARAM_FILE_VAL="${MPU6050_PARAM_FILE:-}"
+PARAM_FILE_VAL="${IMU_PARAM_FILE:-}" # renamed from MPU6050_PARAM_FILE
 
 LAUNCH_ARGS=()
 if [ -n "$PARAM_FILE_VAL" ]; then

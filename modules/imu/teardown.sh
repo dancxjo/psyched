@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config: source ../../config/mpu6050.env from real script location
+# Config: source ../../config/imu.env from real script location
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$REAL_PATH")"
 MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
@@ -12,7 +12,7 @@ if [ -f "$CONF_FILE" ]; then
 fi
 
 REPO_DIR="$(pwd)"
-SERVICE_NAME="psyched-mpu6050.service"
+SERVICE_NAME="psyched-imu.service"
 # Remove common build artifacts
 for a in build install log; do
     [ -d "${REPO_DIR}/$a" ] && rm -rf "${REPO_DIR}/$a"

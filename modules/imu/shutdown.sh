@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Gracefully stop the mpu6050 module's ros2 launch
+# Gracefully stop the imu module's ros2 launch
 PATTERN="ros2 launch ros2_mpu6050 ros2_mpu6050.launch.py"
 TIMEOUT=${TIMEOUT:-10}
 
@@ -11,11 +11,11 @@ kill_with_pattern() {
 
   mapfile -t pids < <(pgrep -f "$pattern" || true)
   if [ ${#pids[@]} -eq 0 ]; then
-    echo "[mpu6050/shutdown] No matching processes found for pattern: $pattern"
+    echo "[imu/shutdown] No matching processes found for pattern: $pattern"
     return 0
   fi
 
-  echo "[mpu6050/shutdown] Stopping ${#pids[@]} process(es) for: $pattern (SIGTERM)"
+  echo "[imu/shutdown] Stopping ${#pids[@]} process(es) for: $pattern (SIGTERM)"
   for pid in "${pids[@]}"; do
     if [ "$pid" -ne $$ ]; then
       kill -TERM "$pid" 2>/dev/null || true
@@ -26,12 +26,12 @@ kill_with_pattern() {
     sleep 1
     mapfile -t still_alive < <(pgrep -f "$pattern" || true)
     if [ ${#still_alive[@]} -eq 0 ]; then
-      echo "[mpu6050/shutdown] All processes stopped"
+      echo "[imu/shutdown] All processes stopped"
       return 0
     fi
   done
 
-  echo "[mpu6050/shutdown] Forcing stop (SIGKILL) for remaining processes"
+  echo "[imu/shutdown] Forcing stop (SIGKILL) for remaining processes"
   for pid in "${still_alive[@]}"; do
     if [ -n "$pid" ]; then
       kill -KILL "$pid" 2>/dev/null || true
