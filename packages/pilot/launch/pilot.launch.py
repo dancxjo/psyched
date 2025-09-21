@@ -3,6 +3,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch_ros.actions import Node
 
@@ -52,6 +53,12 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_ENABLE_WS', default_value='false'),
         description='Enable the WebSocket inside pilot_node (set false when using separate websocket node)'
     )
+
+    run_separate_ws_arg = DeclareLaunchArgument(
+        'run_separate_websocket',
+        default_value=EnvironmentVariable(name='PILOT_RUN_SEPARATE_WS', default_value='true'),
+        description='Launch the separate websocket node (recommended)'
+    )
     
     # Pilot node
     pilot_node = Node(
@@ -76,6 +83,7 @@ def generate_launch_description():
         executable='pilot_websocket_node',
         name='pilot_websocket_node',
         output='screen',
+        condition=IfCondition(LaunchConfiguration('run_separate_websocket')),
         parameters=[{
             'websocket_port': LaunchConfiguration('websocket_port'),
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
@@ -92,6 +100,7 @@ def generate_launch_description():
         host_arg,
         enable_http_arg,
         enable_ws_arg,
+        run_separate_ws_arg,
         pilot_node,
         websocket_node,
     ])
