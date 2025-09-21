@@ -40,7 +40,7 @@
         </header>
 
         <div class="estop-bar">
-            <button id="stopButton" class="stop-button estop-button" title="Immediate halt">🛑 Emergency Stop</button>
+            <button id="stopButton" class="lcars-element rounded button lcars-red-alert-bg estop-button" title="Immediate halt">🛑 Emergency Stop</button>
         </div>
 
         <main>
@@ -218,24 +218,15 @@
                             <span id="gpsAlt">--</span>
                         </div>
                     </div>
-                    <div class="conversation">
-                        <h3>Conversation</h3>
-                        <div id="conversationLog" class="conversation-log" aria-live="polite"></div>
-                    </div>
                 </div>
             </div>
-
-            <div class="instructions">
-                <h3>Instructions</h3>
-                <ul>
-                    <li>Use the D-Pad: Up/Down for forward/backward, Left/Right to turn</li>
-                    <li>Press and hold directions to move; release to stop</li>
-                    <li>Use the joystick: distance from center sets speed; left/right sets turn rate; up is forward, down is reverse</li>
-                    <li>Use Emergency Stop for immediate halt</li>
-                    <li>Joystick overlays: blue robot rotates with yaw; red arrow shows acceleration vector; orange arc shows gyro Z (turn rate)</li>
-                </ul>
+            <div class="conversation">
+                <h3>Conversation</h3>
+                <div id="conversationLog" class="conversation-log" aria-live="polite"></div>
             </div>
+
         </main>
+
 
         <!-- Logs moved after instructions: always open and stacked vertically -->
         <section id="servicesLogs" class="services-logs" aria-live="polite" aria-label="Service logs"></section>

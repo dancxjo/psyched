@@ -96,6 +96,8 @@ class PilotController {
         this.services = {}; // map unit -> { name, active, enabled, description }
         this.servicesContainer = document.getElementById('servicesPills');
         this.servicesLogs = document.getElementById('servicesLogs');
+        // Cache of last non-empty service details to prevent blink/empty overwrites
+        this.serviceDetails = {}; // unit -> { status: string, journal: string }
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
     }
@@ -881,24 +883,35 @@ class PilotController {
 
     updateServicesList(services) {
         if (!this.servicesContainer) return;
-        // Merge/update map
+        // Merge/update map without clearing DOM to prevent blink
         services.forEach(svc => {
             if (!svc || !svc.name) return;
             this.services[svc.name] = svc;
-        });
-        // Render all known services
-        this.servicesContainer.innerHTML = '';
-        if (this.servicesLogs) this.servicesLogs.innerHTML = '';
-        Object.values(this.services).forEach(svc => {
-            const el = this.renderServicePill(svc);
-            this.servicesContainer.appendChild(el);
-            // Immediately create log sections and request data
+            const pillId = this.serviceId(svc.name);
+            let pill = document.getElementById(pillId);
+            if (!pill) {
+                // New pill
+                pill = this.renderServicePill(svc);
+                this.servicesContainer.appendChild(pill);
+            } else {
+                // Update existing pill
+                this.populateServicePill(pill, svc);
+            }
+
+            // Ensure a persistent log block exists per service
             if (this.servicesLogs) {
-                const block = this.renderServiceLogBlock(svc.name);
-                this.servicesLogs.appendChild(block);
-                this.requestSystemdDetail(svc.name, 200);
+                const blockId = this.serviceId(svc.name) + '-detail';
+                let block = document.getElementById(blockId);
+                if (!block) {
+                    block = this.renderServiceLogBlock(svc.name);
+                    this.servicesLogs.appendChild(block);
+                    // Fetch details once on creation; further updates will come from backend
+                    this.requestSystemdDetail(svc.name, 200);
+                }
             }
         });
+        // Note: We do NOT remove pills/blocks that temporarily disappear from the list
+        // to avoid flicker. A later cleanup pass could prune truly stale entries if needed.
     }
 
     updateService(svc) {
@@ -1037,8 +1050,45 @@ class PilotController {
         const base = this.serviceId(unit) + '-detail';
         const st = document.getElementById(base + '-status');
         const jl = document.getElementById(base + '-journal');
-        if (st) st.textContent = (detail.status || '').trim() || '(no status output)';
-        if (jl) jl.textContent = (detail.journal || '').trim() || '(no journal output)';
+
+        // Use last non-empty values to avoid blinking into emptiness
+        const prev = this.serviceDetails[unit] || { status: '', journal: '' };
+        const nextStatus = (detail.status ?? '').trim();
+        const nextJournal = (detail.journal ?? '').trim();
+
+        const finalStatus = nextStatus !== '' ? nextStatus : (prev.status || '(no status output)');
+        const finalJournal = nextJournal !== '' ? nextJournal : (prev.journal || '(no journal output)');
+
+        // Helper to detect sticky bottom before update
+        const isAtBottom = (el) => {
+            if (!el) return false;
+            const threshold = 4; // px tolerance
+            return (el.scrollTop + el.clientHeight) >= (el.scrollHeight - threshold);
+        };
+
+        // Update status pane if changed; maintain sticky-bottom autoscroll
+        if (st) {
+            const stick = isAtBottom(st);
+            if (st.textContent !== finalStatus) {
+                st.textContent = finalStatus;
+                if (stick) st.scrollTop = st.scrollHeight;
+            }
+        }
+
+        // Update journal pane if changed; maintain sticky-bottom autoscroll
+        if (jl) {
+            const stick = isAtBottom(jl);
+            if (jl.textContent !== finalJournal) {
+                jl.textContent = finalJournal;
+                if (stick) jl.scrollTop = jl.scrollHeight;
+            }
+        }
+
+        // Update cache only with non-empty values
+        this.serviceDetails[unit] = {
+            status: nextStatus !== '' ? nextStatus : prev.status,
+            journal: nextJournal !== '' ? nextJournal : prev.journal,
+        };
     }
 
     flashServiceError(unit, msg) {
