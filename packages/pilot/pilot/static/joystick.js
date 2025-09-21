@@ -137,6 +137,7 @@ class PilotController {
                     this.isConnected = true;
                     this.updateStatus('Connected', 'connected');
                     console.log('WebSocket connected', wsUrl);
+                    this.updateWsAddress(wsUrl);
                     // Send immediate ping to fetch status
                     this.sendPing();
                     // Ask for services list
@@ -147,6 +148,7 @@ class PilotController {
                     const wasConnected = this.isConnected;
                     this.isConnected = false;
                     this.updateStatus('Disconnected', 'disconnected');
+                    this.updateWsAddress('—');
                     console.log('WebSocket disconnected');
                     // If we never established, try next candidate; else schedule reconnect to same
                     if (!wasConnected) {
@@ -258,12 +260,17 @@ class PilotController {
 
     updateAddressDisplay() {
         const webAddress = `${window.location.protocol}//${window.location.host}`;
+        // Initial guess for WS; will be updated on successful connect
         const wsPort = parseInt(window.location.port) + 1;
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsAddress = `${wsProtocol}//${window.location.hostname}:${wsPort}`;
-
         document.getElementById('webAddress').textContent = webAddress;
         document.getElementById('wsAddress').textContent = wsAddress;
+    }
+
+    updateWsAddress(url) {
+        const el = document.getElementById('wsAddress');
+        if (el) el.textContent = url || '—';
     }
 
     onJoystickStart(event) {
@@ -661,6 +668,7 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    // Update ws footer address if backend included server info later (optional)
                     if (message.imu_topic) {
                         // could show somewhere if desired
                     }
@@ -685,6 +693,7 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    // keep footer in sync (ws address set on connect already)
                     if (message.imu_topic) {
                         // could show somewhere if desired
                     }
