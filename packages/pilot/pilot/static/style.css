@@ -229,6 +229,50 @@ main {
 .service-pill .enabled.off { color: #b91c1c; }
 .services-actions-hint { font-size: 0.8rem; color: #6b7280; margin-top: 6px; }
 
+/* Services details/logs */
+.services-details {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.service-detail {
+    background: #f9fafb;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.service-detail summary {
+    cursor: pointer;
+    padding: 8px 12px;
+    font-weight: 600;
+    background: #eef2ff;
+    color: #1f2937;
+}
+.service-detail .detail-body {
+    padding: 10px 12px;
+}
+.service-detail pre {
+    background: #111827;
+    color: #e5e7eb;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    border-radius: 8px;
+    padding: 8px;
+    overflow: auto;
+    max-height: 240px;
+    margin: 6px 0;
+}
+.service-detail .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+@media (max-width: 700px) {
+    .service-detail .columns { grid-template-columns: 1fr; }
+}
+
 .joystick-section h2, .info-section h2 {
     color: #333;
     font-size: 1.8rem;

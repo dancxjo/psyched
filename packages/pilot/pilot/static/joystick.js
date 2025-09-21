@@ -84,6 +84,7 @@ class PilotController {
         // Services UI
         this.services = {}; // map unit -> { name, active, enabled, description }
         this.servicesContainer = document.getElementById('servicesPills');
+        this.servicesDetails = document.getElementById('servicesDetails');
     }
 
     setupHostHealthToggle() {
@@ -706,6 +707,8 @@ class PilotController {
                     } else if (message.unit && message.status) {
                         this.updateService(message.status);
                         if (message.error) this.flashServiceError(message.unit, message.error);
+                    } else if (message.unit && message.detail) {
+                        this.renderServiceDetail(message.unit, message.detail);
                     } else if (message.error) {
                         console.warn('systemd error:', message.error);
                     }
@@ -747,9 +750,14 @@ class PilotController {
         });
         // Render all known services
         this.servicesContainer.innerHTML = '';
+        if (this.servicesDetails) this.servicesDetails.innerHTML = '';
         Object.values(this.services).forEach(svc => {
             const el = this.renderServicePill(svc);
             this.servicesContainer.appendChild(el);
+            if (this.servicesDetails) {
+                const det = this.renderServiceDetailsShell(svc.name);
+                this.servicesDetails.appendChild(det);
+            }
         });
     }
 
@@ -826,6 +834,8 @@ class PilotController {
         el.addEventListener('touchend', end);
         el.addEventListener('touchcancel', end);
         el.addEventListener('contextmenu', (e) => { e.preventDefault(); this.onPillLongPress(unit); });
+        // Also support middle-click to open details quickly
+        el.addEventListener('auxclick', (e) => { if (e.button === 1) this.toggleDetails(unit, true); });
     }
 
     onPillClick(unit) {
@@ -849,6 +859,62 @@ class PilotController {
         } catch (e) {
             console.error('systemd action failed to send', e);
         }
+    }
+
+    requestSystemdDetail(unit, lines = 200) {
+        if (!this.websocket) return;
+        try {
+            this.websocket.send(JSON.stringify({ type: 'systemd', action: 'detail', unit, lines }));
+        } catch (e) {
+            console.error('systemd detail request failed', e);
+        }
+    }
+
+    renderServiceDetailsShell(unit) {
+        const id = this.serviceId(unit) + '-detail';
+        const details = document.createElement('details');
+        details.className = 'service-detail';
+        details.id = id;
+        const summary = document.createElement('summary');
+        summary.textContent = `Logs: ${this.prettyServiceName(unit)}`;
+        details.appendChild(summary);
+        const body = document.createElement('div');
+        body.className = 'detail-body';
+        body.innerHTML = `
+            <div class="columns">
+                <div>
+                    <div><strong>systemctl status</strong></div>
+                    <pre id="${id}-status">(open to load)</pre>
+                </div>
+                <div>
+                    <div><strong>journalctl (last 200 lines)</strong></div>
+                    <pre id="${id}-journal">(open to load)</pre>
+                </div>
+            </div>
+        `;
+        details.appendChild(body);
+        details.addEventListener('toggle', () => {
+            if (details.open) {
+                this.requestSystemdDetail(unit, 200);
+            }
+        });
+        return details;
+    }
+
+    toggleDetails(unit, open) {
+        const el = document.getElementById(this.serviceId(unit) + '-detail');
+        if (el) {
+            el.open = open == null ? !el.open : !!open;
+            if (el.open) this.requestSystemdDetail(unit, 200);
+        }
+    }
+
+    renderServiceDetail(unit, detail) {
+        const base = this.serviceId(unit) + '-detail';
+        const st = document.getElementById(base + '-status');
+        const jl = document.getElementById(base + '-journal');
+        if (st) st.textContent = (detail.status || '').trim() || '(no status output)';
+        if (jl) jl.textContent = (detail.journal || '').trim() || '(no journal output)';
     }
 
     flashServiceError(unit, msg) {

@@ -307,6 +307,22 @@ class PilotWebSocketNode(Node):
                         if result.get('error'):
                             payload['error'] = result['error']
                         await websocket.send(json.dumps(payload))
+                elif action == 'detail':
+                    unit = data.get('unit')
+                    lines = data.get('lines')
+                    try:
+                        n = int(lines) if lines is not None else 200
+                        if n <= 0 or n > 1000:
+                            n = 200
+                    except Exception:
+                        n = 200
+                    if not unit or not isinstance(unit, str):
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': 'missing unit'}))
+                    elif unit not in self._systemd_units:
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': f'unknown unit: {unit}'}))
+                    else:
+                        detail = self._systemd_detail(unit, n)
+                        await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
@@ -610,6 +626,27 @@ class PilotWebSocketNode(Node):
                 # include error but do not block UI; suggest NOPASSWD configuration
                 return {'error': r2['err'] or r2['out'] or f'systemctl {verb} failed with code {r2["code"]}'}
         return {}
+
+    def _systemd_detail(self, unit: str, lines: int = 200):
+        # Full status text
+        st = self._run_cmd(['systemctl', '--no-pager', '--full', 'status', unit])
+        if st['code'] != 0:
+            st2 = self._run_cmd(['systemctl', '--no-pager', '--full', 'status', unit], require_root=True)
+            st_txt = st2['out'] or st2['err']
+        else:
+            st_txt = st['out'] or st['err']
+        # Journal recent logs
+        jl = self._run_cmd(['journalctl', '-u', unit, '-n', str(lines), '--no-pager', '--output=short-iso'])
+        if jl['code'] != 0:
+            jl2 = self._run_cmd(['journalctl', '-u', unit, '-n', str(lines), '--no-pager', '--output=short-iso'], require_root=True)
+            jl_txt = jl2['out'] or jl2['err']
+        else:
+            jl_txt = jl['out'] or jl['err']
+        return {
+            'status': st_txt,
+            'journal': jl_txt,
+            'lines': lines
+        }
 
 
 def main(args=None):
