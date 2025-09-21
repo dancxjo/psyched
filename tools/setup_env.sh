@@ -16,7 +16,28 @@ MODE=${SETUP_ENV_MODE:-source}
 
 # Determine repository root (directory above this tools/ directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Try to locate the main repository root by walking upward from this script and
+# checking for repository markers (Makefile and hosts directory). If not found
+# use the parent of tools/ as a fallback.
+find_repo_root() {
+  local d="$SCRIPT_DIR/.."
+  d="$(cd "$d" && pwd)"
+  local last_match=""
+  while [[ "$d" != "/" && -n "$d" ]]; do
+    if [[ -f "$d/Makefile" && -d "$d/hosts" ]]; then
+      last_match="$d"
+    fi
+    d="$(cd "$d/.." && pwd)"
+  done
+  if [[ -n "$last_match" ]]; then
+    printf '%s' "$last_match"
+    return
+  fi
+  # fallback to parent of tools
+  printf '%s' "$(cd "$SCRIPT_DIR/.." && pwd)"
+}
+
+REPO_ROOT="$(find_repo_root)"
 
 # Source /opt/ros/<version>/setup.bash and <repo_root>/install/setup.bash
 # Behavior:
