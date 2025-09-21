@@ -95,7 +95,7 @@ class PilotController {
         // Services UI
         this.services = {}; // map unit -> { name, active, enabled, description }
         this.servicesContainer = document.getElementById('servicesPills');
-        this.servicesDetails = document.getElementById('servicesDetails');
+        this.servicesLogs = document.getElementById('servicesLogs');
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
     }
@@ -888,13 +888,15 @@ class PilotController {
         });
         // Render all known services
         this.servicesContainer.innerHTML = '';
-        if (this.servicesDetails) this.servicesDetails.innerHTML = '';
+        if (this.servicesLogs) this.servicesLogs.innerHTML = '';
         Object.values(this.services).forEach(svc => {
             const el = this.renderServicePill(svc);
             this.servicesContainer.appendChild(el);
-            if (this.servicesDetails) {
-                const det = this.renderServiceDetailsShell(svc.name);
-                this.servicesDetails.appendChild(det);
+            // Immediately create log sections and request data
+            if (this.servicesLogs) {
+                const block = this.renderServiceLogBlock(svc.name);
+                this.servicesLogs.appendChild(block);
+                this.requestSystemdDetail(svc.name, 200);
             }
         });
     }
@@ -1008,44 +1010,28 @@ class PilotController {
         }
     }
 
-    renderServiceDetailsShell(unit) {
+    renderServiceLogBlock(unit) {
         const id = this.serviceId(unit) + '-detail';
-        const details = document.createElement('details');
-        details.className = 'service-detail';
-        details.id = id;
-        const summary = document.createElement('summary');
-        summary.textContent = `Logs: ${this.prettyServiceName(unit)}`;
-        details.appendChild(summary);
-        const body = document.createElement('div');
-        body.className = 'detail-body';
-        body.innerHTML = `
-            <div class="columns">
-                <div>
-                    <div><strong>systemctl status</strong></div>
-                    <pre id="${id}-status">(open to load)</pre>
+        const wrap = document.createElement('div');
+        wrap.className = 'service-log-block';
+        wrap.id = id;
+        wrap.innerHTML = `
+            <h4 class="service-log-title">${this.prettyServiceName(unit)}</h4>
+            <div class="service-log-columns">
+                <div class="service-log-col">
+                    <div class="service-log-heading">systemctl status</div>
+                    <pre id="${id}-status" class="service-log-pre">(loading...)</pre>
                 </div>
-                <div>
-                    <div><strong>journalctl (last 200 lines)</strong></div>
-                    <pre id="${id}-journal">(open to load)</pre>
+                <div class="service-log-col">
+                    <div class="service-log-heading">journalctl (last 200 lines)</div>
+                    <pre id="${id}-journal" class="service-log-pre">(loading...)</pre>
                 </div>
             </div>
         `;
-        details.appendChild(body);
-        details.addEventListener('toggle', () => {
-            if (details.open) {
-                this.requestSystemdDetail(unit, 200);
-            }
-        });
-        return details;
+        return wrap;
     }
 
-    toggleDetails(unit, open) {
-        const el = document.getElementById(this.serviceId(unit) + '-detail');
-        if (el) {
-            el.open = open == null ? !el.open : !!open;
-            if (el.open) this.requestSystemdDetail(unit, 200);
-        }
-    }
+    toggleDetails(unit, open) { /* no-op after logs redesign */ }
 
     renderServiceDetail(unit, detail) {
         const base = this.serviceId(unit) + '-detail';

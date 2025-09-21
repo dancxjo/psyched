@@ -66,6 +66,7 @@ header {
     margin-bottom: 20px;
     padding: 14px 18px;
     border-radius: var(--radius-xl);
+  position: relative;
     background:
         linear-gradient(90deg, var(--lcars-peach) 0 24%, transparent 24%) left center / 100% 100% no-repeat,
         linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
@@ -368,3 +369,45 @@ footer { margin-top: 20px; background: var(--lcars-panel); border-radius: var(--
 .estop-button { display: block; width: 100%; padding: 16px 24px; font-size: 1.1rem; font-weight: 900; letter-spacing: 0.5px; border-radius: 999px; border: none; color: #1a0000; background: var(--lcars-red); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.4); }
 .estop-button:hover { transform: translateY(-1px); filter: brightness(1.05); }
 .estop-button:active { transform: translateY(0); }
+
+/* Services logs section (always open, stacked) */
+.services-logs {
+  margin: 10px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.service-log-block {
+  background: var(--lcars-panel);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+.service-log-title {
+  color: var(--lcars-peach);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin: 0 0 8px 0;
+}
+.service-log-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 900px) {
+  .service-log-columns { grid-template-columns: 1fr; }
+}
+.service-log-heading { color: var(--lcars-muted); font-weight: 800; margin-bottom: 4px; text-transform: uppercase; }
+.service-log-pre {
+  background: #05070d;
+  color: #dbe6ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 8px;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap; /* wrap long lines */
+  word-wrap: break-word;
+  max-height: 320px;
+}

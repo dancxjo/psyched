@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pilot - Robot Control Interface</title>
+    <!-- LCARS CSS (MIT) from jsDelivr CDN: https://github.com/joernweissenborn/lcars -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joernweissenborn/lcars/css/lcars.css">
+    <!-- Local overrides and app styles -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="lcars-black-bg">
     <div class="container">
         <header>
             <h1>🤖 Pilot Control Interface</h1>
@@ -123,7 +126,6 @@
                             <h3>Services</h3>
                             <div id="servicesPills" class="services-pills" aria-live="polite"></div>
                             <div class="services-actions-hint">Tap a pill to Start/Stop; long-press for Enable/Disable.</div>
-                            <div id="servicesDetails" class="services-details" aria-live="polite"></div>
                         </div>
                     </div>
                 </div>
@@ -234,6 +236,9 @@
                 </ul>
             </div>
         </main>
+
+        <!-- Logs moved after instructions: always open and stacked vertically -->
+        <section id="servicesLogs" class="services-logs" aria-live="polite" aria-label="Service logs"></section>
 
         <footer>
             <div class="connection-info">
