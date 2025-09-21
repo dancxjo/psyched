@@ -10,7 +10,7 @@ ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/host
 ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/imu/shutdown.sh
 Restart=on-failure
 RestartSec=2
-User=pete
+User=root
 KillMode=control-group
 TimeoutStopSec=20
 

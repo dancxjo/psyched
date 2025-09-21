@@ -19,7 +19,7 @@ else
 fi
 SOURCE_DIR="${REPO_DIR}/src"
 
-MPU6050_REPO="https://github.com/kimsniper/ros2_mpu6050.git"
+MPU6050_REPO="https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
 
 if ! command -v git >/dev/null 2>&1; then
   echo "Error: 'git' is required. Install Git from https://git-scm.com/downloads" >&2
@@ -40,11 +40,32 @@ if [ -d "${LOCAL_MODULE_SRC_DIR}" ]; then
   rmdir "${LOCAL_MODULE_SRC_DIR}" 2>/dev/null || true
 fi
 
-# Clone ros2_mpu6050 if missing
-if [ ! -d "${SOURCE_DIR}/ros2_mpu6050/.git" ]; then
-  git clone "${MPU6050_REPO}" "${SOURCE_DIR}/ros2_mpu6050"
+DRIVER_DIR_NAME="ros2_mpu6050_driver"
+# Clone the requested driver repo if missing
+if [ ! -d "${SOURCE_DIR}/${DRIVER_DIR_NAME}/.git" ]; then
+  git clone "${MPU6050_REPO}" "${SOURCE_DIR}/${DRIVER_DIR_NAME}"
 else
-  echo "[imu/setup] ros2_mpu6050 already present; skipping clone"
+  echo "[imu/setup] ${DRIVER_DIR_NAME} already present; skipping clone"
+fi
+
+# Apply idempotent patch requested by user to add <array> include
+PATCH_HEADER_PATH="${SOURCE_DIR}/${DRIVER_DIR_NAME}/include/mpu6050driver/mpu6050sensor.h"
+if [ -f "${PATCH_HEADER_PATH}" ]; then
+  # Check whether <array> is already present
+  if ! grep -q "#include <array>" "${PATCH_HEADER_PATH}" 2>/dev/null; then
+    echo "[imu/setup] Patching ${PATCH_HEADER_PATH}: inserting #include <array> after #include <string>"
+    # Insert after the first occurrence of #include <string>
+    if grep -q "#include <string>" "${PATCH_HEADER_PATH}" 2>/dev/null; then
+      sed -i '/#include <string>/a #include <array>' "${PATCH_HEADER_PATH}"
+    else
+      # Fallback: add near top of file
+      sed -i '1i #include <array>' "${PATCH_HEADER_PATH}"
+    fi
+  else
+    echo "[imu/setup] ${PATCH_HEADER_PATH} already contains <array>; no change"
+  fi
+else
+  echo "[imu/setup] ${PATCH_HEADER_PATH} not found; skipping header patch"
 fi
 
 # Ensure I2C development headers are available for build (Ubuntu/Debian)
