@@ -11,28 +11,53 @@
 #     or
 #       SETUP_ENV_MODE=source bash /path/to/tools/setup_env.sh
 
+
 MODE=${SETUP_ENV_MODE:-source}
 
-# Source /opt/ros/<version>/setup.sh and ~/psyched/install/setup.sh
+# Determine repository root (directory above this tools/ directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source /opt/ros/<version>/setup.sh and <repo_root>/install/setup.sh
 # Behavior:
 #  - If SETUP_ENV_MODE=print, print the source commands instead of executing them
-#  - Prefer ROS_VERSION env var; fall back to ROS_DISTRO; if neither set do nothing
-
-HOME_PSYCHED_DIR="${HOME:-$HOME}/psyched"
+#  - Prefer ROS_VERSION env var -> ROS_DISTRO env var -> /opt/ros/kilted -> first
+#    available distro under /opt/ros
 
 ros_setup_path() {
-  if [[ -n "${ROS_VERSION:-}" ]]; then
+  # 1) explicit env var
+  if [[ -n "${ROS_VERSION:-}" && -f "/opt/ros/${ROS_VERSION}/setup.sh" ]]; then
     echo "/opt/ros/${ROS_VERSION}/setup.sh"
-  elif [[ -n "${ROS_DISTRO:-}" ]]; then
-    echo "/opt/ros/${ROS_DISTRO}/setup.sh"
-  else
-    echo ""
+    return
   fi
+  if [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.sh" ]]; then
+    echo "/opt/ros/${ROS_DISTRO}/setup.sh"
+    return
+  fi
+
+  # 2) prefer kilted if present
+  if [[ -f "/opt/ros/kilted/setup.sh" ]]; then
+    echo "/opt/ros/kilted/setup.sh"
+    return
+  fi
+
+  # 3) first available under /opt/ros
+  if [[ -d "/opt/ros" ]]; then
+    for d in /opt/ros/*; do
+      if [[ -f "$d/setup.sh" ]]; then
+        echo "$d/setup.sh"
+        return
+      fi
+    done
+  fi
+
+  # nothing found
+  echo ""
 }
 
 ws_setup_path() {
-  # Use expanded home path to ~/psyched/install/setup.sh
-  echo "${HOME}/psyched/install/setup.sh"
+  # Use repository root so systemd (running as root) finds the workspace in the repo
+  echo "${REPO_ROOT}/install/setup.sh"
 }
 
 print_commands() {
