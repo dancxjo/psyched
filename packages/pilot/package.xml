@@ -3,7 +3,7 @@
     <name>pilot</name>
     <version>0.1.0</version>
     <description>Pilot web interface with joystick control for robot movement via WebSocket and cmd_vel</description>
-    <maintainer email="you@example.com">Psyched</maintainer>
+    <maintainer email="tdreed@gmail.com">Psyched</maintainer>
     <license>MIT</license>
 
     <buildtool_depend>ament_cmake</buildtool_depend>

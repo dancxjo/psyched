@@ -40,6 +40,18 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_HOST', default_value='0.0.0.0'),
         description='Host address to bind the web server (0.0.0.0 for all interfaces)'
     )
+
+    enable_http_arg = DeclareLaunchArgument(
+        'enable_http',
+        default_value=EnvironmentVariable(name='PILOT_ENABLE_HTTP', default_value='true'),
+        description='Enable the HTTP static server'
+    )
+
+    enable_ws_arg = DeclareLaunchArgument(
+        'enable_websocket',
+        default_value=EnvironmentVariable(name='PILOT_ENABLE_WS', default_value='false'),
+        description='Enable the WebSocket inside pilot_node (set false when using separate websocket node)'
+    )
     
     # Pilot node
     pilot_node = Node(
@@ -53,6 +65,22 @@ def generate_launch_description():
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
             'host': LaunchConfiguration('host'),
+            'enable_http': LaunchConfiguration('enable_http'),
+            'enable_websocket': LaunchConfiguration('enable_websocket'),
+        }]
+    )
+
+    # Separate websocket node (recommended)
+    websocket_node = Node(
+        package='pilot',
+        executable='pilot_websocket_node',
+        name='pilot_websocket_node',
+        output='screen',
+        parameters=[{
+            'websocket_port': LaunchConfiguration('websocket_port'),
+            'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
+            'voice_topic': LaunchConfiguration('voice_topic'),
+            'host': LaunchConfiguration('host'),
         }]
     )
     
@@ -62,5 +90,8 @@ def generate_launch_description():
         cmd_vel_topic_arg,
         voice_topic_arg,
         host_arg,
+        enable_http_arg,
+        enable_ws_arg,
         pilot_node,
+        websocket_node,
     ])

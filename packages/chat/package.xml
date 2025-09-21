@@ -3,7 +3,7 @@
     <name>chat</name>
     <version>0.1.0</version>
     <description>Chat node that uses Ollama (gemma3) and coordinates with the voice module</description>
-    <maintainer email="you@example.com">Psyched</maintainer>
+    <maintainer email="tdreed@gmail.com">Psyched</maintainer>
     <license>MIT</license>
 
     <buildtool_depend>ament_cmake</buildtool_depend>

@@ -14,7 +14,7 @@ setup(
     install_requires=['setuptools', 'requests'],
     zip_safe=True,
     maintainer='Psyched',
-    maintainer_email='you@example.com',
+    maintainer_email='tdreed@gmail.com',
     description='Chat node that listens to conversation and queries Ollama, coordinating with voice output',
     license='MIT',
     tests_require=['pytest'],

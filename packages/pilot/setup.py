@@ -15,13 +15,14 @@ setup(
     install_requires=['setuptools', 'websockets', 'asyncio'],
     zip_safe=True,
     maintainer='Psyched',
-    maintainer_email='you@example.com',
+    maintainer_email='tdreed@gmail.com',
     description='Pilot web interface with joystick control for robot movement via WebSocket and cmd_vel',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'pilot_node = pilot.node:main',
+            'pilot_websocket_node = pilot.websocket_node:main',
         ],
     },
 )

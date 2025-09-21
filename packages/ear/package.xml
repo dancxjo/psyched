@@ -4,7 +4,7 @@
     <version>0.1.0</version>
     <description>Capture microphone PCM audio and publish as audio_common_msgs/AudioData.</description>
 
-    <maintainer email="you@example.com">Psyched</maintainer>
+    <maintainer email="tdreed@gmail.com">Psyched</maintainer>
     <license>MIT</license>
 
     <buildtool_depend>ament_python</buildtool_depend>

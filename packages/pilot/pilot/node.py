@@ -43,6 +43,8 @@ class PilotNode(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
+    self.declare_parameter('enable_http', True)
+    self.declare_parameter('enable_websocket', True)
 
         def _get_param_value(name):
             # rclpy returns a Python value at .value regardless of declared type
@@ -64,22 +66,39 @@ class PilotNode(Node):
             except Exception:
                 return default
 
+        def _as_bool(val, default):
+            try:
+                if isinstance(val, bool):
+                    return val
+                if isinstance(val, (int, float)):
+                    return bool(val)
+                if isinstance(val, str):
+                    v = val.strip().lower()
+                    if v in ('1', 'true', 'yes', 'on'): return True
+                    if v in ('0', 'false', 'no', 'off'): return False
+                return default
+            except Exception:
+                return default
+
         self.web_port = _as_int(_get_param_value('web_port'), 8080)
         self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
         self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
+    self.enable_http = _as_bool(_get_param_value('enable_http'), True)
+    self.enable_websocket = _as_bool(_get_param_value('enable_websocket'), True)
         
         # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
 
         # Web and WebSocket servers
-        self.web_server = None
-        self.websocket_server = None
+    self.web_server = None  # http.server instance
+    self.websocket_server = None  # websockets.server.Server (set inside loop)
         self.web_thread = None
         self.websocket_thread = None
-        self._ws_loop = None  # asyncio loop used by WS server
+    self._ws_loop = None  # asyncio loop used by WS server
+    self._ws_stop_event = None  # asyncio.Event to signal WS shutdown
         
         # Connected WebSocket clients
         self.connected_clients = set()
@@ -88,7 +107,7 @@ class PilotNode(Node):
         self.static_path = self._find_static_path()
         
         # Start servers
-        self.start_servers()
+    self.start_servers()
         
         self.get_logger().info('Pilot node started:')
         self.get_logger().info(f'  Static path: {self.static_path}')
@@ -123,13 +142,18 @@ class PilotNode(Node):
     def start_servers(self):
         """Start web and WebSocket servers in separate threads."""
         # Start web server
-        self.web_thread = threading.Thread(target=self._run_web_server, daemon=True)
-        self.web_thread.start()
+        if self.enable_http:
+            self.web_thread = threading.Thread(target=self._run_web_server, daemon=True)
+            self.web_thread.start()
+        else:
+            self.get_logger().info('HTTP server disabled by parameter enable_http=false')
         
         # Start WebSocket server
-        if websockets:
+        if self.enable_websocket and websockets:
             self.websocket_thread = threading.Thread(target=self._run_websocket_server, daemon=True)
             self.websocket_thread.start()
+        elif not self.enable_websocket:
+            self.get_logger().info('WebSocket server disabled by parameter enable_websocket=false')
         else:
             self.get_logger().warn('websockets library not available. Install with: pip install websockets')
     
@@ -140,6 +164,7 @@ class PilotNode(Node):
             # Prefer a threading server to avoid blocking
             HTTPServer = getattr(http.server, 'ThreadingHTTPServer', http.server.HTTPServer)
             httpd = HTTPServer((self.host, self.web_port), handler)
+            self.web_server = httpd
             self.get_logger().info(f'Web server started on {self.host}:{self.web_port}')
             try:
                 httpd.serve_forever()
@@ -167,14 +192,28 @@ class PilotNode(Node):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             self._ws_loop = loop
+            self._ws_stop_event = asyncio.Event()
 
             async def ws_main():
                 self.get_logger().info(f'Starting WebSocket server on {self.host}:{self.websocket_port}')
-                # Use async context manager so the server lives as long as the task
-                async with websockets.serve(self._websocket_handler, self.host, self.websocket_port):
-                    self.get_logger().info(f'WebSocket server started on {self.host}:{self.websocket_port}')
-                    # Wait forever
-                    await asyncio.Event().wait()
+                # Start server and keep a reference for shutdown
+                self.websocket_server = await websockets.serve(self._websocket_handler, self.host, self.websocket_port)
+                self.get_logger().info(f'WebSocket server started on {self.host}:{self.websocket_port}')
+                # Wait until stop is signaled
+                await self._ws_stop_event.wait()
+                # Begin graceful shutdown
+                self.get_logger().info('Stopping WebSocket server...')
+                try:
+                    # Close all clients first
+                    await self._close_all_ws_clients()
+                except Exception as e:
+                    self.get_logger().warn(f'Error while closing WS clients: {e}')
+                try:
+                    if self.websocket_server is not None:
+                        self.websocket_server.close()
+                        await self.websocket_server.wait_closed()
+                finally:
+                    self.websocket_server = None
 
             # Start the server task and run the loop forever
             loop.create_task(ws_main())
@@ -282,19 +321,48 @@ class PilotNode(Node):
         except Exception as e:
             self.get_logger().warn(f'Error handling WebSocket message: {e}')
     
+    async def _close_all_ws_clients(self):
+        """Close all connected websocket clients (must be called in WS loop)."""
+        # Make a copy to avoid modification during iteration
+        clients = list(self.connected_clients)
+        for client in clients:
+            try:
+                await client.close()
+            except Exception:
+                pass
+        # Give clients a moment to close
+        await asyncio.sleep(0)
+    
     def destroy_node(self):
         """Clean shutdown."""
-        # Close WebSocket connections
-        if self.connected_clients:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            async def close_connections():
-                for client in list(self.connected_clients):
-                    await client.close()
-            
-            loop.run_until_complete(close_connections())
-            loop.close()
+        # Stop WebSocket server and close clients from its own loop
+        if self._ws_loop is not None:
+            try:
+                if self._ws_stop_event is not None:
+                    # Signal stop on the WS loop thread
+                    self._ws_loop.call_soon_threadsafe(self._ws_stop_event.set)
+                # Also request the loop to stop after tasks complete
+                self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)
+            except Exception:
+                pass
+            # Join the websocket thread to ensure cleanup
+            if self.websocket_thread and self.websocket_thread.is_alive():
+                try:
+                    self.websocket_thread.join(timeout=2.0)
+                except Exception:
+                    pass
+            self._ws_loop = None
+            self._ws_stop_event = None
+            self.websocket_server = None
+        
+        # Stop HTTP server gracefully
+        if self.web_server is not None:
+            try:
+                # Trigger server shutdown from this thread
+                self.web_server.shutdown()
+            except Exception:
+                pass
+            self.web_server = None
         
         return super().destroy_node()
 

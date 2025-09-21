@@ -14,7 +14,7 @@ setup(
     install_requires=['setuptools', 'pyaudio', 'webrtcvad'],
     zip_safe=True,
     maintainer='Psyched',
-    maintainer_email='you@example.com',
+    maintainer_email='tdreed@gmail.com',
     description='PyAudio-based microphone capture with silence detection',
     license='MIT',
     tests_require=['pytest'],

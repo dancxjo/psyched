@@ -4,7 +4,7 @@
     <version>0.1.0</version>
     <description>ROS 2 ament_python package for TTS using Piper with FIFO playback</description>
 
-    <maintainer email="you@example.com">Psyched</maintainer>
+    <maintainer email="tdreed@gmail.com">Psyched</maintainer>
     <license>MIT</license>
 
     <buildtool_depend>ament_cmake</buildtool_depend>

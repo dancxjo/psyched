@@ -15,7 +15,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Psyched',
-    maintainer_email='you@example.com',
+    maintainer_email='tdreed@gmail.com',
     description='Voice node subscribing to text and playing via Piper TTS FIFO',
     license='MIT',
     tests_require=['pytest'],
