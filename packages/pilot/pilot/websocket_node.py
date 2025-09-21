@@ -249,6 +249,7 @@ class PilotWebSocketNode(Node):
                 'imu_topic': self.imu_topic,
                 'conversation_topic': self.conversation_topic,
             }
+            status_msg['audio'] = self._audio
             # include latest GPS fix if available
             if self._gps_fix is not None:
                 status_msg['gps_fix'] = self._gps_fix
