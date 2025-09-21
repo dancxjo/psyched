@@ -98,12 +98,25 @@ class PilotController {
         this.servicesLogs = document.getElementById('servicesLogs');
         // Cache of last non-empty service details to prevent blink/empty overwrites
         this.serviceDetails = {}; // unit -> { status: string, journal: string }
-        
+        // Track watched units to allow cleanup if needed
+        this.watchedUnits = new Set();
+
         // Modules UI
         this.modules = {}; // map module_name -> module config
-        
+
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
+
+        // Best-effort unwatch on page unload (backend also cleans on disconnect)
+        window.addEventListener('beforeunload', () => {
+            try {
+                if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                    this.watchedUnits.forEach(unit => {
+                        try { this.websocket.send(JSON.stringify({ type: 'systemd', action: 'unwatch', unit })); } catch (_) { }
+                    });
+                }
+            } catch (_) { }
+        });
     }
 
     setupHostHealthToggle() {
@@ -788,12 +801,15 @@ class PilotController {
                 case 'systemd':
                     if (Array.isArray(message.services)) {
                         this.updateServicesList(message.services);
-                    } else if (message.unit && message.status) {
+                    }
+                    if (message.unit && message.status) {
                         this.updateService(message.status);
                         if (message.error) this.flashServiceError(message.unit, message.error);
-                    } else if (message.unit && message.detail) {
+                    }
+                    if (message.unit && message.detail) {
                         this.renderServiceDetail(message.unit, message.detail);
-                    } else if (message.error) {
+                    }
+                    if (!message.unit && message.error) {
                         console.warn('systemd error:', message.error);
                     }
                     break;
@@ -934,17 +950,17 @@ class PilotController {
 
     updateModules(modules) {
         this.modules = modules;
-        
+
         // Clear existing module displays
         if (this.servicesLogs) {
             this.servicesLogs.innerHTML = '';
         }
-        
+
         // Create module sections
         Object.entries(modules).forEach(([moduleName, moduleConfig]) => {
             this.renderModuleSection(moduleName, moduleConfig);
         });
-        
+
         // Update existing services to be grouped by modules
         Object.values(this.services).forEach(svc => {
             this.updateModuleServiceDisplay(svc);
@@ -953,14 +969,14 @@ class PilotController {
 
     renderModuleSection(moduleName, moduleConfig) {
         if (!this.servicesLogs) return;
-        
+
         const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
-        
+
         // Create module container
         const moduleSection = document.createElement('div');
         moduleSection.className = 'module-section';
         moduleSection.id = moduleId;
-        
+
         moduleSection.innerHTML = `
             <div class="module-header">
                 <h3 class="module-title">${moduleConfig.name}</h3>
@@ -975,17 +991,19 @@ class PilotController {
                 </div>
             </div>
         `;
-        
+
         this.servicesLogs.appendChild(moduleSection);
-        
+
         // Render module controls
-        this.renderModuleControls(moduleId + '-controls', moduleConfig.controls);
+        this.renderModuleControls(moduleId + '-controls', moduleConfig.controls, moduleName);
     }
 
-    renderModuleControls(containerId, controls) {
+    renderModuleControls(containerId, controls, moduleName) {
         const container = document.getElementById(containerId);
         if (!container || !controls || controls.length === 0) return;
-        
+        // Tag container with module for event handlers
+        container.dataset.module = moduleName;
+
         const controlsHtml = controls.map(control => {
             switch (control.type) {
                 case 'info':
@@ -1005,7 +1023,7 @@ class PilotController {
                         <span>${control.value}${control.unit || ''}</span>
                     </div>`;
                 case 'select':
-                    const options = control.options.map(opt => 
+                    const options = control.options.map(opt =>
                         `<option value="${opt.value}" ${opt.value === control.value ? 'selected' : ''}>${opt.label}</option>`
                     ).join('');
                     return `<div class="module-control select">
@@ -1030,7 +1048,7 @@ class PilotController {
                     const inputType = control.multiline ? 'textarea' : 'input';
                     return `<div class="module-control text">
                         <label for="${control.id}">${control.label}:</label>
-                        ${inputType === 'textarea' 
+                        ${inputType === 'textarea'
                             ? `<textarea id="${control.id}">${control.value}</textarea>`
                             : `<input type="text" id="${control.id}" value="${control.value}">`}
                     </div>`;
@@ -1044,9 +1062,9 @@ class PilotController {
                     return '';
             }
         }).join('');
-        
+
         container.innerHTML = controlsHtml;
-        
+
         // Add event listeners for interactive controls
         this.attachModuleControlEvents(containerId, controls);
     }
@@ -1054,65 +1072,92 @@ class PilotController {
     attachModuleControlEvents(containerId, controls) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        
+        const moduleName = container.dataset.module;
+
         controls.forEach(control => {
             if (!control.id) return;
-            
+
             const element = document.getElementById(control.id);
             if (!element) return;
-            
+
             switch (control.type) {
                 case 'button':
                     element.addEventListener('click', () => {
-                        this.handleModuleControlAction(control.action, control.id, element.value);
+                        this.handleModuleControlAction(control.action, control.id, element.value, moduleName);
                     });
                     break;
                 case 'slider':
                     element.addEventListener('input', () => {
                         const span = element.nextElementSibling;
                         if (span) span.textContent = element.value + (control.unit || '');
-                        this.handleModuleControlChange(control.id, element.value);
+                        this.handleModuleControlChange(control.id, element.value, moduleName);
                     });
                     break;
                 case 'select':
                 case 'toggle':
                 case 'text':
                     element.addEventListener('change', () => {
-                        this.handleModuleControlChange(control.id, element.value);
+                        this.handleModuleControlChange(control.id, element.value, moduleName);
                     });
                     break;
             }
         });
     }
 
-    handleModuleControlAction(action, controlId, value) {
-        console.log('Module control action:', action, controlId, value);
-        // TODO: Implement specific actions like emergency_stop, take_snapshot, etc.
+    handleModuleControlAction(action, controlId, value, moduleName) {
+        const mod = moduleName || this.getModuleFromControl(controlId);
+        if (!this.websocket || !mod) return;
+        try {
+            const payload = { type: 'module_control', kind: 'action', module: mod, id: controlId, action, value };
+            this.websocket.send(JSON.stringify(payload));
+        } catch (e) {
+            console.error('Failed to send module control action', e);
+        }
     }
 
-    handleModuleControlChange(controlId, value) {
-        console.log('Module control changed:', controlId, value);
-        // TODO: Send control changes to backend
+    handleModuleControlChange(controlId, value, moduleName) {
+        const mod = moduleName || this.getModuleFromControl(controlId);
+        if (!this.websocket || !mod) return;
+        try {
+            const payload = { type: 'module_control', kind: 'change', module: mod, id: controlId, value };
+            this.websocket.send(JSON.stringify(payload));
+        } catch (e) {
+            console.error('Failed to send module control change', e);
+        }
+    }
+
+    getModuleFromControl(controlId) {
+        // Attempt to locate parent module section from control element
+        const el = document.getElementById(controlId);
+        if (!el) return null;
+        const container = el.closest('.module-content');
+        if (!container) return null;
+        const systemdSection = container.querySelector('.module-systemd');
+        const parentSection = container.parentElement; // .module-section
+        if (!parentSection || !parentSection.id) return null;
+        // parentSection.id is 'module-<name>'
+        const m = parentSection.id.replace(/^module-/, '');
+        return m || null;
     }
 
     updateModuleServiceDisplay(svc) {
         if (!svc || !svc.name) return;
-        
+
         // Find which module this service belongs to
         const serviceName = svc.name.replace(/^psyched-/, '').replace(/\.service$/, '');
         const moduleConfig = this.modules[serviceName];
-        
+
         if (!moduleConfig) {
             // Service doesn't belong to a known module, use fallback display
             this.ensureFallbackServiceBlock(svc);
             return;
         }
-        
+
         const moduleId = 'module-' + serviceName.replace(/[^a-zA-Z0-9_-]/g, '-');
         const systemdContainer = document.getElementById(moduleId + '-systemd');
-        
+
         if (!systemdContainer) return;
-        
+
         // Ensure service block exists in the module's systemd section
         const blockId = this.serviceId(svc.name) + '-detail';
         let block = document.getElementById(blockId);
@@ -1121,21 +1166,23 @@ class PilotController {
             systemdContainer.appendChild(block);
             // Fetch details once on creation
             this.requestSystemdDetail(svc.name, 200);
+            this.watchSystemdUnit(svc.name, 200);
         }
-        
+
         // Update control state inside the block
         this.updateServiceLogControls(svc);
     }
 
     ensureFallbackServiceBlock(svc) {
         if (!this.servicesLogs) return;
-        
+
         const blockId = this.serviceId(svc.name) + '-detail';
         let block = document.getElementById(blockId);
         if (!block) {
             block = this.renderServiceLogBlock(svc.name);
             this.servicesLogs.appendChild(block);
             this.requestSystemdDetail(svc.name, 200);
+            this.watchSystemdUnit(svc.name, 200);
         }
         this.updateServiceLogControls(svc);
     }
@@ -1249,6 +1296,26 @@ class PilotController {
         }
     }
 
+    watchSystemdUnit(unit, lines = 200) {
+        if (!this.websocket) return;
+        try {
+            this.websocket.send(JSON.stringify({ type: 'systemd', action: 'watch', unit, lines }));
+            this.watchedUnits.add(unit);
+        } catch (e) {
+            console.error('systemd watch request failed', e);
+        }
+    }
+
+    unwatchSystemdUnit(unit) {
+        if (!this.websocket) return;
+        try {
+            this.websocket.send(JSON.stringify({ type: 'systemd', action: 'unwatch', unit }));
+            this.watchedUnits.delete(unit);
+        } catch (e) {
+            console.error('systemd unwatch request failed', e);
+        }
+    }
+
     renderServiceLogBlock(unit) {
         const id = this.serviceId(unit) + '-detail';
         const wrap = document.createElement('div');
@@ -1258,8 +1325,10 @@ class PilotController {
             <div class="service-log-header">
               <h4 class="service-log-title">${this.prettyServiceName(unit)}</h4>
               <div class="service-log-controls" data-unit="${unit}">
-                <label class="svc-check"><input type="checkbox" class="svc-active"> Active</label>
-                <label class="svc-check"><input type="checkbox" class="svc-enabled"> Enabled</label>
+                <button class="systemd-btn" data-action="start">Start</button>
+                <button class="systemd-btn" data-action="stop">Stop</button>
+                <button class="systemd-btn" data-action="enable">Enable</button>
+                <button class="systemd-btn" data-action="disable">Disable</button>
               </div>
             </div>
             <div class="service-log-columns">
@@ -1273,22 +1342,32 @@ class PilotController {
                 </div>
             </div>
         `;
-        // Wire events
+        // Wire button events
         const controls = wrap.querySelector('.service-log-controls');
-        const activeCb = wrap.querySelector('.svc-active');
-        const enabledCb = wrap.querySelector('.svc-enabled');
-        if (controls && activeCb && enabledCb) {
-            activeCb.addEventListener('change', (e) => {
-                const checked = activeCb.checked;
-                const action = checked ? 'start' : 'stop';
-                this.systemdAction(action, unit);
-            });
-            enabledCb.addEventListener('change', (e) => {
-                const checked = enabledCb.checked;
-                const action = checked ? 'enable' : 'disable';
-                this.systemdAction(action, unit);
+        if (controls) {
+            controls.querySelectorAll('.systemd-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const action = btn.getAttribute('data-action');
+                    this.systemdAction(action, unit);
+                });
             });
         }
+        // Sticky-bottom autoscroll for logs
+        const statusEl = wrap.querySelector(`#${id}-status`);
+        const journalEl = wrap.querySelector(`#${id}-journal`);
+        [statusEl, journalEl].forEach(logEl => {
+            if (!logEl) return;
+            logEl.addEventListener('wheel', function () {
+                logEl._userScrolled = (logEl.scrollTop + logEl.clientHeight) < (logEl.scrollHeight - 4);
+            });
+        });
+        wrap._scrollLogsToBottom = function () {
+            [statusEl, journalEl].forEach(logEl => {
+                if (logEl && !logEl._userScrolled) {
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+            });
+        };
         return wrap;
     }
 
@@ -1296,15 +1375,20 @@ class PilotController {
         const id = this.serviceId(svc.name) + '-detail';
         const block = document.getElementById(id);
         if (!block) return;
-        const activeCb = block.querySelector('.svc-active');
-        const enabledCb = block.querySelector('.svc-enabled');
-        if (activeCb) {
-            const isActive = (svc.active || '').toLowerCase() === 'active';
-            activeCb.checked = isActive;
-        }
-        if (enabledCb) {
-            const isEnabled = (svc.enabled || '').toLowerCase() === 'enabled';
-            enabledCb.checked = isEnabled;
+        const isActive = (svc.active || '').toLowerCase() === 'active';
+        const isEnabled = (svc.enabled || '').toLowerCase() === 'enabled';
+
+        // Update button disabled state based on service state
+        const controls = block.querySelector('.service-log-controls');
+        if (controls) {
+            const startBtn = controls.querySelector('[data-action="start"]');
+            const stopBtn = controls.querySelector('[data-action="stop"]');
+            const enableBtn = controls.querySelector('[data-action="enable"]');
+            const disableBtn = controls.querySelector('[data-action="disable"]');
+            if (startBtn) startBtn.disabled = isActive;
+            if (stopBtn) stopBtn.disabled = !isActive;
+            if (enableBtn) enableBtn.disabled = isEnabled;
+            if (disableBtn) disableBtn.disabled = !isEnabled;
         }
     }
 

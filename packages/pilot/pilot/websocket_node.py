@@ -82,6 +82,11 @@ class PilotWebSocketNode(Node):
         self.voice_resume_pub = self.create_publisher(Empty, self.voice_resume_topic, 10)
         self.voice_clear_pub = self.create_publisher(Empty, self.voice_clear_topic, 10)
         self.voice_volume_pub = self.create_publisher(Float32, self.voice_volume_topic, 10)
+        # Module control publisher (generic JSON payload for modules to consume)
+        try:
+            self.module_control_pub = self.create_publisher(String, 'pilot/module_control', 10)
+        except Exception:
+            self.module_control_pub = None
 
         # IMU subscription/cache
         self._imu_last = None
@@ -202,6 +207,9 @@ class PilotWebSocketNode(Node):
         self._server = None
         self._stop_event = None
         self.connected_clients = set()
+        # Systemd watch registry and task
+        self._systemd_watch = {}
+        self._systemd_watch_task = None
 
         # Start asyncio server thread
         self._thread = threading.Thread(target=self._run_ws_loop, daemon=True)
@@ -253,6 +261,11 @@ class PilotWebSocketNode(Node):
 
     async def _ws_handler(self, websocket, path: Optional[str] = None):
         self.connected_clients.add(websocket)
+        # Initialize per-client systemd watch map
+        try:
+            self._systemd_watch[websocket] = {}
+        except Exception:
+            pass
         self.get_logger().info(f'Client connected: {websocket.remote_address}')
         try:
             status_msg = {
@@ -307,6 +320,16 @@ class PilotWebSocketNode(Node):
             self.get_logger().warn(f'WebSocket error: {e}')
         finally:
             self.connected_clients.discard(websocket)
+            # Cleanup any watches for this client
+            try:
+                self._systemd_watch.pop(websocket, None)
+            except Exception:
+                pass
+            # Stop watcher task if no watchers remain
+            try:
+                self._maybe_stop_watch_task()
+            except Exception:
+                pass
             self.get_logger().info(f'Client disconnected: {websocket.remote_address}')
 
     async def _handle_message(self, websocket, message: str):
@@ -413,6 +436,35 @@ class PilotWebSocketNode(Node):
                     await websocket.send(json.dumps({'type': 'ack', 'voice_volume': val}))
                 except Exception:
                     await websocket.send(json.dumps({'type': 'error', 'error': 'invalid volume value'}))
+            elif t == 'module_control':
+                # { type: 'module_control', kind: 'action'|'change', module: <name>, id: <control_id>, action?: <str>, value?: <any> }
+                try:
+                    kind = str((data.get('kind') or 'change')).lower()
+                    module = str(data.get('module') or '')
+                    cid = str(data.get('id') or '')
+                    action = data.get('action')
+                    value = data.get('value')
+                    if not module or not cid or kind not in ('action', 'change'):
+                        raise ValueError('invalid module control payload')
+                    # Build JSON payload for ROS consumer modules
+                    payload = {
+                        'kind': kind,
+                        'module': module,
+                        'id': cid,
+                        'action': action,
+                        'value': value,
+                        'ts': asyncio.get_event_loop().time() if asyncio.get_event_loop() else 0.0,
+                    }
+                    # Publish to generic topic
+                    if self.module_control_pub is not None:
+                        try:
+                            self.module_control_pub.publish(String(data=json.dumps(payload)))
+                        except Exception:
+                            pass
+                    # Ack back to client
+                    await websocket.send(json.dumps({'type': 'module_control_ack', **payload}))
+                except Exception as e:
+                    await websocket.send(json.dumps({'type': 'error', 'error': f'module_control: {e}'}))
             elif t == 'systemd':
                 action = (data.get('action') or 'list').lower()
                 if action == 'list':
@@ -427,7 +479,14 @@ class PilotWebSocketNode(Node):
                         result = self._systemd_perform(action, unit)
                         # always follow up with fresh status for this unit
                         status = self._query_systemd_unit(unit)
+                        # also include a detail snapshot for immediate UI update
+                        try:
+                            detail = self._systemd_detail(unit, int(data.get('lines') or 200))
+                        except Exception:
+                            detail = None
                         payload = {'type': 'systemd', 'unit': unit, 'status': status}
+                        if detail:
+                            payload['detail'] = detail
                         if result.get('error'):
                             payload['error'] = result['error']
                         await websocket.send(json.dumps(payload))
@@ -447,6 +506,40 @@ class PilotWebSocketNode(Node):
                     else:
                         detail = self._systemd_detail(unit, n)
                         await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                elif action in ('watch', 'unwatch', 'watch_off'):
+                    unit = data.get('unit')
+                    lines = data.get('lines')
+                    try:
+                        n = int(lines) if lines is not None else 200
+                        if n <= 0 or n > 1000:
+                            n = 200
+                    except Exception:
+                        n = 200
+                    if not unit or not isinstance(unit, str):
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': 'missing unit'}))
+                    elif unit not in self._systemd_units:
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': f'unknown unit: {unit}'}))
+                    else:
+                        if action == 'watch':
+                            # Register watch and send immediate snapshot
+                            try:
+                                self._systemd_watch.setdefault(websocket, {})[unit] = {'lines': n}
+                                detail = self._systemd_detail(unit, n)
+                                await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                                self._ensure_watch_task()
+                            except Exception as e:
+                                await websocket.send(json.dumps({'type': 'systemd', 'error': f'watch failed: {e}'}))
+                        else:
+                            try:
+                                ws_map = self._systemd_watch.get(websocket, {})
+                                if unit in ws_map:
+                                    del ws_map[unit]
+                                if not ws_map:
+                                    self._systemd_watch.pop(websocket, None)
+                                self._maybe_stop_watch_task()
+                                await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'unwatched': True}))
+                            except Exception as e:
+                                await websocket.send(json.dumps({'type': 'systemd', 'error': f'unwatch failed: {e}'}))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
@@ -940,6 +1033,74 @@ class PilotWebSocketNode(Node):
             'journal': jl_txt,
             'lines': lines
         }
+
+    # -----------------------------
+    # Systemd watch helpers (periodic log/status updates)
+    # -----------------------------
+    def _ensure_watch_task(self):
+        try:
+            active = any(bool(v) for v in self._systemd_watch.values())
+        except Exception:
+            active = False
+        if not active or self._loop is None:
+            return
+        try:
+            task = self._systemd_watch_task
+            done = getattr(task, 'done', lambda: True)() if task is not None else True
+            cancelled = getattr(task, 'cancelled', lambda: True)() if task is not None else True
+        except Exception:
+            done = True
+            cancelled = True
+        if task is None or done or cancelled:
+            try:
+                self._systemd_watch_task = asyncio.run_coroutine_threadsafe(self._watch_loop(), self._loop)
+            except Exception:
+                self._systemd_watch_task = None
+
+    def _maybe_stop_watch_task(self):
+        try:
+            active = any(bool(v) for v in self._systemd_watch.values())
+        except Exception:
+            active = False
+        if not active and self._systemd_watch_task is not None:
+            try:
+                self._systemd_watch_task.cancel()
+            except Exception:
+                pass
+            self._systemd_watch_task = None
+
+    async def _watch_loop(self):
+        try:
+            while True:
+                await asyncio.sleep(3.0)
+                # Build snapshot to avoid mutation during iteration
+                snapshot = []
+                for ws, units in list(self._systemd_watch.items()):
+                    if not units:
+                        continue
+                    for unit, meta in list(units.items()):
+                        lines = int(meta.get('lines', 200) or 200)
+                        snapshot.append((ws, unit, lines))
+                if not snapshot:
+                    continue
+                async def fetch_detail(unit, lines):
+                    return await asyncio.to_thread(self._systemd_detail, unit, lines)
+                tasks = [fetch_detail(unit, lines) for (_ws, unit, lines) in snapshot]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for idx, (ws, unit, _lines) in enumerate(snapshot):
+                    if idx >= len(results):
+                        continue
+                    detail = results[idx]
+                    if isinstance(detail, Exception):
+                        continue
+                    try:
+                        await ws.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                    except Exception:
+                        pass
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            self.get_logger().warn(f'systemd watch loop error: {e}')
 
     # -----------------------------
     # Audio helpers (system ALSA volume)
