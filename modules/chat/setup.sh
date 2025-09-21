@@ -12,31 +12,35 @@ if [ -f "$CONF_FILE" ]; then
   . "$CONF_FILE"
 fi
 
-# Chat module setup: ensure packages are linked and Ollama with a configured model (default tinyllama) is installed
-REPO_DIR="$(pwd)"
+# Chat module setup: ensure packages are linked from module-local packages only
+# Determine repository root regardless of current working directory
+if REPO_DIR_GIT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+  REPO_DIR="$REPO_DIR_GIT_ROOT"
+else
+  REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 SRC_DIR="${REPO_DIR}/src"
-# Prefer module-local packages under modules/chat/packages, fall back to repo-level packages/
 PKG_DIR_MODULE="${REPO_DIR}/modules/chat/packages"
-PKG_DIR_REPO="${REPO_DIR}/packages"
-mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}" "${PKG_DIR_REPO}"
 
-# Link required packages into src/ (prefer module-local)
+mkdir -p "${SRC_DIR}" "${PKG_DIR_MODULE}"
+
+# Link required packages into src/ from module-local packages only. Warn if missing.
 if [ -d "${PKG_DIR_MODULE}/chat" ]; then
   ln -sfn "${PKG_DIR_MODULE}/chat" "${SRC_DIR}/chat"
 else
-  ln -sfn "${PKG_DIR_REPO}/chat" "${SRC_DIR}/chat"
+  echo "[chat/setup] Warning: module-local package not found: ${PKG_DIR_MODULE}/chat" >&2
 fi
 
 if [ -d "${PKG_DIR_MODULE}/psyched_msgs" ]; then
   ln -sfn "${PKG_DIR_MODULE}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
-elif [ -d "${PKG_DIR_REPO}/psyched_msgs" ]; then
-  ln -sfn "${PKG_DIR_REPO}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+else
+  echo "[chat/setup] Warning: module-local package not found: ${PKG_DIR_MODULE}/psyched_msgs" >&2
 fi
 
 if [ -d "${PKG_DIR_MODULE}/voice" ]; then
   ln -sfn "${PKG_DIR_MODULE}/voice" "${SRC_DIR}/voice"
-elif [ -d "${PKG_DIR_REPO}/voice" ]; then
-  ln -sfn "${PKG_DIR_REPO}/voice" "${SRC_DIR}/voice"
+else
+  echo "[chat/setup] Warning: module-local package not found: ${PKG_DIR_MODULE}/voice" >&2
 fi
 
 # Install Python dependencies for chat module

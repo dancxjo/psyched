@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run selected modules for this host by launching each module's launch.sh.
+# Usage:
+#   ./tools/run pilot gps imu
+# Options:
+#   --foreground   : run scripts in foreground (don't background them)
+#   --no-exec      : only check for presence and executability, don't run
+#   --help         : show this help
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
+
+foreground=0
+no_exec=0
+
+print_help() {
+  cat <<EOF
+Usage: $0 [OPTIONS] MODULE [MODULE...]
+
+Run module launch scripts from ${MODULES_DIR}.
+
+Options:
+  --foreground   Run scripts in foreground (don't background them)
+  --no-exec      Only verify scripts exist and are executable; don't run
+  --help         Show this help
+
+Examples:
+  $0 pilot gps imu
+  HOST=myhost $0 pilot
+  $0 --no-exec pilot
+EOF
+}
+
+if [ ${#@} -eq 0 ]; then
+  # If no args provided, show help
+  print_help
+  exit 1
+fi
+
+args=()
+while (( $# )); do
+  case "$1" in
+    --foreground)
+      foreground=1; shift;;
+    --no-exec)
+      no_exec=1; shift;;
+    --help|-h)
+      print_help; exit 0;;
+    --*)
+      echo "Unknown option: $1" >&2; exit 2;;
+    *)
+      args+=("$1"); shift;;
+  esac
+done
+
+if [ ! -d "$MODULES_DIR" ]; then
+  echo "[run] No modules directory for host '$HOST_SHORT' at $MODULES_DIR" >&2
+  exit 1
+fi
+
+for m in "${args[@]}"; do
+  LAUNCH="$MODULES_DIR/$m/launch.sh"
+  if [ -f "$LAUNCH" ]; then
+    if [ ! -x "$LAUNCH" ]; then
+      echo "[run] Found $LAUNCH but it is not executable. Will attempt to run with bash." >&2
+      exec_cmd="bash \"$LAUNCH\""
+    else
+      exec_cmd="\"$LAUNCH\""
+    fi
+
+    if [ "$no_exec" -eq 1 ]; then
+      echo "[run] OK: $LAUNCH exists";
+      continue
+    fi
+
+    echo "[run] Launching $m -> $LAUNCH";
+    if [ "$foreground" -eq 1 ]; then
+      ( cd "$(dirname "$LAUNCH")" && eval $exec_cmd )
+    else
+      ( cd "$(dirname "$LAUNCH")" && eval $exec_cmd ) &
+    fi
+  else
+    echo "[run] ERROR: $LAUNCH not found" >&2
+    exit 1
+  fi
+done
+
+if [ "$foreground" -eq 0 ] && [ "$no_exec" -eq 0 ]; then
+  echo "[run] All launch commands dispatched in background."
+fi
+
+exit 0

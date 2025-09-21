@@ -14,20 +14,31 @@ fi
 
 # Ear module setup: link package(s) into src/ and ensure ALSA utils.
 
-REPO_DIR="$(pwd)"
+# Determine repository root regardless of current working directory
+if REPO_DIR_GIT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+  REPO_DIR="$REPO_DIR_GIT_ROOT"
+else
+  REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 SRC_DIR="${REPO_DIR}/src"
 # Packages are now located under modules/<module>/packages/<module>
 PKG_DIR="${REPO_DIR}/modules/${MODULE_NAME}/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
-# Optionally include core psyched package too
-if [ -d "${PKG_DIR}/psyched" ]; then
-  ln -sfn "${PKG_DIR}/psyched" "${SRC_DIR}/psyched"
+# Link the module package into src/ (e.g. modules/ear/packages/ear -> src/ear)
+if [ -d "${PKG_DIR}/${MODULE_NAME}" ]; then
+  ln -sfn "${PKG_DIR}/${MODULE_NAME}" "${SRC_DIR}/${MODULE_NAME}"
+else
+  echo "[ear/setup] Warning: module-local package not found: ${PKG_DIR}/${MODULE_NAME}" >&2
 fi
 
-# Link the module package into src/ (e.g. modules/ear/packages/ear -> src/ear)
-ln -sfn "${PKG_DIR}/${MODULE_NAME}" "${SRC_DIR}/${MODULE_NAME}"
+# Link module-local psyced_msgs if present (named psyched_msgs in repo)
+if [ -d "${PKG_DIR}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+else
+  echo "[ear/setup] Warning: module-local package not found: ${PKG_DIR}/psyched_msgs" >&2
+fi
 
 # Install Python dependencies for ear module
 echo "[ear/setup] Installing Python dependencies..."

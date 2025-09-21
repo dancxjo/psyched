@@ -1,4 +1,4 @@
-.PHONY: help ros2 build bootstrap update bringup setup teardown \
+.PHONY: help ros2 build bootstrap update bringup setup shutdown \
 	 systemd-generate systemd-install systemd-reload \
 	 systemd-enable systemd-disable systemd-start systemd-stop systemd-status \
 	 systemd-debug
@@ -14,7 +14,7 @@ help:
 	@echo "  update             - git pull then run bootstrap"
 	@echo "  bringup            - Launch all host modules in background via ./tools/bringup"
 	@echo "  setup              - Run setup.sh for all host modules via ./tools/setup"
-	@echo "  teardown           - Run teardown.sh for all host modules via ./tools/teardown"
+	@echo "  shutdown           - Stop modules (run shutdown.sh) via ./tools/stop"
 	@echo "  systemd-generate   - Generate host unit files under hosts/$(shell hostname -s)/systemd"
 	@echo "  systemd-install    - Copy generated units to /etc/systemd/system and daemon-reload"
 	@echo "  systemd-enable     - Enable and start units (UNIT=name.service to limit)"
@@ -96,8 +96,8 @@ bringup:
 setup:
 	@bash -lc 'set -eo pipefail; rm -rf ./src && mkdir -p src && ./tools/setup'
 
-teardown:
-	@bash -lc 'set -eo pipefail; ./tools/teardown'
+shutdown:
+	@bash -lc 'set -eo pipefail; ./tools/stop'
 
 # -----------------------------
 # Systemd helpers

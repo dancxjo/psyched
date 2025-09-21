@@ -21,19 +21,30 @@ fi
 
 # Voice module setup: build local packages using a fresh src/ populated by symlinks.
 
-REPO_DIR="$(pwd)"
+# Determine repository root regardless of current working directory
+if REPO_DIR_GIT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
+  REPO_DIR="$REPO_DIR_GIT_ROOT"
+else
+  REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 SRC_DIR="${REPO_DIR}/src"
 # Packages are now located under modules/<module>/packages/<module>
-PKG_DIR="${REPO_DIR}/modules/${SCRIPT_DIR##*/}/packages"
+PKG_DIR="${REPO_DIR}/modules/voice/packages"
 
 mkdir -p "${SRC_DIR}" "${PKG_DIR}"
 
 # Link the packages we want in this module (module name -> directory name)
-ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
+if [ -d "${PKG_DIR}/voice" ]; then
+  ln -sfn "${PKG_DIR}/voice" "${SRC_DIR}/voice"
+else
+  echo "[voice/setup] Warning: module-local package not found: ${PKG_DIR}/voice" >&2
+fi
 
-# Optionally include core psyched package too (kept at repo root if present)
-if [ -d "${REPO_DIR}/packages/psyched" ]; then
-  ln -sfn "${REPO_DIR}/packages/psyched" "${SRC_DIR}/psyched"
+# Link module-local psyched_msgs if present
+if [ -d "${PKG_DIR}/psyched_msgs" ]; then
+  ln -sfn "${PKG_DIR}/psyched_msgs" "${SRC_DIR}/psyched_msgs"
+else
+  echo "[voice/setup] Warning: module-local package not found: ${PKG_DIR}/psyched_msgs" >&2
 fi
 
 # Engine setup - default to espeak for reliability

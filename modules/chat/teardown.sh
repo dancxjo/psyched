@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config: source ../../config/chat.env from real script location
+echo "[chat/teardown] DEPRECATED: use shutdown.sh instead. Forwarding to shutdown.sh if present..."
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$REAL_PATH")"
-MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
-CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
-if [ -f "$CONF_FILE" ]; then
-	# shellcheck disable=SC1090
-	. "$CONF_FILE"
+SHUTDOWN="$SCRIPT_DIR/shutdown.sh"
+if [ -f "$SHUTDOWN" ]; then
+	if [ -x "$SHUTDOWN" ]; then
+		( cd "$SCRIPT_DIR" && ./shutdown.sh )
+	else
+		( cd "$SCRIPT_DIR" && bash ./shutdown.sh )
+	fi
+else
+	echo "[chat/teardown] No shutdown.sh present; nothing to do."
 fi
-
-echo "[chat/teardown] Nothing to teardown currently."
