@@ -7,6 +7,7 @@ This isolates asyncio from the HTTP server to avoid cross-thread/event-loop issu
 
 import asyncio
 import subprocess
+import shutil
 import os
 from pathlib import Path
 import threading
@@ -387,6 +388,15 @@ class PilotWebSocketNode(Node):
                     if val > 2.0:
                         val = 2.0
                     self.voice_volume_pub.publish(Float32(data=val))
+                    # Also attempt to set system ALSA mixer volume when available.
+                    # Mapping: values <= 1.0 map to 0-100%; values > 1.0 keep ALSA at 100% (extra gain handled by voice node)
+                    try:
+                        pct = int(max(0.0, min(1.0, val)) * 100.0)
+                        ok = self._set_alsa_volume(pct)
+                        if not ok:
+                            self.get_logger().info('ALSA volume unchanged (amixer missing or control not found)')
+                    except Exception as e:
+                        self.get_logger().warn(f'Failed to adjust ALSA volume: {e}')
                     await websocket.send(json.dumps({'type': 'ack', 'voice_volume': val}))
                 except Exception:
                     await websocket.send(json.dumps({'type': 'error', 'error': 'invalid volume value'}))
@@ -836,6 +846,43 @@ class PilotWebSocketNode(Node):
             'journal': jl_txt,
             'lines': lines
         }
+
+    # -----------------------------
+    # Audio helpers (system ALSA volume)
+    # -----------------------------
+    def _set_alsa_volume(self, level_percent: int) -> bool:
+        """Set system output volume via ALSA amixer.
+
+        Tries common mixer controls in order until one succeeds.
+        Returns True if a control was adjusted successfully.
+        """
+        try:
+            level = int(max(0, min(100, level_percent)))
+        except Exception:
+            level = 100
+
+        amixer = shutil.which('amixer')
+        if not amixer:
+            return False
+
+        controls = ['Master', 'Speaker', 'PCM', 'Headphone', 'Digital', 'Playback']
+        # Try without device, then explicit default, then pulse bridge
+        device_args = [[], ['-D', 'default'], ['-D', 'pulse']]
+        for ctl in controls:
+            for dargs in device_args:
+                res = self._run_cmd([amixer, *dargs, '-q', 'sset', ctl, f'{level}%'])
+                if res.get('code', 1) == 0:
+                    dev = ' '.join(dargs) if dargs else '(default)'
+                    self.get_logger().info(f"ALSA volume set: {ctl} {dev} -> {level}%")
+                    return True
+        # If none succeeded, log available controls to aid debugging
+        try:
+            scontrols = self._run_cmd([amixer, 'scontrols'])
+            if scontrols.get('code', 1) == 0 and scontrols.get('out'):
+                self.get_logger().info(f"amixer available controls: {scontrols['out']}")
+        except Exception:
+            pass
+        return False
 
 
 def main(args=None):
