@@ -92,12 +92,16 @@ class PilotController {
         };
         this.lastImuTs = 0;
 
-        // Services UI
+        // Services UI  
         this.services = {}; // map unit -> { name, active, enabled, description }
         this.servicesContainer = document.getElementById('servicesPills');
         this.servicesLogs = document.getElementById('servicesLogs');
         // Cache of last non-empty service details to prevent blink/empty overwrites
         this.serviceDetails = {}; // unit -> { status: string, journal: string }
+        
+        // Modules UI
+        this.modules = {}; // map module_name -> module config
+        
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
     }
@@ -743,6 +747,9 @@ class PilotController {
                     if (Array.isArray(message.systemd_services)) {
                         this.updateServicesList(message.systemd_services);
                     }
+                    if (message.modules) {
+                        this.updateModules(message.modules);
+                    }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {
@@ -773,6 +780,9 @@ class PilotController {
                     }
                     if (Array.isArray(message.systemd_services)) {
                         this.updateServicesList(message.systemd_services);
+                    }
+                    if (message.modules) {
+                        this.updateModules(message.modules);
                     }
                     break;
                 case 'systemd':
@@ -899,22 +909,235 @@ class PilotController {
                 }
             }
 
-            // Ensure a persistent log block exists per service
-            if (this.servicesLogs) {
-                const blockId = this.serviceId(svc.name) + '-detail';
-                let block = document.getElementById(blockId);
-                if (!block) {
-                    block = this.renderServiceLogBlock(svc.name);
-                    this.servicesLogs.appendChild(block);
-                    // Fetch details once on creation; further updates will come from backend
-                    this.requestSystemdDetail(svc.name, 200);
+            // Update module-based display if modules are loaded
+            if (Object.keys(this.modules).length > 0) {
+                this.updateModuleServiceDisplay(svc);
+            } else {
+                // Fallback: Ensure a persistent log block exists per service
+                if (this.servicesLogs) {
+                    const blockId = this.serviceId(svc.name) + '-detail';
+                    let block = document.getElementById(blockId);
+                    if (!block) {
+                        block = this.renderServiceLogBlock(svc.name);
+                        this.servicesLogs.appendChild(block);
+                        // Fetch details once on creation; further updates will come from backend
+                        this.requestSystemdDetail(svc.name, 200);
+                    }
+                    // Update control state inside the block
+                    this.updateServiceLogControls(svc);
                 }
-                // Update control state inside the block
-                this.updateServiceLogControls(svc);
             }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
         // to avoid flicker. A later cleanup pass could prune truly stale entries if needed.
+    }
+
+    updateModules(modules) {
+        this.modules = modules;
+        
+        // Clear existing module displays
+        if (this.servicesLogs) {
+            this.servicesLogs.innerHTML = '';
+        }
+        
+        // Create module sections
+        Object.entries(modules).forEach(([moduleName, moduleConfig]) => {
+            this.renderModuleSection(moduleName, moduleConfig);
+        });
+        
+        // Update existing services to be grouped by modules
+        Object.values(this.services).forEach(svc => {
+            this.updateModuleServiceDisplay(svc);
+        });
+    }
+
+    renderModuleSection(moduleName, moduleConfig) {
+        if (!this.servicesLogs) return;
+        
+        const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
+        
+        // Create module container
+        const moduleSection = document.createElement('div');
+        moduleSection.className = 'module-section';
+        moduleSection.id = moduleId;
+        
+        moduleSection.innerHTML = `
+            <div class="module-header">
+                <h3 class="module-title">${moduleConfig.name}</h3>
+                <div class="module-description">${moduleConfig.description}</div>
+            </div>
+            <div class="module-content">
+                <div class="module-controls" id="${moduleId}-controls">
+                    <!-- Module controls will be rendered here -->
+                </div>
+                <div class="module-systemd" id="${moduleId}-systemd">
+                    <!-- Service logs and controls will be rendered here -->
+                </div>
+            </div>
+        `;
+        
+        this.servicesLogs.appendChild(moduleSection);
+        
+        // Render module controls
+        this.renderModuleControls(moduleId + '-controls', moduleConfig.controls);
+    }
+
+    renderModuleControls(containerId, controls) {
+        const container = document.getElementById(containerId);
+        if (!container || !controls || controls.length === 0) return;
+        
+        const controlsHtml = controls.map(control => {
+            switch (control.type) {
+                case 'info':
+                    return `<div class="module-control info">
+                        <label>${control.label}:</label>
+                        <span>${control.value}</span>
+                    </div>`;
+                case 'link':
+                    return `<div class="module-control link">
+                        <a href="${control.url}" target="_blank" class="module-link">${control.label}</a>
+                    </div>`;
+                case 'slider':
+                    return `<div class="module-control slider">
+                        <label for="${control.id}">${control.label}:</label>
+                        <input type="range" id="${control.id}" min="${control.min}" max="${control.max}" 
+                               value="${control.value}" step="${control.step || 1}">
+                        <span>${control.value}${control.unit || ''}</span>
+                    </div>`;
+                case 'select':
+                    const options = control.options.map(opt => 
+                        `<option value="${opt.value}" ${opt.value === control.value ? 'selected' : ''}>${opt.label}</option>`
+                    ).join('');
+                    return `<div class="module-control select">
+                        <label for="${control.id}">${control.label}:</label>
+                        <select id="${control.id}">${options}</select>
+                    </div>`;
+                case 'toggle':
+                    return `<div class="module-control toggle">
+                        <label>
+                            <input type="checkbox" id="${control.id}" ${control.value ? 'checked' : ''}>
+                            ${control.label}
+                        </label>
+                    </div>`;
+                case 'button':
+                    const styleClass = control.style === 'danger' ? 'button-danger' : 'button-primary';
+                    return `<div class="module-control button">
+                        <button id="${control.id}" class="${styleClass}" data-action="${control.action}">
+                            ${control.label}
+                        </button>
+                    </div>`;
+                case 'text':
+                    const inputType = control.multiline ? 'textarea' : 'input';
+                    return `<div class="module-control text">
+                        <label for="${control.id}">${control.label}:</label>
+                        ${inputType === 'textarea' 
+                            ? `<textarea id="${control.id}">${control.value}</textarea>`
+                            : `<input type="text" id="${control.id}" value="${control.value}">`}
+                    </div>`;
+                case 'display':
+                    return `<div class="module-control display">
+                        <label>${control.label}:</label>
+                        <span id="${control.id}" class="display-value">--</span>
+                        ${control.unit ? `<span class="display-unit">${control.unit}</span>` : ''}
+                    </div>`;
+                default:
+                    return '';
+            }
+        }).join('');
+        
+        container.innerHTML = controlsHtml;
+        
+        // Add event listeners for interactive controls
+        this.attachModuleControlEvents(containerId, controls);
+    }
+
+    attachModuleControlEvents(containerId, controls) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        controls.forEach(control => {
+            if (!control.id) return;
+            
+            const element = document.getElementById(control.id);
+            if (!element) return;
+            
+            switch (control.type) {
+                case 'button':
+                    element.addEventListener('click', () => {
+                        this.handleModuleControlAction(control.action, control.id, element.value);
+                    });
+                    break;
+                case 'slider':
+                    element.addEventListener('input', () => {
+                        const span = element.nextElementSibling;
+                        if (span) span.textContent = element.value + (control.unit || '');
+                        this.handleModuleControlChange(control.id, element.value);
+                    });
+                    break;
+                case 'select':
+                case 'toggle':
+                case 'text':
+                    element.addEventListener('change', () => {
+                        this.handleModuleControlChange(control.id, element.value);
+                    });
+                    break;
+            }
+        });
+    }
+
+    handleModuleControlAction(action, controlId, value) {
+        console.log('Module control action:', action, controlId, value);
+        // TODO: Implement specific actions like emergency_stop, take_snapshot, etc.
+    }
+
+    handleModuleControlChange(controlId, value) {
+        console.log('Module control changed:', controlId, value);
+        // TODO: Send control changes to backend
+    }
+
+    updateModuleServiceDisplay(svc) {
+        if (!svc || !svc.name) return;
+        
+        // Find which module this service belongs to
+        const serviceName = svc.name.replace(/^psyched-/, '').replace(/\.service$/, '');
+        const moduleConfig = this.modules[serviceName];
+        
+        if (!moduleConfig) {
+            // Service doesn't belong to a known module, use fallback display
+            this.ensureFallbackServiceBlock(svc);
+            return;
+        }
+        
+        const moduleId = 'module-' + serviceName.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const systemdContainer = document.getElementById(moduleId + '-systemd');
+        
+        if (!systemdContainer) return;
+        
+        // Ensure service block exists in the module's systemd section
+        const blockId = this.serviceId(svc.name) + '-detail';
+        let block = document.getElementById(blockId);
+        if (!block) {
+            block = this.renderServiceLogBlock(svc.name);
+            systemdContainer.appendChild(block);
+            // Fetch details once on creation
+            this.requestSystemdDetail(svc.name, 200);
+        }
+        
+        // Update control state inside the block
+        this.updateServiceLogControls(svc);
+    }
+
+    ensureFallbackServiceBlock(svc) {
+        if (!this.servicesLogs) return;
+        
+        const blockId = this.serviceId(svc.name) + '-detail';
+        let block = document.getElementById(blockId);
+        if (!block) {
+            block = this.renderServiceLogBlock(svc.name);
+            this.servicesLogs.appendChild(block);
+            this.requestSystemdDetail(svc.name, 200);
+        }
+        this.updateServiceLogControls(svc);
     }
 
     updateService(svc) {

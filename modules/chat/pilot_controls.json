@@ -1,0 +1,40 @@
+{
+  "name": "Chat", 
+  "description": "Large language model chat interface",
+  "controls": [
+    {
+      "type": "info",
+      "label": "Conversation Topic",
+      "value": "${CHAT_CONVERSATION_TOPIC:-/conversation}"
+    },
+    {
+      "type": "info",
+      "label": "Voice Topic",
+      "value": "${CHAT_VOICE_TOPIC:-/voice}"
+    },
+    {
+      "type": "text",
+      "label": "System Prompt",
+      "id": "chat_system_prompt",
+      "value": "${CHAT_SYSTEM_PROMPT:-You are a helpful assistant.}",
+      "multiline": true
+    },
+    {
+      "type": "select",
+      "label": "Model",
+      "id": "chat_model",
+      "options": [
+        {"value": "gpt-3.5-turbo", "label": "GPT-3.5 Turbo"},
+        {"value": "gpt-4", "label": "GPT-4"},
+        {"value": "local", "label": "Local Model"}
+      ],
+      "value": "${CHAT_MODEL:-gpt-3.5-turbo}"
+    },
+    {
+      "type": "button",
+      "label": "Clear History",
+      "id": "chat_clear",
+      "action": "clear_history"
+    }
+  ]
+}

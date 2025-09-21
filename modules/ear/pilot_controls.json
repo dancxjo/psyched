@@ -1,0 +1,35 @@
+{
+  "name": "Ear", 
+  "description": "Audio capture and processing",
+  "controls": [
+    {
+      "type": "info",
+      "label": "Audio Topic",
+      "value": "${EAR_TOPIC:-/audio/pcm}"
+    },
+    {
+      "type": "info",
+      "label": "Device",
+      "value": "${EAR_DEVICE:-default}"
+    },
+    {
+      "type": "info",
+      "label": "Sample Rate",
+      "value": "${EAR_RATE:-16000} Hz"
+    },
+    {
+      "type": "info",
+      "label": "Channels",
+      "value": "${EAR_CHANNELS:-1}"
+    },
+    {
+      "type": "slider",
+      "label": "Input Gain",
+      "id": "ear_gain",
+      "min": 0,
+      "max": 200,
+      "value": "100",
+      "unit": "%"
+    }
+  ]
+}

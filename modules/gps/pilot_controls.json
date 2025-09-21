@@ -1,0 +1,39 @@
+{
+  "name": "GPS",
+  "description": "Global positioning and navigation",
+  "controls": [
+    {
+      "type": "info",
+      "label": "GPS Topic",
+      "value": "${GPS_TOPIC:-/gps/fix}"
+    },
+    {
+      "type": "info",
+      "label": "Device",
+      "value": "${GPS_DEVICE:-/dev/ttyUSB0}"
+    },
+    {
+      "type": "info",
+      "label": "Baud Rate",
+      "value": "${GPS_BAUD:-9600}"
+    },
+    {
+      "type": "display",
+      "label": "Current Position",
+      "id": "gps_position",
+      "format": "lat_lon"
+    },
+    {
+      "type": "display",
+      "label": "Satellites",
+      "id": "gps_satellites",
+      "format": "number"
+    },
+    {
+      "type": "display",
+      "label": "Fix Quality",
+      "id": "gps_quality",
+      "format": "text"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Pilot",
+  "description": "Web interface and joystick control for robot piloting",
+  "controls": [
+    {
+      "type": "info",
+      "label": "Web Port",
+      "value": "${PILOT_WEB_PORT:-8080}"
+    },
+    {
+      "type": "info", 
+      "label": "WebSocket Port",
+      "value": "${PILOT_WS_PORT:-8081}"
+    },
+    {
+      "type": "link",
+      "label": "Open Pilot Interface",
+      "url": "http://localhost:${PILOT_WEB_PORT:-8080}"
+    }
+  ]
+}

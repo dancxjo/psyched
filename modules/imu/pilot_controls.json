@@ -1,0 +1,43 @@
+{
+  "name": "IMU",
+  "description": "Inertial measurement and orientation sensing",
+  "controls": [
+    {
+      "type": "info",
+      "label": "IMU Topic",
+      "value": "${IMU_TOPIC:-/imu/mpu6050}"
+    },
+    {
+      "type": "info",
+      "label": "Device",
+      "value": "${IMU_DEVICE:-/dev/i2c-1}"
+    },
+    {
+      "type": "display",
+      "label": "Acceleration (XYZ)",
+      "id": "imu_accel",
+      "format": "vector3",
+      "unit": "m/s²"
+    },
+    {
+      "type": "display",
+      "label": "Angular Velocity (XYZ)",
+      "id": "imu_gyro",
+      "format": "vector3", 
+      "unit": "rad/s"
+    },
+    {
+      "type": "display",
+      "label": "Orientation (RPY)",
+      "id": "imu_orientation",
+      "format": "rpy",
+      "unit": "deg"
+    },
+    {
+      "type": "button",
+      "label": "Calibrate",
+      "id": "imu_calibrate",
+      "action": "calibrate"
+    }
+  ]
+}
