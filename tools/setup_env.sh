@@ -18,45 +18,77 @@ MODE=${SETUP_ENV_MODE:-source}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Source /opt/ros/<version>/setup.sh and <repo_root>/install/setup.sh
+# Source /opt/ros/<version>/setup.bash and <repo_root>/install/setup.bash
 # Behavior:
 #  - If SETUP_ENV_MODE=print, print the source commands instead of executing them
 #  - Prefer ROS_VERSION env var -> ROS_DISTRO env var -> /opt/ros/kilted -> first
 #    available distro under /opt/ros
 
 ros_setup_path() {
-  # 1) explicit env var
-  if [[ -n "${ROS_VERSION:-}" && -f "/opt/ros/${ROS_VERSION}/setup.sh" ]]; then
-    echo "/opt/ros/${ROS_VERSION}/setup.sh"
-    return
+  # prefer setup.bash when available
+  if [[ -n "${ROS_VERSION:-}" ]]; then
+    if [[ -f "/opt/ros/${ROS_VERSION}/setup.bash" ]]; then
+      echo "/opt/ros/${ROS_VERSION}/setup.bash"; return
+    elif [[ -f "/opt/ros/${ROS_VERSION}/setup.sh" ]]; then
+      echo "/opt/ros/${ROS_VERSION}/setup.sh"; return
+    fi
   fi
-  if [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.sh" ]]; then
-    echo "/opt/ros/${ROS_DISTRO}/setup.sh"
-    return
+  if [[ -n "${ROS_DISTRO:-}" ]]; then
+    if [[ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+      echo "/opt/ros/${ROS_DISTRO}/setup.bash"; return
+    elif [[ -f "/opt/ros/${ROS_DISTRO}/setup.sh" ]]; then
+      echo "/opt/ros/${ROS_DISTRO}/setup.sh"; return
+    fi
   fi
 
-  # 2) prefer kilted if present
-  if [[ -f "/opt/ros/kilted/setup.sh" ]]; then
-    echo "/opt/ros/kilted/setup.sh"
-    return
+  # prefer kilted
+  if [[ -f "/opt/ros/kilted/setup.bash" ]]; then
+    echo "/opt/ros/kilted/setup.bash"; return
+  elif [[ -f "/opt/ros/kilted/setup.sh" ]]; then
+    echo "/opt/ros/kilted/setup.sh"; return
   fi
 
-  # 3) first available under /opt/ros
+  # first available under /opt/ros
   if [[ -d "/opt/ros" ]]; then
     for d in /opt/ros/*; do
-      if [[ -f "$d/setup.sh" ]]; then
-        echo "$d/setup.sh"
-        return
+      if [[ -f "$d/setup.bash" ]]; then
+        echo "$d/setup.bash"; return
+      elif [[ -f "$d/setup.sh" ]]; then
+        echo "$d/setup.sh"; return
       fi
     done
   fi
 
-  # nothing found
   echo ""
 }
 
 ws_setup_path() {
-  # Use repository root so systemd (running as root) finds the workspace in the repo
+  # Candidates (in order): PSYCHED_ROOT, REPO_ROOT, SUDO_USER home, /home/pete, /home/${USER}
+  local candidates=()
+  if [[ -n "${PSYCHED_ROOT:-}" ]]; then
+    candidates+=("${PSYCHED_ROOT}")
+  fi
+  candidates+=("${REPO_ROOT}")
+  # If sudo invoked, prefer the original user's home
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    candidates+=("/home/${SUDO_USER}/psyched")
+  fi
+  # common explicit path used in this project
+  candidates+=("/home/pete/psyched")
+  # fallback to current user's home
+  if [[ -n "${HOME:-}" ]]; then
+    candidates+=("${HOME}/psyched")
+  fi
+
+  for c in "${candidates[@]}"; do
+    if [[ -f "${c}/install/setup.bash" ]]; then
+      echo "${c}/install/setup.bash"; return
+    elif [[ -f "${c}/install/setup.sh" ]]; then
+      echo "${c}/install/setup.sh"; return
+    fi
+  done
+
+  # fallback to REPO_ROOT/install/setup.sh even if missing (to show diagnostic path)
   echo "${REPO_ROOT}/install/setup.sh"
 }
 
