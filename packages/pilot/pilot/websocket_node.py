@@ -34,7 +34,6 @@ except Exception:  # pragma: no cover
 
 try:
     import websockets
-    from websockets.server import WebSocketServerProtocol
 except ImportError:
     websockets = None
 
@@ -45,16 +44,16 @@ class PilotWebSocketNode(Node):
 
         self.declare_parameter('websocket_port', 8081)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
-    self.declare_parameter('voice_topic', '/voice')
-    self.declare_parameter('voice_pause_topic', '/voice/interrupt')
-    self.declare_parameter('voice_resume_topic', '/voice/resume')
-    self.declare_parameter('voice_clear_topic', '/voice/clear')
-    self.declare_parameter('voice_volume_topic', '/voice/volume')
+        self.declare_parameter('voice_topic', '/voice')
+        self.declare_parameter('voice_pause_topic', '/voice/interrupt')
+        self.declare_parameter('voice_resume_topic', '/voice/resume')
+        self.declare_parameter('voice_clear_topic', '/voice/clear')
+        self.declare_parameter('voice_volume_topic', '/voice/volume')
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
         self.declare_parameter('imu_topic', '/imu/mpu6050')
-    self.declare_parameter('gps_fix_topic', '/gps/fix')
-    self.declare_parameter('conversation_topic', '/conversation')
+        self.declare_parameter('gps_fix_topic', '/gps/fix')
+        self.declare_parameter('conversation_topic', '/conversation')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -65,23 +64,23 @@ class PilotWebSocketNode(Node):
                 return default
         self.websocket_port = int(_param('websocket_port', 8081))
         self.cmd_vel_topic = str(_param('cmd_vel_topic', '/cmd_vel'))
-    self.voice_topic = str(_param('voice_topic', '/voice'))
-    self.voice_pause_topic = str(_param('voice_pause_topic', '/voice/interrupt'))
-    self.voice_resume_topic = str(_param('voice_resume_topic', '/voice/resume'))
-    self.voice_clear_topic = str(_param('voice_clear_topic', '/voice/clear'))
-    self.voice_volume_topic = str(_param('voice_volume_topic', '/voice/volume'))
+        self.voice_topic = str(_param('voice_topic', '/voice'))
+        self.voice_pause_topic = str(_param('voice_pause_topic', '/voice/interrupt'))
+        self.voice_resume_topic = str(_param('voice_resume_topic', '/voice/resume'))
+        self.voice_clear_topic = str(_param('voice_clear_topic', '/voice/clear'))
+        self.voice_volume_topic = str(_param('voice_volume_topic', '/voice/volume'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
-    self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
-    self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
-    self.conversation_topic = str(_param('conversation_topic', '/conversation'))
+        self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
+        self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
+        self.conversation_topic = str(_param('conversation_topic', '/conversation'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
-    self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
-    self.voice_pause_pub = self.create_publisher(Empty, self.voice_pause_topic, 10)
-    self.voice_resume_pub = self.create_publisher(Empty, self.voice_resume_topic, 10)
-    self.voice_clear_pub = self.create_publisher(Empty, self.voice_clear_topic, 10)
-    self.voice_volume_pub = self.create_publisher(Float32, self.voice_volume_topic, 10)
+        self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+        self.voice_pause_pub = self.create_publisher(Empty, self.voice_pause_topic, 10)
+        self.voice_resume_pub = self.create_publisher(Empty, self.voice_resume_topic, 10)
+        self.voice_clear_pub = self.create_publisher(Empty, self.voice_clear_topic, 10)
+        self.voice_volume_pub = self.create_publisher(Float32, self.voice_volume_topic, 10)
 
         # IMU subscription/cache
         self._imu_last = None
@@ -248,7 +247,7 @@ class PilotWebSocketNode(Node):
         finally:
             self._server = None
 
-    async def _ws_handler(self, websocket: WebSocketServerProtocol, path: Optional[str] = None):
+    async def _ws_handler(self, websocket, path: Optional[str] = None):
         self.connected_clients.add(websocket)
         self.get_logger().info(f'Client connected: {websocket.remote_address}')
         try:
@@ -301,7 +300,7 @@ class PilotWebSocketNode(Node):
             self.connected_clients.discard(websocket)
             self.get_logger().info(f'Client disconnected: {websocket.remote_address}')
 
-    async def _handle_message(self, websocket: WebSocketServerProtocol, message: str):
+    async def _handle_message(self, websocket, message: str):
         try:
             data = json.loads(message)
             t = data.get('type')
@@ -788,7 +787,7 @@ class PilotWebSocketNode(Node):
     def _list_systemd_status(self):
         return [self._query_systemd_unit(u) for u in self._systemd_units]
 
-    async def _send_systemd_list(self, websocket: WebSocketServerProtocol):
+    async def _send_systemd_list(self, websocket):
         try:
             services = self._list_systemd_status()
         except Exception:
