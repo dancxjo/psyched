@@ -94,7 +94,7 @@ bringup:
 	@bash -lc 'set -eo pipefail; ./tools/bringup'
 
 setup:
-	@bash -lc 'set -eo pipefail; ./tools/setup'
+	@bash -lc 'set -eo pipefail; rm -rf ./src && mkdir -p src && ./tools/setup'
 
 teardown:
 	@bash -lc 'set -eo pipefail; ./tools/teardown'
