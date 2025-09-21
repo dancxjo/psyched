@@ -13,6 +13,7 @@ Fields (JSON in std_msgs/String):
 import json
 import os
 import time
+import socket
 from typing import Optional
 
 import rclpy
@@ -27,9 +28,17 @@ except Exception:
 class HostHealthNode(Node):
     def __init__(self):
         super().__init__('host_health')
-        self.declare_parameter('publish_topic', 'host/health')
+        self.declare_parameter('publish_topic', 'auto')
         self.declare_parameter('period_sec', 2.0)
-        self.topic = self.get_parameter('publish_topic').get_parameter_value().string_value or 'host/health'
+        topic_param = self.get_parameter('publish_topic').get_parameter_value().string_value
+        if not topic_param or str(topic_param).lower() == 'auto':
+            try:
+                short = socket.gethostname().split('.')[0]
+            except Exception:
+                short = os.uname().nodename.split('.')[0] if hasattr(os, 'uname') else 'host'
+            self.topic = f'hosts/{short}/health'
+        else:
+            self.topic = topic_param
         self.period = self.get_parameter('period_sec').get_parameter_value().double_value or 2.0
         self.pub = self.create_publisher(StringMsg, self.topic, 10)
         self.timer = self.create_timer(self.period, self._tick)

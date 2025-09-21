@@ -34,18 +34,20 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
+    self.declare_parameter('host_health_topic', 'auto')
 
-        def _get(name, default):
+        # Resolve parameters safely
+        def _param(name, default):
             try:
-                v = self.get_parameter(name).value
-                return v if v is not None else default
+                val = self.get_parameter(name).value
+                return default if val is None else val
             except Exception:
                 return default
-
-        self.websocket_port = int(_get('websocket_port', 8081))
-        self.cmd_vel_topic = str(_get('cmd_vel_topic', '/cmd_vel'))
-        self.voice_topic = str(_get('voice_topic', '/voice'))
-        self.host = str(_get('host', '0.0.0.0'))
+        self.websocket_port = int(_param('websocket_port', 8081))
+        self.cmd_vel_topic = str(_param('cmd_vel_topic', '/cmd_vel'))
+        self.voice_topic = str(_param('voice_topic', '/voice'))
+        self.host = str(_param('host', '0.0.0.0'))
+        self.host_health_topic = str(_param('host_health_topic', 'auto'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
@@ -97,7 +99,17 @@ class PilotWebSocketNode(Node):
         # Host health cache and subscription
         self._host_health = None
         self._host_lock = threading.Lock()
-        self.create_subscription(String, 'host/health', self._on_host_health, 10)
+        # Determine host health topic
+        htopic = self.host_health_topic
+        if not htopic or htopic.lower() == 'auto':
+            try:
+                import socket
+                short = socket.gethostname().split('.')[0]
+            except Exception:
+                import os as _os
+                short = _os.uname().nodename.split('.')[0] if hasattr(_os, 'uname') else 'host'
+            htopic = f'hosts/{short}/health'
+        self.create_subscription(String, htopic, self._on_host_health, 10)
 
         # asyncio context in dedicated thread
         self._loop = None

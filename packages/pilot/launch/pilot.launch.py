@@ -71,7 +71,7 @@ def generate_launch_description():
     )
     host_health_topic_arg = DeclareLaunchArgument(
         'host_health_topic',
-        default_value=EnvironmentVariable(name='PILOT_HOST_HEALTH_TOPIC', default_value='host/health'),
+        default_value=EnvironmentVariable(name='PILOT_HOST_HEALTH_TOPIC', default_value='auto'),
         description='Topic for host health metrics'
     )
     
@@ -104,6 +104,7 @@ def generate_launch_description():
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
             'host': LaunchConfiguration('host'),
+            'host_health_topic': LaunchConfiguration('host_health_topic'),
         }]
     )
 
