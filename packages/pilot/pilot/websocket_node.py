@@ -6,6 +6,7 @@ This isolates asyncio from the HTTP server to avoid cross-thread/event-loop issu
 """
 
 import asyncio
+import threading
 import json
 from typing import Optional
 
@@ -46,15 +47,34 @@ class PilotWebSocketNode(Node):
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
 
-        # asyncio context
-        self._loop = asyncio.get_event_loop()
+        # asyncio context in dedicated thread
+        self._loop = None
         self._server = None
-        self._stop_event = asyncio.Event()
+        self._stop_event = None
         self.connected_clients = set()
 
-        # Start the server task
-        self._loop.create_task(self._start_server())
+        # Start asyncio server thread
+        self._thread = threading.Thread(target=self._run_ws_loop, daemon=True)
+        self._thread.start()
         self.get_logger().info(f'WebSocket node starting on ws://{self.host}:{self.websocket_port}')
+
+    def _run_ws_loop(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        self._stop_event = asyncio.Event()
+        loop.create_task(self._start_server())
+        try:
+            loop.run_forever()
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop=loop)
+                for t in pending:
+                    t.cancel()
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception:
+                pass
+            loop.close()
 
     async def _start_server(self):
         try:
@@ -141,7 +161,14 @@ class PilotWebSocketNode(Node):
     def destroy_node(self):
         # signal shutdown of server
         try:
-            self._stop_event.set()
+            if self._loop and self._stop_event:
+                self._loop.call_soon_threadsafe(self._stop_event.set)
+        except Exception:
+            pass
+        # join thread
+        try:
+            if getattr(self, '_thread', None) and self._thread.is_alive():
+                self._thread.join(timeout=2.0)
         except Exception:
             pass
         return super().destroy_node()

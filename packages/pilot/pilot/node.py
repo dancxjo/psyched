@@ -43,8 +43,8 @@ class PilotNode(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
-    self.declare_parameter('enable_http', True)
-    self.declare_parameter('enable_websocket', True)
+        self.declare_parameter('enable_http', True)
+        self.declare_parameter('enable_websocket', True)
 
         def _get_param_value(name):
             # rclpy returns a Python value at .value regardless of declared type
@@ -85,20 +85,20 @@ class PilotNode(Node):
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
         self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
-    self.enable_http = _as_bool(_get_param_value('enable_http'), True)
-    self.enable_websocket = _as_bool(_get_param_value('enable_websocket'), True)
+        self.enable_http = _as_bool(_get_param_value('enable_http'), True)
+        self.enable_websocket = _as_bool(_get_param_value('enable_websocket'), True)
         
         # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
 
         # Web and WebSocket servers
-    self.web_server = None  # http.server instance
-    self.websocket_server = None  # websockets.server.Server (set inside loop)
+        self.web_server = None  # http.server instance
+        self.websocket_server = None  # websockets.server.Server (set inside loop)
         self.web_thread = None
         self.websocket_thread = None
-    self._ws_loop = None  # asyncio loop used by WS server
-    self._ws_stop_event = None  # asyncio.Event to signal WS shutdown
+        self._ws_loop = None  # asyncio loop used by WS server
+        self._ws_stop_event = None  # asyncio.Event to signal WS shutdown
         
         # Connected WebSocket clients
         self.connected_clients = set()
@@ -107,7 +107,7 @@ class PilotNode(Node):
         self.static_path = self._find_static_path()
         
         # Start servers
-    self.start_servers()
+        self.start_servers()
         
         self.get_logger().info('Pilot node started:')
         self.get_logger().info(f'  Static path: {self.static_path}')
