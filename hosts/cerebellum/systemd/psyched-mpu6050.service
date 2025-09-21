@@ -1,0 +1,18 @@
+[Unit]
+Description=Psyched mpu6050 Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pete/psyched
+Environment=HOST=cerebellum
+ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/mpu6050/launch.sh
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/mpu6050/shutdown.sh
+Restart=on-failure
+RestartSec=2
+User=pete
+KillMode=control-group
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
