@@ -25,10 +25,13 @@
                         <span id="batteryState" class="battery-state">--</span>
                     </div>
                 </div>
-                <div class="host-health" id="hostHealthWidget" title="Host health">
-                    <span class="host-chip" id="cpuChip">CPU --%</span>
-                    <span class="host-chip" id="tempChip">Temp --°C</span>
-                    <span class="host-chip" id="memChip">Mem --%</span>
+                <div class="host-health-panel" id="hostHealthPanel">
+                    <button class="host-health-toggle" id="hostHealthToggle" aria-expanded="true" aria-controls="hostHealthWidget" title="Show/Hide system health">System ▾</button>
+                    <div class="host-health" id="hostHealthWidget" title="Host health">
+                        <span class="host-chip" id="cpuChip">CPU --%</span>
+                        <span class="host-chip" id="tempChip">Temp --°C / --°F</span>
+                        <span class="host-chip" id="memChip">Mem --%</span>
+                    </div>
                 </div>
             </div>
         </header>
@@ -113,7 +116,7 @@
                             <span id="batteryCurrent">--</span>
                         </div>
                         <div class="info-item">
-                            <label>Temperature (°C)</label>
+                            <label>Temperature</label>
                             <span id="batteryTemp">--</span>
                         </div>
                         <div class="info-item">

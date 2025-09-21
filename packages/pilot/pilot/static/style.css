@@ -117,12 +117,31 @@ header h1 {
     opacity: 0.9;
 }
 
-/* Host health chips */
-.host-health {
+/* Host health panel (toggle + chips) */
+.host-health-panel {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     margin-left: 10px;
+}
+.host-health-toggle {
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.25);
+    cursor: pointer;
+}
+.host-health-toggle[aria-expanded="false"]::after {
+    content: '';
+}
+.host-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 6px;
+    flex-wrap: wrap; /* allow wrapping on narrow */
+    max-width: 60vw; /* avoid overflow on very narrow */
 }
 .host-chip {
     padding: 4px 8px;
@@ -130,6 +149,16 @@ header h1 {
     color: white;
     border-radius: 10px;
     font-size: 0.9rem;
+}
+
+/* Collapsed state */
+.host-health-panel.collapsed .host-health { display: none; }
+
+/* Small screen defaults: hide host health by default, allow toggle */
+@media (max-width: 640px) {
+    .status { flex-wrap: wrap; } /* status items wrap */
+    .host-health-panel { order: 3; width: 100%; justify-content: center; }
+    .host-health { max-width: 100%; }
 }
 
 /* Main content */

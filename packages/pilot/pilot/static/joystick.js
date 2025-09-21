@@ -66,8 +66,37 @@ class PilotController {
             mem: document.getElementById('memChip'),
         };
 
+        // Host health toggle setup
+        this.setupHostHealthToggle();
+
         // Send periodic keep-alive
         setInterval(() => this.sendPing(), 5000);
+    }
+
+    setupHostHealthToggle() {
+        const panel = document.getElementById('hostHealthPanel');
+        const toggle = document.getElementById('hostHealthToggle');
+        if (!panel || !toggle) return;
+        const small = window.matchMedia('(max-width: 640px)');
+        const applyDefault = () => {
+            const collapsed = small.matches; // default collapsed on small screens
+            panel.classList.toggle('collapsed', collapsed);
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.textContent = collapsed ? 'System ▸' : 'System ▾';
+        };
+        applyDefault();
+        // Update on viewport changes
+        try {
+            small.addEventListener('change', applyDefault);
+        } catch (e) {
+            // Safari fallback
+            small.addListener(applyDefault);
+        }
+        toggle.addEventListener('click', () => {
+            const collapsed = panel.classList.toggle('collapsed');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.textContent = collapsed ? 'System ▸' : 'System ▾';
+        });
     }
 
     setupWebSocket() {
@@ -701,7 +730,9 @@ class PilotController {
             els.current.textContent = payload.current.toFixed(2);
         }
         if (els.temp && typeof payload.temperature === 'number') {
-            els.temp.textContent = String(payload.temperature);
+            const c = payload.temperature;
+            const f = c * 9 / 5 + 32;
+            els.temp.textContent = `${c.toFixed(1)}°C / ${f.toFixed(1)}°F`;
         }
 
         const stateStr = this.formatChargingState(payload.charging_state);
@@ -755,7 +786,9 @@ class PilotController {
             els.cpu.textContent = `CPU ${h.cpu_percent.toFixed(0)}%`;
         }
         if (typeof h.temp_c === 'number') {
-            els.temp.textContent = `Temp ${h.temp_c.toFixed(0)}°C`;
+            const c = h.temp_c;
+            const f = c * 9 / 5 + 32;
+            els.temp.textContent = `Temp ${c.toFixed(0)}°C / ${f.toFixed(0)}°F`;
         }
         if (typeof h.mem_used_percent === 'number') {
             els.mem.textContent = `Mem ${h.mem_used_percent.toFixed(0)}%`;
