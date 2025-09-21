@@ -68,6 +68,21 @@ class PilotWebSocketNode(Node):
         self.create_subscription(Float32, 'battery/charge_ratio', self._on_batt_ratio, 10)
         self.create_subscription(Int16, 'battery/temperature', self._on_batt_temp, 10)
         self.create_subscription(ChargingState, 'battery/charging_state', self._on_batt_state, 10)
+            # Robot status snapshot
+            self._robot = {
+                'mode': None,
+                'speed': None,
+                'bumper': None,
+                'cliff': None,
+                'wheel_drop': None,
+                'ir_omni': None,
+                'diag_level': None,
+                'diag_counts': None,
+            }
+            self._robot_lock = threading.Lock()
+            # Host health cache
+            self._host_health = None
+            self._host_lock = threading.Lock()
 
         # asyncio context in dedicated thread
         self._loop = None
@@ -138,6 +153,13 @@ class PilotWebSocketNode(Node):
             with self._battery_lock:
                 if any(v is not None for v in self._battery.values()):
                     status_msg['battery'] = self._format_battery()
+                with self._robot_lock:
+                    rs = self._format_robot_status()
+                    if rs:
+                        status_msg['robot_status'] = rs
+                with self._host_lock:
+                    if self._host_health is not None:
+                        status_msg['host_health'] = self._host_health
             await websocket.send(json.dumps(status_msg))
         except Exception:
             pass
@@ -183,6 +205,13 @@ class PilotWebSocketNode(Node):
                 with self._battery_lock:
                     if any(v is not None for v in self._battery.values()):
                         pong['battery'] = self._format_battery()
+                    with self._robot_lock:
+                        rs = self._format_robot_status()
+                        if rs:
+                            pong['robot_status'] = rs
+                    with self._host_lock:
+                        if self._host_health is not None:
+                            pong['host_health'] = self._host_health
                 await websocket.send(json.dumps(pong))
             elif t == 'voice':
                 text = data.get('text')
@@ -193,6 +222,19 @@ class PilotWebSocketNode(Node):
                     await websocket.send(json.dumps({'type': 'ack', 'voice': {'text': msg.data}}))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
+        d = self._robot
+        if all(v is None for v in d.values()):
+            return None
+        return {
+            'mode': d['mode'],
+            'speed': d['speed'],
+            'bumper': d['bumper'],
+            'cliff': d['cliff'],
+            'wheel_drop': d['wheel_drop'],
+            'ir_omni': d['ir_omni'],
+            'diag_level': d['diag_level'],
+            'diag_counts': d['diag_counts'],
+        }
 
     # Battery callbacks
     def _broadcast_battery(self):
@@ -265,6 +307,99 @@ class PilotWebSocketNode(Node):
         with self._battery_lock:
             self._battery['charging_state'] = msg
         self._broadcast_battery()
+
+        # Robot callbacks
+        def _on_mode(self, msg: Mode):
+            with self._robot_lock:
+                try:
+                    self._robot['mode'] = int(msg.mode)
+                except Exception:
+                    self._robot['mode'] = None
+
+        def _on_odom(self, msg: Odometry):
+            try:
+                vx = float(msg.twist.twist.linear.x)
+                vy = float(msg.twist.twist.linear.y)
+                speed = (vx * vx + vy * vy) ** 0.5
+            except Exception:
+                speed = None
+            with self._robot_lock:
+                self._robot['speed'] = speed
+
+        def _on_bumper(self, msg: Bumper):
+            any_pressed = bool(getattr(msg, 'is_left_pressed', False) or getattr(msg, 'is_right_pressed', False))
+            with self._robot_lock:
+                self._robot['bumper'] = any_pressed
+
+        def _on_cliff(self, msg: Cliff):
+            any_cliff = bool(
+                getattr(msg, 'is_cliff_left', False) or getattr(msg, 'is_cliff_front_left', False) or getattr(msg, 'is_cliff_right', False) or getattr(msg, 'is_cliff_front_right', False)
+            )
+            with self._robot_lock:
+                self._robot['cliff'] = any_cliff
+
+        def _on_wheeldrop(self, _msg: Empty):
+            with self._robot_lock:
+                self._robot['wheel_drop'] = True
+
+        def _on_ir_omni(self, msg: UInt16):
+            with self._robot_lock:
+                try:
+                    self._robot['ir_omni'] = int(msg.data)
+                except Exception:
+                    self._robot['ir_omni'] = None
+
+        def _on_diag(self, msg: DiagnosticArray):
+            counts = {0: 0, 1: 0, 2: 0}
+            max_lvl = 0
+            for st in getattr(msg, 'status', []):
+                try:
+                    lvl = int(getattr(st, 'level', 0))
+                except Exception:
+                    lvl = 0
+                counts[lvl] = counts.get(lvl, 0) + 1
+                if lvl > max_lvl:
+                    max_lvl = lvl
+            with self._robot_lock:
+                self._robot['diag_level'] = max_lvl
+                self._robot['diag_counts'] = counts
+
+        def _broadcast_robot_status(self):
+            if not self.connected_clients:
+                return
+            with self._robot_lock:
+                payload = self._format_robot_status()
+            if not payload:
+                return
+            data = json.dumps({'type': 'robot_status', **payload})
+            async def _send_all():
+                for client in list(self.connected_clients):
+                    try:
+                        await client.send(data)
+                    except Exception:
+                        pass
+            if self._loop:
+                asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+        # Host health
+        def _on_host_health(self, msg: String):
+            try:
+                obj = json.loads(msg.data)
+            except Exception:
+                obj = {'raw': msg.data}
+            with self._host_lock:
+                self._host_health = obj
+            if not self.connected_clients:
+                return
+            data = json.dumps({'type': 'host_health', **obj})
+            async def _send_all():
+                for client in list(self.connected_clients):
+                    try:
+                        await client.send(data)
+                    except Exception:
+                        pass
+            if self._loop:
+                asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
 
     def destroy_node(self):
         # signal shutdown of server

@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name + '/launch', ['launch/pilot.launch.py']),
         ('share/' + package_name + '/static', ['pilot/static/index.html', 'pilot/static/joystick.js', 'pilot/static/style.css']),
     ],
-    install_requires=['setuptools', 'websockets', 'asyncio'],
+    install_requires=['setuptools', 'websockets', 'asyncio', 'psutil'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',
@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'pilot_node = pilot.node:main',
             'pilot_websocket_node = pilot.websocket_node:main',
+            'host_health = pilot.host_health_node:main',
         ],
     },
 )

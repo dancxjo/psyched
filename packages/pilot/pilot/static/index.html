@@ -25,6 +25,11 @@
                         <span id="batteryState" class="battery-state">--</span>
                     </div>
                 </div>
+                <div class="host-health" id="hostHealthWidget" title="Host health">
+                    <span class="host-chip" id="cpuChip">CPU --%</span>
+                    <span class="host-chip" id="tempChip">Temp --°C</span>
+                    <span class="host-chip" id="memChip">Mem --%</span>
+                </div>
             </div>
         </header>
 
@@ -70,6 +75,30 @@
                         <div class="info-item">
                             <label>Angular Z:</label>
                             <span id="angularZ">0.00</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Mode</label>
+                            <span id="robotMode">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Speed (m/s)</label>
+                            <span id="robotSpeed">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Bumper</label>
+                            <span id="robotBumper">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Cliff</label>
+                            <span id="robotCliff">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>IR Omni</label>
+                            <span id="robotIrOmni">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Diagnostics</label>
+                            <span id="robotDiag">--</span>
                         </div>
                         <div class="info-item">
                             <label>Battery %</label>

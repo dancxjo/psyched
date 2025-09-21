@@ -52,6 +52,19 @@ class PilotController {
             temp: document.getElementById('batteryTemp'),
             stateInfo: document.getElementById('batteryStateInfo'),
         };
+        this.robotEls = {
+            mode: document.getElementById('robotMode'),
+            speed: document.getElementById('robotSpeed'),
+            bumper: document.getElementById('robotBumper'),
+            cliff: document.getElementById('robotCliff'),
+            ir: document.getElementById('robotIrOmni'),
+            diag: document.getElementById('robotDiag'),
+        };
+        this.hostEls = {
+            cpu: document.getElementById('cpuChip'),
+            temp: document.getElementById('tempChip'),
+            mem: document.getElementById('memChip'),
+        };
 
         // Send periodic keep-alive
         setInterval(() => this.sendPing(), 5000);
@@ -606,6 +619,12 @@ class PilotController {
                     if (message.battery) {
                         this.updateBattery(message.battery);
                     }
+                    if (message.robot_status) {
+                        this.updateRobotStatus(message.robot_status);
+                    }
+                    if (message.host_health) {
+                        this.updateHostHealth(message.host_health);
+                    }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {
@@ -618,9 +637,21 @@ class PilotController {
                     if (message.battery) {
                         this.updateBattery(message.battery);
                     }
+                    if (message.robot_status) {
+                        this.updateRobotStatus(message.robot_status);
+                    }
+                    if (message.host_health) {
+                        this.updateHostHealth(message.host_health);
+                    }
                     break;
                 case 'battery':
                     this.updateBattery(message);
+                    break;
+                case 'robot_status':
+                    this.updateRobotStatus(message);
+                    break;
+                case 'host_health':
+                    this.updateHostHealth(message);
                     break;
                 default:
                     console.log('Unknown message type:', message.type);
@@ -687,6 +718,47 @@ class PilotController {
             case 4: return 'Waiting';
             case 5: return 'Fault';
             default: return '--';
+        }
+    }
+
+    updateRobotStatus(s) {
+        const els = this.robotEls;
+        if (!els) return;
+        const modeStr = this.formatMode(s.mode);
+        if (els.mode) els.mode.textContent = modeStr;
+        if (els.speed && typeof s.speed === 'number') els.speed.textContent = s.speed.toFixed(2);
+        if (els.bumper && typeof s.bumper === 'boolean') els.bumper.textContent = s.bumper ? 'PRESSED' : 'OK';
+        if (els.cliff && typeof s.cliff === 'boolean') els.cliff.textContent = s.cliff ? 'DETECTED' : 'OK';
+        if (els.ir && typeof s.ir_omni === 'number') els.ir.textContent = String(s.ir_omni);
+        if (els.diag && s.diag_counts) {
+            const lvl = s.diag_level ?? 0;
+            const counts = s.diag_counts;
+            const txt = `L${lvl} ok:${counts[0] || 0} warn:${counts[1] || 0} err:${counts[2] || 0}`;
+            els.diag.textContent = txt;
+        }
+    }
+
+    formatMode(code) {
+        switch (code) {
+            case 0: return 'OFF';
+            case 1: return 'PASSIVE';
+            case 2: return 'SAFE';
+            case 3: return 'FULL';
+            default: return '--';
+        }
+    }
+
+    updateHostHealth(h) {
+        const els = this.hostEls;
+        if (!els) return;
+        if (typeof h.cpu_percent === 'number') {
+            els.cpu.textContent = `CPU ${h.cpu_percent.toFixed(0)}%`;
+        }
+        if (typeof h.temp_c === 'number') {
+            els.temp.textContent = `Temp ${h.temp_c.toFixed(0)}°C`;
+        }
+        if (typeof h.mem_used_percent === 'number') {
+            els.mem.textContent = `Mem ${h.mem_used_percent.toFixed(0)}%`;
         }
     }
 }
