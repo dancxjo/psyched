@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Gracefully stop the imu module's ros2 launch
-PATTERN="ros2 launch ros2_mpu6050 ros2_mpu6050.launch.py"
+PATTERN="ros2 launch mpu6050driver mpu6050driver_launch.py"
 TIMEOUT=${TIMEOUT:-10}
 
 kill_with_pattern() {

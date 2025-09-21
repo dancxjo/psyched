@@ -19,4 +19,4 @@ if [ -n "$PARAM_FILE_VAL" ]; then
   LAUNCH_ARGS+=("param_file:=${PARAM_FILE_VAL}")
 fi
 
-ros2 launch ros2_mpu6050 ros2_mpu6050.launch.py ${LAUNCH_ARGS[@]:-}
+ros2 launch mpu6050driver mpu6050driver_launch.py ${LAUNCH_ARGS[@]:-}

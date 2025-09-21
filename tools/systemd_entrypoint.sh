@@ -2,7 +2,7 @@
 set -euo pipefail
 # Usage: systemd_entrypoint.sh <script> [args...]
 # Sources ROS 2 and workspace env, then execs the given script with args
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="/home/pete/psyched"
 SETUP_SH="$REPO_DIR/tools/setup_env.sh"
 if [ -f "$SETUP_SH" ]; then
   # Temporarily disable nounset while sourcing external setup to avoid failures

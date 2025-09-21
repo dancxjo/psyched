@@ -20,8 +20,11 @@ done
 
 # Remove specific src entries
 SRC_DIR="${REPO_DIR}/src"
-for d in ros2_mpu6050; do
-    [ -L "${SRC_DIR}/$d" ] || [ -d "${SRC_DIR}/$d" ] && rm -rf "${SRC_DIR}/$d"
+# remove either the old nested name or the new driver directory
+for d in ros2_mpu6050 ros2_mpu6050_driver; do
+    if [ -L "${SRC_DIR}/$d" ] || [ -d "${SRC_DIR}/$d" ]; then
+        rm -rf "${SRC_DIR}/$d"
+    fi
 done
 
 # Disable/remove systemd service if possible
