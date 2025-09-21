@@ -110,6 +110,8 @@ if [[ "${ENGINE}" == "piper" ]]; then
     fi
   fi
 
+  sudo apt install -y sox libsox-fmt-all || true
+
   # Python library is optional but helpful for fallback
   if ! python3 -c 'import piper' >/dev/null 2>&1; then
     echo "Installing optional piper-tts library (for fallback)..."
