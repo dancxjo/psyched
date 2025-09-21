@@ -244,6 +244,13 @@ main {
     gap: 20px;
 }
 
+.aux-controls {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .joystick {
     width: 200px;
     height: 200px;

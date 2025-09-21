@@ -520,23 +520,23 @@ class PilotController {
         // Update knob position
         this.joystickKnob.style.transform = `translate(${knobX - 30}px, ${knobY - 30}px)`;
 
-        // Calculate normalized turn (-1 to 1) from X only
-        const normalizedX = knobX / this.maxKnobDistance;
+        // Map joystick vector to velocities:
+        // Up (negative Y in screen) => +linear.x; Left => +angular.z (conventional left turn positive)
+        const nx = knobX / this.maxKnobDistance; // -1..1 (right positive)
+        const ny = knobY / this.maxKnobDistance; // -1..1 (down positive)
+        // Apply small deadzone to avoid jitter
+        const dead = 0.06;
+        const dz = (v) => (Math.abs(v) < dead ? 0 : v);
+        const nxDZ = dz(nx), nyDZ = dz(ny);
 
-        // Map to cmd_vel
-        const maxAngularVel = 2.0; // rad/s
+        const maxLinearVel = 0.7;   // m/s
+        const maxAngularVel = 2.0;  // rad/s
+        const linearX = -nyDZ * maxLinearVel;      // up => forward
+        const angularZ = -nxDZ * maxAngularVel;    // left => positive turn
 
         this.currentVelocity = {
-            linear: {
-                x: this.currentVelocity.linear.x || 0.0, // Keep current linear x (from D-pad)
-                y: 0.0,
-                z: 0.0
-            },
-            angular: {
-                x: 0.0,
-                y: 0.0,
-                z: -normalizedX * maxAngularVel // Left/right (negative for conventional turning)
-            }
+            linear: { x: linearX, y: 0.0, z: 0.0 },
+            angular: { x: 0.0, y: 0.0, z: angularZ }
         };
 
         this.updateVelocityDisplay();

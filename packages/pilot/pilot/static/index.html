@@ -94,6 +94,29 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Moved auxiliary controls under movement commands -->
+                    <div class="aux-controls">
+                        <div class="controls">
+                            <button id="resetButton" class="reset-button">🔄 Reset</button>
+                        </div>
+
+                        <div class="voice-controls">
+                            <h3>Voice</h3>
+                            <div class="voice-row">
+                                <input id="voiceInput" type="text" placeholder="Type something for the robot to say..." />
+                                <button id="voiceSendButton" class="voice-button">📣 Speak</button>
+                                <button id="marcoButton" class="voice-button" title="Robot will say 'Polo!'">Marco?</button>
+                            </div>
+                            <div id="voiceHint" class="voice-hint">Press Enter to send</div>
+                        </div>
+
+                        <div class="services-controls">
+                            <h3>Services</h3>
+                            <div id="servicesPills" class="services-pills" aria-live="polite"></div>
+                            <div class="services-actions-hint">Tap a pill to Start/Stop; long-press for Enable/Disable.</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="info-section">
@@ -157,25 +180,7 @@
                         </div>
                     </div>
                     
-                    <div class="controls">
-                        <button id="resetButton" class="reset-button">🔄 Reset</button>
-                    </div>
-
-                    <div class="voice-controls">
-                        <h3>Voice</h3>
-                        <div class="voice-row">
-                            <input id="voiceInput" type="text" placeholder="Type something for the robot to say..." />
-                            <button id="voiceSendButton" class="voice-button">📣 Speak</button>
-                            <button id="marcoButton" class="voice-button" title="Robot will say 'Polo!'">Marco?</button>
-                        </div>
-                        <div id="voiceHint" class="voice-hint">Press Enter to send</div>
-                    </div>
-
-                    <div class="services-controls">
-                        <h3>Services</h3>
-                        <div id="servicesPills" class="services-pills" aria-live="polite"></div>
-                        <div class="services-actions-hint">Tap a pill to Start/Stop; long-press for Enable/Disable.</div>
-                    </div>
+                    
                 </div>
             </div>
 
@@ -184,8 +189,9 @@
                 <ul>
                     <li>Use the D-Pad: Up/Down for forward/backward, Left/Right to turn</li>
                     <li>Press and hold directions to move; release to stop</li>
-                    <li>Drag the joystick left/right to turn if you prefer analog steering</li>
+                    <li>Use the joystick: distance from center sets speed; left/right sets turn rate; up is forward, down is reverse</li>
                     <li>Use Emergency Stop for immediate halt</li>
+                    <li>Joystick overlays: blue robot rotates with yaw; red arrow shows acceleration vector; orange arc shows gyro Z (turn rate)</li>
                 </ul>
             </div>
         </main>
