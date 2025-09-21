@@ -104,14 +104,23 @@ for module in "${modules[@]}"; do
   cat >"${OUTPUT_DIR}/${service_name}" <<UNIT
 [Unit]
 Description=Psyched ${name} Service
-After=network.target
+# Ensure networking is fully configured before starting ROS2 nodes that may
+# rely on network interfaces for DDS discovery.
+After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=${REPO_DIR}
 Environment=HOST=${HOST_SHORT}
+# ExecStart: run the launch script via the entrypoint which will source
+# the ROS environment and then exec the launch script. Keep it simple.
 ExecStart=${entrypoint} ${launch_path}
-ExecStop=${entrypoint} ${shutdown_path}
+# ExecStop: some shutdown scripts may not be marked executable; run the
+# entrypoint which will source env and then invoke the shutdown script via
+# an explicit shell command to avoid permission-denied exit code 126.
+# We use bash -c to ensure the shutdown script is executed by the shell.
+ExecStop=${entrypoint} bash -c "\"${shutdown_path}\""
 Restart=on-failure
 RestartSec=2
 User=${SERVICE_USER}
