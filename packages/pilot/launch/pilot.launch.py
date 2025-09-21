@@ -17,6 +17,11 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_WEB_PORT', default_value='8080'),
         description='Port for the web interface'
     )
+    imu_topic_arg = DeclareLaunchArgument(
+        'imu_topic',
+        default_value=EnvironmentVariable(name='PILOT_IMU_TOPIC', default_value='/imu/mpu6050'),
+        description='IMU topic (sensor_msgs/Imu) for UI overlay'
+    )
     
     websocket_port_arg = DeclareLaunchArgument(
         'websocket_port',
@@ -86,6 +91,7 @@ def generate_launch_description():
             'websocket_port': LaunchConfiguration('websocket_port'),
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
+            'imu_topic': LaunchConfiguration('imu_topic'),
             'host': LaunchConfiguration('host'),
             'enable_http': LaunchConfiguration('enable_http'),
             'enable_websocket': LaunchConfiguration('enable_websocket'),
@@ -103,6 +109,7 @@ def generate_launch_description():
             'websocket_port': LaunchConfiguration('websocket_port'),
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
+            'imu_topic': LaunchConfiguration('imu_topic'),
             'host': LaunchConfiguration('host'),
             'host_health_topic': LaunchConfiguration('host_health_topic'),
         }]
@@ -126,6 +133,7 @@ def generate_launch_description():
         cmd_vel_topic_arg,
         voice_topic_arg,
         host_arg,
+    imu_topic_arg,
         enable_http_arg,
         enable_ws_arg,
         run_separate_ws_arg,

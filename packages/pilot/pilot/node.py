@@ -19,6 +19,8 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
+from sensor_msgs.msg import Imu
+from math import atan2
 
 try:
     import websockets
@@ -45,6 +47,7 @@ class PilotNode(Node):
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('enable_http', True)
         self.declare_parameter('enable_websocket', True)
+        self.declare_parameter('imu_topic', '/imu/mpu6050')
 
         def _get_param_value(name):
             # rclpy returns a Python value at .value regardless of declared type
@@ -84,6 +87,7 @@ class PilotNode(Node):
         self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
         self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
+        self.imu_topic = _as_str(_get_param_value('imu_topic'), '/imu/mpu6050')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
         self.enable_http = _as_bool(_get_param_value('enable_http'), True)
         self.enable_websocket = _as_bool(_get_param_value('enable_websocket'), True)
@@ -91,6 +95,12 @@ class PilotNode(Node):
         # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+        # Subscribers
+        self._imu_last = None  # cache last IMU message dictionary
+        try:
+            self.imu_sub = self.create_subscription(Imu, self.imu_topic, self._on_imu, 10)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to subscribe to IMU: {e}')
 
         # Web and WebSocket servers
         self.web_server = None  # http.server instance
@@ -108,6 +118,9 @@ class PilotNode(Node):
         
         # Start servers
         self.start_servers()
+
+        # Periodic push of IMU to clients (20 Hz)
+        self.create_timer(0.05, self._tick_broadcast)
         
         self.get_logger().info('Pilot node started:')
         self.get_logger().info(f'  Static path: {self.static_path}')
@@ -115,6 +128,52 @@ class PilotNode(Node):
         self.get_logger().info(f'  WebSocket: ws://{self.host}:{self.websocket_port}')
         self.get_logger().info(f'  Publishing to: {self.cmd_vel_topic}')
         self.get_logger().info(f'  Voice topic: {self.voice_topic}')
+        self.get_logger().info(f'  IMU topic: {self.imu_topic}')
+
+    def _on_imu(self, msg: Imu):
+        # Extract linear acceleration
+        ax = float(msg.linear_acceleration.x)
+        ay = float(msg.linear_acceleration.y)
+        az = float(msg.linear_acceleration.z)
+        # Angular velocity
+        gx = float(msg.angular_velocity.x)
+        gy = float(msg.angular_velocity.y)
+        gz = float(msg.angular_velocity.z)
+        # Orientation yaw from quaternion (if provided)
+        qx = float(msg.orientation.x)
+        qy = float(msg.orientation.y)
+        qz = float(msg.orientation.z)
+        qw = float(msg.orientation.w)
+        # Robust yaw (z) extraction
+        # yaw = atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz))
+        try:
+            yaw = atan2(2.0*(qw*qz + qx*qy), 1.0 - 2.0*(qy*qy + qz*qz))
+        except Exception:
+            yaw = 0.0
+        self._imu_last = {
+            'ax': ax, 'ay': ay, 'az': az,
+            'gx': gx, 'gy': gy, 'gz': gz,
+            'yaw': yaw,
+        }
+
+    async def _send_ws_json(self, websocket, payload):
+        try:
+            await websocket.send(json.dumps(payload))
+        except Exception:
+            pass
+
+    def _tick_broadcast(self):
+        # Broadcast IMU if we have clients and data
+        if not self.connected_clients or not self._imu_last:
+            return
+        payload = { 'type': 'imu', **self._imu_last }
+        # Send to all clients via the WS loop thread-safely
+        if self._ws_loop is not None:
+            for ws in list(self.connected_clients):
+                try:
+                    self._ws_loop.call_soon_threadsafe(lambda w=ws, p=payload: asyncio.create_task(self._send_ws_json(w, p)))
+                except Exception:
+                    pass
     
     def _find_static_path(self) -> Path:
         """Find the static files directory."""
@@ -233,6 +292,7 @@ class PilotNode(Node):
                 'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0,
                 'voice_topic': self.voice_topic,
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
+                'imu_topic': self.imu_topic,
             }
             await websocket.send(json.dumps(status_msg))
         except Exception as e:

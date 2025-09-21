@@ -18,6 +18,8 @@ from std_msgs.msg import String, Float32, Int16, UInt16, Empty
 from nav_msgs.msg import Odometry
 from diagnostic_msgs.msg import DiagnosticArray
 from create_msgs.msg import ChargingState, Mode, Bumper, Cliff
+from sensor_msgs.msg import Imu
+from math import atan2
 
 try:
     import websockets
@@ -35,6 +37,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
+    self.declare_parameter('imu_topic', '/imu/mpu6050')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -48,9 +51,17 @@ class PilotWebSocketNode(Node):
         self.voice_topic = str(_param('voice_topic', '/voice'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
+    self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+
+        # IMU subscription/cache
+        self._imu_last = None
+        try:
+            self.create_subscription(Imu, self.imu_topic, self._on_imu, 10)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to subscribe to IMU: {e}')
 
         # Battery topics (from create_driver)
         # Note: topics are relative to create_driver node namespace
@@ -175,6 +186,7 @@ class PilotWebSocketNode(Node):
                 'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0,
                 'voice_topic': self.voice_topic,
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
+                'imu_topic': self.imu_topic,
             }
             # include latest battery snapshot if available
             with self._battery_lock:
@@ -227,7 +239,8 @@ class PilotWebSocketNode(Node):
                     'cmd_vel_topic': self.cmd_vel_topic,
                     'publisher_matched_count': sub_count,
                     'voice_topic': self.voice_topic,
-                    'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0
+                    'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
+                    'imu_topic': self.imu_topic,
                 }
                 with self._battery_lock:
                     if any(v is not None for v in self._battery.values()):
@@ -251,6 +264,35 @@ class PilotWebSocketNode(Node):
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
         return None
+
+    # IMU forwarding
+    def _on_imu(self, msg: Imu):
+        try:
+            ax = float(msg.linear_acceleration.x)
+            ay = float(msg.linear_acceleration.y)
+            az = float(msg.linear_acceleration.z)
+            gx = float(msg.angular_velocity.x)
+            gy = float(msg.angular_velocity.y)
+            gz = float(msg.angular_velocity.z)
+            qx = float(msg.orientation.x)
+            qy = float(msg.orientation.y)
+            qz = float(msg.orientation.z)
+            qw = float(msg.orientation.w)
+            yaw = atan2(2.0*(qw*qz + qx*qy), 1.0 - 2.0*(qy*qy + qz*qz))
+        except Exception:
+            ax=ay=az=gx=gy=gz=yaw=0.0
+        self._imu_last = {'ax': ax, 'ay': ay, 'az': az, 'gx': gx, 'gy': gy, 'gz': gz, 'yaw': yaw}
+        # push to clients immediately (throttle implicitly by ROS rate)
+        if not self.connected_clients or self._loop is None:
+            return
+        data = json.dumps({'type': 'imu', **self._imu_last})
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
 
     # Battery callbacks
     def _broadcast_battery(self):

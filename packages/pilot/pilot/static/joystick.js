@@ -71,6 +71,15 @@ class PilotController {
 
         // Send periodic keep-alive
         setInterval(() => this.sendPing(), 5000);
+
+        // IMU DOM refs
+        this.imuEls = {
+            overlay: document.getElementById('imuOverlay'),
+            robotYaw: document.getElementById('imuRobotYaw'),
+            accelVec: document.getElementById('imuAccelVec'),
+            gyroZ: document.getElementById('imuGyroZ'),
+        };
+        this.lastImuTs = 0;
     }
 
     setupHostHealthToggle() {
@@ -645,6 +654,9 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    if (message.imu_topic) {
+                        // could show somewhere if desired
+                    }
                     if (message.battery) {
                         this.updateBattery(message.battery);
                     }
@@ -663,6 +675,9 @@ class PilotController {
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
                     }
+                    if (message.imu_topic) {
+                        // could show somewhere if desired
+                    }
                     if (message.battery) {
                         this.updateBattery(message.battery);
                     }
@@ -672,6 +687,9 @@ class PilotController {
                     if (message.host_health) {
                         this.updateHostHealth(message.host_health);
                     }
+                    break;
+                case 'imu':
+                    this.updateImu(message);
                     break;
                 case 'battery':
                     this.updateBattery(message);
@@ -792,6 +810,56 @@ class PilotController {
         }
         if (typeof h.mem_used_percent === 'number') {
             els.mem.textContent = `Mem ${h.mem_used_percent.toFixed(0)}%`;
+        }
+    }
+
+    updateImu(imu) {
+        // imu: { ax, ay, az, gx, gy, gz, yaw }
+        const els = this.imuEls;
+        if (!els || !els.overlay) return;
+
+        // Rotate robot by yaw (radians to degrees)
+        if (typeof imu.yaw === 'number' && isFinite(imu.yaw) && els.robotYaw) {
+            const deg = imu.yaw * 180 / Math.PI;
+            els.robotYaw.setAttribute('transform', `rotate(${deg})`);
+        }
+
+        // Acceleration vector in plane (x: forward, y: left). Scale visually.
+        if (typeof imu.ax === 'number' && typeof imu.ay === 'number' && els.accelVec) {
+            const scale = 10; // pixels per m/s^2 (tuned visually)
+            // In our world, +x forward = upward in joystick SVG (y decreases). +y left = left (x decreases)
+            const dx = -imu.ay * scale; // left/right
+            const dy = -imu.ax * scale; // up/down
+            const x2 = 100 + Math.max(-80, Math.min(80, dx));
+            const y2 = 100 + Math.max(-80, Math.min(80, dy));
+            els.accelVec.setAttribute('x2', String(x2));
+            els.accelVec.setAttribute('y2', String(y2));
+            els.accelVec.setAttribute('opacity', (Math.hypot(dx, dy) > 2) ? '0.95' : '0.5');
+        }
+
+        // Gyro Z arc: map gz rad/s to arc length and direction
+        if (typeof imu.gz === 'number' && isFinite(imu.gz) && els.gyroZ) {
+            const maxGz = 4.0; // rad/s corresponding to full semicircle
+            const clamped = Math.max(-maxGz, Math.min(maxGz, imu.gz));
+            const frac = Math.abs(clamped) / maxGz; // 0..1
+            const sweep = Math.max(0.02, Math.PI * frac); // up to 180 degrees
+
+            // Draw arc centered at top (start angle depends on sign)
+            const r = 88;
+            const cx = 100, cy = 100;
+            const sign = clamped >= 0 ? 1 : -1; // CCW positive
+            // Base angle is -90deg; arc goes left for positive, right for negative
+            const start = (-Math.PI / 2) + (sign > 0 ? -sweep : 0);
+            const end = (-Math.PI / 2) + (sign > 0 ? 0 : sweep);
+            const x0 = cx + r * Math.cos(start);
+            const y0 = cy + r * Math.sin(start);
+            const x1 = cx + r * Math.cos(end);
+            const y1 = cy + r * Math.sin(end);
+            const largeArc = sweep > Math.PI ? 1 : 0;
+            const sweepFlag = sign > 0 ? 1 : 0; // CCW for positive
+            const d = `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+            els.gyroZ.setAttribute('d', d);
+            els.gyroZ.setAttribute('opacity', frac > 0.05 ? '0.9' : '0.3');
         }
     }
 }
