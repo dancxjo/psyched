@@ -887,15 +887,16 @@ class PilotController {
         services.forEach(svc => {
             if (!svc || !svc.name) return;
             this.services[svc.name] = svc;
-            const pillId = this.serviceId(svc.name);
-            let pill = document.getElementById(pillId);
-            if (!pill) {
-                // New pill
-                pill = this.renderServicePill(svc);
-                this.servicesContainer.appendChild(pill);
-            } else {
-                // Update existing pill
-                this.populateServicePill(pill, svc);
+            // Update legacy pill if still present (container may be absent)
+            if (this.servicesContainer) {
+                const pillId = this.serviceId(svc.name);
+                let pill = document.getElementById(pillId);
+                if (!pill) {
+                    pill = this.renderServicePill(svc);
+                    this.servicesContainer.appendChild(pill);
+                } else {
+                    this.populateServicePill(pill, svc);
+                }
             }
 
             // Ensure a persistent log block exists per service
@@ -908,6 +909,8 @@ class PilotController {
                     // Fetch details once on creation; further updates will come from backend
                     this.requestSystemdDetail(svc.name, 200);
                 }
+                // Update control state inside the block
+                this.updateServiceLogControls(svc);
             }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
@@ -1029,7 +1032,13 @@ class PilotController {
         wrap.className = 'service-log-block';
         wrap.id = id;
         wrap.innerHTML = `
-            <h4 class="service-log-title">${this.prettyServiceName(unit)}</h4>
+            <div class="service-log-header">
+              <h4 class="service-log-title">${this.prettyServiceName(unit)}</h4>
+              <div class="service-log-controls" data-unit="${unit}">
+                <label class="svc-check"><input type="checkbox" class="svc-active"> Active</label>
+                <label class="svc-check"><input type="checkbox" class="svc-enabled"> Enabled</label>
+              </div>
+            </div>
             <div class="service-log-columns">
                 <div class="service-log-col">
                     <div class="service-log-heading">systemctl status</div>
@@ -1041,7 +1050,39 @@ class PilotController {
                 </div>
             </div>
         `;
+        // Wire events
+        const controls = wrap.querySelector('.service-log-controls');
+        const activeCb = wrap.querySelector('.svc-active');
+        const enabledCb = wrap.querySelector('.svc-enabled');
+        if (controls && activeCb && enabledCb) {
+            activeCb.addEventListener('change', (e) => {
+                const checked = activeCb.checked;
+                const action = checked ? 'start' : 'stop';
+                this.systemdAction(action, unit);
+            });
+            enabledCb.addEventListener('change', (e) => {
+                const checked = enabledCb.checked;
+                const action = checked ? 'enable' : 'disable';
+                this.systemdAction(action, unit);
+            });
+        }
         return wrap;
+    }
+
+    updateServiceLogControls(svc) {
+        const id = this.serviceId(svc.name) + '-detail';
+        const block = document.getElementById(id);
+        if (!block) return;
+        const activeCb = block.querySelector('.svc-active');
+        const enabledCb = block.querySelector('.svc-enabled');
+        if (activeCb) {
+            const isActive = (svc.active || '').toLowerCase() === 'active';
+            activeCb.checked = isActive;
+        }
+        if (enabledCb) {
+            const isEnabled = (svc.enabled || '').toLowerCase() === 'enabled';
+            enabledCb.checked = isEnabled;
+        }
     }
 
     toggleDetails(unit, open) { /* no-op after logs redesign */ }

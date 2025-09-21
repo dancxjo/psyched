@@ -383,6 +383,10 @@ footer { margin-top: 20px; background: var(--lcars-panel); border-radius: var(--
   border-radius: var(--radius-md);
   padding: 12px;
 }
+.service-log-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.service-log-controls { display: inline-flex; gap: 12px; align-items: center; }
+.service-log-controls .svc-check { font-size: 0.9rem; color: var(--lcars-text); display: inline-flex; gap: 6px; align-items: center; }
+.service-log-controls input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--lcars-blue); }
 .service-log-title {
   color: var(--lcars-text);
   text-transform: uppercase;
