@@ -34,7 +34,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
-    self.declare_parameter('host_health_topic', 'auto')
+        self.declare_parameter('host_health_topic', 'auto')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -431,98 +431,6 @@ class PilotWebSocketNode(Node):
                     pass
         if self._loop:
             asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
-        # Robot callbacks
-        def _on_mode(self, msg: Mode):
-            with self._robot_lock:
-                try:
-                    self._robot['mode'] = int(msg.mode)
-                except Exception:
-                    self._robot['mode'] = None
-
-        def _on_odom(self, msg: Odometry):
-            try:
-                vx = float(msg.twist.twist.linear.x)
-                vy = float(msg.twist.twist.linear.y)
-                speed = (vx * vx + vy * vy) ** 0.5
-            except Exception:
-                speed = None
-            with self._robot_lock:
-                self._robot['speed'] = speed
-
-        def _on_bumper(self, msg: Bumper):
-            any_pressed = bool(getattr(msg, 'is_left_pressed', False) or getattr(msg, 'is_right_pressed', False))
-            with self._robot_lock:
-                self._robot['bumper'] = any_pressed
-
-        def _on_cliff(self, msg: Cliff):
-            any_cliff = bool(
-                getattr(msg, 'is_cliff_left', False) or getattr(msg, 'is_cliff_front_left', False) or getattr(msg, 'is_cliff_right', False) or getattr(msg, 'is_cliff_front_right', False)
-            )
-            with self._robot_lock:
-                self._robot['cliff'] = any_cliff
-
-        def _on_wheeldrop(self, _msg: Empty):
-            with self._robot_lock:
-                self._robot['wheel_drop'] = True
-
-        def _on_ir_omni(self, msg: UInt16):
-            with self._robot_lock:
-                try:
-                    self._robot['ir_omni'] = int(msg.data)
-                except Exception:
-                    self._robot['ir_omni'] = None
-
-        def _on_diag(self, msg: DiagnosticArray):
-            counts = {0: 0, 1: 0, 2: 0}
-            max_lvl = 0
-            for st in getattr(msg, 'status', []):
-                try:
-                    lvl = int(getattr(st, 'level', 0))
-                except Exception:
-                    lvl = 0
-                counts[lvl] = counts.get(lvl, 0) + 1
-                if lvl > max_lvl:
-                    max_lvl = lvl
-            with self._robot_lock:
-                self._robot['diag_level'] = max_lvl
-                self._robot['diag_counts'] = counts
-
-        def _broadcast_robot_status(self):
-            if not self.connected_clients:
-                return
-            with self._robot_lock:
-                payload = self._format_robot_status()
-            if not payload:
-                return
-            data = json.dumps({'type': 'robot_status', **payload})
-            async def _send_all():
-                for client in list(self.connected_clients):
-                    try:
-                        await client.send(data)
-                    except Exception:
-                        pass
-            if self._loop:
-                asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
-
-        # Host health
-        def _on_host_health(self, msg: String):
-            try:
-                obj = json.loads(msg.data)
-            except Exception:
-                obj = {'raw': msg.data}
-            with self._host_lock:
-                self._host_health = obj
-            if not self.connected_clients:
-                return
-            data = json.dumps({'type': 'host_health', **obj})
-            async def _send_all():
-                for client in list(self.connected_clients):
-                    try:
-                        await client.send(data)
-                    except Exception:
-                        pass
-            if self._loop:
-                asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
 
     def destroy_node(self):
         # signal shutdown of server
