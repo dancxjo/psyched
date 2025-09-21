@@ -11,147 +11,82 @@
 #     or
 #       SETUP_ENV_MODE=source bash /path/to/tools/setup_env.sh
 
-
 MODE=${SETUP_ENV_MODE:-source}
 
-# Determine repository root (directory above this tools/ directory)
+# Determine repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Try to locate the main repository root by walking upward from this script and
-# checking for repository markers (Makefile and hosts directory). If not found
-# use the parent of tools/ as a fallback.
-find_repo_root() {
-  local d="$SCRIPT_DIR/.."
-  d="$(cd "$d" && pwd)"
-  local last_match=""
-  while [[ "$d" != "/" && -n "$d" ]]; do
-    if [[ -f "$d/Makefile" && -d "$d/hosts" ]]; then
-      last_match="$d"
-    fi
-    d="$(cd "$d/.." && pwd)"
-  done
-  if [[ -n "$last_match" ]]; then
-    printf '%s' "$last_match"
-    return
-  fi
-  # fallback to parent of tools
-  printf '%s' "$(cd "$SCRIPT_DIR/.." && pwd)"
-}
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-REPO_ROOT="$(find_repo_root)"
-
-# Source /opt/ros/<version>/setup.bash and <repo_root>/install/setup.bash
-# Behavior:
-#  - If SETUP_ENV_MODE=print, print the source commands instead of executing them
-#  - Prefer ROS_VERSION env var -> ROS_DISTRO env var -> /opt/ros/kilted -> first
-#    available distro under /opt/ros
-
-ros_setup_path() {
-  # prefer setup.bash when available
-  if [[ -n "${ROS_VERSION:-}" ]]; then
-    if [[ -f "/opt/ros/${ROS_VERSION}/setup.bash" ]]; then
-      echo "/opt/ros/${ROS_VERSION}/setup.bash"; return
-    elif [[ -f "/opt/ros/${ROS_VERSION}/setup.sh" ]]; then
-      echo "/opt/ros/${ROS_VERSION}/setup.sh"; return
-    fi
-  fi
-  if [[ -n "${ROS_DISTRO:-}" ]]; then
-    if [[ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
-      echo "/opt/ros/${ROS_DISTRO}/setup.bash"; return
-    elif [[ -f "/opt/ros/${ROS_DISTRO}/setup.sh" ]]; then
-      echo "/opt/ros/${ROS_DISTRO}/setup.sh"; return
-    fi
+resolve_ros_setup() {
+  # 1) Explicit override via ROS_SETUP_PATH
+  if [[ -n "${ROS_SETUP_PATH:-}" && -f "${ROS_SETUP_PATH}" ]]; then
+    printf '%s' "${ROS_SETUP_PATH}"
+    return 0;
   fi
 
-  # prefer kilted
+  # 2) Known distro via ROS_DISTRO
+  if [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+    printf '/opt/ros/%s/setup.bash' "${ROS_DISTRO}"
+    return 0;
+  fi
+
+  # 3) Prefer 'kilted' if present (project convention)
   if [[ -f "/opt/ros/kilted/setup.bash" ]]; then
-    echo "/opt/ros/kilted/setup.bash"; return
-  elif [[ -f "/opt/ros/kilted/setup.sh" ]]; then
-    echo "/opt/ros/kilted/setup.sh"; return
+    printf '%s' "/opt/ros/kilted/setup.bash"
+    return 0;
   fi
 
-  # first available under /opt/ros
+  # 4) First available distro under /opt/ros
   if [[ -d "/opt/ros" ]]; then
     for d in /opt/ros/*; do
       if [[ -f "$d/setup.bash" ]]; then
-        echo "$d/setup.bash"; return
-      elif [[ -f "$d/setup.sh" ]]; then
-        echo "$d/setup.sh"; return
+        printf '%s' "$d/setup.bash"
+        return 0;
       fi
     done
   fi
 
-  echo ""
+  return 1
 }
 
-ws_setup_path() {
-  # Candidates (in order): PSYCHED_ROOT, REPO_ROOT, SUDO_USER home, /home/pete, /home/${USER}
-  local candidates=()
-  if [[ -n "${PSYCHED_ROOT:-}" ]]; then
-    candidates+=("${PSYCHED_ROOT}")
+resolve_ws_setup() {
+  local ws_setup="$REPO_ROOT/install/setup.bash"
+  if [[ -f "$ws_setup" ]]; then
+    printf '%s' "$ws_setup"
+    return 0
   fi
-  candidates+=("${REPO_ROOT}")
-  # If sudo invoked, prefer the original user's home
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    candidates+=("/home/${SUDO_USER}/psyched")
-  fi
-  # common explicit path used in this project
-  candidates+=("/home/pete/psyched")
-  # fallback to current user's home
-  if [[ -n "${HOME:-}" ]]; then
-    candidates+=("${HOME}/psyched")
-  fi
-
-  for c in "${candidates[@]}"; do
-    if [[ -f "${c}/install/setup.bash" ]]; then
-      echo "${c}/install/setup.bash"; return
-    elif [[ -f "${c}/install/setup.sh" ]]; then
-      echo "${c}/install/setup.sh"; return
-    fi
-  done
-
-  # fallback to REPO_ROOT/install/setup.sh even if missing (to show diagnostic path)
-  echo "${REPO_ROOT}/install/setup.sh"
+  return 1
 }
 
 print_commands() {
-  local rpath wpath
-  rpath=$(ros_setup_path)
-  wpath=$(ws_setup_path)
-  if [[ -n "$rpath" && -f "$rpath" ]]; then
-    printf ". '%s'\n" "$rpath"
+  local ros_setup ws_setup
+  if ros_setup=$(resolve_ros_setup); then
+    echo ". '${ros_setup}'"
   else
-    printf "# [setup_env] ROS setup not found at %s\n" "$rpath"
+    echo "# [setup_env] ROS setup.bash not found; skipping" 
   fi
-  if [[ -f "$wpath" ]]; then
-    printf ". '%s'\n" "$wpath"
+
+  if ws_setup=$(resolve_ws_setup); then
+    echo ". '${ws_setup}'"
   else
-    printf "# [setup_env] Workspace setup not found at %s\n" "$wpath"
+    echo "# [setup_env] Workspace install/setup.bash not found; skipping"
   fi
 }
 
 source_now() {
-  local rpath wpath
-  rpath=$(ros_setup_path)
-  wpath=$(ws_setup_path)
-  # Temporarily disable nounset to avoid failing when variables missing
+  local ros_setup ws_setup
+  # Remember if -u (nounset) is set, then temporarily disable while sourcing
   local had_u=0
   case $- in *u*) had_u=1 ;; esac
   if (( had_u )); then set +u; fi
-
-  if [[ -n "$rpath" && -f "$rpath" ]]; then
+  if ros_setup=$(resolve_ros_setup); then
     # shellcheck disable=SC1090
-    . "$rpath"
-  else
-    printf "# [setup_env] Skipping ROS source; not found: %s\n" "$rpath" >&2
+    . "${ros_setup}"
   fi
-
-  if [[ -f "$wpath" ]]; then
+  if ws_setup=$(resolve_ws_setup); then
     # shellcheck disable=SC1090
-    . "$wpath"
-  else
-    printf "# [setup_env] Skipping workspace source; not found: %s\n" "$wpath" >&2
+    . "${ws_setup}"
   fi
-
   if (( had_u )); then set -u; fi
 }
 
