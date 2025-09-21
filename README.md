@@ -245,6 +245,9 @@ ros2 topic list
 
 ## Contributing
 
+Internal maintainers should follow the workflow, testing, and git expectations
+documented in [AGENTS.md](AGENTS.md).
+
 1. Fork the repository
 2. Create a feature branch
 3. Make changes following the modular architecture
@@ -270,4 +273,5 @@ For issues and questions:
 
 ---
 
-**Next Steps**: See [AGENTS.md](AGENTS.md) for detailed information about each module and their integration patterns.
+**Next Steps**: See [AGENTS.md](AGENTS.md) for the contributor workflow, testing
+guidance, and git etiquette that keep this repository healthy.
