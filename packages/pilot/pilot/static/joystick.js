@@ -65,6 +65,17 @@ class PilotController {
             temp: document.getElementById('tempChip'),
             mem: document.getElementById('memChip'),
         };
+        this.audioEls = {
+            speakingMs: document.getElementById('voiceSpeakingMs'),
+            vadMs: document.getElementById('vadSpeechMs'),
+            micInfo: document.getElementById('micInfo'),
+        };
+        this.gpsEls = {
+            fix: document.getElementById('gpsFixStatus'),
+            lat: document.getElementById('gpsLat'),
+            lon: document.getElementById('gpsLon'),
+            alt: document.getElementById('gpsAlt'),
+        };
 
         // Host health toggle setup
         this.setupHostHealthToggle();
@@ -85,6 +96,8 @@ class PilotController {
         this.services = {}; // map unit -> { name, active, enabled, description }
         this.servicesContainer = document.getElementById('servicesPills');
         this.servicesDetails = document.getElementById('servicesDetails');
+        // Conversation UI
+        this.convLog = document.getElementById('conversationLog');
     }
 
     setupHostHealthToggle() {
@@ -681,6 +694,12 @@ class PilotController {
                     if (message.host_health) {
                         this.updateHostHealth(message.host_health);
                     }
+                    if (message.audio) {
+                        this.updateAudioStatus(message.audio);
+                    }
+                    if (message.gps_fix) {
+                        this.updateGps(message.gps_fix);
+                    }
                     if (Array.isArray(message.systemd_services)) {
                         this.updateServicesList(message.systemd_services);
                     }
@@ -705,6 +724,12 @@ class PilotController {
                     }
                     if (message.host_health) {
                         this.updateHostHealth(message.host_health);
+                    }
+                    if (message.audio) {
+                        this.updateAudioStatus(message.audio);
+                    }
+                    if (message.gps_fix) {
+                        this.updateGps(message.gps_fix);
                     }
                     if (Array.isArray(message.systemd_services)) {
                         this.updateServicesList(message.systemd_services);
@@ -734,11 +759,77 @@ class PilotController {
                 case 'host_health':
                     this.updateHostHealth(message);
                     break;
+                case 'audio_status':
+                    this.updateAudioStatus(message);
+                    break;
+                case 'audio_info':
+                    this.updateMicInfo(message);
+                    break;
+                case 'gps_fix':
+                    this.updateGps(message);
+                    break;
+                case 'conversation':
+                    this.addConversation(message);
+                    break;
                 default:
                     console.log('Unknown message type:', message.type);
             }
         } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
+        }
+    }
+
+    addConversation(msg) {
+        if (!this.convLog) return;
+        const el = document.createElement('div');
+        el.className = 'conversation-entry';
+        const role = (msg.role || '').toString().trim() || 'assistant';
+        const content = (msg.content || '').toString();
+        el.innerHTML = `<span class="role">${role}:</span> <span class="content"></span>`;
+        const c = el.querySelector('.content');
+        if (c) c.textContent = content;
+        this.convLog.appendChild(el);
+        // autoscroll to bottom
+        this.convLog.scrollTop = this.convLog.scrollHeight;
+    }
+
+    updateAudioStatus(a) {
+        const els = this.audioEls;
+        if (!els) return;
+        if (typeof a.autophony_ms === 'number' && els.speakingMs) {
+            els.speakingMs.textContent = String(a.autophony_ms);
+        }
+        if (typeof a.speech_ms === 'number' && els.vadMs) {
+            els.vadMs.textContent = String(a.speech_ms);
+        }
+        if (a.mic) this.updateMicInfo(a.mic);
+    }
+
+    updateMicInfo(m) {
+        const el = this.audioEls?.micInfo;
+        if (!el) return;
+        const sr = (typeof m.sample_rate === 'number' && m.sample_rate) ? `${m.sample_rate} Hz` : '--';
+        const ch = (typeof m.channels === 'number' && m.channels) ? `${m.channels} ch` : '--';
+        el.textContent = `${sr}, ${ch}`;
+    }
+
+    updateGps(g) {
+        const els = this.gpsEls;
+        if (!els) return;
+        const statusStr = this.formatGpsStatus(g.status);
+        if (els.fix) els.fix.textContent = statusStr;
+        if (typeof g.lat === 'number' && els.lat) els.lat.textContent = g.lat.toFixed(6);
+        if (typeof g.lon === 'number' && els.lon) els.lon.textContent = g.lon.toFixed(6);
+        if (typeof g.alt === 'number' && els.alt) els.alt.textContent = g.alt.toFixed(1);
+    }
+
+    formatGpsStatus(code) {
+        switch (code) {
+            case -1: return 'No Fix';
+            case 0: return 'No Fix';
+            case 1: return 'Fix (2D/3D)';
+            case 2: return 'DGPS';
+            default: return '--';
         }
     }
 

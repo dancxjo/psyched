@@ -22,6 +22,11 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_IMU_TOPIC', default_value='/imu/mpu6050'),
         description='IMU topic (sensor_msgs/Imu) for UI overlay'
     )
+    gps_fix_topic_arg = DeclareLaunchArgument(
+        'gps_fix_topic',
+        default_value=EnvironmentVariable(name='PILOT_GPS_FIX_TOPIC', default_value='/gps/fix'),
+        description='GPS NavSatFix topic to display on Pilot UI'
+    )
     
     websocket_port_arg = DeclareLaunchArgument(
         'websocket_port',
@@ -33,6 +38,11 @@ def generate_launch_description():
         'cmd_vel_topic',
         default_value=EnvironmentVariable(name='PILOT_CMD_VEL_TOPIC', default_value='/cmd_vel'),
         description='Topic name for publishing cmd_vel messages'
+    )
+    conversation_topic_arg = DeclareLaunchArgument(
+        'conversation_topic',
+        default_value=EnvironmentVariable(name='PILOT_CONVERSATION_TOPIC', default_value='/conversation'),
+        description='Topic name for chat conversation messages'
     )
 
     voice_topic_arg = DeclareLaunchArgument(
@@ -92,6 +102,8 @@ def generate_launch_description():
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
             'imu_topic': LaunchConfiguration('imu_topic'),
+            'gps_fix_topic': LaunchConfiguration('gps_fix_topic'),
+            'conversation_topic': LaunchConfiguration('conversation_topic'),
             'host': LaunchConfiguration('host'),
             'enable_http': LaunchConfiguration('enable_http'),
             'enable_websocket': LaunchConfiguration('enable_websocket'),
@@ -110,6 +122,8 @@ def generate_launch_description():
             'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
             'voice_topic': LaunchConfiguration('voice_topic'),
             'imu_topic': LaunchConfiguration('imu_topic'),
+            'gps_fix_topic': LaunchConfiguration('gps_fix_topic'),
+            'conversation_topic': LaunchConfiguration('conversation_topic'),
             'host': LaunchConfiguration('host'),
             'host_health_topic': LaunchConfiguration('host_health_topic'),
         }]
@@ -132,8 +146,10 @@ def generate_launch_description():
         websocket_port_arg,
         cmd_vel_topic_arg,
         voice_topic_arg,
+    conversation_topic_arg,
         host_arg,
     imu_topic_arg,
+        gps_fix_topic_arg,
         enable_http_arg,
         enable_ws_arg,
         run_separate_ws_arg,

@@ -17,12 +17,20 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import Twist
-from std_msgs.msg import String, Float32, Int16, UInt16, Empty
+from std_msgs.msg import String, Float32, Int16, UInt16, UInt32, Empty
+from sensor_msgs.msg import NavSatFix
 from nav_msgs.msg import Odometry
 from diagnostic_msgs.msg import DiagnosticArray
 from create_msgs.msg import ChargingState, Mode, Bumper, Cliff
 from sensor_msgs.msg import Imu
 from math import atan2
+from psyched_msgs.msg import Message as ConvMessage
+
+# Optional AudioInfo import for microphone metadata
+try:
+    from audio_common_msgs.msg import AudioInfo  # type: ignore
+except Exception:  # pragma: no cover
+    AudioInfo = None  # type: ignore
 
 try:
     import websockets
@@ -41,6 +49,8 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
         self.declare_parameter('imu_topic', '/imu/mpu6050')
+    self.declare_parameter('gps_fix_topic', '/gps/fix')
+    self.declare_parameter('conversation_topic', '/conversation')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -54,7 +64,9 @@ class PilotWebSocketNode(Node):
         self.voice_topic = str(_param('voice_topic', '/voice'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
-        self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
+    self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
+    self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
+    self.conversation_topic = str(_param('conversation_topic', '/conversation'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
@@ -65,6 +77,19 @@ class PilotWebSocketNode(Node):
             self.create_subscription(Imu, self.imu_topic, self._on_imu, 10)
         except Exception as e:
             self.get_logger().warn(f'Failed to subscribe to IMU: {e}')
+
+        # GPS fix subscription/cache
+        self._gps_fix = None  # dict with lat, lon, alt, status
+        try:
+            self.create_subscription(NavSatFix, self.gps_fix_topic, self._on_gps_fix, 10)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to subscribe to GPS fix: {e}')
+
+        # Conversation subscription
+        try:
+            self.create_subscription(ConvMessage, self.conversation_topic, self._on_conversation, 10)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to subscribe to conversation: {e}')
 
         # Battery topics (from create_driver)
         # Note: topics are relative to create_driver node namespace
@@ -134,6 +159,26 @@ class PilotWebSocketNode(Node):
                 self._host_short = 'host'
         self.create_subscription(String, htopic, self._on_host_health, 10)
 
+        # Audio status (voice speaking and VAD speech duration)
+        self._audio = {
+            'autophony_ms': 0,
+            'speech_ms': 0,
+            'mic': {'sample_rate': None, 'channels': None},
+        }
+        try:
+            self.create_subscription(UInt32, '/audio/autophony_duration', self._on_autophony, 10)
+        except Exception:
+            pass
+        try:
+            self.create_subscription(UInt32, '/audio/speech_duration', self._on_speech_dur, 10)
+        except Exception:
+            pass
+        if AudioInfo is not None:
+            try:
+                self.create_subscription(AudioInfo, '/audio/pcm/info', self._on_audio_info, 10)
+            except Exception:
+                pass
+
         # Systemd services discovery
         self._systemd_units = self._discover_systemd_units()
 
@@ -202,7 +247,11 @@ class PilotWebSocketNode(Node):
                 'voice_topic': self.voice_topic,
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
                 'imu_topic': self.imu_topic,
+                'conversation_topic': self.conversation_topic,
             }
+            # include latest GPS fix if available
+            if self._gps_fix is not None:
+                status_msg['gps_fix'] = self._gps_fix
             # include systemd services snapshot
             try:
                 services = self._list_systemd_status()
@@ -263,7 +312,10 @@ class PilotWebSocketNode(Node):
                     'voice_topic': self.voice_topic,
                     'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
                     'imu_topic': self.imu_topic,
+                    'conversation_topic': self.conversation_topic,
                 }
+                if self._gps_fix is not None:
+                    pong['gps_fix'] = self._gps_fix
                 with self._battery_lock:
                     if any(v is not None for v in self._battery.values()):
                         pong['battery'] = self._format_battery()
@@ -274,6 +326,8 @@ class PilotWebSocketNode(Node):
                     with self._host_lock:
                         if self._host_health is not None:
                             pong['host_health'] = self._host_health
+                # include audio status snapshot
+                pong['audio'] = self._audio
                 # include services snapshot on pong to keep UI fresh (lightweight)
                 try:
                     services = self._list_systemd_status()
@@ -349,6 +403,94 @@ class PilotWebSocketNode(Node):
         if not self.connected_clients or self._loop is None:
             return
         data = json.dumps({'type': 'imu', **self._imu_last})
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    # Conversation forwarding
+    def _on_conversation(self, msg: ConvMessage):
+        try:
+            role = str(getattr(msg, 'role', '') or '')
+            content = str(getattr(msg, 'content', '') or '')
+        except Exception:
+            return
+        if not content:
+            return
+        payload = {'type': 'conversation', 'role': role, 'content': content}
+        if not self.connected_clients or self._loop is None:
+            return
+        data = json.dumps(payload)
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    # GPS forwarding
+    def _on_gps_fix(self, msg: NavSatFix):
+        try:
+            lat = float(msg.latitude)
+            lon = float(msg.longitude)
+            alt = float(msg.altitude)
+            status = int(getattr(msg.status, 'status', 0)) if getattr(msg, 'status', None) is not None else 0
+        except Exception:
+            return
+        self._gps_fix = {'lat': lat, 'lon': lon, 'alt': alt, 'status': status}
+        if not self.connected_clients or self._loop is None:
+            return
+        data = json.dumps({'type': 'gps_fix', **self._gps_fix})
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    # Audio callbacks/forwarding
+    def _broadcast_audio(self):
+        if not self.connected_clients or self._loop is None:
+            return
+        data = json.dumps({'type': 'audio_status', **self._audio})
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(data)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    def _on_autophony(self, msg: UInt32):
+        try:
+            self._audio['autophony_ms'] = int(getattr(msg, 'data', 0))
+        except Exception:
+            self._audio['autophony_ms'] = 0
+        self._broadcast_audio()
+
+    def _on_speech_dur(self, msg: UInt32):
+        try:
+            self._audio['speech_ms'] = int(getattr(msg, 'data', 0))
+        except Exception:
+            self._audio['speech_ms'] = 0
+        self._broadcast_audio()
+
+    def _on_audio_info(self, msg):  # AudioInfo when available
+        try:
+            sr = int(getattr(msg, 'sample_rate', 0))
+            ch = int(getattr(msg, 'channels', 0))
+            self._audio['mic'] = {'sample_rate': sr or None, 'channels': ch or None}
+        except Exception:
+            self._audio['mic'] = {'sample_rate': None, 'channels': None}
+        # Send a dedicated message for info to avoid overwriting durations unnecessarily
+        if not self.connected_clients or self._loop is None:
+            return
+        data = json.dumps({'type': 'audio_info', **self._audio.get('mic', {})})
         async def _send_all():
             for client in list(self.connected_clients):
                 try:
