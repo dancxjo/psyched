@@ -80,6 +80,10 @@ class PilotController {
             gyroZ: document.getElementById('imuGyroZ'),
         };
         this.lastImuTs = 0;
+
+        // Services UI
+        this.services = {}; // map unit -> { name, active, enabled, description }
+        this.servicesContainer = document.getElementById('servicesPills');
     }
 
     setupHostHealthToggle() {
@@ -134,6 +138,8 @@ class PilotController {
                     console.log('WebSocket connected', wsUrl);
                     // Send immediate ping to fetch status
                     this.sendPing();
+                    // Ask for services list
+                    this.requestSystemdList();
                 };
 
                 this.websocket.onclose = () => {
@@ -647,7 +653,7 @@ class PilotController {
                     // Ping response
                     if (message.cmd_vel_topic) {
                         this.updateCmdVelTopic(message.cmd_vel_topic, message.publisher_matched_count);
-                        this.updateStatus(`Connected to ${message.cmd_vel_topic}`, 'connected');
+                        this.updateStatus(`Connected`, 'connected');
                     } else {
                         console.log('Ping response received');
                     }
@@ -666,11 +672,14 @@ class PilotController {
                     if (message.host_health) {
                         this.updateHostHealth(message.host_health);
                     }
+                    if (Array.isArray(message.systemd_services)) {
+                        this.updateServicesList(message.systemd_services);
+                    }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {
                         this.updateCmdVelTopic(message.cmd_vel_topic, message.publisher_matched_count);
-                        this.updateStatus(`Connected to ${message.cmd_vel_topic}`, 'connected');
+                        this.updateStatus(`Connected`, 'connected');
                     }
                     if (message.voice_topic) {
                         this.updateVoiceTopic(message.voice_topic, message.voice_subscriber_count);
@@ -686,6 +695,19 @@ class PilotController {
                     }
                     if (message.host_health) {
                         this.updateHostHealth(message.host_health);
+                    }
+                    if (Array.isArray(message.systemd_services)) {
+                        this.updateServicesList(message.systemd_services);
+                    }
+                    break;
+                case 'systemd':
+                    if (Array.isArray(message.services)) {
+                        this.updateServicesList(message.services);
+                    } else if (message.unit && message.status) {
+                        this.updateService(message.status);
+                        if (message.error) this.flashServiceError(message.unit, message.error);
+                    } else if (message.error) {
+                        console.warn('systemd error:', message.error);
                     }
                     break;
                 case 'imu':
@@ -706,6 +728,137 @@ class PilotController {
         } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
         }
+    }
+
+    // =====================
+    // Systemd UI and actions
+    // =====================
+    requestSystemdList() {
+        if (!this.websocket) return;
+        try { this.websocket.send(JSON.stringify({ type: 'systemd', action: 'list' })); } catch (e) { /* noop */ }
+    }
+
+    updateServicesList(services) {
+        if (!this.servicesContainer) return;
+        // Merge/update map
+        services.forEach(svc => {
+            if (!svc || !svc.name) return;
+            this.services[svc.name] = svc;
+        });
+        // Render all known services
+        this.servicesContainer.innerHTML = '';
+        Object.values(this.services).forEach(svc => {
+            const el = this.renderServicePill(svc);
+            this.servicesContainer.appendChild(el);
+        });
+    }
+
+    updateService(svc) {
+        if (!svc || !svc.name) return;
+        this.services[svc.name] = svc;
+        const id = this.serviceId(svc.name);
+        const el = document.getElementById(id);
+        if (el) {
+            this.populateServicePill(el, svc);
+        } else if (this.servicesContainer) {
+            this.servicesContainer.appendChild(this.renderServicePill(svc));
+        }
+    }
+
+    serviceId(unit) {
+        return 'svc-' + unit.replace(/[^a-zA-Z0-9_-]/g, '-');
+    }
+
+    prettyServiceName(unit) {
+        return unit.replace(/^psyched-/, '').replace(/\.service$/, '');
+    }
+
+    renderServicePill(svc) {
+        const el = document.createElement('div');
+        el.className = 'service-pill';
+        el.id = this.serviceId(svc.name);
+        el.title = svc.description || svc.name;
+        el.innerHTML = `
+            <span class="name"></span>
+            <span class="state"></span>
+            <span class="enabled"></span>
+        `;
+        this.populateServicePill(el, svc);
+        this.attachPillEvents(el, svc.name);
+        return el;
+    }
+
+    populateServicePill(el, svc) {
+        const nameEl = el.querySelector('.name');
+        const stateEl = el.querySelector('.state');
+        const enEl = el.querySelector('.enabled');
+        if (nameEl) nameEl.textContent = this.prettyServiceName(svc.name);
+        const active = (svc.active || '').toLowerCase();
+        stateEl.textContent = active || 'unknown';
+        stateEl.className = 'state ' + (active === 'active' ? 'active' : (active === 'inactive' ? 'inactive' : 'unknown'));
+        const enabled = (svc.enabled || '').toLowerCase();
+        enEl.textContent = enabled ? `(${enabled})` : '';
+        enEl.className = 'enabled ' + (enabled === 'enabled' ? 'on' : 'off');
+        el.title = (svc.description || svc.name) + `\nState: ${stateEl.textContent}  Enabled: ${enabled || 'unknown'}`;
+    }
+
+    attachPillEvents(el, unit) {
+        let timer = null;
+        let longPressed = false;
+        const start = (e) => {
+            e.preventDefault();
+            longPressed = false;
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                longPressed = true;
+                this.onPillLongPress(unit);
+            }, 600);
+        };
+        const end = (e) => {
+            e.preventDefault();
+            clearTimeout(timer);
+            if (!longPressed) this.onPillClick(unit);
+        };
+        el.addEventListener('mousedown', start);
+        el.addEventListener('touchstart', start, { passive: false });
+        el.addEventListener('mouseup', end);
+        el.addEventListener('mouseleave', end);
+        el.addEventListener('touchend', end);
+        el.addEventListener('touchcancel', end);
+        el.addEventListener('contextmenu', (e) => { e.preventDefault(); this.onPillLongPress(unit); });
+    }
+
+    onPillClick(unit) {
+        const svc = this.services[unit];
+        if (!svc) return;
+        const action = (String(svc.active).toLowerCase() === 'active') ? 'stop' : 'start';
+        this.systemdAction(action, unit);
+    }
+
+    onPillLongPress(unit) {
+        const svc = this.services[unit];
+        if (!svc) return;
+        const action = (String(svc.enabled).toLowerCase() === 'enabled') ? 'disable' : 'enable';
+        this.systemdAction(action, unit);
+    }
+
+    systemdAction(action, unit) {
+        if (!this.websocket) return;
+        try {
+            this.websocket.send(JSON.stringify({ type: 'systemd', action, unit }));
+        } catch (e) {
+            console.error('systemd action failed to send', e);
+        }
+    }
+
+    flashServiceError(unit, msg) {
+        const id = this.serviceId(unit);
+        const el = document.getElementById(id);
+        if (!el) return;
+        const old = el.style.outline;
+        el.style.outline = '2px solid #ef4444';
+        el.title = (el.title || unit) + `\nError: ${msg}`;
+        setTimeout(() => { el.style.outline = old || ''; }, 1200);
     }
 
     updateCmdVelTopic(topic, count) {

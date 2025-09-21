@@ -191,6 +191,44 @@ main {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+/* Services pills */
+.services-controls {
+    margin-top: 24px;
+}
+.services-controls h3 {
+    margin: 12px 0 8px;
+}
+.services-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.service-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    border: 1px solid rgba(0,0,0,0.1);
+    background: #f3f4f6;
+    color: #111827;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.1s ease, background 0.2s ease;
+}
+.service-pill:hover { transform: translateY(-1px); }
+.service-pill .name { font-weight: 600; }
+.service-pill .desc { font-size: 0.8rem; color: #4b5563; }
+.service-pill .state { font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; }
+.service-pill .state.active { background: #dcfce7; color: #166534; }
+.service-pill .state.inactive { background: #fee2e2; color: #991b1b; }
+.service-pill .state.unknown { background: #e5e7eb; color: #374151; }
+.service-pill .enabled { font-size: 0.75rem; color: #6b7280; }
+.service-pill .enabled.on { color: #16a34a; }
+.service-pill .enabled.off { color: #b91c1c; }
+.services-actions-hint { font-size: 0.8rem; color: #6b7280; margin-top: 6px; }
+
 .joystick-section h2, .info-section h2 {
     color: #333;
     font-size: 1.8rem;

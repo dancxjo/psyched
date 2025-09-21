@@ -6,6 +6,9 @@ This isolates asyncio from the HTTP server to avoid cross-thread/event-loop issu
 """
 
 import asyncio
+import subprocess
+import os
+from pathlib import Path
 import threading
 import json
 from typing import Optional
@@ -112,6 +115,7 @@ class PilotWebSocketNode(Node):
         self._host_lock = threading.Lock()
         # Determine host health topic
         htopic = self.host_health_topic
+        self._host_short = None
         if not htopic or htopic.lower() == 'auto':
             try:
                 import socket
@@ -120,7 +124,18 @@ class PilotWebSocketNode(Node):
                 import os as _os
                 short = _os.uname().nodename.split('.')[0] if hasattr(_os, 'uname') else 'host'
             htopic = f'hosts/{short}/health'
+            self._host_short = short
+        else:
+            # best-effort host short from env/hostname
+            try:
+                import socket
+                self._host_short = socket.gethostname().split('.')[0]
+            except Exception:
+                self._host_short = 'host'
         self.create_subscription(String, htopic, self._on_host_health, 10)
+
+        # Systemd services discovery
+        self._systemd_units = self._discover_systemd_units()
 
         # asyncio context in dedicated thread
         self._loop = None
@@ -188,6 +203,13 @@ class PilotWebSocketNode(Node):
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
                 'imu_topic': self.imu_topic,
             }
+            # include systemd services snapshot
+            try:
+                services = self._list_systemd_status()
+                if services:
+                    status_msg['systemd_services'] = services
+            except Exception as e:
+                self.get_logger().warn(f'Failed to get systemd status: {e}')
             # include latest battery snapshot if available
             with self._battery_lock:
                 if any(v is not None for v in self._battery.values()):
@@ -252,6 +274,13 @@ class PilotWebSocketNode(Node):
                     with self._host_lock:
                         if self._host_health is not None:
                             pong['host_health'] = self._host_health
+                # include services snapshot on pong to keep UI fresh (lightweight)
+                try:
+                    services = self._list_systemd_status()
+                    if services:
+                        pong['systemd_services'] = services
+                except Exception:
+                    pass
                 await websocket.send(json.dumps(pong))
             elif t == 'voice':
                 text = data.get('text')
@@ -260,6 +289,24 @@ class PilotWebSocketNode(Node):
                     msg.data = text.strip()
                     self.voice_publisher.publish(msg)
                     await websocket.send(json.dumps({'type': 'ack', 'voice': {'text': msg.data}}))
+            elif t == 'systemd':
+                action = (data.get('action') or 'list').lower()
+                if action == 'list':
+                    await self._send_systemd_list(websocket)
+                elif action in ('start', 'stop', 'enable', 'disable', 'restart', 'status'):
+                    unit = data.get('unit')
+                    if not unit or not isinstance(unit, str):
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': 'missing unit'}))
+                    elif unit not in self._systemd_units:
+                        await websocket.send(json.dumps({'type': 'systemd', 'error': f'unknown unit: {unit}'}))
+                    else:
+                        result = self._systemd_perform(action, unit)
+                        # always follow up with fresh status for this unit
+                        status = self._query_systemd_unit(unit)
+                        payload = {'type': 'systemd', 'unit': unit, 'status': status}
+                        if result.get('error'):
+                            payload['error'] = result['error']
+                        await websocket.send(json.dumps(payload))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
@@ -488,6 +535,81 @@ class PilotWebSocketNode(Node):
         except Exception:
             pass
         return super().destroy_node()
+
+    # -----------------------------
+    # Systemd helpers
+    # -----------------------------
+    def _discover_systemd_units(self):
+        try:
+            # services present under hosts/<host_short>/systemd
+            host_short = self._host_short or 'host'
+            repo_root = Path(__file__).resolve().parents[3]  # .../packages/pilot/pilot -> repo
+            services_dir = repo_root / 'hosts' / host_short / 'systemd'
+            if not services_dir.exists():
+                return []
+            units = []
+            for p in services_dir.glob('psyched-*.service'):
+                units.append(p.name)
+            return sorted(units)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to discover systemd units: {e}')
+            return []
+
+    def _run_cmd(self, args, require_root: bool = False):
+        env = os.environ.copy()
+        cmd = list(args)
+        # Non-interactive sudo if requested
+        if require_root:
+            cmd = ['sudo', '-n'] + cmd
+        try:
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            return {'code': res.returncode, 'out': res.stdout.strip(), 'err': res.stderr.strip()}
+        except Exception as e:
+            return {'code': -1, 'out': '', 'err': str(e)}
+
+    def _query_systemd_unit(self, unit: str):
+        # Query active state
+        active = self._run_cmd(['systemctl', 'is-active', unit])
+        enabled = self._run_cmd(['systemctl', 'is-enabled', unit])
+        desc = self._run_cmd(['systemctl', 'show', unit, '--property=Description', '--value'])
+        return {
+            'name': unit,
+            'active': active['out'] if active['code'] == 0 else 'unknown',
+            'enabled': enabled['out'] if enabled['code'] == 0 else 'unknown',
+            'description': desc['out'] if desc['code'] == 0 else ''
+        }
+
+    def _list_systemd_status(self):
+        return [self._query_systemd_unit(u) for u in self._systemd_units]
+
+    async def _send_systemd_list(self, websocket: WebSocketServerProtocol):
+        try:
+            services = self._list_systemd_status()
+        except Exception:
+            services = []
+        await websocket.send(json.dumps({'type': 'systemd', 'services': services}))
+
+    def _systemd_perform(self, action: str, unit: str):
+        # Map actions to systemctl verbs
+        verb = {
+            'start': 'start',
+            'stop': 'stop',
+            'enable': 'enable',
+            'disable': 'disable',
+            'restart': 'restart',
+            'status': 'status',
+        }.get(action)
+        if not verb:
+            return {'error': f'unsupported action: {action}'}
+        # Try without sudo first (status/start may work if user has rights), else sudo -n
+        r = self._run_cmd(['systemctl', verb, unit])
+        if r['code'] != 0:
+            # Try non-interactive sudo
+            r2 = self._run_cmd(['systemctl', verb, unit], require_root=True)
+            if r2['code'] != 0:
+                # include error but do not block UI; suggest NOPASSWD configuration
+                return {'error': r2['err'] or r2['out'] or f'systemctl {verb} failed with code {r2["code"]}'}
+        return {}
 
 
 def main(args=None):
