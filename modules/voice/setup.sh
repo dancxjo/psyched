@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+sudo pip install piper-tts --break-system-packages || true
+
 # Config: source hosts/<host>/config/voice.env if present relative to repo root, else fallback to ./config/voice.env
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$REAL_PATH")"          # .../modules/voice
