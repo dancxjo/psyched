@@ -61,6 +61,9 @@ workspace.
 - Record newly discovered gotchas or workflow aids here using concise bullet
   points.
 - Keep the guide succinct and focused on actionable advice.
+- `pytest` is configured to ignore the `src/` symlink; place new tests under
+  `packages/<pkg>/tests` and stub ROS interfaces when running in environments
+  without ROS installed.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.

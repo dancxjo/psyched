@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import importlib
 import os
 import time
 import threading
 import subprocess
 import json
+from types import ModuleType
 from typing import List, Dict
 
 import rclpy
@@ -13,12 +15,6 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from psyched_msgs.msg import Message as MsgMessage
-
-try:
-    import requests
-except Exception:  # pragma: no cover - will be installed via setup
-    requests = None  # type: ignore
-
 
 def first_sentence(text: str) -> str:
     s = text.strip()
@@ -63,7 +59,8 @@ class ChatNode(Node):
         self.history: List[Dict[str, str]] = []  # list of {role, content}
         self.pending_to_confirm: List[str] = []  # queue of assistant texts awaiting voice_done
         self._serve_proc: subprocess.Popen | None = None
-        self._http = requests if requests is not None else None
+        self._http_missing_warned = False
+        self._http: ModuleType | None = self._load_http_client()
         self._http_lock = threading.Lock()
 
         # Ensure Ollama service is reachable or try to start it
@@ -72,9 +69,27 @@ class ChatNode(Node):
         self.get_logger().info(f"Chat node started. Model={self.model}, conversation={self.conversation_topic}, voice={self.voice_topic}")
 
     # --- Ollama helpers ---
+    def _load_http_client(self) -> ModuleType | None:
+        """Return the ``requests`` module if available, logging when missing."""
+        try:
+            return importlib.import_module('requests')
+        except ModuleNotFoundError:
+            self._http_missing_warned = True
+            self.get_logger().warning(
+                'Python requests not available; install it to enable HTTP calls to Ollama'
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            self._http_missing_warned = True
+            self.get_logger().warning(f'Failed to import requests: {exc}')
+        return None
+
     def _ensure_ollama(self) -> None:
         if self._http is None:
-            self.get_logger().warning('Python requests not available; installing may be required for HTTP calls to Ollama')
+            if not self._http_missing_warned:
+                self.get_logger().warning(
+                    'Python requests not available; install it to enable HTTP calls to Ollama'
+                )
+                self._http_missing_warned = True
             return
         if self._check_ollama():
             return
@@ -104,6 +119,13 @@ class ChatNode(Node):
             return False
 
     def _ollama_chat(self, messages: List[Dict[str, str]]) -> str:
+        if self._http is None:
+            if not self._http_missing_warned:
+                self.get_logger().warning(
+                    'Python requests not available; install it to enable HTTP calls to Ollama'
+                )
+                self._http_missing_warned = True
+            return ''
         # Try chat endpoint first, fallback to generate
         payload_chat = {
             'model': self.model,

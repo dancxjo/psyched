@@ -141,7 +141,7 @@ class EarNode(Node):
                 data = self._proc.stdout.read(self.chunk)
                 if not data:
                     # EOF or device issue; restart
-                    self.get_logger().warn('arecord produced no data; restarting...')
+                    self.get_logger().warning('arecord produced no data; restarting...')
                     try:
                         self._proc.terminate()
                     except Exception:
