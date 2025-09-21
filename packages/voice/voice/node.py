@@ -122,9 +122,16 @@ class VoiceNode(Node):
         self._stop_event = threading.Event()
         self._unpaused = threading.Event()
         self._unpaused.set()  # start unpaused
+        # Runtime volume (0.0 - 2.0), initialized from parameter 'volume'
+        try:
+            self.volume = float(self.get_parameter('volume').value)
+        except Exception:
+            self.volume = 1.0
+        self.volume = max(0.0, min(2.0, self.volume))
 
         # Topic setup
         topic = self.get_parameter('topic').get_parameter_value().string_value
+
 
         # Publishers and subscribers
         self._pub_done = self.create_publisher(String, 'voice_done', 10)
@@ -144,6 +151,19 @@ class VoiceNode(Node):
         self._clear_sub = self.create_subscription(Empty, clear_topic, self._on_clear, 1)
         # Preferred interrupt topic as Empty
         self._interrupt_sub = self.create_subscription(Empty, interrupt_topic, self._on_pause, 1)
+
+        # Volume control topic (std_msgs/Float32)
+        from std_msgs.msg import Float32
+        self._volume_sub = self.create_subscription(Float32, '/voice/volume', self._on_volume, 1)
+
+    def _on_volume(self, msg):
+        try:
+            new_volume = float(getattr(msg, 'data', 1.0))
+            self.get_logger().info(f'Voice volume set to {new_volume}')
+            # TODO: Apply volume to engine (self.volume)
+            self.volume = new_volume
+        except Exception as e:
+            self.get_logger().warning(f'Failed to set volume: {e}')
 
         # Ensure Piper model files exist if using Piper; attempt runtime fetch if missing
         try:
@@ -399,24 +419,32 @@ class VoiceNode(Node):
 
             self.get_logger().info(f'Speaking: {text}')
 
-            # Publish autophony duration
-            start_time = time.time()
-            
             # Engine-specific synthesis
             success = False
+            # Autophony duration only published while audio is actively playing
             if engine == 'espeak':
+                # espeak path; if aplay used, publish autophony during playback
                 success = self._speak_with_espeak(text, aplay_cmd, espeak_voice, espeak_rate, espeak_pitch, espeak_volume, espeak_extra_args)
-                if not success:
-                    self.get_logger().warning('espeak-ng synthesis failed. Ensure espeak-ng is installed and voices are available.')
+                # Ensure autophony resets to 0 (in case direct playback used)
+                autophony_msg = UInt32()
+                autophony_msg.data = 0
+                self.autophony_pub.publish(autophony_msg)
             else:
                 # Piper path
                 if piper_cmd and os.path.exists(self.model_path) and os.path.exists(self.config_path):
                     success = self._speak_with_subprocess(text, aplay_cmd, piper_cmd)
+                    # Publish 0 autophony duration after playback
+                    autophony_msg = UInt32()
+                    autophony_msg.data = 0
+                    self.autophony_pub.publish(autophony_msg)
                 if not success and legacy_voice is not None:
                     success = self._speak_with_legacy(text, legacy_voice, syn_config, wav_out_dir, aplay_cmd)
+                    autophony_msg = UInt32()
+                    autophony_msg.data = 0
+                    self.autophony_pub.publish(autophony_msg)
                 if not success:
                     self.get_logger().warning('No working Piper installation found. Install piper binary or piper-tts library, or set engine=espeak.')
-                
+
             # Signal completion to upstream (e.g., chat service)
             try:
                 done = String()
@@ -424,11 +452,6 @@ class VoiceNode(Node):
                 self._pub_done.publish(done)
             except Exception:
                 pass
-
-            # Publish 0 autophony duration
-            autophony_msg = UInt32()
-            autophony_msg.data = 0
-            self.autophony_pub.publish(autophony_msg)
 
     def _speak_with_subprocess(self, text: str, aplay_cmd: str | None, piper_cmd: list[str]) -> bool:
         """Use subprocess piper binary for efficient speech synthesis."""
@@ -470,8 +493,34 @@ class VoiceNode(Node):
             aplay_cmd_list += ["-D", "pulse"]
         aplay_cmd_list += ["-"]
         
-        aplay = subprocess.Popen(aplay_cmd_list, stdin=piper.stdout)
-        self._procs = [aplay, piper]
+        # Optionally insert a volume scaling stage via 'sox' if available and volume != 1.0
+        use_volume = abs(self.volume - 1.0) > 1e-3
+        sox_path = shutil.which('sox') if use_volume else None
+        if sox_path:
+            # sox -t raw -r <sr> -e signed-integer -b 16 -c 1 - -t raw -v <vol> -
+            sox_cmd = [
+                sox_path,
+                '-t', 'raw',
+                '-r', str(self.sample_rate),
+                '-e', 'signed-integer',
+                '-b', '16',
+                '-c', '1',
+                '-',
+                '-t', 'raw',
+                '-v', str(self.volume),
+                '-',
+            ]
+            try:
+                sox = subprocess.Popen(sox_cmd, stdin=piper.stdout, stdout=subprocess.PIPE)
+                aplay = subprocess.Popen(aplay_cmd_list, stdin=sox.stdout)
+                self._procs = [aplay, sox, piper]
+            except Exception:
+                # Fallback to direct pipeline if sox fails
+                aplay = subprocess.Popen(aplay_cmd_list, stdin=piper.stdout)
+                self._procs = [aplay, piper]
+        else:
+            aplay = subprocess.Popen(aplay_cmd_list, stdin=piper.stdout)
+            self._procs = [aplay, piper]
         
         # Send text to Piper
         try:
@@ -626,8 +675,6 @@ class VoiceNode(Node):
         - volume_scale: 0.0-1.0 mapped to espeak -a 0-200
         - extra_args: raw string of additional arguments for espeak-ng
         """
-        import shutil
-
         espeak = shutil.which('espeak-ng') or shutil.which('espeak')
         if not espeak:
             return False
@@ -636,6 +683,13 @@ class VoiceNode(Node):
         rate = max(80, min(450, int(rate)))
         pitch = max(0, min(99, int(pitch)))
         amp = int(max(0.0, min(1.5, float(volume_scale))) * 200)
+
+        # If runtime volume is set, override amplitude accordingly
+        try:
+            vol = max(0.0, min(1.5, float(getattr(self, 'volume', 1.0))))
+            amp = int(vol * 200)
+        except Exception:
+            pass
 
         base_cmd = [espeak, '-v', voice, '-s', str(rate), '-p', str(pitch), '-a', str(amp)]
         if extra_args:
@@ -651,6 +705,14 @@ class VoiceNode(Node):
                 speak = subprocess.Popen([*base_cmd, '--stdout', text], stdout=subprocess.PIPE)
                 aplay = subprocess.Popen([aplay_cmd, '-q', '-t', 'wav', '-'], stdin=speak.stdout)
                 self._procs = [aplay, speak]
+                # Publish autophony duration while speaking
+                start_time = time.time()
+                while aplay.poll() is None:
+                    duration = int((time.time() - start_time) * 1000)
+                    autophony_msg = UInt32()
+                    autophony_msg.data = duration
+                    self.autophony_pub.publish(autophony_msg)
+                    time.sleep(0.1)
                 aplay.wait()
                 try:
                     speak.terminate()

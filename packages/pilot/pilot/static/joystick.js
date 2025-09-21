@@ -237,6 +237,11 @@ class PilotController {
         const input = document.getElementById('voiceInput');
         const button = document.getElementById('voiceSendButton');
         const marco = document.getElementById('marcoButton');
+        const pauseBtn = document.getElementById('voicePause');
+        const resumeBtn = document.getElementById('voiceResume');
+        const clearBtn = document.getElementById('voiceClear');
+        const volSlider = document.getElementById('voiceVolume');
+        const volValue = document.getElementById('voiceVolumeValue');
         if (!input || !button) return;
 
         const send = () => {
@@ -269,6 +274,39 @@ class PilotController {
                 send();
             }
         });
+
+        const sendControl = (action) => {
+            if (!this.isConnected || !this.websocket) return;
+            try {
+                this.websocket.send(JSON.stringify({ type: 'voice_control', action }));
+            } catch (e) {
+                console.error('Failed to send voice control:', e);
+            }
+        };
+        if (pauseBtn) pauseBtn.addEventListener('click', () => sendControl('pause'));
+        if (resumeBtn) resumeBtn.addEventListener('click', () => sendControl('resume'));
+        if (clearBtn) clearBtn.addEventListener('click', () => sendControl('clear'));
+
+        const sendVolume = (value) => {
+            if (!this.isConnected || !this.websocket) return;
+            try {
+                this.websocket.send(JSON.stringify({ type: 'voice_volume', value }));
+            } catch (e) {
+                console.error('Failed to send voice volume:', e);
+            }
+        };
+        if (volSlider) {
+            // Slider 0..200 maps to 0.0..2.0 (espeak supports >1x, clamp backend to 2.0)
+            const updateLabel = () => { if (volValue) volValue.textContent = `${volSlider.value}%`; };
+            updateLabel();
+            volSlider.addEventListener('input', () => {
+                updateLabel();
+                const frac = Math.max(0, Math.min(200, parseInt(volSlider.value, 10))) / 100.0;
+                // Debounce a bit by sending at most every 150ms
+                clearTimeout(this._volTimer);
+                this._volTimer = setTimeout(() => sendVolume(frac), 150);
+            });
+        }
     }
 
     updateAddressDisplay() {

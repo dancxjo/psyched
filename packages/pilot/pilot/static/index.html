@@ -108,6 +108,14 @@
                                 <button id="voiceSendButton" class="voice-button">📣 Speak</button>
                                 <button id="marcoButton" class="voice-button" title="Robot will say 'Polo!'">Marco?</button>
                             </div>
+                            <div class="voice-row">
+                                <button id="voicePause" class="voice-button" title="Pause speech">⏸ Pause</button>
+                                <button id="voiceResume" class="voice-button" title="Resume speech">▶ Resume</button>
+                                <button id="voiceClear" class="voice-button" title="Clear queue">🧹 Clear</button>
+                                <label for="voiceVolume" class="voice-label">Volume</label>
+                                <input id="voiceVolume" type="range" min="0" max="200" value="100" />
+                                <span id="voiceVolumeValue">100%</span>
+                            </div>
                             <div id="voiceHint" class="voice-hint">Press Enter to send</div>
                         </div>
 

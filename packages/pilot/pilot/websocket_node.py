@@ -45,7 +45,11 @@ class PilotWebSocketNode(Node):
 
         self.declare_parameter('websocket_port', 8081)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
-        self.declare_parameter('voice_topic', '/voice')
+    self.declare_parameter('voice_topic', '/voice')
+    self.declare_parameter('voice_pause_topic', '/voice/interrupt')
+    self.declare_parameter('voice_resume_topic', '/voice/resume')
+    self.declare_parameter('voice_clear_topic', '/voice/clear')
+    self.declare_parameter('voice_volume_topic', '/voice/volume')
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
         self.declare_parameter('imu_topic', '/imu/mpu6050')
@@ -61,7 +65,11 @@ class PilotWebSocketNode(Node):
                 return default
         self.websocket_port = int(_param('websocket_port', 8081))
         self.cmd_vel_topic = str(_param('cmd_vel_topic', '/cmd_vel'))
-        self.voice_topic = str(_param('voice_topic', '/voice'))
+    self.voice_topic = str(_param('voice_topic', '/voice'))
+    self.voice_pause_topic = str(_param('voice_pause_topic', '/voice/interrupt'))
+    self.voice_resume_topic = str(_param('voice_resume_topic', '/voice/resume'))
+    self.voice_clear_topic = str(_param('voice_clear_topic', '/voice/clear'))
+    self.voice_volume_topic = str(_param('voice_volume_topic', '/voice/volume'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
     self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
@@ -69,7 +77,11 @@ class PilotWebSocketNode(Node):
     self.conversation_topic = str(_param('conversation_topic', '/conversation'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
-        self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+    self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
+    self.voice_pause_pub = self.create_publisher(Empty, self.voice_pause_topic, 10)
+    self.voice_resume_pub = self.create_publisher(Empty, self.voice_resume_topic, 10)
+    self.voice_clear_pub = self.create_publisher(Empty, self.voice_clear_topic, 10)
+    self.voice_volume_pub = self.create_publisher(Float32, self.voice_volume_topic, 10)
 
         # IMU subscription/cache
         self._imu_last = None
@@ -246,6 +258,10 @@ class PilotWebSocketNode(Node):
                 'publisher_matched_count': self.cmd_vel_publisher.get_subscription_count() if hasattr(self.cmd_vel_publisher, 'get_subscription_count') else 0,
                 'voice_topic': self.voice_topic,
                 'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
+                'voice_pause_topic': self.voice_pause_topic,
+                'voice_resume_topic': self.voice_resume_topic,
+                'voice_clear_topic': self.voice_clear_topic,
+                'voice_volume_topic': self.voice_volume_topic,
                 'imu_topic': self.imu_topic,
                 'conversation_topic': self.conversation_topic,
             }
@@ -312,6 +328,10 @@ class PilotWebSocketNode(Node):
                     'publisher_matched_count': sub_count,
                     'voice_topic': self.voice_topic,
                     'voice_subscriber_count': self.voice_publisher.get_subscription_count() if hasattr(self.voice_publisher, 'get_subscription_count') else 0,
+                    'voice_pause_topic': self.voice_pause_topic,
+                    'voice_resume_topic': self.voice_resume_topic,
+                    'voice_clear_topic': self.voice_clear_topic,
+                    'voice_volume_topic': self.voice_volume_topic,
                     'imu_topic': self.imu_topic,
                     'conversation_topic': self.conversation_topic,
                 }
@@ -344,6 +364,33 @@ class PilotWebSocketNode(Node):
                     msg.data = text.strip()
                     self.voice_publisher.publish(msg)
                     await websocket.send(json.dumps({'type': 'ack', 'voice': {'text': msg.data}}))
+            elif t == 'voice_control':
+                # { type: 'voice_control', action: 'pause'|'resume'|'clear' }
+                action = (data.get('action') or '').lower()
+                if action == 'pause':
+                    self.voice_pause_pub.publish(Empty())
+                    await websocket.send(json.dumps({'type': 'ack', 'voice_control': 'pause'}))
+                elif action == 'resume':
+                    self.voice_resume_pub.publish(Empty())
+                    await websocket.send(json.dumps({'type': 'ack', 'voice_control': 'resume'}))
+                elif action == 'clear':
+                    self.voice_clear_pub.publish(Empty())
+                    await websocket.send(json.dumps({'type': 'ack', 'voice_control': 'clear'}))
+                else:
+                    await websocket.send(json.dumps({'type': 'error', 'error': f'unknown voice action: {action}'}))
+            elif t == 'voice_volume':
+                # { type: 'voice_volume', value: <0.0..1.5> }
+                try:
+                    val = float(data.get('value'))
+                    # Clamp to a reasonable range
+                    if not (val == val) or val < 0:
+                        raise ValueError('invalid')
+                    if val > 2.0:
+                        val = 2.0
+                    self.voice_volume_pub.publish(Float32(data=val))
+                    await websocket.send(json.dumps({'type': 'ack', 'voice_volume': val}))
+                except Exception:
+                    await websocket.send(json.dumps({'type': 'error', 'error': 'invalid volume value'}))
             elif t == 'systemd':
                 action = (data.get('action') or 'list').lower()
                 if action == 'list':
