@@ -37,7 +37,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
-    self.declare_parameter('imu_topic', '/imu/mpu6050')
+        self.declare_parameter('imu_topic', '/imu/mpu6050')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -51,7 +51,7 @@ class PilotWebSocketNode(Node):
         self.voice_topic = str(_param('voice_topic', '/voice'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
-    self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
+        self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
