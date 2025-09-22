@@ -152,8 +152,9 @@ patch_cmake_include_usr() {
         return 0
     fi
     echo "[eye/setup] Patching $cmake_file to include /usr/include and ${ros_cv_bridge_dir} after first project()"
+    # Use awk to safely locate the first 'project(' line regardless of grep regex support
     local line
-    line=$(grep -n "^[[:space:]]*project\(" "$cmake_file" | head -n1 | cut -d: -f1)
+    line=$(awk '/project[[:space:]]*\(/ {print NR; exit}' "$cmake_file" || true)
     if [ -n "$line" ]; then
         awk -v ln="$line" -v rosdir="$ros_cv_bridge_dir" 'NR==ln{print; print "include_directories(/usr/include)"; print "include_directories("rosdir")"; next}1' "$cmake_file" > "$cmake_file.tmp" && mv "$cmake_file.tmp" "$cmake_file"
     else
