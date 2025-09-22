@@ -1,0 +1,17 @@
+# RTAB-Map parameters for RGB-D mapping — tune for Kinect and platform
+rtabmap:
+  ros__parameters:
+    frame_id: camera_link
+    subscribe_rgbd: true
+    rgb_topic: /camera/color/image_raw
+    depth_topic: /camera/depth/image_raw
+    camera_info_topic: /camera/color/camera_info
+    approx_sync: true
+    # memory and loop closure
+    Mem/IncrementalMemory: true
+    Mem/WeightNewNodes: 0.1
+    Kp/MaxFeatures: 500
+    # Depth and visual odometry settings
+    Vis/CorType: 1
+    RGBD/LinearUpdate: 0.1
+    RGBD/AngularUpdate: 0.1

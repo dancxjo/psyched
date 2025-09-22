@@ -110,6 +110,12 @@ class PilotController {
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
 
+        // Map canvas
+        this.mapCanvas = document.getElementById('mapCanvas');
+        if (this.mapCanvas) {
+            this.mapCtx = this.mapCanvas.getContext('2d');
+        }
+
         // Best-effort unwatch on page unload (backend also cleans on disconnect)
         window.addEventListener('beforeunload', () => {
             try {
@@ -1647,7 +1653,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Attach image handler to incoming websocket messages (if websocket already present it will be reused)
     try {
         const pc = window.pilotController;
-        // Wrap existing handleWebSocketMessage to intercept image messages
+        // Wrap existing handleWebSocketMessage to intercept image and map messages
         const origHandle = pc.handleWebSocketMessage.bind(pc);
         pc.handleWebSocketMessage = function (data) {
             // Data may be raw string; ensure JSON parse happens once (the original expects parsed object)
@@ -1664,12 +1670,74 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (message.topic === '/depth/image_raw') {
                         const el = document.getElementById('depth-image');
                         if (el) el.src = message.data;
+                    } else if (message.topic === '/map' || message.topic === 'map') {
+                        // Map image payload
+                        if (pc.mapCtx) {
+                            const img = new Image();
+                            img.onload = () => {
+                                const cw = pc.mapCanvas.width;
+                                const ch = pc.mapCanvas.height;
+                                const ar = img.width / img.height;
+                                let dw = cw, dh = ch;
+                                if (cw / ch > ar) { dw = ch * ar; } else { dh = cw / ar; }
+                                pc.mapCtx.clearRect(0, 0, cw, ch);
+                                pc.mapCtx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                            };
+                            img.src = message.data;
+                        }
                     }
-                    // Do not return; still allow original handler to process if needed
                 }
             } catch (e) {
                 // ignore
             }
+
+            // Handle raw map payload (map_raw)
+            try {
+                if (message && message.type === 'map_raw' && message.data) {
+                    const w = parseInt(message.width, 10);
+                    const h = parseInt(message.height, 10);
+                    const b64 = message.data;
+                    const raw = atob(b64);
+                    const arr = new Uint8Array(raw.length);
+                    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+
+                    if (pc.mapCtx) {
+                        const canvas = pc.mapCanvas;
+                        // Resize canvas to preserve map aspect but keep reasonable size
+                        const maxSize = 800;
+                        let scale = 1.0;
+                        if (w > h) scale = Math.min(maxSize / w, 1.0);
+                        else scale = Math.min(maxSize / h, 1.0);
+                        canvas.width = Math.max(200, Math.floor(w * scale));
+                        canvas.height = Math.max(200, Math.floor(h * scale));
+                        const imgData = pc.mapCtx.createImageData(w, h);
+                        for (let y = 0; y < h; y++) {
+                            for (let x = 0; x < w; x++) {
+                                const idx = y * w + x;
+                                let v = (arr[idx] & 0xFF) - 128;
+                                let color = 127;
+                                if (v === -1) color = 127;
+                                else if (v === 0) color = 255;
+                                else if (v > 0) color = 0;
+                                const p = ((h - 1 - y) * w + x) * 4;
+                                imgData.data[p] = color;
+                                imgData.data[p + 1] = color;
+                                imgData.data[p + 2] = color;
+                                imgData.data[p + 3] = 255;
+                            }
+                        }
+                        const off = document.createElement('canvas');
+                        off.width = w; off.height = h;
+                        const offCtx = off.getContext('2d');
+                        offCtx.putImageData(imgData, 0, 0);
+                        pc.mapCtx.clearRect(0, 0, canvas.width, canvas.height);
+                        pc.mapCtx.drawImage(off, 0, 0, canvas.width, canvas.height);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to render raw map:', e);
+            }
+
             try { origHandle(data); } catch (e) { console.error(e); }
         };
     } catch (e) {

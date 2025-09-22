@@ -53,6 +53,17 @@
             </div>
         </div>
 
+        <!-- Map display panel -->
+        <div id="map-container" class="map-container" style="margin-top:12px;">
+            <h2>Map</h2>
+            <div class="map-controls">
+                <button id="mapSaveBtn">Save Map</button>
+                <button id="mapRecordBtn">Record Session</button>
+            </div>
+            <canvas id="mapCanvas" width="400" height="400" style="border:1px solid #333; background:#111; display:block; max-width:100%;"></canvas>
+            <div class="map-legend">Black=Occupied, White=Free, Gray=Unknown</div>
+        </div>
+
         <div class="estop-bar">
             <button id="stopButton" class="lcars-element rounded button lcars-red-alert-bg estop-button" title="Immediate halt">🛑 Emergency Stop</button>
         </div>

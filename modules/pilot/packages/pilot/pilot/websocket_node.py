@@ -27,6 +27,12 @@ from sensor_msgs.msg import Imu
 from math import atan2
 from psyched_msgs.msg import Message as ConvMessage
 from sensor_msgs.msg import Image
+try:
+    from nav_msgs.msg import OccupancyGrid
+except Exception:
+    OccupancyGrid = None
+import base64
+import zlib
 
 # Optional image tooling
 try:
@@ -69,6 +75,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('imu_topic', '/imu')
         self.declare_parameter('gps_fix_topic', '/gps/fix')
         self.declare_parameter('conversation_topic', '/conversation')
+    self.declare_parameter('map_topic', '/map')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -89,6 +96,7 @@ class PilotWebSocketNode(Node):
         self.imu_topic = str(_param('imu_topic', '/imu'))
         self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
         self.conversation_topic = str(_param('conversation_topic', '/conversation'))
+    self.map_topic = str(_param('map_topic', '/map'))
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
@@ -246,6 +254,15 @@ class PilotWebSocketNode(Node):
                     self.get_logger().info('OpenCV not available; image streaming disabled')
         except Exception as e:
             self.get_logger().warn(f'Failed to create image subscriptions: {e}')
+
+        # Map subscription (OccupancyGrid) — optional
+        try:
+            if OccupancyGrid is not None:
+                self.create_subscription(OccupancyGrid, self.map_topic, self._on_map, 1)
+            else:
+                self.get_logger().info('nav_msgs/OccupancyGrid not available; map streaming disabled')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to create map subscription: {e}')
 
         # Periodic snapshot broadcaster (push stacked data to clients)
         # Ensures UI receives all current measurements in a single, ordered payload
@@ -676,6 +693,68 @@ class PilotWebSocketNode(Node):
             self._encode_and_send_image('/depth/image_raw', b64)
         except Exception:
             return
+
+    def _on_map(self, msg: OccupancyGrid):
+        """Handle OccupancyGrid messages and broadcast as an image or raw payload.
+
+        If OpenCV + numpy are available, render an image and send as the existing
+        'image' message (topic '/map') so the frontend can reuse the image handler.
+        Otherwise, send a compact raw base64 payload with width/height for the
+        frontend to decode and render.
+        """
+        try:
+            w = int(msg.info.width)
+            h = int(msg.info.height)
+            data = list(msg.data) if hasattr(msg, 'data') else []
+        except Exception:
+            return
+
+        # Prefer image encoding when OpenCV is present
+        if cv2 is not None and np is not None:
+            try:
+                arr = np.array(data, dtype=np.int8).reshape((h, w))
+                # Create a BGR image: unknown=127, free=255 (white), occ=0 (black)
+                img = np.full((h, w, 3), 127, dtype=np.uint8)
+                free_mask = (arr == 0)
+                occ_mask = (arr > 0)
+                img[free_mask] = [255, 255, 255]
+                img[occ_mask] = [0, 0, 0]
+                # Flip vertically to match display conventions
+                img = np.flipud(img)
+                ret, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if ret:
+                    b64 = 'data:image/jpeg;base64,' + base64.b64encode(buf.tobytes()).decode('ascii')
+                    # Reuse existing image broadcaster with topic '/map'
+                    self._encode_and_send_image('/map', b64)
+                    return
+            except Exception as e:
+                self.get_logger().warn(f'Failed to encode map image: {e}')
+
+        # Fallback: send raw occupancy bytes as base64 for client-side rendering
+        try:
+            # Pack as signed bytes (-1..100) into single byte values by offsetting 128
+            raw = bytes([(x + 128) & 0xFF for x in data])
+            b64 = base64.b64encode(raw).decode('ascii')
+            payload = json.dumps({
+                'type': 'map_raw',
+                'topic': self.map_topic,
+                'width': w,
+                'height': h,
+                'resolution': float(msg.info.resolution) if hasattr(msg.info, 'resolution') else None,
+                'data': b64,
+            })
+
+            async def _send_all():
+                for client in list(self.connected_clients):
+                    try:
+                        await client.send(payload)
+                    except Exception:
+                        pass
+
+            if self._loop:
+                asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+        except Exception as e:
+            self.get_logger().warn(f'Failed to send raw map payload: {e}')
 
     # Conversation forwarding
     def _on_conversation(self, msg: ConvMessage):
