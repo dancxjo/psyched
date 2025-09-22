@@ -61,6 +61,45 @@ body {
     flex-direction: column;
 }
 
+/* Camera preview styles - full width above controls */
+#camera-container {
+  width: 50%;
+  max-width: 800px;
+  display: block;
+  margin: 10px auto 18px auto; /* center and add vertical spacing */
+}
+
+#camera-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: #000; /* black backdrop while loading */
+}
+
+/* Overlay wrapper positions depth image above color image */
+.camera-overlay-wrap { position: relative; width: 100%; display: block; }
+.camera-overlay-wrap img { display: block; width: 100%; height: auto; }
+.camera-overlay-wrap #camera-image { position: relative; z-index: 1; }
+.camera-overlay-wrap #depth-image {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
+  pointer-events: none; /* clicks pass through */
+  mix-blend-mode: overlay; /* visually combine depth with color */
+  opacity: 0.6; /* default; adjustable via slider */
+  border-radius: 8px;
+}
+
+.camera-controls { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.camera-controls input[type=range] { width: 120px; }
+
+/* Responsive fallback: fullscreen on small screens */
+@media (max-width: 900px) {
+  #camera-container { width: 100%; margin-left: 0; margin-right: 0; }
+}
+
 /* Header */
 header {
     margin-bottom: 20px;

@@ -26,6 +26,20 @@ from create_msgs.msg import ChargingState, Mode, Bumper, Cliff
 from sensor_msgs.msg import Imu
 from math import atan2
 from psyched_msgs.msg import Message as ConvMessage
+from sensor_msgs.msg import Image
+
+# Optional image tooling
+try:
+    from cv_bridge import CvBridge
+except Exception:  # pragma: no cover
+    CvBridge = None
+
+try:
+    import cv2
+    import numpy as np
+except Exception:
+    cv2 = None
+    np = None
 
 # Optional AudioInfo import for microphone metadata
 try:
@@ -215,6 +229,23 @@ class PilotWebSocketNode(Node):
         self._thread = threading.Thread(target=self._run_ws_loop, daemon=True)
         self._thread.start()
         self.get_logger().info(f'WebSocket node starting on ws://{self.host}:{self.websocket_port}')
+
+        # Image bridge (optional)
+        self._bridge = CvBridge() if CvBridge is not None else None
+        # Subscriptions for camera and depth (best-effort)
+        try:
+            if self._bridge is not None and cv2 is not None:
+                # color image
+                self.create_subscription(Image, '/image_raw', self._on_image, 10)
+                # depth image
+                self.create_subscription(Image, '/depth/image_raw', self._on_depth, 10)
+            else:
+                if CvBridge is None:
+                    self.get_logger().info('cv_bridge not available; image streaming disabled')
+                else:
+                    self.get_logger().info('OpenCV not available; image streaming disabled')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to create image subscriptions: {e}')
 
         # Periodic snapshot broadcaster (push stacked data to clients)
         # Ensures UI receives all current measurements in a single, ordered payload
@@ -582,6 +613,69 @@ class PilotWebSocketNode(Node):
                 except Exception:
                     pass
         asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+
+    # -----------------------------
+    # Image handling (color + depth)
+    # -----------------------------
+    def _encode_and_send_image(self, topic: str, b64data: str):
+        if not self.connected_clients or self._loop is None:
+            return
+        payload = json.dumps({'type': 'image', 'topic': topic, 'data': b64data})
+
+        async def _send_all():
+            for client in list(self.connected_clients):
+                try:
+                    await client.send(payload)
+                except Exception:
+                    pass
+
+        try:
+            asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+        except Exception:
+            pass
+
+    def _on_image(self, msg: Image):
+        # Convert ROS Image to JPEG base64 and broadcast
+        if self._bridge is None or cv2 is None:
+            return
+        try:
+            cv_img = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception:
+            return
+        try:
+            ret, buf = cv2.imencode('.jpg', cv_img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ret:
+                return
+            b64 = 'data:image/jpeg;base64,' + (buf.tobytes().encode('base64') if False else __import__('base64').b64encode(buf.tobytes()).decode('ascii'))
+            self._encode_and_send_image('/image_raw', b64)
+        except Exception:
+            return
+
+    def _on_depth(self, msg: Image):
+        # Convert depth to a visualizable color image, JPEG encode and broadcast
+        if self._bridge is None or cv2 is None or np is None:
+            return
+        try:
+            depth = self._bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        except Exception:
+            return
+        try:
+            # Normalize to 0-255
+            d = np.nan_to_num(depth, nan=0.0)
+            amin = float(np.min(d)) if d.size else 0.0
+            amax = float(np.max(d)) if d.size else 1.0
+            if amax - amin <= 1e-6:
+                amax = amin + 1.0
+            norm = (d - amin) / (amax - amin)
+            d8 = (np.clip(norm, 0.0, 1.0) * 255.0).astype(np.uint8)
+            colored = cv2.applyColorMap(d8, cv2.COLORMAP_JET)
+            ret, buf = cv2.imencode('.jpg', colored, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ret:
+                return
+            b64 = 'data:image/jpeg;base64,' + __import__('base64').b64encode(buf.tobytes()).decode('ascii')
+            self._encode_and_send_image('/depth/image_raw', b64)
+        except Exception:
+            return
 
     # Conversation forwarding
     def _on_conversation(self, msg: ConvMessage):

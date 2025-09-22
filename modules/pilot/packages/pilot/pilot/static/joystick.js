@@ -80,6 +80,9 @@ class PilotController {
         // Host health toggle setup
         this.setupHostHealthToggle();
 
+        // Depth overlay controls
+        this.setupDepthOverlayControls();
+
         // Send periodic keep-alive
         setInterval(() => this.sendPing(), 5000);
 
@@ -143,6 +146,27 @@ class PilotController {
             toggle.setAttribute('aria-expanded', String(!collapsed));
             toggle.textContent = collapsed ? 'System ▸' : 'System ▾';
         });
+    }
+
+    setupDepthOverlayControls() {
+        const toggle = document.getElementById('depthOverlayToggle');
+        const slider = document.getElementById('depthOpacity');
+        const depthEl = document.getElementById('depth-image');
+        if (!depthEl) return;
+        if (toggle) {
+            toggle.addEventListener('change', () => {
+                depthEl.style.display = toggle.checked ? 'block' : 'none';
+            });
+        }
+        if (slider) {
+            const setOpacity = (v) => {
+                const op = Math.max(0, Math.min(100, parseInt(v, 10))) / 100.0;
+                depthEl.style.opacity = String(op);
+            };
+            // set initial
+            setOpacity(slider.value);
+            slider.addEventListener('input', () => setOpacity(slider.value));
+        }
     }
 
     setupWebSocket() {
@@ -1618,5 +1642,37 @@ class PilotController {
 
 // Initialize the pilot controller when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    new PilotController();
+    // Keep a global reference for debugging and for additional handlers
+    window.pilotController = new PilotController();
+    // Attach image handler to incoming websocket messages (if websocket already present it will be reused)
+    try {
+        const pc = window.pilotController;
+        // Wrap existing handleWebSocketMessage to intercept image messages
+        const origHandle = pc.handleWebSocketMessage.bind(pc);
+        pc.handleWebSocketMessage = function (data) {
+            // Data may be raw string; ensure JSON parse happens once (the original expects parsed object)
+            let message = data;
+            if (typeof data === 'string') {
+                try { message = JSON.parse(data); } catch (e) { /* non-json - ignore */ }
+            }
+            // If image message, update UI directly
+            try {
+                if (message && message.type === 'image' && message.topic && message.data) {
+                    if (message.topic === '/image_raw') {
+                        const el = document.getElementById('camera-image');
+                        if (el) el.src = message.data;
+                    } else if (message.topic === '/depth/image_raw') {
+                        const el = document.getElementById('depth-image');
+                        if (el) el.src = message.data;
+                    }
+                    // Do not return; still allow original handler to process if needed
+                }
+            } catch (e) {
+                // ignore
+            }
+            try { origHandle(data); } catch (e) { console.error(e); }
+        };
+    } catch (e) {
+        // ignore errors attaching handler
+    }
 });

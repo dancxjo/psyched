@@ -39,6 +39,20 @@
             </div>
         </header>
 
+        <!-- Camera preview (color + depth) shown above controls -->
+        <div id="camera-container" class="camera-container">
+            <div id="camera-overlay-wrap" class="camera-overlay-wrap">
+                <img id="camera-image" alt="camera image" src="" />
+                <img id="depth-image" alt="depth image" src="" />
+            </div>
+            <div class="camera-controls">
+                <label style="font-size:0.9rem;color:var(--lcars-muted);margin-right:8px;">Depth overlay</label>
+                <input type="checkbox" id="depthOverlayToggle" checked />
+                <label for="depthOpacity" style="font-size:0.9rem;color:var(--lcars-muted);margin-left:12px;margin-right:6px;">Opacity</label>
+                <input type="range" id="depthOpacity" min="0" max="100" value="60" />
+            </div>
+        </div>
+
         <div class="estop-bar">
             <button id="stopButton" class="lcars-element rounded button lcars-red-alert-bg estop-button" title="Immediate halt">🛑 Emergency Stop</button>
         </div>
