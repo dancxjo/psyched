@@ -27,10 +27,17 @@ import subprocess
 import threading
 import pathlib
 import wave
+
 from dataclasses import dataclass
 import sys
 import shlex
 import shutil
+
+# Engine defaults (Piper removed; use espeak)
+ENGINE = os.getenv("VOICE_ENGINE", "espeak")  # espeak
+# Default espeak-ng voice (use MBROLA voice like 'mb-us1' or 'en1' if installed)
+# Use MBROLA `en1` as the workspace default when available
+ESPEAK_VOICE = os.getenv("ESPEAK_VOICE", "mb-en1")
 
 import rclpy
 from rclpy.node import Node
@@ -39,70 +46,7 @@ from std_msgs.msg import String
 from std_msgs.msg import Empty
 from std_msgs.msg import UInt32
 
-
-                        This service reads text from the ``voice`` topic, synthesizes speech with the
-                        selected engine, and plays audio via ALSA (``aplay``) when available.
-
-                        Examples:
-                            Run the service::
-
-                                $ python3 node.py  # doctest: +SKIP
-
-                            Publish text::
-
-                                $ ros2 topic pub --once voice std_msgs/String '{data: "hello"}'  # doctest: +SKIP
-                        """
-                        from __future__ import annotations
-
-                        import argparse
-                        import time
-                        import json
-                        import os
-                        import queue
-                        import subprocess
-                        import threading
-                        import pathlib
-                        import wave
-                        from dataclasses import dataclass
-                        import sys
-                        import shlex
-                        import shutil
-
-                        import rclpy
-                        from rclpy.node import Node
-                        from rclpy.executors import MultiThreadedExecutor
-                        from std_msgs.msg import String
-                        from std_msgs.msg import Empty
-                        from std_msgs.msg import UInt32
-
-                        from voice.utils import fetch_fortune_text
-
-                        try:
-                            from piper import PiperVoice
-                            from piper import SynthesisConfig
-                        except Exception:  # pragma: no cover - allow import failure until deps installed
-                            PiperVoice = None  # type: ignore
-                            SynthesisConfig = None  # type: ignore
-
-                        # Engine defaults
-                        ENGINE = os.getenv("VOICE_ENGINE", "piper")  # piper | espeak
-
-                        # Default Piper voice model (downloaded during provisioning)
-                        PIPER_VOICES_DIR = os.getenv("PIPER_VOICES_DIR", "/opt/piper/voices")
-                        PIPER_MODEL = os.getenv("PIPER_MODEL", "en_US-ryan-high")
-
-                        # Default espeak-ng voice (use MBROLA voice like 'mb-us1' if installed)
-                        ESPEAK_VOICE = os.getenv("ESPEAK_VOICE", "en-us")
-
-
-                        @dataclass
-                        class PiperSettings:
-                            voice_path: str
-                            sample_rate: int | None = None  # if None, use voice default
-                            use_cuda: bool = False
-
-
-                        class VoiceNode(Node):
+class VoiceNode(Node):
                             """Speak queued messages via Piper TTS.
 
                             Args:
@@ -113,15 +57,15 @@ from std_msgs.msg import UInt32
                                 >>> VoiceNode(model="en_US-amy-medium")  # doctest: +SKIP
                             """
 
-                            def __init__(self, model: str = PIPER_MODEL, voices_dir: str = PIPER_VOICES_DIR) -> None:
+                            def __init__(self) -> None:
                                 super().__init__('voice')
 
                                 # Parameters - keep compatibility with existing node parameters
                                 self.declare_parameter('topic', '/voice')
                                 # Engine selection: 'piper' or 'espeak'
-                                self.declare_parameter('engine', os.environ.get('VOICE_ENGINE', 'piper'))
-                                self.declare_parameter('voice_path', os.environ.get('PIPER_VOICE', ''))
-                                self.declare_parameter('use_cuda', False)
+                                # Piper has been intentionally removed; default to espeak
+                                self.declare_parameter('engine', os.environ.get('VOICE_ENGINE', 'espeak'))
+                                # Runtime volume (0.0 - 2.0) - ensure it's stored as a float
                                 self.declare_parameter('volume', 1.0)
                                 self.declare_parameter('length_scale', 1.0)
                                 self.declare_parameter('noise_scale', 0.667)
@@ -134,7 +78,7 @@ from std_msgs.msg import UInt32
                                 self.declare_parameter('enable_ping', True)
                                 self.declare_parameter('ping_interval_sec', 30)
                                 # espeak-ng parameters
-                                self.declare_parameter('espeak_voice', os.environ.get('ESPEAK_VOICE', 'en-us'))
+                                self.declare_parameter('espeak_voice', os.environ.get('ESPEAK_VOICE', ESPEAK_VOICE))
                                 self.declare_parameter('espeak_rate', 170)   # words per minute
                                 self.declare_parameter('espeak_pitch', 50)   # 0-99
                                 self.declare_parameter('espeak_volume', 1.0) # 0.0-1.0 scales -a 0-200
@@ -145,12 +89,13 @@ from std_msgs.msg import UInt32
                                 self.declare_parameter('clear_topic', '/voice/clear')
                                 self.declare_parameter('interrupt_topic', '/voice/interrupt')
 
-                                # New voice model setup
-                                self.model = model
-                                self.voices_dir = voices_dir
-                                self.model_path = os.path.join(self.voices_dir, f"{self.model}.onnx")
-                                self.config_path = os.path.join(self.voices_dir, f"{self.model}.onnx.json")
-                                self.sample_rate = self._load_sample_rate(self.config_path)
+                                # No Piper model handling here — use espeak by default.
+                                self.model = None
+                                self.voices_dir = ''
+                                self.model_path = ''
+                                self.config_path = ''
+                                # Default sample rate used for any legacy pipelines
+                                self.sample_rate = 22050
 
                                 # Internal state
                                 self._queue: queue.Queue[str] = queue.Queue()
@@ -163,9 +108,18 @@ from std_msgs.msg import UInt32
                                 self._runtime_started = False
                                 # Runtime volume (0.0 - 2.0), initialized from parameter 'volume'
                                 try:
-                                    self.volume = float(self.get_parameter('volume').value)
+                                    raw_vol = self.get_parameter('volume').get_parameter_value().double_value
+                                    # rclpy returns 0.0 for missing numeric; guard anyway
+                                    if raw_vol is None:
+                                        raw_vol = 1.0
+                                    self.volume = float(raw_vol)
                                 except Exception:
-                                    self.volume = 1.0
+                                    # Fallback for older rclpy versions or unexpected types
+                                    try:
+                                        self.volume = float(self.get_parameter('volume').value)
+                                    except Exception:
+                                        self.volume = 1.0
+                                # Clamp range
                                 self.volume = max(0.0, min(2.0, self.volume))
 
                                 # Topic setup
@@ -228,7 +182,48 @@ from std_msgs.msg import UInt32
                                 self._setup_ping_timer()
 
                             def _announce_startup_message(self) -> None:
-                                """Queue an initial utterance so operators know the node is alive."""
+                                """Queue an initial utterance so operators know the node is alive.
+
+                                This will enqueue the configured startup_greeting parameter if present.
+                                """
+                                try:
+                                    greeting = self.get_parameter('startup_greeting').get_parameter_value().string_value
+                                except Exception:
+                                    greeting = ''
+                                if greeting:
+                                    try:
+                                        self.enqueue(String(data=greeting))
+                                    except Exception:
+                                        pass
+                                return
+                            
+                            def _setup_ping_timer(self) -> None:
+                                """Create a periodic timer that enqueues a short fortune/ping message.
+
+                                Timer is stored on `self._ping_timer` so it can be cancelled during
+                                shutdown.
+                                """
+                                try:
+                                    enable = False
+                                    try:
+                                        enable = bool(self.get_parameter('enable_ping').get_parameter_value().bool_value)
+                                    except Exception:
+                                        enable = False
+                                    if not enable:
+                                        self._ping_timer = None
+                                        return
+                                    interval = 30
+                                    try:
+                                        interval = int(self.get_parameter('ping_interval_sec').get_parameter_value().integer_value or 30)
+                                    except Exception:
+                                        interval = 30
+                                    # Use rclpy timer to schedule periodic pings
+                                    from rclpy.duration import Duration
+                                    # Store the timer so it can be canceled on shutdown
+                                    self._ping_timer = self.create_timer(float(interval), self._send_fortune_ping)
+                                except Exception:
+                                    self._ping_timer = None
+                                    return
                             def enqueue(self, msg: String) -> None:
                                 """Add ``msg`` to the speech queue."""
                                 self._queue.put(msg.data)
@@ -283,6 +278,40 @@ from std_msgs.msg import UInt32
                                         self.get_logger().warning(f"Failed to download config: {e}")
                                         pass
 
+                            def _load_sample_rate(self, config_path: str) -> int:
+                                """Load sample_rate from Piper model config JSON if available.
+
+                                Returns an integer sample rate. If the config doesn't exist or
+                                cannot be parsed, returns a sensible default (22050).
+                                """
+                                try:
+                                    if not config_path:
+                                        return 22050
+                                    p = pathlib.Path(config_path)
+                                    if not p.exists():
+                                        return 22050
+                                    import json as _json
+                                    with p.open('r', encoding='utf-8') as fh:
+                                        cfg = _json.load(fh)
+                                    # Configs vary; look for common keys
+                                    for key in ('sample_rate', 'sampling_rate', 'sr'):
+                                        if key in cfg:
+                                            try:
+                                                return int(cfg[key])
+                                            except Exception:
+                                                pass
+                                    # Some piper configs embed 'audio' dict
+                                    audio = cfg.get('audio') if isinstance(cfg, dict) else None
+                                    if isinstance(audio, dict) and 'sample_rate' in audio:
+                                        try:
+                                            return int(audio['sample_rate'])
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                                # Sensible default
+                                return 22050
+
                             # Compatibility methods for existing control topics
                             def _on_pause(self, _msg) -> None:
                                 if self._unpaused.is_set():
@@ -332,6 +361,15 @@ from std_msgs.msg import UInt32
                                 if worker is not None:
                                     worker.join(timeout=5)
                                     self._worker = None
+                                # Cancel ping timer if created
+                                try:
+                                    if getattr(self, '_ping_timer', None) is not None:
+                                        try:
+                                            self._ping_timer.cancel()
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
                                 return super().destroy_node()
 
                             def _run_worker(self):
@@ -343,7 +381,17 @@ from std_msgs.msg import UInt32
                                 espeak_voice = self.get_parameter('espeak_voice').get_parameter_value().string_value
                                 espeak_rate = int(self.get_parameter('espeak_rate').get_parameter_value().integer_value or 170)
                                 espeak_pitch = int(self.get_parameter('espeak_pitch').get_parameter_value().integer_value or 50)
-                                espeak_volume = float(self.get_parameter('espeak_volume').get_parameter_value().double_value or 1.0)
+                                # Robustly parse espeak_volume (some environments may provide empty string)
+                                try:
+                                    raw_ev = self.get_parameter('espeak_volume').get_parameter_value().double_value
+                                    if raw_ev is None:
+                                        raw_ev = 1.0
+                                    espeak_volume = float(raw_ev)
+                                except Exception:
+                                    try:
+                                        espeak_volume = float(self.get_parameter('espeak_volume').value)
+                                    except Exception:
+                                        espeak_volume = 1.0
                                 espeak_extra_args = self.get_parameter('espeak_extra_args').get_parameter_value().string_value
 
                                 while not self._stop_event.is_set():
@@ -376,7 +424,15 @@ from std_msgs.msg import UInt32
 
 
                                     # Engine-specific synthesis (espeak-ng/mbrola only)
-                                    success = self._speak_with_espeak(text, espeak_voice, espeak_rate, espeak_pitch, espeak_volume, espeak_extra_args)
+                                    # Determine aplay command (may be disabled via parameter)
+                                    try:
+                                        aplay_enabled = bool(self.get_parameter('aplay').get_parameter_value().bool_value)
+                                    except Exception:
+                                        aplay_enabled = True
+                                    aplay_cmd = shutil.which('aplay') if aplay_enabled else None
+
+                                    # Call with correct parameter order: (text, aplay_cmd, voice, rate, pitch, volume, extra_args)
+                                    success = self._speak_with_espeak(text, aplay_cmd, espeak_voice, espeak_rate, espeak_pitch, espeak_volume, espeak_extra_args)
                                     autophony_msg = UInt32()
                                     autophony_msg.data = 0
                                     self.autophony_pub.publish(autophony_msg)
@@ -618,14 +674,22 @@ from std_msgs.msg import UInt32
                                 # Clamp and convert values
                                 rate = max(80, min(450, int(rate)))
                                 pitch = max(0, min(99, int(pitch)))
-                                amp = int(max(0.0, min(1.5, float(volume_scale))) * 200)
+                                # Safely parse the passed-in volume_scale (may be string or empty)
+                                try:
+                                    vs = volume_scale
+                                    if isinstance(vs, str) and vs.strip() == '':
+                                        vs = 1.0
+                                    vsf = float(vs)
+                                except Exception:
+                                    vsf = 1.0
+                                amp = int(max(0.0, min(1.5, vsf)) * 200)
 
-                                # If runtime volume is set, override amplitude accordingly
+                                # If runtime node volume is set, override amplitude accordingly
                                 try:
                                     vol = max(0.0, min(1.5, float(getattr(self, 'volume', 1.0))))
                                     amp = int(vol * 200)
                                 except Exception:
-                                    pass
+                                    amp = 200
 
                                 base_cmd = [espeak, '-v', voice, '-s', str(rate), '-p', str(pitch), '-a', str(amp)]
                                 if extra_args:
@@ -702,33 +766,31 @@ from std_msgs.msg import UInt32
                                     return False
 
 
-                        def main(args=None):
-                            """Start the voice node.
+def main(args=None):
+    """Start the voice node.
 
-                            Respects ``PIPER_MODEL`` and ``PIPER_VOICES_DIR`` environment variables
-                            and ``--model``/``--voices-dir`` CLI arguments.
-                            """
-                            parser = argparse.ArgumentParser()
-                            parser.add_argument("--model", default=os.getenv("PIPER_MODEL", PIPER_MODEL))
-                            parser.add_argument("--voices-dir", default=os.getenv("PIPER_VOICES_DIR", PIPER_VOICES_DIR))
+    Respects ``PIPER_MODEL`` and ``PIPER_VOICES_DIR`` environment variables
+    and ``--model``/``--voices-dir`` CLI arguments.
+    """
+    # No CLI arguments required for espeak-only configuration
+    parser = argparse.ArgumentParser()
+    # Parse known args to handle ROS2 arguments
+    known_args, ros_args = parser.parse_known_args()
 
-                            # Parse known args to handle ROS2 arguments
-                            known_args, ros_args = parser.parse_known_args()
+    rclpy.init(args=ros_args)
+    node = VoiceNode()
 
-                            rclpy.init(args=ros_args)
-                            node = VoiceNode(model=known_args.model, voices_dir=known_args.voices_dir)
-
-                            try:
-                                # Use multithreaded executor so sub + worker can coexist if callback blocks briefly
-                                executor = MultiThreadedExecutor(num_threads=2)
-                                executor.add_node(node)
-                                executor.spin()
-                            except KeyboardInterrupt:
-                                pass
-                            finally:
-                                node.destroy_node()
-                                rclpy.shutdown()
+    try:
+        # Use multithreaded executor so sub + worker can coexist if callback blocks briefly
+        executor = MultiThreadedExecutor(num_threads=2)
+        executor.add_node(node)
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
-                        if __name__ == '__main__':
-                            main()
+if __name__ == '__main__':
+    main()
