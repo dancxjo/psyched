@@ -97,11 +97,11 @@ class PilotWebSocketNode(Node):
         self.imu_topic = str(_param('imu_topic', '/imu'))
         self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
         self.conversation_topic = str(_param('conversation_topic', '/conversation'))
-    self.map_topic = str(_param('map_topic', '/map'))
+        self.map_topic = str(_param('map_topic', '/map'))
 
-    # Background recording/map save processes registry
-    self._bg_recordings = {}  # name -> Popen
-    self._bg_lock = threading.Lock()
+        # Background recording/map save processes registry
+        self._bg_recordings = {}  # name -> Popen
+        self._bg_lock = threading.Lock()
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
