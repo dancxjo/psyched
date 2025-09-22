@@ -44,7 +44,17 @@ def generate_launch_description():
     clear_topic_arg = DeclareLaunchArgument('clear_topic', default_value='/voice/clear')
     interrupt_topic_arg = DeclareLaunchArgument('interrupt_topic', default_value='/voice/interrupt')
 
-    # Piper model args removed
+    # Piper model args
+    model_arg = DeclareLaunchArgument(
+        'model',
+        default_value=EnvironmentVariable(name='PIPER_MODEL', default_value='en_US-ryan-high'),
+        description='Piper model name (e.g., en_US-ryan-high)'
+    )
+    voices_dir_arg = DeclareLaunchArgument(
+        'voices_dir',
+        default_value=EnvironmentVariable(name='PIPER_VOICES_DIR', default_value='~/.local/share/piper/voices'),
+        description='Directory for Piper voice models'
+    )
 
     node = Node(
         package='voice',
