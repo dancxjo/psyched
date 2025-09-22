@@ -56,7 +56,7 @@ sudo apt-get install -y espeak-ng mbrola mbrola-en1
 
 echo "[voice/setup] Installing pyttsx3 for TTS Python support..."
 python3 -m pip install --upgrade pip
-python3 -m pip install pyttsx3
+python3 -m pip install pyttsx3 --break-system-packages
   if command -v apt >/dev/null 2>&1; then
     # Common package name for English MBROLA voice
     sudo apt install -y mbrola-en1 || true
