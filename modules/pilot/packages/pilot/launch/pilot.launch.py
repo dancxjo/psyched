@@ -19,7 +19,7 @@ def generate_launch_description():
     )
     imu_topic_arg = DeclareLaunchArgument(
         'imu_topic',
-        default_value=EnvironmentVariable(name='PILOT_IMU_TOPIC', default_value='/imu/mpu6050'),
+        default_value=EnvironmentVariable(name='PILOT_IMU_TOPIC', default_value='/imu'),
         description='IMU topic (sensor_msgs/Imu) for UI overlay'
     )
     gps_fix_topic_arg = DeclareLaunchArgument(

@@ -47,7 +47,7 @@ class PilotNode(Node):
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('enable_http', True)
         self.declare_parameter('enable_websocket', True)
-        self.declare_parameter('imu_topic', '/imu/mpu6050')
+        self.declare_parameter('imu_topic', '/imu')
 
         def _get_param_value(name):
             # rclpy returns a Python value at .value regardless of declared type
@@ -87,7 +87,7 @@ class PilotNode(Node):
         self.websocket_port = _as_int(_get_param_value('websocket_port'), 8081)
         self.cmd_vel_topic = _as_str(_get_param_value('cmd_vel_topic'), '/cmd_vel')
         self.voice_topic = _as_str(_get_param_value('voice_topic'), '/voice')
-        self.imu_topic = _as_str(_get_param_value('imu_topic'), '/imu/mpu6050')
+        self.imu_topic = _as_str(_get_param_value('imu_topic'), '/imu')
         self.host = _as_str(_get_param_value('host'), '0.0.0.0')
         self.enable_http = _as_bool(_get_param_value('enable_http'), True)
         self.enable_websocket = _as_bool(_get_param_value('enable_websocket'), True)

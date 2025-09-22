@@ -5,7 +5,7 @@
     {
       "type": "info",
       "label": "IMU Topic",
-      "value": "${IMU_TOPIC:-/imu/mpu6050}"
+      "value": "${IMU_TOPIC:-/imu}"
     },
     {
       "type": "info",

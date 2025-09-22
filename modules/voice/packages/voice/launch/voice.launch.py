@@ -25,7 +25,7 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='ESPEAK_VOICE', default_value='mb-en1'),
         description='espeak-ng voice name, e.g., en-us or mb-us1 (MBROLA)'
     )
-    espeak_rate_arg = DeclareLaunchArgument('espeak_rate', default_value='170')
+    espeak_rate_arg = DeclareLaunchArgument('espeak_rate', default_value='100')
     espeak_pitch_arg = DeclareLaunchArgument('espeak_pitch', default_value='50')
     espeak_volume_arg = DeclareLaunchArgument('espeak_volume', default_value='1.0')
     espeak_extra_args_arg = DeclareLaunchArgument('espeak_extra_args', default_value='')

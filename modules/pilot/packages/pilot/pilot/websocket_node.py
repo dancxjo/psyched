@@ -52,7 +52,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('voice_volume_topic', '/voice/volume')
         self.declare_parameter('host', '0.0.0.0')
         self.declare_parameter('host_health_topic', 'auto')
-        self.declare_parameter('imu_topic', '/imu/mpu6050')
+        self.declare_parameter('imu_topic', '/imu')
         self.declare_parameter('gps_fix_topic', '/gps/fix')
         self.declare_parameter('conversation_topic', '/conversation')
 
@@ -72,7 +72,7 @@ class PilotWebSocketNode(Node):
         self.voice_volume_topic = str(_param('voice_volume_topic', '/voice/volume'))
         self.host = str(_param('host', '0.0.0.0'))
         self.host_health_topic = str(_param('host_health_topic', 'auto'))
-        self.imu_topic = str(_param('imu_topic', '/imu/mpu6050'))
+        self.imu_topic = str(_param('imu_topic', '/imu'))
         self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
         self.conversation_topic = str(_param('conversation_topic', '/conversation'))
 
