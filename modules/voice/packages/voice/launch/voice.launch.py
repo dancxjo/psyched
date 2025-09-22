@@ -13,7 +13,8 @@ def generate_launch_description():
     )
     voice_path_arg = DeclareLaunchArgument(
         'voice_path',
-    # Piper arguments removed
+        default_value='',
+        description='Path to specific voice model (optional, usually unused)'
     )
 
     use_cuda_arg = DeclareLaunchArgument('use_cuda', default_value='false')
