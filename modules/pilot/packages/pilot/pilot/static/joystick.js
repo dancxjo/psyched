@@ -272,6 +272,8 @@ class PilotController {
     setupButtons() {
         const stopButton = document.getElementById('stopButton');
         const resetButton = document.getElementById('resetButton');
+        const mapSave = document.getElementById('mapSaveBtn');
+        const mapRecord = document.getElementById('mapRecordBtn');
 
         stopButton.addEventListener('click', () => {
             this.emergencyStop();
@@ -280,6 +282,39 @@ class PilotController {
         resetButton.addEventListener('click', () => {
             this.resetJoystick();
         });
+
+        if (mapSave) {
+            mapSave.addEventListener('click', () => {
+                if (!this.websocket || !this.isConnected) return;
+                try {
+                    // Ask backend to save map; optional name can be added later
+                    this.websocket.send(JSON.stringify({ type: 'save_map', name: 'rtabmap_map' }));
+                } catch (e) { console.error('Failed to request save_map', e); }
+            });
+        }
+
+        if (mapRecord) {
+            mapRecord.addEventListener('click', () => {
+                if (!this.websocket || !this.isConnected) return;
+                // Toggle recording state locally by disabling button and sending start/stop
+                if (!mapRecord.dataset.recording || mapRecord.dataset.recording === 'false') {
+                    try {
+                        this.websocket.send(JSON.stringify({ type: 'record_bag', name: 'nav_record' }));
+                        mapRecord.dataset.recording = 'starting';
+                        mapRecord.textContent = 'Recording...';
+                        mapRecord.disabled = true;
+                        // We'll enable and mark true on ack
+                    } catch (e) { console.error('Failed to start recording', e); }
+                } else {
+                    try {
+                        this.websocket.send(JSON.stringify({ type: 'record_bag_stop' }));
+                        mapRecord.dataset.recording = 'stopping';
+                        mapRecord.disabled = true;
+                        mapRecord.textContent = 'Stopping...';
+                    } catch (e) { console.error('Failed to stop recording', e); }
+                }
+            });
+        }
     }
 
     setupVoice() {
@@ -804,6 +839,35 @@ class PilotController {
                     if (message.gps_fix) this.updateGps(message.gps_fix);
                     if (Array.isArray(message.systemd_services)) this.updateServicesList(message.systemd_services);
                     if (message.modules) this.updateModules(message.modules);
+                    break;
+                case 'record_started':
+                    try {
+                        const btn = document.getElementById('mapRecordBtn');
+                        if (btn) {
+                            btn.dataset.recording = 'true';
+                            btn.disabled = false;
+                            btn.textContent = 'Stop Recording';
+                        }
+                    } catch (e) { }
+                    break;
+                case 'record_stopped':
+                    try {
+                        const btn = document.getElementById('mapRecordBtn');
+                        if (btn) {
+                            btn.dataset.recording = 'false';
+                            btn.disabled = false;
+                            btn.textContent = 'Record Session';
+                        }
+                    } catch (e) { }
+                    break;
+                case 'save_map_ack':
+                    try {
+                        const ms = document.getElementById('mapSaveBtn');
+                        if (ms) {
+                            ms.textContent = 'Save Requested';
+                            setTimeout(() => { ms.textContent = 'Save Map'; }, 2000);
+                        }
+                    } catch (e) { }
                     break;
                 case 'status':
                     if (message.cmd_vel_topic) {

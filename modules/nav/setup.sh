@@ -80,12 +80,21 @@ if ! dpkg -s "ros-${ROS_DISTRO}-rtabmap-ros" >/dev/null 2>&1 && ! apt-cache show
   popd >/dev/null
 fi
 
-echo "Cloning helpful repos into modules/nav/external (if network allowed)"
+echo "Ensuring external helper repositories in modules/nav/external (single clone)"
 mkdir -p modules/nav/external
 pushd modules/nav/external >/dev/null
 
-if [ ! -d rtabmap_ros_examples ]; then
-  git clone https://github.com/introlab/rtabmap_ros.git rtabmap_ros_examples || true
+# We only clone the upstream rtabmap_ros repository once (into 'rtabmap_ros').
+# Do not clone a second copy as 'rtabmap_ros_examples' which creates duplicate package names
+# If you need example overlays or a different branch, adjust or fetch into a separate workspace.
+if [ ! -d rtabmap_ros ]; then
+  if command -v git >/dev/null 2>&1; then
+    git clone https://github.com/introlab/rtabmap_ros.git rtabmap_ros || echo "git clone failed (network?)"
+  else
+    echo "git not available; cannot clone rtabmap_ros source."
+  fi
+else
+  echo "rtabmap_ros already present in modules/nav/external/rtabmap_ros"
 fi
 
 popd >/dev/null

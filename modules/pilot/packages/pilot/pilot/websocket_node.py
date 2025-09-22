@@ -31,6 +31,7 @@ try:
     from nav_msgs.msg import OccupancyGrid
 except Exception:
     OccupancyGrid = None
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import base64
 import zlib
 
@@ -75,7 +76,7 @@ class PilotWebSocketNode(Node):
         self.declare_parameter('imu_topic', '/imu')
         self.declare_parameter('gps_fix_topic', '/gps/fix')
         self.declare_parameter('conversation_topic', '/conversation')
-    self.declare_parameter('map_topic', '/map')
+        self.declare_parameter('map_topic', '/map')
 
         # Resolve parameters safely
         def _param(name, default):
@@ -97,6 +98,10 @@ class PilotWebSocketNode(Node):
         self.gps_fix_topic = str(_param('gps_fix_topic', '/gps/fix'))
         self.conversation_topic = str(_param('conversation_topic', '/conversation'))
     self.map_topic = str(_param('map_topic', '/map'))
+
+    # Background recording/map save processes registry
+    self._bg_recordings = {}  # name -> Popen
+    self._bg_lock = threading.Lock()
 
         self.cmd_vel_publisher = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.voice_publisher = self.create_publisher(String, self.voice_topic, 10)
@@ -243,10 +248,19 @@ class PilotWebSocketNode(Node):
         # Subscriptions for camera and depth (best-effort)
         try:
             if self._bridge is not None and cv2 is not None:
-                # color image
-                self.create_subscription(Image, '/image_raw', self._on_image, 10)
-                # depth image
-                self.create_subscription(Image, '/depth/image_raw', self._on_depth, 10)
+                # Use small depth and BEST_EFFORT reliability for high-rate image streams
+                try:
+                    qos_img = QoSProfile(depth=1)
+                    qos_img.reliability = ReliabilityPolicy.BEST_EFFORT
+                    qos_img.history = HistoryPolicy.KEEP_LAST
+                    # color image
+                    self.create_subscription(Image, '/image_raw', self._on_image, qos_img)
+                    # depth image
+                    self.create_subscription(Image, '/depth/image_raw', self._on_depth, qos_img)
+                except Exception:
+                    # Fallback to default integer depth if QoSProfile isn't accepted
+                    self.create_subscription(Image, '/image_raw', self._on_image, 10)
+                    self.create_subscription(Image, '/depth/image_raw', self._on_depth, 10)
             else:
                 if CvBridge is None:
                     self.get_logger().info('cv_bridge not available; image streaming disabled')
@@ -258,7 +272,14 @@ class PilotWebSocketNode(Node):
         # Map subscription (OccupancyGrid) — optional
         try:
             if OccupancyGrid is not None:
-                self.create_subscription(OccupancyGrid, self.map_topic, self._on_map, 1)
+                # Maps are relatively low-rate; keep a small queue and best-effort reliability
+                try:
+                    qos_map = QoSProfile(depth=1)
+                    qos_map.reliability = ReliabilityPolicy.BEST_EFFORT
+                    qos_map.history = HistoryPolicy.KEEP_LAST
+                    self.create_subscription(OccupancyGrid, self.map_topic, self._on_map, qos_map)
+                except Exception:
+                    self.create_subscription(OccupancyGrid, self.map_topic, self._on_map, 1)
             else:
                 self.get_logger().info('nav_msgs/OccupancyGrid not available; map streaming disabled')
         except Exception as e:
@@ -597,6 +618,29 @@ class PilotWebSocketNode(Node):
                                 await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'unwatched': True}))
                             except Exception as e:
                                 await websocket.send(json.dumps({'type': 'systemd', 'error': f'unwatch failed: {e}'}))
+            elif t == 'save_map':
+                # Trigger save_map helper script asynchronously
+                name = data.get('name') or 'rtabmap_map'
+                try:
+                    res = self._run_background_script(['modules/nav/save_map.sh', name])
+                    await websocket.send(json.dumps({'type': 'save_map_ack', 'name': name, 'pid': res}))
+                except Exception as e:
+                    await websocket.send(json.dumps({'type': 'error', 'error': f'save_map failed: {e}'}))
+            elif t == 'record_bag':
+                # Start ros2 bag recording in background; optional name arg
+                name = data.get('name') or 'nav_record'
+                try:
+                    pid = self._start_recording(name)
+                    await websocket.send(json.dumps({'type': 'record_started', 'name': name, 'pid': pid}))
+                except Exception as e:
+                    await websocket.send(json.dumps({'type': 'error', 'error': f'record_bag failed: {e}'}))
+            elif t == 'record_stop' or t == 'record_bag_stop':
+                name = data.get('name') or None
+                try:
+                    stopped = self._stop_recording(name)
+                    await websocket.send(json.dumps({'type': 'record_stopped', 'stopped': stopped}))
+                except Exception as e:
+                    await websocket.send(json.dumps({'type': 'error', 'error': f'stop_record failed: {e}'}))
         except Exception as e:
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
@@ -1218,6 +1262,62 @@ class PilotWebSocketNode(Node):
             return {'code': res.returncode, 'out': res.stdout.strip(), 'err': res.stderr.strip()}
         except Exception as e:
             return {'code': -1, 'out': '', 'err': str(e)}
+
+    def _run_background_script(self, args):
+        """Run a shell helper script in background returning the pid (or raise).
+
+        Args is a list like ['modules/nav/save_map.sh', 'name'] (relative repo path).
+        """
+        repo_root = Path(__file__).resolve().parents[3]
+        script = repo_root.joinpath(*args)
+        # If args list provided includes path components, script currently resolves wrong; accept full path string join
+        try:
+            # If first element is a path to script relative to repo, normalize
+            if isinstance(args, (list, tuple)):
+                spath = repo_root.joinpath(args[0]) if not Path(args[0]).is_absolute() else Path(args[0])
+                cmd = [str(spath)] + list(args[1:])
+            else:
+                cmd = [str(args)]
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with self._bg_lock:
+                self._bg_recordings[p.pid] = p
+            self.get_logger().info(f'Started background script: {cmd} (pid {p.pid})')
+            return p.pid
+        except Exception as e:
+            raise
+
+    def _start_recording(self, name='nav_record'):
+        """Start ros2 bag recording via helper script and return pid."""
+        repo_root = Path(__file__).resolve().parents[3]
+        script = repo_root / 'modules' / 'nav' / 'record_bag.sh'
+        if not script.exists():
+            raise FileNotFoundError(str(script))
+        try:
+            p = subprocess.Popen([str(script), name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with self._bg_lock:
+                self._bg_recordings[p.pid] = p
+            self.get_logger().info(f'Started ros2 bag recording: {name} (pid {p.pid})')
+            return p.pid
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start recording: {e}')
+            raise
+
+    def _stop_recording(self, name=None):
+        """Stop background recording(s). If name is None, stop all recordings started by this process."""
+        stopped = []
+        with self._bg_lock:
+            for pid, proc in list(self._bg_recordings.items()):
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                stopped.append(pid)
+                del self._bg_recordings[pid]
+        return stopped
 
     def _query_systemd_unit(self, unit: str):
         # Query active state
