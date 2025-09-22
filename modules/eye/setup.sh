@@ -1,6 +1,6 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
-
 
 # Config: source ../../config/eye.env from real script location
 REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -16,44 +16,31 @@ fi
 if REPO_DIR_GIT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
     REPO_DIR="$REPO_DIR_GIT_ROOT"
 else
-    # Fallback: modules/<name> is two levels below repo root
     REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 SOURCE_DIR="${REPO_DIR}/src"
+ROS_DISTRO="${ROS_DISTRO:-kilted}"
 
 ensure_cv_bridge_overlay() {
-    local distro="${ROS_DISTRO:-kilted}"
-    local header="/opt/ros/${distro}/include/cv_bridge/cv_bridge.h"
-    local pkg="ros-${distro}-cv-bridge"
+    local header="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge.hpp"
+    local pkg="ros-${ROS_DISTRO}-cv-bridge"
     local repo="${SOURCE_DIR}/vision_opencv"
-
-    # If system package installed or header present, nothing to do
     if dpkg -s "$pkg" >/dev/null 2>&1 || [ -f "$header" ]; then
         echo "[eye/setup] cv_bridge available via package or header: $pkg or $header"
         return 0
     fi
-
-    # Clone overlay if missing. Prefer common_clone_repo if available.
     if [ ! -d "$repo" ]; then
         echo "[eye/setup] Cloning vision_opencv overlay to $repo"
-        if declare -f common_clone_repo >/dev/null 2>&1; then
-            common_clone_repo https://github.com/ros-perception/vision_opencv.git "$repo"
-        else
-            git clone https://github.com/ros-perception/vision_opencv.git "$repo"
-        fi
+        git clone https://github.com/ros-perception/vision_opencv.git "$repo"
     fi
-
-    # Try to switch to a matching branch if available
     if [ -d "$repo/.git" ]; then
         git -C "$repo" fetch --tags --force >/dev/null 2>&1 || true
-        if git -C "$repo" rev-parse --verify "$distro" >/dev/null 2>&1; then
-            git -C "$repo" checkout "$distro" >/dev/null 2>&1 || true
+        if git -C "$repo" rev-parse --verify "$ROS_DISTRO" >/dev/null 2>&1; then
+            git -C "$repo" checkout "$ROS_DISTRO" >/dev/null 2>&1 || true
         elif git -C "$repo" rev-parse --verify "ros2" >/dev/null 2>&1; then
             git -C "$repo" checkout "ros2" >/dev/null 2>&1 || true
         fi
     fi
-
-    # Ensure overlay will be picked up by colcon by removing COLCON_IGNORE
     if [ -d "$repo" ]; then
         rm -f "$repo/COLCON_IGNORE" 2>/dev/null || true
     fi
@@ -160,23 +147,17 @@ patch_cmake_include_usr() {
     if [ ! -f "$cmake_file" ]; then
         return 0
     fi
-    # Avoid fragile regex with parentheses; use fixed-string contains checks
-    if grep -Fq "include_directories(/usr/include" "$cmake_file"; then
+    local ros_cv_bridge_dir="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge"
+    if grep -Fq "include_directories(/usr/include)" "$cmake_file" && grep -Fq "include_directories(${ros_cv_bridge_dir})" "$cmake_file"; then
         return 0
     fi
-    echo "[eye/setup] Patching $cmake_file to include /usr/include"
-    # Try to insert after first 'project(' line; if not found, after first 'cmake_minimum_required'
-    if grep -n "^[[:space:]]*project\(" "$cmake_file" >/dev/null; then
-        local line
-        line=$(grep -n "^[[:space:]]*project\(" "$cmake_file" | head -n1 | cut -d: -f1)
-        awk -v ln="$line" 'NR==ln{print; print "include_directories(/usr/include)"; next}1' "$cmake_file" >"$cmake_file.tmp" && mv "$cmake_file.tmp" "$cmake_file"
-    elif grep -n "^[[:space:]]*cmake_minimum_required\(" "$cmake_file" >/dev/null; then
-        local line
-        line=$(grep -n "^[[:space:]]*cmake_minimum_required\(" "$cmake_file" | head -n1 | cut -d: -f1)
-        awk -v ln="$line" 'NR==ln{print; print "include_directories(/usr/include)"; next}1' "$cmake_file" >"$cmake_file.tmp" && mv "$cmake_file.tmp" "$cmake_file"
+    echo "[eye/setup] Patching $cmake_file to include /usr/include and ${ros_cv_bridge_dir} after first project()"
+    local line
+    line=$(grep -n "^[[:space:]]*project\(" "$cmake_file" | head -n1 | cut -d: -f1)
+    if [ -n "$line" ]; then
+        awk -v ln="$line" -v rosdir="$ros_cv_bridge_dir" 'NR==ln{print; print "include_directories(/usr/include)"; print "include_directories("rosdir")"; next}1' "$cmake_file" > "$cmake_file.tmp" && mv "$cmake_file.tmp" "$cmake_file"
     else
-        # Fallback: append at end
-        printf "\ninclude_directories(/usr/include)\n" >>"$cmake_file"
+        awk -v rosdir="$ros_cv_bridge_dir" 'NR==1{print "include_directories(/usr/include)"; print "include_directories("rosdir")"; print} NR>1{print}' "$cmake_file" > "$cmake_file.tmp" && mv "$cmake_file.tmp" "$cmake_file"
     fi
 }
 
@@ -187,29 +168,28 @@ patch_cmake_include_usr "${SOURCE_DIR}/libfreenect/CMakeLists.txt"
 
 # Ensure all vision dependencies for Kinect and RGB-D pipelines
 ensure_vision_deps() {
-    # Kinect and other RGB-D pipelines depend on cv_bridge and related transports.
     if ! command -v apt-get >/dev/null 2>&1; then
         echo "[eye/setup] apt-get not available; skipping vision deps install"
         return 0
     fi
     sudo apt-get update -y >/dev/null 2>&1 || true
     sudo apt-get install -y \
-        ros-${ROS_DISTRO:-jazzy}-cv-bridge \
-        ros-${ROS_DISTRO:-jazzy}-camera-calibration-parsers \
-        ros-${ROS_DISTRO:-jazzy}-image-transport \
-        ros-${ROS_DISTRO:-jazzy}-image-transport-plugins \
-        ros-${ROS_DISTRO:-jazzy}-image-pipeline \
-        ros-${ROS_DISTRO:-jazzy}-perception \
-        ros-${ROS_DISTRO:-jazzy}-perception-pcl \
-        ros-${ROS_DISTRO:-jazzy}-vision-msgs \
-        ros-${ROS_DISTRO:-jazzy}-usb-cam \
+        ros-${ROS_DISTRO}-cv-bridge \
+        ros-${ROS_DISTRO}-camera-calibration-parsers \
+        ros-${ROS_DISTRO}-image-transport \
+        ros-${ROS_DISTRO}-image-transport-plugins \
+        ros-${ROS_DISTRO}-image-pipeline \
+        ros-${ROS_DISTRO}-perception \
+        ros-${ROS_DISTRO}-perception-pcl \
+        ros-${ROS_DISTRO}-vision-msgs \
+        ros-${ROS_DISTRO}-usb-cam \
         libopencv-dev \
         python3-opencv \
         libglu1-mesa-dev \
         freeglut3-dev \
         mesa-common-dev \
         libogre-1.12-dev \
-        ros-${ROS_DISTRO:-jazzy}-rviz2 \
+        ros-${ROS_DISTRO}-rviz2 \
         libgl1 \
         libegl1 \
         libxrandr2 \
@@ -231,17 +211,13 @@ if command -v apt-get >/dev/null 2>&1; then
 fi
 
 install_ros_vision_packages() {
-    local distro="${ROS_DISTRO:-kilted}"
-    local pkgs=("ros-${distro}-cv-bridge" "ros-${distro}-image-transport" "ros-${distro}-vision-msgs")
+    local pkgs=("ros-${ROS_DISTRO}-cv-bridge" "ros-${ROS_DISTRO}-image-transport" "ros-${ROS_DISTRO}-vision-msgs")
     if ! command -v apt-get >/dev/null 2>&1; then
         echo "[eye/setup] apt-get not available; skipping ROS vision packages install: ${pkgs[*]}"
         return 0
     fi
-
-    echo "[eye/setup] Installing ROS vision packages for distro: $distro"
-    # Update once before installs
+    echo "[eye/setup] Installing ROS vision packages for distro: $ROS_DISTRO"
     sudo apt-get update -y >/dev/null 2>&1 || true
-
     local to_install=()
     for p in "${pkgs[@]}"; do
         if dpkg -s "$p" >/dev/null 2>&1; then
@@ -250,12 +226,10 @@ install_ros_vision_packages() {
             to_install+=("$p")
         fi
     done
-
     if [ ${#to_install[@]} -eq 0 ]; then
         echo "[eye/setup] All ROS vision packages already installed."
         return 0
     fi
-
     echo "[eye/setup] Installing: ${to_install[*]}"
     sudo apt-get install -y "${to_install[@]}"
 }

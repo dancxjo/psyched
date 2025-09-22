@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config: source ../../config/<module>.env from real script location
-REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname "$REAL_PATH")"
-MODULE_NAME="$(basename "$(dirname "$REAL_PATH")")"
-CONF_FILE="$(cd "$SCRIPT_DIR/../.." && pwd)/config/${MODULE_NAME}.env"
-if [ -f "$CONF_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$CONF_FILE"
+# Source ROS environment if available, disable nounset to avoid unbound variable errors
+if [ -f "/opt/ros/${ROS_DISTRO:-kilted}/setup.bash" ]; then
+  set +u
+  source "/opt/ros/${ROS_DISTRO:-kilted}/setup.bash"
+  set -u
+fi
+if [ -f "install/setup.bash" ]; then
+  set +u
+  source "install/setup.bash"
+  set -u
 fi
 
-# If kinect_ros2 package provides a launch file, try launching it
-LAUNCH_PKG="kinect_ros2"
-LAUNCH_FILE="kinect.launch.py"
-
-if ros2 pkg list | grep -qx "$LAUNCH_PKG"; then
-  if ros2 launch "$LAUNCH_PKG" "$LAUNCH_FILE" 2>/dev/null; then
-    exit 0
-  fi
+# Try to run the node via ros2 run first
+if ros2 run kinect_ros2 kinect_ros2_node 2>/dev/null; then
+  exit 0
 fi
 
-echo "[eye/launch] Falling back to running kinect_ros2 node executable directly (if available)."
+echo "[eye/launch] Falling back to running kinect_ros2_node directly (if available)."
 if command -v kinect_ros2_node >/dev/null 2>&1; then
   exec kinect_ros2_node
 else
-  echo "[eye/launch] Could not find launch file or node for kinect_ros2. Ensure workspace is built." >&2
+  echo "[eye/launch] Could not find kinect_ros2_node. Ensure workspace is built and sourced." >&2
   exit 1
 fi
