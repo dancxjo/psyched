@@ -84,3 +84,10 @@ or conflicting package sources.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.
+
+## Nav Module: Depth-to-LaserScan + Vision LLM
+- RTAB-Map is now a separate module/host; nav module uses AMCL + depth-to-scan pipeline.
+- See `nav/depth_projection.py` for depth-to-scan logic and tests.
+- See `nav/vision_prompt.py` for vision LLM prompt and annotation stub.
+- Depth-scan tests: `tests/test_depth_projection.py`, `tests/test_vision_prompt.py`.
+- Update host/module symlinks to configure RTAB-Map separately.
