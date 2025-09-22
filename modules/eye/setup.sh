@@ -20,6 +20,44 @@ else
 fi
 SOURCE_DIR="${REPO_DIR}/src"
 
+ensure_cv_bridge_overlay() {
+    local distro="${ROS_DISTRO:-jazzy}"
+    local header="/opt/ros/${distro}/include/cv_bridge/cv_bridge.h"
+    local pkg="ros-${distro}-cv-bridge"
+    local repo="${SOURCE_DIR}/vision_opencv"
+
+    # If system package installed or header present, nothing to do
+    if dpkg -s "$pkg" >/dev/null 2>&1 || [ -f "$header" ]; then
+        echo "[eye/setup] cv_bridge available via package or header: $pkg or $header"
+        return 0
+    fi
+
+    # Clone overlay if missing. Prefer common_clone_repo if available.
+    if [ ! -d "$repo" ]; then
+        echo "[eye/setup] Cloning vision_opencv overlay to $repo"
+        if declare -f common_clone_repo >/dev/null 2>&1; then
+            common_clone_repo https://github.com/ros-perception/vision_opencv.git "$repo"
+        else
+            git clone https://github.com/ros-perception/vision_opencv.git "$repo"
+        fi
+    fi
+
+    # Try to switch to a matching branch if available
+    if [ -d "$repo/.git" ]; then
+        git -C "$repo" fetch --tags --force >/dev/null 2>&1 || true
+        if git -C "$repo" rev-parse --verify "$distro" >/dev/null 2>&1; then
+            git -C "$repo" checkout "$distro" >/dev/null 2>&1 || true
+        elif git -C "$repo" rev-parse --verify "ros2" >/dev/null 2>&1; then
+            git -C "$repo" checkout "ros2" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # Ensure overlay will be picked up by colcon by removing COLCON_IGNORE
+    if [ -d "$repo" ]; then
+        rm -f "$repo/COLCON_IGNORE" 2>/dev/null || true
+    fi
+}
+
 KINECT_ROS2_REPO="https://github.com/bribribriambriguy/kinect_ros2.git"
 KINECT_ROS2_BRANCH="frame_correction"
 LIBFREENECT_REPO="https://github.com/OpenKinect/libfreenect"
@@ -32,6 +70,9 @@ fi
 mkdir -p "${SOURCE_DIR}"
 echo "[eye/setup] Using repo root: ${REPO_DIR}"
 echo "[eye/setup] Populating source dir: ${SOURCE_DIR}"
+
+# Ensure cv_bridge (vision_opencv) overlay exists when system package is missing
+ensure_cv_bridge_overlay
 
 # Clean up any stale module-local clones that could cause duplicate packages
 LOCAL_MODULE_SRC_DIR="${SCRIPT_DIR}/src"
