@@ -134,6 +134,30 @@ ensure_kinect_cv_bridge() {
 # Ensure the kinect overlay has cv_bridge listed in its CMake files
 ensure_kinect_cv_bridge
 
+# Replace any lingering includes that use the old header name (.h) with the modern .hpp
+replace_cv_bridge_header() {
+    local pattern='cv_bridge/cv_bridge.h'
+    echo "[eye/setup] Searching for occurrences of ${pattern} under ${SOURCE_DIR}..."
+    # Find text files likely to contain includes. Use perl for a portable word-boundary-aware replace.
+    mapfile -t files < <(grep -RIl --exclude-dir=.git --exclude-dir=build --exclude="*.bak" "${pattern}" "${SOURCE_DIR}" || true)
+    if [ ${#files[@]} -eq 0 ]; then
+        echo "[eye/setup] No occurrences of ${pattern} found."
+        return 0
+    fi
+    for f in "${files[@]}"; do
+        echo "[eye/setup] Replacing in: $f"
+        if command -v perl >/dev/null 2>&1; then
+            # Use perl inplace edit; don't keep backups
+            perl -pi -e 's{cv_bridge/cv_bridge\.h\b}{cv_bridge/cv_bridge.hpp}g' "$f"
+        else
+            # Fallback to sed (less precise) if perl not available
+            sed -i 's#cv_bridge/cv_bridge\.h#cv_bridge/cv_bridge.hpp#g' "$f"
+        fi
+    done
+}
+
+replace_cv_bridge_header
+
 # Clone libfreenect if missing
 if [ ! -d "${SOURCE_DIR}/libfreenect/.git" ]; then
     echo "[eye/setup] Cloning libfreenect..."
@@ -147,7 +171,8 @@ patch_cmake_include_usr() {
     if [ ! -f "$cmake_file" ]; then
         return 0
     fi
-    local ros_cv_bridge_dir="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge"
+    # Use the ROS distro include directory (parent that contains cv_bridge/)
+    local ros_cv_bridge_dir="/opt/ros/${ROS_DISTRO}/include"
     if grep -Fq "include_directories(/usr/include)" "$cmake_file" && grep -Fq "include_directories(${ros_cv_bridge_dir})" "$cmake_file"; then
         return 0
     fi
