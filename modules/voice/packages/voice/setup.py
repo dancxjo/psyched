@@ -11,12 +11,12 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/voice.launch.py']),
     ],
-    # Piper library is optional; we rely on external binaries for piper/espeak.
+    # espeak-ng is used for TTS; no Piper support.
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',
-    description='Voice node subscribing to text and playing via Piper TTS FIFO',
+    description='Voice node subscribing to text and playing via espeak-ng TTS',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

@@ -1,3 +1,6 @@
+# No Piper logic present; nothing to remove.
+
+
 from __future__ import annotations
 
 import importlib

@@ -8,13 +8,12 @@ def generate_launch_description():
     topic_arg = DeclareLaunchArgument('topic', default_value='/voice')
     engine_arg = DeclareLaunchArgument(
         'engine',
-        default_value=EnvironmentVariable(name='VOICE_ENGINE', default_value='piper'),
-        description="TTS engine to use: 'piper' or 'espeak'"
+    default_value=EnvironmentVariable(name='VOICE_ENGINE', default_value='espeak-ng'),
+    description="TTS engine to use: 'espeak-ng' only"
     )
     voice_path_arg = DeclareLaunchArgument(
         'voice_path',
-        default_value=EnvironmentVariable(name='PIPER_VOICE', default_value=''),
-        description='Path to Piper .onnx voice model (can also set PIPER_VOICE env var)'
+    # Piper arguments removed
     )
 
     use_cuda_arg = DeclareLaunchArgument('use_cuda', default_value='false')
@@ -45,9 +44,7 @@ def generate_launch_description():
     clear_topic_arg = DeclareLaunchArgument('clear_topic', default_value='/voice/clear')
     interrupt_topic_arg = DeclareLaunchArgument('interrupt_topic', default_value='/voice/interrupt')
 
-    # Piper model args (forwarded to the Python executable)
-    model_arg = DeclareLaunchArgument('model', default_value=EnvironmentVariable(name='PIPER_MODEL', default_value='en_US-ryan-high'))
-    voices_dir_arg = DeclareLaunchArgument('voices_dir', default_value=EnvironmentVariable(name='PIPER_VOICES_DIR', default_value='/opt/piper/voices'))
+    # Piper model args removed
 
     node = Node(
         package='voice',

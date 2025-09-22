@@ -48,97 +48,15 @@ else
 fi
 
 # Engine setup - default to espeak for reliability
-ENGINE="${VOICE_ENGINE:-espeak}" # espeak | piper
+ENGINE="${VOICE_ENGINE:-espeak-ng}" # espeak-ng only
 
-if [[ "${ENGINE}" == "piper" ]]; then
-  # Save Piper voices in user-local directory
-  PIPER_VOICES_DIR="${PIPER_VOICES_DIR:-$HOME/.local/piper/voices}"
-  mkdir -p "$PIPER_VOICES_DIR" || true
-  # Prefer using the centralized installer helper which handles network failures
-  INSTALLER="${REPO_DIR}/tools/install_piper.sh"
-  VOICE_MODEL_BASENAME="${VOICE_MODEL:-en_US-john-medium}"
-  export VOICE_MODEL_BASENAME
-  if [ -x "${INSTALLER}" ]; then
-    echo "[voice/setup] Running Piper installer helper: ${INSTALLER}"
-    if ! "${INSTALLER}"; then
-      echo "[voice/setup] Warning: Piper installer returned non-zero. You may need to manually place model files in ${PIPER_VOICES_DIR}" >&2
-    fi
-  elif [ -f "${INSTALLER}" ]; then
-    echo "[voice/setup] Installer helper found but not executable; running with bash: ${INSTALLER}"
-    if ! bash "${INSTALLER}"; then
-      echo "[voice/setup] Warning: Piper installer returned non-zero. You may need to manually place model files in ${PIPER_VOICES_DIR}" >&2
-    fi
-  else
-    echo "[voice/setup] Installer helper not found: ${INSTALLER}. Falling back to inline download logic." >&2
-    # Inline fallback (best-effort)
-    VOICE_DIR="${PIPER_VOICES_DIR}"
-    VOICE_MODEL="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx"
-    VOICE_CFG="${VOICE_DIR}/${VOICE_MODEL_BASENAME}.onnx.json"
-    VOICE_URL="${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true}"
-    VOICE_CFG_URL="${PIPER_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true}"
+echo "[voice/setup] Installing espeak-ng and mbrola-en1..."
+sudo apt-get update
+sudo apt-get install -y espeak-ng mbrola mbrola-en1
 
-    mkdir -p "${VOICE_DIR}"
-    if [ ! -f "${VOICE_MODEL}" ]; then
-      echo "[voice/setup] Attempting to download Piper voice model..."
-      if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL -o "${VOICE_MODEL}" "${VOICE_URL}"; then
-          echo "[voice/setup] Warning: could not download Piper model. Place the ONNX file at: ${VOICE_MODEL}" >&2
-        fi
-      else
-        echo "[voice/setup] curl not available; please fetch the model and place it at: ${VOICE_MODEL}" >&2
-      fi
-    fi
-    if [ ! -f "${VOICE_CFG}" ]; then
-      echo "[voice/setup] Attempting to download Piper voice config..."
-      if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL -o "${VOICE_CFG}" "${VOICE_CFG_URL}"; then
-          echo "[voice/setup] Warning: could not download Piper config. Place the JSON at: ${VOICE_CFG}" >&2
-        fi
-      else
-        echo "[voice/setup] curl not available; please fetch the config and place it at: ${VOICE_CFG}" >&2
-      fi
-    fi
-    if [ -z "${PIPER_VOICE:-}" ]; then
-      if [ -f "${VOICE_MODEL}" ]; then
-        export PIPER_VOICE="${VOICE_MODEL}"
-        echo "PIPER_VOICE set to ${VOICE_MODEL}"
-      else
-        echo "[voice/setup] PIPER_VOICE not set and model not present. Set PIPER_VOICE to the ONNX file path when available." >&2
-      fi
-    else
-      echo "PIPER_VOICE already set to ${PIPER_VOICE}"
-    fi
-  fi
-
-  sudo apt install -y sox libsox-fmt-all || true
-
-  # Python library is optional but helpful for fallback
-  if ! python3 -c 'import piper' >/dev/null 2>&1; then
-    echo "Installing optional piper-tts library (for fallback)..."
-    if pip3 install --break-system-packages piper-tts >/dev/null 2>&1 || sudo pip3 install --break-system-packages piper-tts >/dev/null 2>&1; then
-      echo "Installed piper-tts"
-    else
-      echo "Skipping piper-tts install"
-    fi
-  fi
-else
-  # espeak-ng + MBROLA setup
-  echo "Configuring espeak-ng engine..."
-  # Try to install packages if not present
-  if ! command -v espeak-ng >/dev/null 2>&1 && ! command -v espeak >/dev/null 2>&1; then
-    echo "espeak-ng not found. Attempting to install..."
-    if command -v apt >/dev/null 2>&1; then
-      sudo apt update && sudo apt install -y espeak-ng mbrola || true
-    else
-      echo "Non-APT system; please install espeak-ng and MBROLA voices manually."
-    fi
-  fi
-  # Suggest environment variable for voice
-  if [ -z "${ESPEAK_VOICE:-}" ]; then
-    export ESPEAK_VOICE="mb-en1"
-    echo "ESPEAK_VOICE set to ${ESPEAK_VOICE}"
-  fi
-  # Attempt to install the requested MBROLA voice if on apt-based systems
+echo "[voice/setup] Installing pyttsx3 for TTS Python support..."
+python3 -m pip install --upgrade pip
+python3 -m pip install pyttsx3
   if command -v apt >/dev/null 2>&1; then
     # Common package name for English MBROLA voice
     sudo apt install -y mbrola-en1 || true
