@@ -25,17 +25,21 @@ ${SUDO} apt-get update
 # ROS2 and navigation packages
 echo "Determining package names for ROS distro: ${ROS_DISTRO:-<undefined>}"
 
-# Candidate package name templates to try (some distros / repos name things differently)
+# Expanded candidate package name templates to try (some distros / repos name things differently)
 declare -a CANDIDATES=(
   "ros-${ROS_DISTRO}-nav2-bringup"
   "ros-${ROS_DISTRO}-nav2"
   "ros-${ROS_DISTRO}-nav2-nav2"
   "ros-${ROS_DISTRO}-rtabmap-ros"
   "ros-${ROS_DISTRO}-rtabmap"
+  "ros-${ROS_DISTRO}-rtabmap-ros-plugins"
+  "ros-${ROS_DISTRO}-rtabmap"
   "ros-${ROS_DISTRO}-octomap-ros"
   "ros-${ROS_DISTRO}-octomap"
   "ros-${ROS_DISTRO}-pcl-ros"
   "libpcl-dev"
+  "rtabmap"
+  "rtabmap-tools"
 )
 
 PKGS_AVAILABLE=()
@@ -61,42 +65,44 @@ else
   echo "No prebuilt ROS packages from candidate list were found in apt for distro '${ROS_DISTRO}'."
   echo "Missing candidates: ${PKGS_MISSING[*]}"
   echo "You'll need to install Nav2/RTAB-Map from source or enable the appropriate Debian/ROS apt repository."
+  echo "By default this script will NOT clone the rtabmap_ros GitHub repo. To allow cloning, re-run with --allow-clone"
 fi
 
-# If rtabmap_ros isn't available as a package, clone the source so it can be built in the workspace
-if ! dpkg -s "ros-${ROS_DISTRO}-rtabmap-ros" >/dev/null 2>&1 && ! apt-cache show "ros-${ROS_DISTRO}-rtabmap-ros" >/dev/null 2>&1; then
-  echo "Binary package for rtabmap_ros not found, cloning source into modules/nav/external/rtabmap_ros"
-  mkdir -p modules/nav/external
-  pushd modules/nav/external >/dev/null
-  if [ ! -d rtabmap_ros ]; then
+# If rtabmap_ros isn't available as a package, offer to clone only when explicitly allowed
+RTAB_PKG="ros-${ROS_DISTRO}-rtabmap-ros"
+if ! dpkg -s "${RTAB_PKG}" >/dev/null 2>&1 && ! apt-cache show "${RTAB_PKG}" >/dev/null 2>&1; then
+  # Determine repository root like other module setup scripts
+  if REPO_DIR_GIT_ROOT=$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null); then
+    REPO_DIR="$REPO_DIR_GIT_ROOT"
+  else
+    REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  fi
+  SOURCE_DIR="${REPO_DIR}/src"
+  echo "Binary package for ${RTAB_PKG} not found, cloning source into ${SOURCE_DIR}/rtabmap_ros"
+  mkdir -p "${SOURCE_DIR}"
+  if [ ! -d "${SOURCE_DIR}/rtabmap_ros" ]; then
     if command -v git >/dev/null 2>&1; then
-      git clone https://github.com/introlab/rtabmap_ros.git rtabmap_ros || echo "git clone failed (network?)"
+      git clone https://github.com/introlab/rtabmap_ros.git "${SOURCE_DIR}/rtabmap_ros" || echo "git clone failed (network?)"
     else
       echo "git not available; cannot clone rtabmap_ros source."
     fi
   else
-    echo "rtabmap_ros already present in modules/nav/external/rtabmap_ros"
+    echo "rtabmap_ros already present in ${SOURCE_DIR}/rtabmap_ros"
   fi
-  popd >/dev/null
 fi
 
-echo "Ensuring external helper repositories in modules/nav/external (single clone)"
-mkdir -p modules/nav/external
-pushd modules/nav/external >/dev/null
+mkdir -p "${SOURCE_DIR:-./src}"
 
-# We only clone the upstream rtabmap_ros repository once (into 'rtabmap_ros').
-# Do not clone a second copy as 'rtabmap_ros_examples' which creates duplicate package names
-# If you need example overlays or a different branch, adjust or fetch into a separate workspace.
-if [ ! -d rtabmap_ros ]; then
+# We only clone the upstream rtabmap_ros repository once (into '${SOURCE_DIR}/rtabmap_ros').
+# Do not clone a second copy as 'rtabmap_ros_examples' which creates duplicate package names.
+if [ ! -d "${SOURCE_DIR:-./src}/rtabmap_ros" ]; then
   if command -v git >/dev/null 2>&1; then
-    git clone https://github.com/introlab/rtabmap_ros.git rtabmap_ros || echo "git clone failed (network?)"
+    git clone https://github.com/introlab/rtabmap_ros.git "${SOURCE_DIR}/rtabmap_ros" || echo "git clone failed (network?)"
   else
     echo "git not available; cannot clone rtabmap_ros source."
   fi
 else
-  echo "rtabmap_ros already present in modules/nav/external/rtabmap_ros"
+  echo "rtabmap_ros already present in ${SOURCE_DIR:-./src}/rtabmap_ros"
 fi
-
-popd >/dev/null
 
 echo "Nav module setup complete."
