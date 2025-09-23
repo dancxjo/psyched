@@ -28,9 +28,14 @@ class PilotController {
 
         // Rate limiting
         this.lastSendTime = 0;
-        this.sendRateMs = 50; // Send at most every 50ms (20 Hz)
+        this.sendRateMs = 50;
 
-        // Systemd/services state defaults (already initialized in constructor)
+        // ✅ Added initializations
+        this.services = {};
+        this.serviceDetails = {};
+        this.modules = {};
+        this.moduleUnitMap = {};
+        this.watchedUnits = new Set();
 
         if (!opts.deferInit) {
             this.init();
@@ -938,6 +943,68 @@ class PilotController {
                 case 'conversation':
                     this.addConversation(message);
                     break;
+                case 'image':
+                    if (message.topic === '/image_raw') {
+                        const el = document.getElementById('camera-image');
+                        if (el) el.src = message.data;
+                    } else if (message.topic === '/depth/image_raw') {
+                        const el = document.getElementById('depth-image');
+                        if (el) el.src = message.data;
+                    }
+                    break;
+                case 'map':
+                    if (this.mapCtx) {
+                        const img = new Image();
+                        img.onload = () => {
+                            const cw = this.mapCanvas.width;
+                            const ch = this.mapCanvas.height;
+                            const ar = img.width / img.height;
+                            let dw = cw, dh = ch;
+                            if (cw / ch > ar) { dw = ch * ar; } else { dh = cw / ar; }
+                            this.mapCtx.clearRect(0, 0, cw, ch);
+                            this.mapCtx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                        };
+                        img.src = message.data;
+                    }
+                    break;
+                case 'map_raw':
+                    if (this.mapCtx && message.width && message.height && message.data) {
+                        const w = parseInt(message.width, 10);
+                        const h = parseInt(message.height, 10);
+                        const raw = atob(message.data);
+                        const arr = new Uint8Array(raw.length);
+                        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+
+                        const canvas = this.mapCanvas;
+                        const maxSize = 800;
+                        const scale = w > h ? Math.min(maxSize / w, 1.0) : Math.min(maxSize / h, 1.0);
+                        canvas.width = Math.max(200, Math.floor(w * scale));
+                        canvas.height = Math.max(200, Math.floor(h * scale));
+
+                        const imgData = this.mapCtx.createImageData(w, h);
+                        for (let y = 0; y < h; y++) {
+                            for (let x = 0; x < w; x++) {
+                                const idx = y * w + x;
+                                let v = (arr[idx] & 0xFF) - 128;
+                                let color = 127;
+                                if (v === -1) color = 127;
+                                else if (v === 0) color = 255;
+                                else if (v > 0) color = 0;
+                                const p = ((h - 1 - y) * w + x) * 4;
+                                imgData.data[p] = color;
+                                imgData.data[p + 1] = color;
+                                imgData.data[p + 2] = color;
+                                imgData.data[p + 3] = 255;
+                            }
+                        }
+                        const off = document.createElement('canvas');
+                        off.width = w; off.height = h;
+                        const offCtx = off.getContext('2d');
+                        offCtx.putImageData(imgData, 0, 0);
+                        this.mapCtx.clearRect(0, 0, canvas.width, canvas.height);
+                        this.mapCtx.drawImage(off, 0, 0, canvas.width, canvas.height);
+                    }
+                    break;
                 default:
                     console.log('Unknown message type:', message.type);
             }
@@ -945,6 +1012,30 @@ class PilotController {
             console.error('Failed to parse WebSocket message:', error);
         }
     }
+
+    renderModuleSection(moduleName, moduleConfig) {
+        const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const section = document.createElement('div');
+        section.className = 'module-section';
+        section.id = moduleId;
+
+        section.innerHTML = `
+        <div class="module-header">
+            <h3 class="module-title">${moduleConfig.name}</h3>
+            <p class="module-description">${moduleConfig.description || ''}</p>
+        </div>
+        <div class="module-controls" id="${moduleId}-controls"></div>
+        <div class="module-systemd" id="${moduleId}-systemd"></div>
+    `;
+
+        if (this.servicesLogs) {
+            this.servicesLogs.appendChild(section);
+        }
+
+        // Render module controls initially
+        this.renderModuleControls(moduleId + '-controls', moduleConfig.controls, moduleName);
+    }
+
 
     addConversation(msg) {
         if (!this.convLog) return;
@@ -1192,11 +1283,6 @@ class PilotController {
     serviceModuleSlug(unit) {
         if (typeof unit !== 'string') return '';
         return unit.replace(/^psyched-/, '').replace(/\.service$/, '');
-
-        this.servicesLogs.appendChild(moduleSection);
-
-        // Render module controls
-        this.renderModuleControls(moduleId + '-controls', moduleConfig.controls, moduleName);
     }
 
     renderModuleControls(containerId, controls, moduleName) {
