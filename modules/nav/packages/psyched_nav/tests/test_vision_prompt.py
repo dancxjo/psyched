@@ -1,4 +1,6 @@
-from nav.vision_prompt import build_prompt, VisionLLMClient
+"""Smoke tests for the lightweight vision prompt helper."""
+
+from psyched_nav.vision_prompt import build_prompt, VisionLLMClient
 
 def test_build_prompt():
     prompt = build_prompt()

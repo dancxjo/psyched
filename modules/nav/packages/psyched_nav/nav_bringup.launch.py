@@ -1,13 +1,9 @@
-"""Launch Nav2 + RTAB-Map for 3D mapping using Kinect depth topics.
+"""Bring up Nav2 with AMCL using Kinect depth data for localization."""
 
-This launch file is intentionally minimal and uses placeholders for
-parameters and namespace. Edit `kinect_rgb_topic`, `kinect_depth_topic`,
-and frames as needed for your robot.
-"""
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -26,8 +22,6 @@ def generate_launch_description():
     # Include Nav2 bringup launch if available on the system
     nav2_share = FindPackageShare('nav2_bringup')
     nav2_launch = PathJoinSubstitution([nav2_share, 'launch', 'bringup_launch.py'])
-    # Our package was renamed to 'psyched_nav' to avoid colliding with other
-    # workspace packages. Use that name to locate our params files.
     nav2_params = PathJoinSubstitution([FindPackageShare('psyched_nav'), 'params', 'nav2_params.yaml'])
     # Pass our nav2 params file into the nav2 bringup (bringup_launch.py accepts 'params_file')
     ld.add_action(IncludeLaunchDescription(
@@ -35,7 +29,7 @@ def generate_launch_description():
         launch_arguments={'params_file': nav2_params}.items()
     ))
 
-    # RTAB-Map is not included in this build; users may run their preferred SLAM node separately.
+    # RTAB-Map is intentionally excluded; run an external SLAM node if mapping is required.
 
     # Publish static transform between base_link and camera if not provided by robot
     # Assumes camera is centered: x=0.0, y=0.0, z=0.3 (adjust as necessary)

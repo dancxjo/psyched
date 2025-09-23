@@ -1,16 +1,15 @@
-"""
-depth_projection_node.py
-ROS2 node: subscribes to Kinect depth/RGB, publishes LaserScan and overlay image.
-"""
+"""ROS 2 node that projects depth images into LaserScan messages."""
+
 import rclpy
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan
-from std_msgs.msg import Header
-from cv_bridge import CvBridge
-import numpy as np
-from nav.depth_projection import DepthToScan
+
+from psyched_nav.depth_projection import DepthToScan
 
 class DepthProjectionNode(Node):
+    """Subscribe to depth images and publish synthesized LaserScan data."""
+
     def __init__(self):
         super().__init__('depth_projection')
         self.bridge = CvBridge()
@@ -22,6 +21,8 @@ class DepthProjectionNode(Node):
         self.last_rgb = None
 
     def depth_callback(self, msg):
+        """Convert incoming depth images into a pseudo laser scan."""
+
         depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
         scan_ranges, line_mask = self.d2s.project_depth_to_scan(depth_img)
         scan_msg = self.d2s.make_laserscan_msg(scan_ranges, frame_id="kinect_link")
@@ -35,6 +36,8 @@ class DepthProjectionNode(Node):
             self.overlay_pub.publish(overlay_msg)
 
     def rgb_callback(self, msg):
+        """Cache the most recent RGB frame for overlay generation."""
+
         self.last_rgb = msg
 
 def main(args=None):

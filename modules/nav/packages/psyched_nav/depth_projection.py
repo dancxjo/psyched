@@ -5,9 +5,8 @@ Converts Kinect depth images to pseudo-LaserScan data for AMCL mapping.
 Highlights nearest obstacle line for vision LLM annotation.
 """
 import numpy as np
-import cv2
-from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import LaserScan
 
 class DepthToScan:
     def __init__(self, fx, fy, cx, cy, min_y, max_y, min_range=0.2, max_range=5.0):
@@ -55,7 +54,7 @@ class DepthToScan:
         scan.ranges = scan_ranges
         return scan
 
-    def overlay_line_on_image(self, rgb_img, line_mask, color=(0,255,0)):
+    def overlay_line_on_image(self, rgb_img, line_mask, color=(0, 255, 0)):
         overlay = rgb_img.copy()
         overlay[line_mask > 0] = color
         return overlay

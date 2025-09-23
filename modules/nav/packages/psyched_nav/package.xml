@@ -2,13 +2,11 @@
 <package format="3">
   <name>psyched_nav</name>
   <version>0.1.0</version>
-  <description>Navigation and 3D SLAM bringup for Psyched</description>
+  <description>Navigation bringup for Psyched using Nav2 and AMCL.</description>
   <maintainer email="devnull@example.com">Psyched Dev</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
-
-
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
