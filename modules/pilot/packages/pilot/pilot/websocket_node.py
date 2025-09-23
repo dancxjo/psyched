@@ -1341,7 +1341,15 @@ class PilotWebSocketNode(Node):
         }
 
     def _list_systemd_status(self):
-        return [self._query_systemd_unit(u) for u in self._systemd_units]
+        # Return full service info including status and journal logs for each unit
+        services = []
+        for u in self._systemd_units:
+            base = self._query_systemd_unit(u)
+            detail = self._systemd_detail(u, lines=200)
+            # Merge detail fields into base dict
+            base.update(detail)
+            services.append(base)
+        return services
 
     async def _send_systemd_list(self, websocket):
         try:

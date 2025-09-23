@@ -1055,15 +1055,42 @@ class PilotController {
 
     updateModules(modules) {
         this.modules = modules;
+        if (!this.servicesLogs) return;
 
-        // Clear existing module displays
-        if (this.servicesLogs) {
-            this.servicesLogs.innerHTML = '';
-        }
+        // Track existing module section IDs
+        const existingSections = new Set();
+        Array.from(this.servicesLogs.children).forEach(child => {
+            if (child.classList.contains('module-section') && child.id) {
+                existingSections.add(child.id);
+            }
+        });
 
-        // Create module sections
+        // Add or update module sections
         Object.entries(modules).forEach(([moduleName, moduleConfig]) => {
-            this.renderModuleSection(moduleName, moduleConfig);
+            const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
+            let section = document.getElementById(moduleId);
+            if (!section) {
+                this.renderModuleSection(moduleName, moduleConfig);
+            } else {
+                // Optionally update header/description if changed
+                const title = section.querySelector('.module-title');
+                if (title && title.textContent !== moduleConfig.name) title.textContent = moduleConfig.name;
+                const desc = section.querySelector('.module-description');
+                if (desc && desc.textContent !== moduleConfig.description) desc.textContent = moduleConfig.description;
+                // Controls update: re-render only if controls changed
+                const controlsContainer = section.querySelector('.module-controls');
+                if (controlsContainer && JSON.stringify(controlsContainer._lastControls) !== JSON.stringify(moduleConfig.controls)) {
+                    this.renderModuleControls(controlsContainer.id, moduleConfig.controls, moduleName);
+                    controlsContainer._lastControls = JSON.stringify(moduleConfig.controls);
+                }
+            }
+            existingSections.delete(moduleId);
+        });
+
+        // Remove stale module sections
+        existingSections.forEach(staleId => {
+            const stale = document.getElementById(staleId);
+            if (stale) this.servicesLogs.removeChild(stale);
         });
 
         // Update existing services to be grouped by modules
