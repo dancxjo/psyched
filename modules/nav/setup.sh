@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-
-#!/usr/bin/env bash
 set -euo pipefail
-
 
 echo "Setting up nav module..."
 
 # Compute repository root (one level above "modules")
 REPO_DIR="$(dirname "$(dirname "$(dirname "$(realpath "$0")")")")"
-HOSTS_DIR="$REPO_DIR/hosts"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 MODULE_DIR="$SCRIPT_DIR"
+SRC_DIR="$REPO_DIR/src"
 echo "Repo dir: $REPO_DIR"
-echo "Hosts dir: $HOSTS_DIR"
+echo "Module dir: $MODULE_DIR"
+
+# Ensure workspace src exists up front so optional Nav2 linking works.
+mkdir -p "$SRC_DIR"
 
 if [ "${EUID}" -ne 0 ]; then
   SUDO=sudo
@@ -37,9 +37,11 @@ ${SUDO} apt-get update
 ROS_DISTRO="${ROS_DISTRO:-humble}"
 echo "Using ROS distro: ${ROS_DISTRO}"
 
-# Candidate APT packages for nav2, AMCL and commonly used mapping tools
+# Candidate APT packages for Nav2 core stacks with AMCL. Mapping stacks like
+# RTAB-Map are intentionally excluded from this module.
 declare -a CANDIDATES=(
   "ros-${ROS_DISTRO}-nav2-bringup"
+  "ros-${ROS_DISTRO}-nav2-amcl"
   "ros-${ROS_DISTRO}-nav2-controller"
   "ros-${ROS_DISTRO}-nav2-core"
   "ros-${ROS_DISTRO}-nav2-behavior-tree"
@@ -47,8 +49,7 @@ declare -a CANDIDATES=(
   "ros-${ROS_DISTRO}-nav2-map-server"
   "ros-${ROS_DISTRO}-nav2-navfn-planner"
   "ros-${ROS_DISTRO}-nav2-smac-planner"
-  "ros-${ROS_DISTRO}-nav2-amcl"
-  "ros-${ROS_DISTRO}-slam-toolbox"
+  "ros-${ROS_DISTRO}-nav2-lifecycle-manager"
   "ros-${ROS_DISTRO}-pcl-ros"
   "libpcl-dev"
 )
@@ -107,8 +108,6 @@ if [ -n "${NAV2_LOCAL_DIR:-}" ]; then
 fi
 
 # Ensure workspace src exists and symlink module-local packages into it so colcon sees them
-SRC_DIR="$REPO_DIR/src"
-mkdir -p "$SRC_DIR"
 
 echo "Linking local module packages into $SRC_DIR"
 for pkgpath in "$MODULE_DIR"/packages/*; do
@@ -154,9 +153,9 @@ if [ "$BUILD" = "true" ]; then
   fi
 
   echo "Running targeted colcon build for nav packages (this may take some time)..."
-  # Prefer building only the nav package so the rest of the workspace isn't rebuilt unintentionally
+  # Prefer building only the psyched_nav package so the rest of the workspace isn't rebuilt unintentionally
   if command -v colcon >/dev/null 2>&1; then
-    colcon build --packages-select nav --symlink-install
+    colcon build --packages-select psyched_nav --symlink-install
   else
     echo "colcon not found — skipping build. Install colcon and re-run to build the nav package."
   fi
