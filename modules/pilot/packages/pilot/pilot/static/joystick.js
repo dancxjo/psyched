@@ -4,7 +4,8 @@
  */
 
 class PilotController {
-    constructor() {
+    constructor(options = {}) {
+        const opts = options || {};
         this.websocket = null;
         this.isConnected = false;
         this.joystick = null;
@@ -29,7 +30,18 @@ class PilotController {
         this.lastSendTime = 0;
         this.sendRateMs = 50; // Send at most every 50ms (20 Hz)
 
-        this.init();
+        // Systemd/services state defaults (will be hydrated in init())
+        this.services = {};
+        this.servicesContainer = null;
+        this.servicesLogs = null;
+        this.serviceDetails = {};
+        this.watchedUnits = new Set();
+        this.modules = {};
+        this.moduleUnitMap = {};
+
+        if (!opts.deferInit) {
+            this.init();
+        }
     }
 
     init() {
@@ -106,6 +118,7 @@ class PilotController {
 
         // Modules UI
         this.modules = {}; // map module_name -> module config
+        this.moduleUnitMap = {}; // unit name -> module key
 
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
@@ -1013,11 +1026,18 @@ class PilotController {
     }
 
     updateServicesList(services) {
-        if (!this.servicesContainer) return;
+        if (!Array.isArray(services)) return;
         // Merge/update map without clearing DOM to prevent blink
         services.forEach(svc => {
             if (!svc || !svc.name) return;
             this.services[svc.name] = svc;
+            const moduleHint = (svc.module && typeof svc.module === 'string') ? svc.module : null;
+            if (moduleHint) {
+                if (!this.moduleUnitMap) this.moduleUnitMap = {};
+                if (!this.moduleUnitMap[svc.name]) {
+                    this.moduleUnitMap[svc.name] = moduleHint;
+                }
+            }
             // Update legacy pill if still present (container may be absent)
             if (this.servicesContainer) {
                 const pillId = this.serviceId(svc.name);
@@ -1031,22 +1051,20 @@ class PilotController {
             }
 
             // Update module-based display if modules are loaded
-            if (Object.keys(this.modules).length > 0) {
+            if (this.modules && Object.keys(this.modules).length > 0) {
                 this.updateModuleServiceDisplay(svc);
             } else {
-                // Fallback: Ensure a persistent log block exists per service
-                if (this.servicesLogs) {
-                    const blockId = this.serviceId(svc.name) + '-detail';
-                    let block = document.getElementById(blockId);
-                    if (!block) {
-                        block = this.renderServiceLogBlock(svc.name);
-                        this.servicesLogs.appendChild(block);
-                        // Fetch details once on creation; further updates will come from backend
-                        this.requestSystemdDetail(svc.name, 200);
-                    }
-                    // Update control state inside the block
-                    this.updateServiceLogControls(svc);
-                }
+                this.ensureFallbackServiceBlock(svc);
+            }
+
+            const statusText = typeof svc.status === 'string' ? svc.status : '';
+            const journalText = typeof svc.journal === 'string' ? svc.journal : '';
+            if ((statusText && statusText.trim()) || (journalText && journalText.trim())) {
+                this.renderServiceDetail(svc.name, {
+                    status: statusText,
+                    journal: journalText,
+                    lines: typeof svc.lines === 'number' ? svc.lines : undefined,
+                });
             }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
@@ -1054,23 +1072,47 @@ class PilotController {
     }
 
     updateModules(modules) {
-        this.modules = modules;
-        if (!this.servicesLogs) return;
+        const entries = Object.entries(modules || {});
+        this.modules = {};
+        this.moduleUnitMap = {};
+
+        const normalizedEntries = entries.map(([moduleName, moduleConfig]) => {
+            const normalized = this.normalizeModuleConfig(moduleName, moduleConfig);
+            this.modules[moduleName] = normalized;
+            const units = Array.isArray(normalized.systemd_units) ? normalized.systemd_units : [];
+            units.forEach(unit => {
+                if (typeof unit === 'string' && unit) {
+                    this.moduleUnitMap[unit] = moduleName;
+                }
+            });
+            return [moduleName, normalized];
+        });
+
+        if (!this.servicesLogs) {
+            return;
+        }
 
         // Track existing module section IDs
         const existingSections = new Set();
-        Array.from(this.servicesLogs.children).forEach(child => {
-            if (child.classList.contains('module-section') && child.id) {
-                existingSections.add(child.id);
+        const children = Array.from(this.servicesLogs.children || []);
+        children.forEach(child => {
+            if (!child || !child.classList) return;
+            try {
+                if (child.classList.contains('module-section') && child.id) {
+                    existingSections.add(child.id);
+                }
+            } catch (e) {
+                // ignore DOM errors for detached mock nodes
             }
         });
 
         // Add or update module sections
-        Object.entries(modules).forEach(([moduleName, moduleConfig]) => {
+        normalizedEntries.forEach(([moduleName, moduleConfig]) => {
             const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
             let section = document.getElementById(moduleId);
             if (!section) {
                 this.renderModuleSection(moduleName, moduleConfig);
+                section = document.getElementById(moduleId);
             } else {
                 // Optionally update header/description if changed
                 const title = section.querySelector('.module-title');
@@ -1090,13 +1132,83 @@ class PilotController {
         // Remove stale module sections
         existingSections.forEach(staleId => {
             const stale = document.getElementById(staleId);
-            if (stale) this.servicesLogs.removeChild(stale);
+            if (!stale) return;
+            try {
+                if (typeof this.servicesLogs.contains === 'function') {
+                    if (this.servicesLogs.contains(stale)) {
+                        this.servicesLogs.removeChild(stale);
+                    }
+                } else if (stale.parentElement === this.servicesLogs) {
+                    this.servicesLogs.removeChild(stale);
+                }
+            } catch (e) {
+                try { this.servicesLogs.removeChild(stale); } catch (_) { /* ignore */ }
+            }
         });
 
         // Update existing services to be grouped by modules
         Object.values(this.services).forEach(svc => {
             this.updateModuleServiceDisplay(svc);
         });
+    }
+
+    normalizeModuleConfig(moduleName, moduleConfig) {
+        const cfg = Object.assign({}, moduleConfig || {});
+        const prettyBase = moduleName.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const defaultName = prettyBase ? prettyBase.replace(/\b\w/g, ch => ch.toUpperCase()) : moduleName;
+        const displayName = cfg.display || cfg.name || defaultName;
+        cfg.name = displayName;
+        cfg.slug = cfg.slug || moduleName;
+        if (!cfg.description) {
+            cfg.description = `${displayName} module`;
+        }
+        if (!Array.isArray(cfg.controls)) {
+            cfg.controls = [];
+        }
+        cfg.module = moduleName;
+        const units = this.moduleUnitsFor(moduleName, cfg);
+        cfg.systemd_units = units;
+        if (units.length > 0) {
+            const preferred = typeof cfg.systemd_unit === 'string' && units.includes(cfg.systemd_unit)
+                ? cfg.systemd_unit
+                : units[0];
+            cfg.systemd_unit = preferred;
+        }
+        return cfg;
+    }
+
+    moduleUnitsFor(moduleName, moduleConfig) {
+        const rawUnits = [];
+        if (moduleConfig) {
+            const multi = moduleConfig.systemd_units;
+            if (Array.isArray(multi)) {
+                multi.forEach(unit => rawUnits.push(unit));
+            } else if (typeof multi === 'string') {
+                rawUnits.push(multi);
+            }
+            const single = moduleConfig.systemd_unit;
+            if (typeof single === 'string') {
+                rawUnits.push(single);
+            }
+        }
+        const deduped = [];
+        const seen = new Set();
+        rawUnits.forEach(unit => {
+            if (typeof unit !== 'string') return;
+            const trimmed = unit.trim();
+            if (!trimmed || seen.has(trimmed)) return;
+            seen.add(trimmed);
+            deduped.push(trimmed);
+        });
+        if (!deduped.length) {
+            deduped.push(`psyched-${moduleName}.service`);
+        }
+        return deduped;
+    }
+
+    serviceModuleSlug(unit) {
+        if (typeof unit !== 'string') return '';
+        return unit.replace(/^psyched-/, '').replace(/\.service$/, '');
     }
 
     renderModuleSection(moduleName, moduleConfig) {
@@ -1275,33 +1387,39 @@ class PilotController {
     updateModuleServiceDisplay(svc) {
         if (!svc || !svc.name) return;
 
-        // Find which module this service belongs to
-        const serviceName = svc.name.replace(/^psyched-/, '').replace(/\.service$/, '');
-        const moduleConfig = this.modules[serviceName];
+        const unitName = svc.name;
+        const moduleHint = (svc.module && typeof svc.module === 'string') ? svc.module : null;
+        const moduleKey = (this.moduleUnitMap && this.moduleUnitMap[unitName]) || moduleHint || this.serviceModuleSlug(unitName);
+        const moduleConfig = this.modules ? this.modules[moduleKey] : null;
 
         if (!moduleConfig) {
-            // Service doesn't belong to a known module, use fallback display
             this.ensureFallbackServiceBlock(svc);
             return;
         }
 
-        const moduleId = 'module-' + serviceName.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const slug = (moduleKey && typeof moduleKey === 'string' && moduleKey.trim()) ? moduleKey : this.serviceModuleSlug(unitName);
+        const moduleId = 'module-' + slug.replace(/[^a-zA-Z0-9_-]/g, '-');
         const systemdContainer = document.getElementById(moduleId + '-systemd');
 
-        if (!systemdContainer) return;
-
-        // Ensure service block exists in the module's systemd section
-        const blockId = this.serviceId(svc.name) + '-detail';
-        let block = document.getElementById(blockId);
-        if (!block) {
-            block = this.renderServiceLogBlock(svc.name);
-            systemdContainer.appendChild(block);
-            // Fetch details once on creation
-            this.requestSystemdDetail(svc.name, 200);
-            this.watchSystemdUnit(svc.name, 200);
+        if (!systemdContainer) {
+            this.ensureFallbackServiceBlock(svc);
+            return;
         }
 
-        // Update control state inside the block
+        const blockId = this.serviceId(unitName) + '-detail';
+        let block = document.getElementById(blockId);
+        const created = !block;
+        if (!block) {
+            block = this.renderServiceLogBlock(unitName);
+        }
+        if (block && block.parentElement !== systemdContainer) {
+            systemdContainer.appendChild(block);
+        }
+        if (created) {
+            this.requestSystemdDetail(unitName, 200);
+            this.watchSystemdUnit(unitName, 200);
+        }
+
         this.updateServiceLogControls(svc);
     }
 
@@ -1310,9 +1428,14 @@ class PilotController {
 
         const blockId = this.serviceId(svc.name) + '-detail';
         let block = document.getElementById(blockId);
+        const created = !block;
         if (!block) {
             block = this.renderServiceLogBlock(svc.name);
+        }
+        if (block && block.parentElement !== this.servicesLogs) {
             this.servicesLogs.appendChild(block);
+        }
+        if (created) {
             this.requestSystemdDetail(svc.name, 200);
             this.watchSystemdUnit(svc.name, 200);
         }
@@ -1737,13 +1860,30 @@ class PilotController {
     }
 }
 
+if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+    module.exports = { PilotController };
+}
+
+if (typeof window !== 'undefined') {
+    window.PilotController = PilotController;
+}
+
 // Initialize the pilot controller when the page loads
 document.addEventListener('DOMContentLoaded', () => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.PilotController = PilotController;
     // Keep a global reference for debugging and for additional handlers
-    window.pilotController = new PilotController();
+    if (!window.pilotController && !window.__PILOT_SKIP_AUTO_INIT__) {
+        window.pilotController = new PilotController();
+    }
+    const pc = window.pilotController;
+    if (!pc) {
+        return;
+    }
     // Attach image handler to incoming websocket messages (if websocket already present it will be reused)
     try {
-        const pc = window.pilotController;
         // Wrap existing handleWebSocketMessage to intercept image and map messages
         const origHandle = pc.handleWebSocketMessage.bind(pc);
         pc.handleWebSocketMessage = function (data) {
