@@ -1066,6 +1066,16 @@ class PilotController {
                     lines: typeof svc.lines === 'number' ? svc.lines : undefined,
                 });
             }
+
+            const statusText = typeof svc.status === 'string' ? svc.status : '';
+            const journalText = typeof svc.journal === 'string' ? svc.journal : '';
+            if ((statusText && statusText.trim()) || (journalText && journalText.trim())) {
+                this.renderServiceDetail(svc.name, {
+                    status: statusText,
+                    journal: journalText,
+                    lines: typeof svc.lines === 'number' ? svc.lines : undefined,
+                });
+            }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
         // to avoid flicker. A later cleanup pass could prune truly stale entries if needed.

@@ -272,3 +272,4 @@ if (!controller.moduleUnitMap || controller.moduleUnitMap['psyched-nav.service']
 
     result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
     assert result.returncode == 0, f"stdout: {result.stdout}\nstderr: {result.stderr}"
+
