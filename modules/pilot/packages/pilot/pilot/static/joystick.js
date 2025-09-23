@@ -4,7 +4,8 @@
  */
 
 class PilotController {
-    constructor() {
+    constructor(options = {}) {
+        const opts = options || {};
         this.websocket = null;
         this.isConnected = false;
         this.joystick = null;
@@ -29,7 +30,17 @@ class PilotController {
         this.lastSendTime = 0;
         this.sendRateMs = 50; // Send at most every 50ms (20 Hz)
 
-        this.init();
+        // Systemd/services state defaults (will be hydrated in init())
+        this.services = {};
+        this.servicesContainer = null;
+        this.servicesLogs = null;
+        this.serviceDetails = {};
+        this.watchedUnits = new Set();
+        this.modules = {};
+
+        if (!opts.deferInit) {
+            this.init();
+        }
     }
 
     init() {
@@ -1013,7 +1024,7 @@ class PilotController {
     }
 
     updateServicesList(services) {
-        if (!this.servicesContainer) return;
+        if (!Array.isArray(services)) return;
         // Merge/update map without clearing DOM to prevent blink
         services.forEach(svc => {
             if (!svc || !svc.name) return;
@@ -1031,7 +1042,7 @@ class PilotController {
             }
 
             // Update module-based display if modules are loaded
-            if (Object.keys(this.modules).length > 0) {
+            if (this.modules && Object.keys(this.modules).length > 0) {
                 this.updateModuleServiceDisplay(svc);
             } else {
                 // Fallback: Ensure a persistent log block exists per service
@@ -1043,10 +1054,21 @@ class PilotController {
                         this.servicesLogs.appendChild(block);
                         // Fetch details once on creation; further updates will come from backend
                         this.requestSystemdDetail(svc.name, 200);
+                        this.watchSystemdUnit(svc.name, 200);
                     }
                     // Update control state inside the block
                     this.updateServiceLogControls(svc);
                 }
+            }
+
+            const statusText = typeof svc.status === 'string' ? svc.status : '';
+            const journalText = typeof svc.journal === 'string' ? svc.journal : '';
+            if ((statusText && statusText.trim()) || (journalText && journalText.trim())) {
+                this.renderServiceDetail(svc.name, {
+                    status: statusText,
+                    journal: journalText,
+                    lines: typeof svc.lines === 'number' ? svc.lines : undefined,
+                });
             }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
@@ -1737,13 +1759,30 @@ class PilotController {
     }
 }
 
+if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+    module.exports = { PilotController };
+}
+
+if (typeof window !== 'undefined') {
+    window.PilotController = PilotController;
+}
+
 // Initialize the pilot controller when the page loads
 document.addEventListener('DOMContentLoaded', () => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.PilotController = PilotController;
     // Keep a global reference for debugging and for additional handlers
-    window.pilotController = new PilotController();
+    if (!window.pilotController && !window.__PILOT_SKIP_AUTO_INIT__) {
+        window.pilotController = new PilotController();
+    }
+    const pc = window.pilotController;
+    if (!pc) {
+        return;
+    }
     // Attach image handler to incoming websocket messages (if websocket already present it will be reused)
     try {
-        const pc = window.pilotController;
         // Wrap existing handleWebSocketMessage to intercept image and map messages
         const origHandle = pc.handleWebSocketMessage.bind(pc);
         pc.handleWebSocketMessage = function (data) {
