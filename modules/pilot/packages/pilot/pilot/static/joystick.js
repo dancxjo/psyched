@@ -30,14 +30,7 @@ class PilotController {
         this.lastSendTime = 0;
         this.sendRateMs = 50; // Send at most every 50ms (20 Hz)
 
-        // Systemd/services state defaults (will be hydrated in init())
-        this.services = {};
-        this.servicesContainer = null;
-        this.servicesLogs = null;
-        this.serviceDetails = {};
-        this.watchedUnits = new Set();
-        this.modules = {};
-        this.moduleUnitMap = {};
+        // Systemd/services state defaults (already initialized in constructor)
 
         if (!opts.deferInit) {
             this.init();
@@ -107,22 +100,12 @@ class PilotController {
         };
         this.lastImuTs = 0;
 
-        // Services UI  
-        this.services = {}; // map unit -> { name, active, enabled, description }
+        // Services UI
         this.servicesContainer = document.getElementById('servicesPills');
         this.servicesLogs = document.getElementById('servicesLogs');
-        // Cache of last non-empty service details to prevent blink/empty overwrites
-        this.serviceDetails = {}; // unit -> { status: string, journal: string }
-        // Track watched units to allow cleanup if needed
-        this.watchedUnits = new Set();
-
-        // Modules UI
-        this.modules = {}; // map module_name -> module config
-        this.moduleUnitMap = {}; // unit name -> module key
 
         // Conversation UI
         this.convLog = document.getElementById('conversationLog');
-
         // Map canvas
         this.mapCanvas = document.getElementById('mapCanvas');
         if (this.mapCanvas) {
@@ -1066,16 +1049,6 @@ class PilotController {
                     lines: typeof svc.lines === 'number' ? svc.lines : undefined,
                 });
             }
-
-            const statusText = typeof svc.status === 'string' ? svc.status : '';
-            const journalText = typeof svc.journal === 'string' ? svc.journal : '';
-            if ((statusText && statusText.trim()) || (journalText && journalText.trim())) {
-                this.renderServiceDetail(svc.name, {
-                    status: statusText,
-                    journal: journalText,
-                    lines: typeof svc.lines === 'number' ? svc.lines : undefined,
-                });
-            }
         });
         // Note: We do NOT remove pills/blocks that temporarily disappear from the list
         // to avoid flicker. A later cleanup pass could prune truly stale entries if needed.
@@ -1219,32 +1192,6 @@ class PilotController {
     serviceModuleSlug(unit) {
         if (typeof unit !== 'string') return '';
         return unit.replace(/^psyched-/, '').replace(/\.service$/, '');
-    }
-
-    renderModuleSection(moduleName, moduleConfig) {
-        if (!this.servicesLogs) return;
-
-        const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
-
-        // Create module container
-        const moduleSection = document.createElement('div');
-        moduleSection.className = 'module-section';
-        moduleSection.id = moduleId;
-
-        moduleSection.innerHTML = `
-            <div class="module-header">
-                <h3 class="module-title">${moduleConfig.name}</h3>
-                <div class="module-description">${moduleConfig.description}</div>
-            </div>
-            <div class="module-content">
-                <div class="module-controls" id="${moduleId}-controls">
-                    <!-- Module controls will be rendered here -->
-                </div>
-                <div class="module-systemd" id="${moduleId}-systemd">
-                    <!-- Service logs and controls will be rendered here -->
-                </div>
-            </div>
-        `;
 
         this.servicesLogs.appendChild(moduleSection);
 
