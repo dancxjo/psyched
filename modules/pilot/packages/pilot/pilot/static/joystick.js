@@ -289,7 +289,7 @@ class PilotController {
                 if (!this.websocket || !this.isConnected) return;
                 try {
                     // Ask backend to save map; optional name can be added later
-                    this.websocket.send(JSON.stringify({ type: 'save_map', name: 'rtabmap_map' }));
+                    this.websocket.send(JSON.stringify({ type: 'save_map', name: 'nav_map' }));
                 } catch (e) { console.error('Failed to request save_map', e); }
             });
         }

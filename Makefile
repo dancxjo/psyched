@@ -59,7 +59,7 @@ build:
 		rosdep update; \
 		cd src && rosdep install --from-paths . --ignore-src -r -y; \
 		cd ..; \
-		colcon build --symlink-install; \
+		colcon build --symlink-install --base-paths src; \
 		ln -sfn $(CURDIR)/hosts $(CURDIR)/install/hosts; \
 		. install/setup.bash || true; \
 		echo "[build] Done."'

@@ -26,23 +26,16 @@ def generate_launch_description():
     # Include Nav2 bringup launch if available on the system
     nav2_share = FindPackageShare('nav2_bringup')
     nav2_launch = PathJoinSubstitution([nav2_share, 'launch', 'bringup_launch.py'])
-    nav2_params = PathJoinSubstitution([FindPackageShare('nav'), 'params', 'nav2_params.yaml'])
+    # Our package was renamed to 'psyched_nav' to avoid colliding with other
+    # workspace packages. Use that name to locate our params files.
+    nav2_params = PathJoinSubstitution([FindPackageShare('psyched_nav'), 'params', 'nav2_params.yaml'])
     # Pass our nav2 params file into the nav2 bringup (bringup_launch.py accepts 'params_file')
     ld.add_action(IncludeLaunchDescription(
         PythonLaunchDescriptionSource(nav2_launch),
         launch_arguments={'params_file': nav2_params}.items()
     ))
 
-    # Start RTAB-Map node with parameter file in this package
-    rtabmap_params = PathJoinSubstitution([FindPackageShare('nav'), 'params', 'rtabmap_params.yaml'])
-    ld.add_action(Node(
-        package='rtabmap_ros', executable='rtabmap', output='screen',
-        parameters=[rtabmap_params],
-        remappings=[
-            ('/rgb/image', LaunchConfiguration('kinect_rgb_topic')),
-            ('/depth/image', LaunchConfiguration('kinect_depth_topic')),
-        ]
-    ))
+    # RTAB-Map is not included in this build; users may run their preferred SLAM node separately.
 
     # Publish static transform between base_link and camera if not provided by robot
     # Assumes camera is centered: x=0.0, y=0.0, z=0.3 (adjust as necessary)

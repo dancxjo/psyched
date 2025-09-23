@@ -638,7 +638,7 @@ class PilotWebSocketNode(Node):
                                 await websocket.send(json.dumps({'type': 'systemd', 'error': f'unwatch failed: {e}'}))
             elif t == 'save_map':
                 # Trigger save_map helper script asynchronously
-                name = data.get('name') or 'rtabmap_map'
+                name = data.get('name') or 'nav_map'
                 try:
                     res = self._run_background_script(['modules/nav/save_map.sh', name])
                     await websocket.send(json.dumps({'type': 'save_map_ack', 'name': name, 'pid': res}))
