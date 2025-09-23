@@ -20,6 +20,18 @@ else
 fi
 SOURCE_DIR="${REPO_DIR}/src"
 ROS_DISTRO="${ROS_DISTRO:-kilted}"
+case "${ROS_DISTRO}" in
+    jade|kinetic|lunar|melodic|noetic)
+        echo "Skipping end-of-life ROS distro: ${ROS_DISTRO}"
+        exit 0
+        ;;
+    jazzy|kilted|rolling)
+        echo "Detected supported ROS2 distro: ${ROS_DISTRO}"
+        ;;
+    *)
+        echo "Proceeding with generic ROS2 distro: ${ROS_DISTRO}"
+        ;;
+esac
 
 ensure_cv_bridge_overlay() {
     local header="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge.hpp"

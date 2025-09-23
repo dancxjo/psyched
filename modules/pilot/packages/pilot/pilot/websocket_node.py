@@ -1158,31 +1158,40 @@ class PilotWebSocketNode(Node):
         """Discover modules and load their pilot control configurations."""
         try:
             host_short = self._host_short or 'host'
-            repo_root = Path(__file__).resolve().parents[3]  # .../packages/pilot/pilot -> repo
+            # Use REPO_DIR from environment if set, otherwise walk up to find repo root
+            repo_dir_env = os.environ.get('REPO_DIR')
+            if repo_dir_env and Path(repo_dir_env).exists():
+                repo_root = Path(repo_dir_env)
+            else:
+                repo_root = Path(__file__).resolve()
+                for _ in range(10):
+                    if (repo_root / 'hosts').exists() and (repo_root / 'modules').exists():
+                        break
+                    repo_root = repo_root.parent
             modules_dir = repo_root / 'hosts' / host_short / 'modules'
-            
+
             if not modules_dir.exists():
                 self.get_logger().warn(f'No modules directory found at {modules_dir}')
                 return {}
-                
+
             modules = {}
             for module_link in modules_dir.iterdir():
                 if not module_link.is_symlink():
                     continue
-                    
+
                 module_name = module_link.name
                 module_path = module_link.resolve()
-                
+
                 # Look for pilot_controls.json in the module directory
                 controls_file = module_path / 'pilot_controls.json'
                 if controls_file.exists():
                     try:
                         with open(controls_file, 'r') as f:
                             controls_config = json.loads(f.read())
-                        
+
                         # Expand environment variables in control values
                         controls_config = self._expand_env_vars(controls_config)
-                        
+
                         modules[module_name] = {
                             'name': controls_config.get('name', module_name.title()),
                             'description': controls_config.get('description', f'{module_name.title()} module'),
@@ -1207,7 +1216,7 @@ class PilotWebSocketNode(Node):
                         'controls': [],
                         'systemd_unit': f'psyched-{module_name}.service'
                     }
-            
+
             return modules
         except Exception as e:
             self.get_logger().warn(f'Failed to discover modules: {e}')
