@@ -227,6 +227,7 @@ class PilotWebSocketNode(Node):
         self._systemd_units = self._discover_systemd_units()
 
         # Module controls discovery
+        self._module_unit_map = {}
         self._modules = self._discover_modules()
 
         # asyncio context in dedicated thread
@@ -557,12 +558,17 @@ class PilotWebSocketNode(Node):
                         result = self._systemd_perform(action, unit)
                         # always follow up with fresh status for this unit
                         status = self._query_systemd_unit(unit)
+                        module_name = self._module_unit_map.get(unit)
+                        if module_name:
+                            status['module'] = module_name
                         # also include a detail snapshot for immediate UI update
                         try:
                             detail = self._systemd_detail(unit, int(data.get('lines') or 200))
                         except Exception:
                             detail = None
                         payload = {'type': 'systemd', 'unit': unit, 'status': status}
+                        if module_name:
+                            payload['module'] = module_name
                         if detail:
                             payload['detail'] = detail
                         if result.get('error'):
@@ -583,7 +589,11 @@ class PilotWebSocketNode(Node):
                         await websocket.send(json.dumps({'type': 'systemd', 'error': f'unknown unit: {unit}'}))
                     else:
                         detail = self._systemd_detail(unit, n)
-                        await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                        payload = {'type': 'systemd', 'unit': unit, 'detail': detail}
+                        module_name = self._module_unit_map.get(unit)
+                        if module_name:
+                            payload['module'] = module_name
+                        await websocket.send(json.dumps(payload))
                 elif action in ('watch', 'unwatch', 'watch_off'):
                     unit = data.get('unit')
                     lines = data.get('lines')
@@ -603,7 +613,11 @@ class PilotWebSocketNode(Node):
                             try:
                                 self._systemd_watch.setdefault(websocket, {})[unit] = {'lines': n}
                                 detail = self._systemd_detail(unit, n)
-                                await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                                payload = {'type': 'systemd', 'unit': unit, 'detail': detail}
+                                module_name = self._module_unit_map.get(unit)
+                                if module_name:
+                                    payload['module'] = module_name
+                                await websocket.send(json.dumps(payload))
                                 self._ensure_watch_task()
                             except Exception as e:
                                 await websocket.send(json.dumps({'type': 'systemd', 'error': f'watch failed: {e}'}))
@@ -615,7 +629,11 @@ class PilotWebSocketNode(Node):
                                 if not ws_map:
                                     self._systemd_watch.pop(websocket, None)
                                 self._maybe_stop_watch_task()
-                                await websocket.send(json.dumps({'type': 'systemd', 'unit': unit, 'unwatched': True}))
+                                payload = {'type': 'systemd', 'unit': unit, 'unwatched': True}
+                                module_name = self._module_unit_map.get(unit)
+                                if module_name:
+                                    payload['module'] = module_name
+                                await websocket.send(json.dumps(payload))
                             except Exception as e:
                                 await websocket.send(json.dumps({'type': 'systemd', 'error': f'unwatch failed: {e}'}))
             elif t == 'save_map':
@@ -1156,9 +1174,10 @@ class PilotWebSocketNode(Node):
     # -----------------------------
     def _discover_modules(self):
         """Discover modules and load their pilot control configurations."""
+        modules: dict[str, dict] = {}
+        self._module_unit_map = {}
         try:
             host_short = self._host_short or 'host'
-            # Use REPO_DIR from environment if set, otherwise walk up to find repo root
             repo_dir_env = os.environ.get('REPO_DIR')
             if repo_dir_env and Path(repo_dir_env).exists():
                 repo_root = Path(repo_dir_env)
@@ -1172,55 +1191,96 @@ class PilotWebSocketNode(Node):
 
             if not modules_dir.exists():
                 self.get_logger().warn(f'No modules directory found at {modules_dir}')
-                return {}
+                return modules
 
-            modules = {}
-            for module_link in modules_dir.iterdir():
-                if not module_link.is_symlink():
+            def _register_units(module_name: str, entry: dict) -> None:
+                units = entry.get('systemd_units') or []
+                for unit in units:
+                    if isinstance(unit, str) and unit:
+                        self._module_unit_map[unit] = module_name
+
+            def _make_entry(module_name: str, config: dict | None) -> dict:
+                cfg = config or {}
+                display = cfg.get('display') or cfg.get('name')
+                if not display:
+                    display = module_name.replace('_', ' ').replace('-', ' ').title()
+                description = cfg.get('description') or f'{display} module'
+                controls = cfg.get('controls') if isinstance(cfg.get('controls'), list) else []
+                raw_units = []
+                units_field = cfg.get('systemd_units')
+                if isinstance(units_field, list):
+                    raw_units.extend(units_field)
+                elif isinstance(units_field, str):
+                    raw_units.append(units_field)
+                single_unit = cfg.get('systemd_unit')
+                if isinstance(single_unit, str):
+                    raw_units.append(single_unit)
+                deduped: list[str] = []
+                seen = set()
+                for unit in raw_units:
+                    if not isinstance(unit, str):
+                        continue
+                    clean = unit.strip()
+                    if not clean or clean in seen:
+                        continue
+                    seen.add(clean)
+                    deduped.append(clean)
+                if not deduped:
+                    deduped.append(f'psyched-{module_name}.service')
+                entry = {
+                    'name': display,
+                    'description': description,
+                    'controls': controls,
+                    'systemd_units': deduped,
+                    'systemd_unit': deduped[0],
+                    'slug': cfg.get('slug') or cfg.get('module') or module_name,
+                    'module': module_name,
+                }
+                return entry
+
+            for module_link in sorted(modules_dir.iterdir(), key=lambda p: p.name):
+                if not module_link.is_symlink() and not module_link.is_dir():
                     continue
 
                 module_name = module_link.name
-                module_path = module_link.resolve()
+                try:
+                    module_path = module_link.resolve(strict=False)
+                except Exception as e:
+                    self.get_logger().warn(f'Failed to resolve module link {module_name}: {e}')
+                    entry = _make_entry(module_name, None)
+                    modules[module_name] = entry
+                    _register_units(module_name, entry)
+                    continue
 
-                # Look for pilot_controls.json in the module directory
+                if not module_path.exists():
+                    self.get_logger().warn(f'Module path missing for {module_name}: {module_path}')
+                    entry = _make_entry(module_name, None)
+                    modules[module_name] = entry
+                    _register_units(module_name, entry)
+                    continue
+
                 controls_file = module_path / 'pilot_controls.json'
+                entry = None
                 if controls_file.exists():
                     try:
-                        with open(controls_file, 'r') as f:
+                        with open(controls_file, 'r', encoding='utf-8') as f:
                             controls_config = json.loads(f.read())
-
-                        # Expand environment variables in control values
                         controls_config = self._expand_env_vars(controls_config)
-
-                        modules[module_name] = {
-                            'name': controls_config.get('name', module_name.title()),
-                            'description': controls_config.get('description', f'{module_name.title()} module'),
-                            'controls': controls_config.get('controls', []),
-                            'systemd_unit': f'psyched-{module_name}.service'
-                        }
+                        entry = _make_entry(module_name, controls_config)
                         self.get_logger().info(f'Loaded pilot controls for module: {module_name}')
                     except Exception as e:
                         self.get_logger().warn(f'Failed to load pilot controls for {module_name}: {e}')
-                        # Create minimal module entry without controls
-                        modules[module_name] = {
-                            'name': module_name.title(),
-                            'description': f'{module_name.title()} module',
-                            'controls': [],
-                            'systemd_unit': f'psyched-{module_name}.service'
-                        }
-                else:
-                    # Module without pilot controls - just show basic info
-                    modules[module_name] = {
-                        'name': module_name.title(),
-                        'description': f'{module_name.title()} module',
-                        'controls': [],
-                        'systemd_unit': f'psyched-{module_name}.service'
-                    }
+
+                if entry is None:
+                    entry = _make_entry(module_name, None)
+
+                modules[module_name] = entry
+                _register_units(module_name, entry)
 
             return modules
         except Exception as e:
             self.get_logger().warn(f'Failed to discover modules: {e}')
-            return {}
+            return modules
             
     def _expand_env_vars(self, config):
         """Recursively expand environment variables in configuration values."""
@@ -1345,6 +1405,9 @@ class PilotWebSocketNode(Node):
         services = []
         for u in self._systemd_units:
             base = self._query_systemd_unit(u)
+            module_name = self._module_unit_map.get(u)
+            if module_name:
+                base['module'] = module_name
             detail = self._systemd_detail(u, lines=200)
             # Merge detail fields into base dict
             base.update(detail)
@@ -1461,7 +1524,11 @@ class PilotWebSocketNode(Node):
                     if isinstance(detail, Exception):
                         continue
                     try:
-                        await ws.send(json.dumps({'type': 'systemd', 'unit': unit, 'detail': detail}))
+                        payload = {'type': 'systemd', 'unit': unit, 'detail': detail}
+                        module_name = self._module_unit_map.get(unit)
+                        if module_name:
+                            payload['module'] = module_name
+                        await ws.send(json.dumps(payload))
                     except Exception:
                         pass
         except asyncio.CancelledError:
