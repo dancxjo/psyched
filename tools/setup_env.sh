@@ -112,6 +112,40 @@ source_now() {
     done
   fi
   if (( had_u )); then set -u; fi
+
+  ensure_pytrees_dependencies
+}
+
+ensure_pytrees_dependencies() {
+  local python_bin="${PYTHON:-python3}"
+  if ! command -v "$python_bin" >/dev/null 2>&1; then
+    echo "# [setup_env] ${python_bin} not found; skipping py_trees dependency check" >&2
+    return
+  fi
+
+  "$python_bin" - <<'PY'
+import importlib
+import subprocess
+import sys
+
+
+def ensure(package: str, install_spec: str) -> None:
+    try:
+        importlib.import_module(package)
+    except ModuleNotFoundError:
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", install_spec])
+        except Exception as exc:  # pragma: no cover - environment-dependent path
+            print(f"# [setup_env] Failed to install {install_spec}: {exc}", file=sys.stderr)
+
+
+ensure("py_trees", "py_trees")
+try:
+    importlib.import_module("py_trees_ros")
+except ModuleNotFoundError:
+    # The GitHub dependency tracks ros2 main; pin a commit for deterministic installs.
+    ensure("py_trees_ros", "git+https://github.com/splintered-reality/py_trees_ros.git")
+PY
 }
 
 case "$MODE" in
