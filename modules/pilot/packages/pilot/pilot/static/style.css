@@ -1,0 +1,350 @@
+/* Pilot interface customisations */
+
+/* === Top cascade ======================================================= */
+#controlCascade {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.85rem;
+    padding-block: 0.35rem 0.75rem;
+    align-items: stretch;
+}
+
+#controlCascade .data-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem 1rem;
+    border-radius: 1.5rem;
+    background: linear-gradient(145deg, rgba(12, 12, 12, 0.72), rgba(0, 0, 0, 0.45));
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0.6rem 1.3rem rgba(0, 0, 0, 0.45), 0 0.45rem 1.15rem rgba(0, 0, 0, 0.35);
+    min-width: 0;
+}
+
+#controlCascade .dc-header {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ffe1a9;
+    margin-bottom: -0.1rem;
+}
+
+#controlCascade .dc-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.65rem;
+    font-variant-numeric: tabular-nums;
+    text-transform: uppercase;
+}
+
+#controlCascade .dc-key {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.58);
+    white-space: nowrap;
+}
+
+#controlCascade .dc-value {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fef5dc;
+    min-width: 0;
+    text-align: right;
+}
+
+#controlCascade .dc-value--missing {
+    opacity: 0.45;
+}
+
+/* === D-pad ============================================================= */
+.dpad-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.dpad-grid {
+    position: relative;
+    display: grid;
+    width: clamp(170px, 30vw, 240px);
+    aspect-ratio: 1 / 1;
+    padding: 0.65rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+        ". up ."
+        "left center right"
+        ". down .";
+    gap: 0.5rem;
+    border-radius: 1.6rem;
+    background: linear-gradient(180deg, rgba(255, 240, 200, 0.16), rgba(0, 0, 0, 0.55));
+    box-shadow: inset 0 0.9rem 1.6rem rgba(0, 0, 0, 0.6), 0 0.5rem 1.2rem rgba(0, 0, 0, 0.35);
+}
+
+.dpad-grid::after {
+    content: "";
+    position: absolute;
+    inset: 12%;
+    border-radius: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+}
+
+.dpad-btn {
+    appearance: none;
+    border: 0;
+    border-radius: 1rem;
+    display: grid;
+    place-items: center;
+    font-size: clamp(1.35rem, 5vw, 1.9rem);
+    font-weight: 600;
+    color: #141010;
+    background: linear-gradient(160deg, #fddb97, #e58f2a);
+    box-shadow: 0 0.5rem 0 #a26014, 0 0.55rem 0.75rem rgba(0, 0, 0, 0.45);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dpad-btn[data-direction="up"] { grid-area: up; border-radius: 1.1rem 1.1rem 0.6rem 0.6rem; }
+.dpad-btn[data-direction="down"] { grid-area: down; border-radius: 0.6rem 0.6rem 1.1rem 1.1rem; }
+.dpad-btn[data-direction="left"] { grid-area: left; border-radius: 1.1rem 0.6rem 0.6rem 1.1rem; }
+.dpad-btn[data-direction="right"] { grid-area: right; border-radius: 0.6rem 1.1rem 1.1rem 0.6rem; }
+
+.dpad-btn:active,
+.dpad-btn[data-pressed="true"] {
+    transform: translateY(0.18rem);
+    box-shadow: 0 0.22rem 0 #a26014, 0 0.25rem 0.6rem rgba(0, 0, 0, 0.35);
+}
+
+.dpad-btn:focus-visible {
+    outline: 3px solid #fef2d2;
+    outline-offset: 2px;
+}
+
+.dpad-center {
+    grid-area: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fdf4d0, #c2771b 75%, #7b4511 100%);
+    border: 4px solid rgba(0, 0, 0, 0.55);
+    box-shadow: inset 0 0.75rem 1.25rem rgba(0, 0, 0, 0.55);
+}
+
+/* === Joystick ========================================================= */
+.drive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.65rem;
+    align-items: start;
+    margin-top: 1.1rem;
+}
+
+.joystick-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.joystick {
+    position: relative;
+    width: clamp(210px, 34vw, 320px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 30%, rgba(255, 255, 255, 0.22), rgba(15, 15, 15, 0.85));
+    border: 5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1.2rem 1.8rem rgba(0, 0, 0, 0.55), 0 0.8rem 1.6rem rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.joystick::after {
+    content: "";
+    position: absolute;
+    inset: 12%;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+}
+
+.joystick-knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: clamp(85px, 22vw, 125px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffeac0, #e59a3b 65%, #b06411 100%);
+    box-shadow: 0 0.55rem 0.9rem rgba(0, 0, 0, 0.5);
+    transform: translate(-50%, -50%);
+    transition: box-shadow 0.2s ease;
+}
+
+.joystick[data-dragging="true"] .joystick-knob {
+    box-shadow: 0 0.25rem 0.65rem rgba(0, 0, 0, 0.55), inset 0 0.25rem 0.45rem rgba(255, 255, 255, 0.25);
+}
+
+.joystick-labels {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.joystick-labels .label-forward {
+    grid-column: 2 / 3;
+    justify-self: center;
+}
+
+.joystick-labels .label-left { justify-self: start; }
+.joystick-labels .label-right { justify-self: end; }
+.joystick-labels .label-backward {
+    grid-column: 2 / 3;
+    justify-self: center;
+}
+
+#imuOverlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#imuOverlay circle,
+#imuOverlay path,
+#imuOverlay line {
+    stroke: rgba(255, 255, 255, 0.4);
+}
+
+#imuOverlay circle { stroke-dasharray: 4 6; }
+#imuOverlay path { stroke: #ffbe57; }
+#imuOverlay line { stroke-width: 4; }
+
+/* === Additional layout helpers ======================================= */
+.aux-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    margin-top: 1.25rem;
+}
+
+.aux-controls .controls,
+.aux-controls .voice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.aux-controls .controls button {
+    min-width: 150px;
+}
+
+.voice-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.voice-controls input[type="text"] {
+    flex: 1 1 240px;
+}
+
+.voice-controls input[type="range"] {
+    width: min(220px, 100%);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem 1.4rem;
+    margin-top: 1.1rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 1rem;
+    background: rgba(0, 0, 0, 0.35);
+    font-variant-numeric: tabular-nums;
+}
+
+.info-item label {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.info-item span {
+    font-size: 0.98rem;
+    color: #fef5d6;
+}
+
+/* === Responsive tweaks ================================================ */
+@media (max-width: 1080px) {
+    #controlCascade {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+}
+
+@media (max-width: 860px) {
+    .drive-grid {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .aux-controls .controls {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 620px) {
+    .dpad-grid {
+        width: min(90vw, 260px);
+        gap: 0.4rem;
+        padding: 0.55rem;
+    }
+
+    .joystick {
+        width: min(88vw, 280px);
+    }
+
+    .joystick-knob {
+        width: clamp(70px, 28vw, 110px);
+    }
+
+    .joystick-labels {
+        font-size: 0.68rem;
+    }
+
+    .info-grid {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    #controlCascade {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    }
+
+    .aux-controls .controls,
+    .aux-controls .voice-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .aux-controls .controls button,
+    .voice-controls input[type="text"],
+    .voice-controls button {
+        width: 100%;
+    }
+}

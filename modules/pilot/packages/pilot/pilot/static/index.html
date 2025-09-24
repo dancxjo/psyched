@@ -9,7 +9,6 @@
     <meta name="format-detection" content="date=no">
     <link rel="stylesheet" type="text/css" href="assets/lower-decks-padd.css">
     <link rel="stylesheet" type="text/css" href="style.css">
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 
 <body>
@@ -26,24 +25,140 @@
             <div class="right-frame-top">
                 <div class="banner">Pilot Interface</div>
                 <div class="data-cascade-button-group">
-                    <div class="data-wrapper" x-data="dataCascade()" x-init="init()">
-                        <!-- Labels row (uses same columns array) -->
-                        <div class="data-labels">
-                            <template x-for="(col, idx) in columns" :key="'label-'+idx">
-                                <div class="data-column">
-                                    <div class="dc-row-1 dc-label" x-text="col.label || ''"></div>
-                                </div>
-                            </template>
-                        </div>
-                        <!-- Numeric data rows -->
-                        <template x-for="(col, idx) in columns" :key="idx">
-                            <div class="data-column">
-                                <div class="dc-row-1" :class="col.r1Class" x-text="valueFor(col.r1)"></div>
-                                <div class="dc-row-2" :class="col.r2Class" x-text="valueFor(col.r2)"></div>
-                                <div class="dc-row-3" :class="col.r3Class" x-text="valueFor(col.r3)"></div>
-                                <div class="dc-row-4" :class="col.r4Class" x-text="valueFor(col.r4)"></div>
+                    <div class="data-wrapper" id="controlCascade" role="group" aria-label="Control status cascade">
+                        <div class="data-column" data-column="drive">
+                            <div class="dc-header font-arctic-ice">DRIVE</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">LIN X</span>
+                                <span class="dc-value font-arctic-ice blink" data-source="linearX">0.00</span>
                             </div>
-                        </template>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">LIN Y</span>
+                                <span class="dc-value font-night-rain" data-source="linearY">0.00</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">ANG Z</span>
+                                <span class="dc-value font-alpha-blue" data-source="angularZ">0.00</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">MODE</span>
+                                <span class="dc-value font-arctic-ice" data-source="robotMode">--</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="safety">
+                            <div class="dc-header">SAFETY</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">SPEED</span>
+                                <span class="dc-value font-arctic-ice" data-source="robotSpeed">--</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">BUMPR</span>
+                                <span class="dc-value font-night-rain blink" data-source="robotBumper">--</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">CLIFF</span>
+                                <span class="dc-value font-night-rain" data-source="robotCliff">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">IR</span>
+                                <span class="dc-value font-alpha-blue" data-source="robotIrOmni">--</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="energy">
+                            <div class="dc-header">ENERGY</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">BAT %</span>
+                                <span class="dc-value font-arctic-ice blink" data-source="batteryPercentInfo">--</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">VOLT</span>
+                                <span class="dc-value" data-source="batteryVoltage">--</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">CURR</span>
+                                <span class="dc-value" data-source="batteryCurrent">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">STAT</span>
+                                <span class="dc-value font-night-rain" data-source="batteryStateInfo">--</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="audio">
+                            <div class="dc-header">AUDIO</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">SPEAK</span>
+                                <span class="dc-value font-arctic-ice" data-source="voiceSpeakingMs">0</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">VAD</span>
+                                <span class="dc-value" data-source="vadSpeechMs">0</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">MIC</span>
+                                <span class="dc-value font-night-rain" data-source="micInfo">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">VOICE</span>
+                                <span class="dc-value font-alpha-blue" data-source="voiceTopic">/voice</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="gps">
+                            <div class="dc-header">GPS</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">FIX</span>
+                                <span class="dc-value font-arctic-ice" data-source="gpsFixStatus">--</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">LAT</span>
+                                <span class="dc-value" data-source="gpsLat">--</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">LON</span>
+                                <span class="dc-value" data-source="gpsLon">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">ALT</span>
+                                <span class="dc-value" data-source="gpsAlt">--</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="network">
+                            <div class="dc-header">NETWORK</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">CMD</span>
+                                <span class="dc-value" data-source="cmdVelTopic">/cmd_vel</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">VOICE</span>
+                                <span class="dc-value" data-source="voiceTopic">/voice</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">WEB</span>
+                                <span class="dc-value" data-source="webAddress">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">WS</span>
+                                <span class="dc-value" data-source="wsAddress">--</span>
+                            </div>
+                        </div>
+                        <div class="data-column" data-column="host">
+                            <div class="dc-header">HOST</div>
+                            <div class="dc-row dc-row-1">
+                                <span class="dc-key">CPU</span>
+                                <span class="dc-value darkfont" data-source="cpuChip">--</span>
+                            </div>
+                            <div class="dc-row dc-row-2">
+                                <span class="dc-key">TEMP</span>
+                                <span class="dc-value font-alpha-blue" data-source="tempChip">--</span>
+                            </div>
+                            <div class="dc-row dc-row-3">
+                                <span class="dc-key">MEM</span>
+                                <span class="dc-value font-arctic-ice" data-source="memChip">--</span>
+                            </div>
+                            <div class="dc-row dc-row-4">
+                                <span class="dc-key">DIAG</span>
+                                <span class="dc-value font-night-rain" data-source="robotDiag">--</span>
+                            </div>
+                        </div>
                     </div>
                     <nav role="navigation" aria-label="pilot main navigation">
                         <div class="buttons justify-space-between">
@@ -110,13 +225,13 @@
                                 <div class="slider-title">D-Pad</div>
                                 <div id="dpad" class="dpad-grid" aria-label="Directional pad controls">
                                     <div></div>
-                                    <button id="dpadUp" class="dpad-btn up" aria-label="Forward">▲</button>
+                                    <button id="dpadUp" class="dpad-btn up" data-direction="up" aria-label="Forward">▲</button>
                                     <div></div>
-                                    <button id="dpadLeft" class="dpad-btn left" aria-label="Left">◀</button>
+                                    <button id="dpadLeft" class="dpad-btn left" data-direction="left" aria-label="Left">◀</button>
                                     <div class="dpad-center" aria-hidden="true"></div>
-                                    <button id="dpadRight" class="dpad-btn right" aria-label="Right">▶</button>
+                                    <button id="dpadRight" class="dpad-btn right" data-direction="right" aria-label="Right">▶</button>
                                     <div></div>
-                                    <button id="dpadDown" class="dpad-btn down" aria-label="Backward">▼</button>
+                                    <button id="dpadDown" class="dpad-btn down" data-direction="down" aria-label="Backward">▼</button>
                                     <div></div>
                                 </div>
                             </div>
@@ -196,6 +311,9 @@
                             <div class="info-item"><label>Current (A)</label><span id="batteryCurrent">--</span></div>
                             <div class="info-item"><label>Temperature</label><span id="batteryTemp">--</span></div>
                             <div class="info-item"><label>State</label><span id="batteryStateInfo">--</span></div>
+                            <div class="info-item"><label>CPU Load</label><span id="cpuChip">--</span></div>
+                            <div class="info-item"><label>Main Temp</label><span id="tempChip">--</span></div>
+                            <div class="info-item"><label>Memory</label><span id="memChip">--</span></div>
                             <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs">0</span></div>
                             <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs">0</span></div>
                             <div class="info-item"><label>Mic</label><span id="micInfo">--</span></div>
@@ -229,43 +347,112 @@
     <script type="text/javascript" src="assets/lcars.js"></script>
     <script src="joystick.js"></script>
     <script>
-        function dataCascade() {
-            return {
-                // Define columns as mappings to info-grid element IDs or static keys
-                columns: [
-                    { label: 'BAT %', r1: 'batteryPercentInfo', r2: 'robotSpeed', r3: 'robotMode', r4: 'robotBumper', r1Class: 'font-arctic-ice blink' },
-                    { label: 'VEL', r1: 'linearX', r2: 'linearY', r3: 'angularZ', r4: 'gpsFixStatus', r1Class: 'blink' },
-                    { label: 'BATT', r1: 'batteryVoltage', r2: 'batteryCurrent', r3: 'batteryTemp', r4: 'batteryStateInfo', r1Class: 'font-night-rain blink' },
-                    { label: 'AUDIO', r1: 'voiceSpeakingMs', r2: 'vadSpeechMs', r3: 'micInfo', r4: 'voiceTopic', r1Class: 'font-arctic-ice blink' },
-                    { label: 'GPS', r1: 'gpsLat', r2: 'gpsLon', r3: 'gpsAlt', r4: 'robotDiag', r1Class: 'font-arctic-ice blink' },
-                    { label: 'HOST', r1: 'cpuChip', r2: 'tempChip', r3: 'memChip', r4: '', r1Class: 'darkspace darkfont blink' },
-                    { label: 'SENS', r1: 'robotIrOmni', r2: 'robotCliff', r3: 'robotBumper', r4: 'robotMode' },
-                    { label: 'NET', r1: 'cmdVelTopic', r2: 'voiceTopic', r3: 'webAddress', r4: 'wsAddress' },
-                ],
-                init() {
-                    // Observe mutations to the info grid and force Alpine to update by toggling a dummy property
-                    const ids = new Set();
-                    this.columns.forEach(c => { [c.r1, c.r2, c.r3, c.r4].forEach(id => id && ids.add(id)); });
-                    ids.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            const obs = new MutationObserver(() => this._touch = Date.now());
-                            obs.observe(el, { childList: true, characterData: true, subtree: true });
-                        }
-                    });
-                },
-                valueFor(key) {
-                    if (!key) return '';
-                    const el = document.getElementById(key);
-                    if (!el) return key;
-                    // Read text content; format numbers to shorter form when very large
-                    const v = (el.textContent || '').trim();
-                    if (!v) return '--';
-                    if (/^\d{10,}$/.test(v)) return v.slice(0, 11) + '…';
-                    return v;
+        document.addEventListener('DOMContentLoaded', () => {
+            const cascadeEl = document.getElementById('controlCascade');
+            if (!cascadeEl) {
+                return;
+            }
+
+            const valueEls = Array.from(cascadeEl.querySelectorAll('[data-source]'));
+            if (!valueEls.length) {
+                return;
+            }
+
+            const sourceMap = new Map();
+            valueEls.forEach(el => {
+                const key = el.getAttribute('data-source');
+                if (!key) {
+                    return;
                 }
+                if (!sourceMap.has(key)) {
+                    sourceMap.set(key, []);
+                }
+                sourceMap.get(key).push(el);
+            });
+
+            const readSourceValue = (source) => {
+                if (!source) {
+                    return '';
+                }
+                if (source instanceof HTMLInputElement || source instanceof HTMLSelectElement || source instanceof HTMLTextAreaElement) {
+                    return source.value;
+                }
+                return source.textContent || '';
             };
-        }
+
+            const formatValue = (raw) => {
+                const text = (raw || '').trim();
+                if (!text) {
+                    return '--';
+                }
+                if (/^-?\d+(?:\.\d+)?$/.test(text)) {
+                    const num = parseFloat(text);
+                    const magnitude = Math.abs(num);
+                    if (magnitude >= 1000) {
+                        return num.toFixed(0);
+                    }
+                    if (magnitude >= 100) {
+                        return num.toFixed(1);
+                    }
+                    if (magnitude >= 10) {
+                        return num.toFixed(2);
+                    }
+                    if (magnitude >= 1) {
+                        return num.toFixed(2);
+                    }
+                    if (magnitude === 0) {
+                        return '0';
+                    }
+                    return num.toFixed(3);
+                }
+                return text.length > 14 ? `${text.slice(0, 13)}…` : text;
+            };
+
+            const updateTargets = (id) => {
+                const targets = sourceMap.get(id);
+                if (!targets) {
+                    return;
+                }
+                const source = document.getElementById(id);
+                const formatted = formatValue(readSourceValue(source));
+                targets.forEach(el => {
+                    el.textContent = formatted;
+                    if (source) {
+                        el.classList.remove('dc-value--missing');
+                    } else {
+                        el.classList.add('dc-value--missing');
+                    }
+                });
+            };
+
+            const observerConfig = { childList: true, characterData: true, subtree: true };
+            sourceMap.forEach((_, id) => {
+                const source = document.getElementById(id);
+                if (!source) {
+                    updateTargets(id);
+                    return;
+                }
+
+                const observer = new MutationObserver(() => updateTargets(id));
+                observer.observe(source, observerConfig);
+
+                if (source instanceof HTMLInputElement || source instanceof HTMLSelectElement || source instanceof HTMLTextAreaElement) {
+                    const handler = () => updateTargets(id);
+                    source.addEventListener('input', handler);
+                    source.addEventListener('change', handler);
+                }
+
+                updateTargets(id);
+            });
+
+            document.addEventListener('pilot:cascade:sync', (event) => {
+                const detail = event.detail;
+                if (!detail || !detail.id) {
+                    return;
+                }
+                updateTargets(detail.id);
+            });
+        });
     </script>
     <div class="headtrim"> </div>
     <div class="baseboard"> </div>
