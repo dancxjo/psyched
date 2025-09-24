@@ -83,6 +83,9 @@ or conflicting package sources.
   without ROS installed.
 - Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure
   frontend updates don't depend on it before processing service data.
+- Pilot control cascade reads from DOM elements flagged with `data-source`
+  attributes; update `modules/pilot/packages/pilot/tests/test_frontend_layout.py`
+  if you adjust that markup.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.

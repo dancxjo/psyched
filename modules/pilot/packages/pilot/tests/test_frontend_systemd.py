@@ -94,7 +94,7 @@ const joystickPath = {json.dumps(str(js_path))};
 
 const elements = new Map();
 function makeElement(id, classes) {{
-    classes = Array.isArray(classes) ? classes : (classes ? String(classes).split(/\s+/).filter(Boolean) : []);
+    classes = Array.isArray(classes) ? classes : (classes ? String(classes).split(/\\s+/).filter(Boolean) : []);
     const classSet = new Set(classes);
     const el = {{
         id: id || '',
