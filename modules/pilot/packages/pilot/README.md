@@ -2,6 +2,21 @@
 
 This package provides the Pilot WebSocket bridge that receives UI commands and publishes them onto ROS topics.
 
+## Wireless access point helper
+
+The pilot module can optionally configure a spare wireless interface as an access
+point so that tablets or other robots can join an ad-hoc DDS network without any
+external infrastructure. The helper node wraps `hostapd`, `dnsmasq`, and Python
+`zeroconf` to provide Wi-Fi, DHCP, and mDNS discovery respectively.
+
+- Enable or disable the helper via `PILOT_ENABLE_AP` (defaults to `true`).
+- Point `PILOT_AP_INTERFACE` at the wireless interface reserved for hotspot
+  duties (for example `wlan1`).
+- Adjust SSID, passphrase, subnet, DHCP range, and advertised mDNS hostname via
+  the corresponding `PILOT_AP_*` variables in `hosts/<host>/config/pilot.env`.
+- Set `PILOT_AP_DRY_RUN=true` during development to exercise the node without
+  modifying host networking state.
+
 ## Volume control
 
 - Web UI volume changes are forwarded as `std_msgs/Float32` on the topic `/voice/volume` for the voice node to adjust synthesis/playback gain.

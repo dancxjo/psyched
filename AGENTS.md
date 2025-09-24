@@ -51,6 +51,9 @@ workspace.
   summary. If you must skip a check, state why.
 - Smoke-test launch or setup scripts when you modify them (e.g.
   `./modules/<module>/setup.sh --help`).
+- `modules/pilot/packages/pilot/tests/test_ap_node.py` imports `rclpy`; without
+  a ROS 2 environment installed run only the targeted tests that avoid it or
+  expect collection to fail.
 
 Important workflow note:
 

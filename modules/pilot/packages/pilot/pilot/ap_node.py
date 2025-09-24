@@ -58,11 +58,32 @@ class APNode(Node):
         def _p(name, default=None):
             try:
                 v = self.get_parameter(name).value
-                return v if v is not None else default
             except Exception:
+                v = default
+            if v is None:
                 return default
+            if isinstance(v, str):
+                trimmed = v.strip()
+                lowered = trimmed.lower()
+                if lowered in {'', 'auto', 'none', 'null'}:
+                    return default
+                if isinstance(default, bool) or lowered in {'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'}:
+                    return lowered in {'true', '1', 'yes', 'on'}
+            return v
 
-        self.enable_ap = bool(_p('enable_ap', True))
+        def _as_bool(value, fallback=False):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in {'true', '1', 'yes', 'on'}:
+                    return True
+                if lowered in {'false', '0', 'no', 'off'}:
+                    return False
+                return fallback
+            return bool(value)
+
+        self.enable_ap = _as_bool(_p('enable_ap', True), True)
         self.iface = str(_p('ap_interface', 'wlan1'))
         self.ssid = _p('ap_ssid', f'psyched-{socket.gethostname().split(".")[0]}')
         self.passphrase = _p('ap_passphrase', None)
@@ -72,7 +93,7 @@ class APNode(Node):
         self.mdns_name = _p('mdns_name', socket.gethostname())
         self.http_port = int(_p('http_port', 8080))
         self.websocket_port = int(_p('websocket_port', 8081))
-        self.dry_run = bool(_p('dry_run', False))
+        self.dry_run = _as_bool(_p('dry_run', False), False)
 
         # Runtime handles for subprocesses and zeroconf
         self._hostapd_proc: Optional[subprocess.Popen] = None

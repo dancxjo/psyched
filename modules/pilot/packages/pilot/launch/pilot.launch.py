@@ -89,6 +89,52 @@ def generate_launch_description():
         default_value=EnvironmentVariable(name='PILOT_HOST_HEALTH_TOPIC', default_value='auto'),
         description='Topic for host health metrics'
     )
+
+    enable_ap_arg = DeclareLaunchArgument(
+        'enable_ap',
+        default_value=EnvironmentVariable(name='PILOT_ENABLE_AP', default_value='true'),
+        description='Enable the pilot access point helper node'
+    )
+    ap_iface_arg = DeclareLaunchArgument(
+        'ap_interface',
+        default_value=EnvironmentVariable(name='PILOT_AP_INTERFACE', default_value='wlan1'),
+        description='Wireless interface to configure as an access point'
+    )
+    ap_ssid_arg = DeclareLaunchArgument(
+        'ap_ssid',
+        default_value=EnvironmentVariable(name='PILOT_AP_SSID', default_value=''),
+        description='SSID for the access point (leave empty for hostname-based default)'
+    )
+    ap_pass_arg = DeclareLaunchArgument(
+        'ap_passphrase',
+        default_value=EnvironmentVariable(name='PILOT_AP_PASSPHRASE', default_value=''),
+        description='WPA2 passphrase for the access point (>=8 characters for WPA2)'
+    )
+    ap_ip_arg = DeclareLaunchArgument(
+        'ap_ip',
+        default_value=EnvironmentVariable(name='PILOT_AP_IP', default_value='192.168.50.1/24'),
+        description='Static IP/mask to assign to the AP interface'
+    )
+    ap_dhcp_range_arg = DeclareLaunchArgument(
+        'dhcp_range',
+        default_value=EnvironmentVariable(name='PILOT_AP_DHCP_RANGE', default_value='192.168.50.10,192.168.50.100'),
+        description='Range of addresses to hand out via DHCP'
+    )
+    ap_dhcp_lease_arg = DeclareLaunchArgument(
+        'dhcp_lease_time',
+        default_value=EnvironmentVariable(name='PILOT_AP_DHCP_LEASE', default_value='12h'),
+        description='Lease duration for DHCP clients'
+    )
+    ap_mdns_arg = DeclareLaunchArgument(
+        'mdns_name',
+        default_value=EnvironmentVariable(name='PILOT_AP_MDNS_NAME', default_value=''),
+        description='mDNS hostname to advertise on the AP (leave empty for system hostname)'
+    )
+    ap_dry_run_arg = DeclareLaunchArgument(
+        'ap_dry_run',
+        default_value=EnvironmentVariable(name='PILOT_AP_DRY_RUN', default_value='false'),
+        description='Run the AP node without touching system interfaces (for testing)'
+    )
     
     # Pilot node
     pilot_node = Node(
@@ -140,15 +186,36 @@ def generate_launch_description():
             'period_sec': LaunchConfiguration('host_health_period_sec'),
         }]
     )
-    
+
+    ap_node = Node(
+        package='pilot',
+        executable='pilot_ap',
+        name='pilot_ap',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('enable_ap')),
+        parameters=[{
+            'enable_ap': LaunchConfiguration('enable_ap'),
+            'ap_interface': LaunchConfiguration('ap_interface'),
+            'ap_ssid': LaunchConfiguration('ap_ssid'),
+            'ap_passphrase': LaunchConfiguration('ap_passphrase'),
+            'ap_ip': LaunchConfiguration('ap_ip'),
+            'dhcp_range': LaunchConfiguration('dhcp_range'),
+            'dhcp_lease_time': LaunchConfiguration('dhcp_lease_time'),
+            'mdns_name': LaunchConfiguration('mdns_name'),
+            'http_port': LaunchConfiguration('web_port'),
+            'websocket_port': LaunchConfiguration('websocket_port'),
+            'dry_run': LaunchConfiguration('ap_dry_run'),
+        }],
+    )
+
     return LaunchDescription([
         web_port_arg,
         websocket_port_arg,
         cmd_vel_topic_arg,
         voice_topic_arg,
-    conversation_topic_arg,
+        conversation_topic_arg,
         host_arg,
-    imu_topic_arg,
+        imu_topic_arg,
         gps_fix_topic_arg,
         enable_http_arg,
         enable_ws_arg,
@@ -156,7 +223,17 @@ def generate_launch_description():
         host_health_enable_arg,
         host_health_period_arg,
         host_health_topic_arg,
+        enable_ap_arg,
+        ap_iface_arg,
+        ap_ssid_arg,
+        ap_pass_arg,
+        ap_ip_arg,
+        ap_dhcp_range_arg,
+        ap_dhcp_lease_arg,
+        ap_mdns_arg,
+        ap_dry_run_arg,
         pilot_node,
         websocket_node,
         host_health_node,
+        ap_node,
     ])
