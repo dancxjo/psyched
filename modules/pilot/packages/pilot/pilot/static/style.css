@@ -1,5 +1,7 @@
 /* Pilot interface customisations */
 
+
+
 /* === Top cascade ======================================================= */
 #controlCascade {
     display: grid;
@@ -7,6 +9,10 @@
     gap: 0.85rem;
     padding-block: 0.35rem 0.75rem;
     align-items: stretch;
+    height: 250px;
+    /* apply a fade to black at the bottom */
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.85) 85%, rgba(0, 0, 0, 0.95) 100%);
+    border-radius: 1.5rem;
 }
 
 #controlCascade .data-column {

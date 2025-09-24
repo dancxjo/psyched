@@ -23,7 +23,8 @@
                 <div class="panel-2">02<span class="hop">-262000</span></div>
             </div>
             <div class="right-frame-top">
-                <div class="banner">Pilot Interface</div>
+                <div class="banner">Pilot Interface &bull; <span class="font-alpha-blue"
+                        data-source=" connectionStatus">Offline</span></div>
                 <div class="data-cascade-button-group">
                     <div class="data-wrapper" id="controlCascade" role="group" aria-label="Control status cascade">
                         <div class="data-column" data-column="drive">
@@ -162,13 +163,14 @@
                     </div>
                     <nav role="navigation" aria-label="pilot main navigation">
                         <div class="buttons justify-space-between">
-                            <button onclick="playSoundAndRedirect('audio2', '#')" class="button-bluey">MOVEMENT</button>
-                            <button onclick="playSoundAndRedirect('audio2', '#')"
-                                class="blink button-almond-creme">SPEECH</button>
-                            <button onclick="playSoundAndRedirect('audio2', '#')"
-                                class="button-default">NAVIGATION</button>
-                            <button onclick="playSoundAndRedirect('audio2', '#')"
-                                class="button-default">SENSATION</button>
+                            <button onclick="playSoundAndRedirect('audio2', '#movement')"
+                                class="button-bluey">Move</button>
+                            <button onclick="playSoundAndRedirect('audio2', '#speech')"
+                                class="button-bluey">Speak</button>
+                            <button onclick="playSoundAndRedirect('audio2', '#navigation')"
+                                class="button-default">Navigate</button>
+                            <button onclick="playSoundAndRedirect('audio2', '#sensation')"
+                                class="button-default">Sense</button>
                         </div>
                     </nav>
                 </div>
@@ -217,7 +219,7 @@
 
                     <section class="joystick-section">
                         <div class="lcars-text-bar">
-                            <h2 class="go-center">Movement Control</h2>
+                            <h2 class="go-center" id="movement">Movement Control</h2>
                         </div>
                         <div class="drive-grid">
                             <!-- D-Pad -->
@@ -225,13 +227,17 @@
                                 <div class="slider-title">D-Pad</div>
                                 <div id="dpad" class="dpad-grid" aria-label="Directional pad controls">
                                     <div></div>
-                                    <button id="dpadUp" class="dpad-btn up" data-direction="up" aria-label="Forward">▲</button>
+                                    <button id="dpadUp" class="dpad-btn up" data-direction="up"
+                                        aria-label="Forward">▲</button>
                                     <div></div>
-                                    <button id="dpadLeft" class="dpad-btn left" data-direction="left" aria-label="Left">◀</button>
+                                    <button id="dpadLeft" class="dpad-btn left" data-direction="left"
+                                        aria-label="Left">◀</button>
                                     <div class="dpad-center" aria-hidden="true"></div>
-                                    <button id="dpadRight" class="dpad-btn right" data-direction="right" aria-label="Right">▶</button>
+                                    <button id="dpadRight" class="dpad-btn right" data-direction="right"
+                                        aria-label="Right">▶</button>
                                     <div></div>
-                                    <button id="dpadDown" class="dpad-btn down" data-direction="down" aria-label="Backward">▼</button>
+                                    <button id="dpadDown" class="dpad-btn down" data-direction="down"
+                                        aria-label="Backward">▼</button>
                                     <div></div>
                                 </div>
                             </div>
@@ -254,49 +260,46 @@
                                             marker-end="url(#arrowhead)" />
                                     </svg>
                                 </div>
-                                <div class="joystick-labels">
-                                    <span class="label-forward">FWD</span>
-                                    <span class="label-backward">REV</span>
-                                    <span class="label-left">L</span>
-                                    <span class="label-right">R</span>
-                                </div>
                             </div>
 
                         </div>
 
                         <div class="aux-controls">
-                            <div class="controls">
-                                <button id="resetButton" class="reset-button">Reset</button>
-                                <button id="stopButton" class="stop-button">Emergency Stop</button>
+                            <div class="controls buttons justify-space-evenly">
+                                <button id=" resetButton" class="reset-button">Reset</button>
+                                <button id="stopButton" class="blink stop-button button-sunset-red"
+                                    onclick="playSoundAndRedirect('audio3', '#movement');/* todo: stop the robot!*/">Emergency
+                                    Stop</button>
                             </div>
-                            <div class="voice-controls">
+                            <div id="speech" class="voice-controls">
                                 <div class="lcars-text-bar">
                                     <h3>Voice</h3>
                                 </div>
                                 <div class="voice-row">
                                     <input id="voiceInput" type="text"
                                         placeholder="Type something for the robot to say..." />
-                                    <button id="voiceSendButton" class="voice-button">Speak</button>
-                                    <button id="marcoButton" class="voice-button">Marco?</button>
+                                    <div class="buttons">
+                                        <button id="voiceSendButton" class="voice-button">Speak</button>
+                                        <button id="marcoButton" class="voice-button button-bluey">Marco?</button>
+                                    </div>
                                 </div>
-                                <div class="voice-row">
-                                    <button id="voicePause" class="voice-button">Pause</button>
-                                    <button id="voiceResume" class="voice-button">Resume</button>
-                                    <button id="voiceClear" class="voice-button">Clear</button>
+                                <div class="buttons">
+                                    <button id="voicePause" class="button-default">Pause</button>
+                                    <button id="voiceResume" class="button-default">Resume</button>
+                                    <button id="voiceClear" class="button-bluey">Clear</button>
                                     <label for="voiceVolume">Volume</label>
                                     <input id="voiceVolume" type="range" min="0" max="200" value="100" />
                                     <span id="voiceVolumeValue">100%</span>
                                 </div>
-                                <div id="voiceHint">Press Enter to send</div>
                             </div>
                         </div>
                     </section>
 
-                    <section class="info-section">
+                    <section class="info-section" id="sensation">
                         <div class="lcars-text-bar">
                             <h2 class="go-center">Control Information</h2>
                         </div>
-                        <div class="info-grid">
+                        <div class=" info-grid">
                             <div class="info-item"><label>Linear X</label><span id="linearX">0.00</span></div>
                             <div class="info-item"><label>Linear Y</label><span id="linearY">0.00</span></div>
                             <div class="info-item"><label>Angular Z</label><span id="angularZ">0.00</span></div>
@@ -306,16 +309,21 @@
                             <div class="info-item"><label>Cliff</label><span id="robotCliff">--</span></div>
                             <div class="info-item"><label>IR Omni</label><span id="robotIrOmni">--</span></div>
                             <div class="info-item"><label>Diagnostics</label><span id="robotDiag">--</span></div>
-                            <div class="info-item"><label>Battery %</label><span id="batteryPercentInfo">--</span></div>
-                            <div class="info-item"><label>Voltage (V)</label><span id="batteryVoltage">--</span></div>
-                            <div class="info-item"><label>Current (A)</label><span id="batteryCurrent">--</span></div>
+                            <div class="info-item"><label>Battery %</label><span id="batteryPercentInfo">--</span>
+                            </div>
+                            <div class="info-item"><label>Voltage (V)</label><span id="batteryVoltage">--</span>
+                            </div>
+                            <div class="info-item"><label>Current (A)</label><span id="batteryCurrent">--</span>
+                            </div>
                             <div class="info-item"><label>Temperature</label><span id="batteryTemp">--</span></div>
                             <div class="info-item"><label>State</label><span id="batteryStateInfo">--</span></div>
                             <div class="info-item"><label>CPU Load</label><span id="cpuChip">--</span></div>
                             <div class="info-item"><label>Main Temp</label><span id="tempChip">--</span></div>
                             <div class="info-item"><label>Memory</label><span id="memChip">--</span></div>
-                            <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs">0</span></div>
-                            <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs">0</span></div>
+                            <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs">0</span>
+                            </div>
+                            <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs">0</span>
+                            </div>
                             <div class="info-item"><label>Mic</label><span id="micInfo">--</span></div>
                             <div class="info-item"><label>GPS Fix</label><span id="gpsFixStatus">--</span></div>
                             <div class="info-item"><label>Latitude</label><span id="gpsLat">--</span></div>
