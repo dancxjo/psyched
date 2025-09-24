@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Say goodbye
+ros2 topic pub /voice/say std_msgs/msg/String "{data: 'Goodbye everybody! I\'ve got to go.'}" --once || true
+
 # Gracefully stop the voice module's ros2 launch
 PATTERN="ros2 launch voice voice.launch.py"
 TIMEOUT=${TIMEOUT:-10}
