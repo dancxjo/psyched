@@ -81,6 +81,9 @@ or conflicting package sources.
 - `pytest` is configured to ignore the `src/` symlink; place new tests under
   `packages/<pkg>/tests` and stub ROS interfaces when running in environments
   without ROS installed.
+- `py_trees_ros` is not published to PyPI; `tools/setup_env.sh` installs it
+  from GitHub. Ensure network access is available the first time you source the
+  environment on a new machine.
 - Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure
   frontend updates don't depend on it before processing service data.
 - Pilot control cascade reads from DOM elements flagged with `data-source`
