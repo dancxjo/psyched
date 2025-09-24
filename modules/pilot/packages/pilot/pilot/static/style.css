@@ -231,12 +231,6 @@
 
 /* === Responsive tweaks ================================================ */
 @media (max-width: 1080px) {
-    #controlCascade {
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    }
-}
-
-@media (max-width: 860px) {
     .drive-grid {
         grid-template-columns: 1fr;
         justify-items: center;
@@ -248,11 +242,7 @@
 }
 
 @media (max-width: 620px) {
-    .dpad-grid {
-        width: min(90vw, 260px);
-        gap: 0.4rem;
-        padding: 0.55rem;
-    }
+    /* D-pad responsive rules removed */
 
     .joystick {
         width: min(88vw, 280px);

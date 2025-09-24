@@ -905,7 +905,9 @@ class PilotController {
     setupSlider() { /* removed */ }
 
     setupDpad() {
-        // D-Pad removed from markup; leave as no-op to avoid errors from older builds
+        // D-Pad removed from markup; leave as a no-op and ensure state fields exist
+        this.dpadState = { up: false, down: false, left: false, right: false };
+        this.dpadLoopId = null;
         return;
     }
 
