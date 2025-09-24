@@ -64,6 +64,11 @@
     opacity: 0.45;
 }
 
+.status-indicator {
+    display: inline-block;
+    margin-inline: 0.35rem 0.25rem;
+}
+
 /* === D-pad ============================================================= */
 .dpad-section {
     display: flex;

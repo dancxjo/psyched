@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 import threading
 import json
-from typing import Optional
+from typing import Optional, Dict, Any
+from urllib.parse import urlparse, parse_qs
 
 import rclpy
 from rclpy.node import Node
@@ -58,6 +59,19 @@ try:
     import websockets
 except ImportError:
     websockets = None
+
+try:  # Best-effort ROS message conversion helpers
+    from rosidl_runtime_py.utilities import get_message  # type: ignore
+except Exception:  # pragma: no cover
+    get_message = None  # type: ignore
+
+try:  # message_to_ordereddict moved modules between ROS releases
+    from rosidl_runtime_py import message_to_ordereddict  # type: ignore
+except Exception:  # pragma: no cover
+    try:  # noqa: SIM105 - nested try keeps optional dependency local
+        from rosidl_runtime_py.convert import message_to_ordereddict  # type: ignore
+    except Exception:
+        message_to_ordereddict = None  # type: ignore
 
 
 class PilotWebSocketNode(Node):
@@ -230,6 +244,9 @@ class PilotWebSocketNode(Node):
         self._module_unit_map = {}
         self._modules = self._discover_modules()
 
+        # Dynamic topic subscriptions exposed via /subscribe endpoint
+        self._topic_subscriptions: Dict[Any, Dict[str, Any]] = {}
+
         # asyncio context in dedicated thread
         self._loop = None
         self._server = None
@@ -339,6 +356,11 @@ class PilotWebSocketNode(Node):
             self._server = None
 
     async def _ws_handler(self, websocket, path: Optional[str] = None):
+        parsed = urlparse(path or '')
+        if parsed.path in ('/subscribe', 'subscribe'):
+            await self._handle_topic_subscription(websocket, parsed)
+            return
+
         self.connected_clients.add(websocket)
         # Initialize per-client systemd watch map
         try:
@@ -663,6 +685,193 @@ class PilotWebSocketNode(Node):
             self.get_logger().warn(f'Error handling message: {e}')
         # no return payload expected from handler
         return None
+
+    async def _handle_topic_subscription(self, websocket, parsed_path):
+        """Stream a ROS topic to a dedicated websocket client.
+
+        The frontend connects using ``ws://api/subscribe?topic=/cmd_vel``.  We
+        discover the topic's type at runtime, instantiate a transient
+        subscription and forward deserialised messages as JSON.  Connections are
+        one-topic-per-socket which keeps the API simple for the UI.
+        """
+
+        query = parse_qs(parsed_path.query or '')
+        raw_topic = query.get('topic', [None])[0]
+        topic = (raw_topic or '').strip() if raw_topic is not None else ''
+        if not topic:
+            await websocket.send(json.dumps({'type': 'error', 'error': 'missing topic query parameter'}))
+            await websocket.close()
+            return
+
+        try:
+            info = self._create_topic_subscription(topic, websocket)
+        except Exception as exc:  # pragma: no cover - requires ROS graph
+            try:
+                await websocket.send(json.dumps({'type': 'error', 'error': str(exc)}))
+            finally:
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+            return
+
+        status_payload = {
+            'type': 'topic_status',
+            'topic': info.get('topic', topic),
+            'message_type': info.get('message_type'),
+        }
+        try:
+            await websocket.send(self._safe_json_dumps(status_payload))
+        except Exception:
+            pass
+
+        try:
+            async for raw in websocket:
+                payload = raw
+                if isinstance(raw, (bytes, bytearray)):
+                    payload = raw.decode('utf-8', errors='ignore')
+                if isinstance(payload, str):
+                    text = payload.strip().lower()
+                    if text == 'ping':
+                        await websocket.send(json.dumps({'type': 'pong', 'topic': info.get('topic', topic)}))
+                    else:
+                        try:
+                            payload = json.loads(payload)
+                        except Exception:
+                            continue
+                if isinstance(payload, dict) and payload.get('type') == 'ping':
+                    await websocket.send(json.dumps({'type': 'pong', 'topic': info.get('topic', topic)}))
+        except Exception as exc:  # pragma: no cover - exercised in integration
+            if not (websockets and isinstance(exc, websockets.exceptions.ConnectionClosed)):
+                self.get_logger().warn(f'Topic websocket error for {topic}: {exc}')
+        finally:
+            self._teardown_topic_subscription(websocket)
+
+    def _create_topic_subscription(self, topic: str, websocket):
+        """Create a ROS subscription that mirrors ``topic`` to ``websocket``."""
+
+        resolved = topic if topic.startswith('/') else f'/{topic}'
+        names_to_types = dict(self.get_topic_names_and_types())
+        type_names = names_to_types.get(resolved)
+        if not type_names:
+            raise RuntimeError(f'unknown topic: {resolved}')
+        type_name = type_names[0]
+        if get_message is None:  # pragma: no cover - requires ROS runtime
+            raise RuntimeError('topic subscription requires rosidl_runtime_py utilities')
+        try:
+            msg_type = get_message(type_name)
+        except Exception as exc:  # pragma: no cover - depends on ROS install
+            raise RuntimeError(f'failed to import message type {type_name}: {exc}') from exc
+
+        def _callback(msg):
+            plain = self._message_to_plain(msg)
+            self._publish_topic_message(websocket, resolved, plain, type_name)
+
+        subscription = self.create_subscription(msg_type, resolved, _callback, 10)
+        handle = {'subscription': subscription, 'topic': resolved, 'message_type': type_name}
+        self._topic_subscriptions[websocket] = handle
+        return handle
+
+    def _teardown_topic_subscription(self, websocket):
+        """Remove and destroy a dynamic topic subscription."""
+
+        handle = self._topic_subscriptions.pop(websocket, None)
+        if not handle:
+            return
+        subscription = handle.get('subscription')
+        if subscription is None:
+            return
+        try:
+            self.destroy_subscription(subscription)
+        except Exception:
+            pass
+
+    def _publish_topic_message(self, websocket, topic: str, message: Any, message_type: Optional[str]):
+        """Send a ROS message payload to a websocket client in JSON form."""
+
+        loop = self._loop
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+
+        payload = {'type': 'topic', 'topic': topic, 'message': message}
+        if message_type:
+            payload['message_type'] = message_type
+
+        data = self._safe_json_dumps(payload)
+
+        async def _send():
+            try:
+                await websocket.send(data)
+            except Exception:
+                pass
+
+        try:
+            asyncio.run_coroutine_threadsafe(_send(), loop)
+        except Exception:
+            pass
+
+    def _safe_json_dumps(self, payload: Dict[str, Any]) -> str:
+        """Serialize ``payload`` to JSON, tolerating ROS types and numpy arrays."""
+
+        try:
+            return json.dumps(payload, default=self._json_default)
+        except Exception:
+            fallback = {
+                'type': payload.get('type', 'topic'),
+                'topic': payload.get('topic'),
+                'message': str(payload.get('message')),
+            }
+            if 'message_type' in payload:
+                fallback['message_type'] = payload['message_type']
+            return json.dumps(fallback)
+
+    def _json_default(self, obj: Any):
+        if isinstance(obj, bytes):
+            return list(obj)
+        if isinstance(obj, (set, tuple)):
+            return list(obj)
+        if hasattr(obj, 'tolist'):
+            try:
+                return obj.tolist()
+            except Exception:
+                pass
+        if hasattr(obj, '__slots__'):
+            return self._message_to_plain(obj)
+        return str(obj)
+
+    def _message_to_plain(self, msg: Any):
+        """Convert a ROS message into JSON-friendly primitives."""
+
+        if message_to_ordereddict is not None:
+            try:
+                return message_to_ordereddict(msg)
+            except Exception:
+                pass
+        if hasattr(msg, '__slots__'):
+            result = {}
+            for slot in getattr(msg, '__slots__', []):
+                key = slot[1:] if slot.startswith('_') else slot
+                value = getattr(msg, slot)
+                result[key] = self._message_value_to_plain(value)
+            return result
+        return self._message_value_to_plain(msg)
+
+    def _message_value_to_plain(self, value: Any):
+        if hasattr(value, '__slots__'):
+            return self._message_to_plain(value)
+        if isinstance(value, (list, tuple)):
+            return [self._message_value_to_plain(v) for v in value]
+        if isinstance(value, bytes):
+            return list(value)
+        if hasattr(value, 'tolist'):
+            try:
+                return value.tolist()
+            except Exception:
+                pass
+        return value
 
     # IMU forwarding
     def _on_imu(self, msg: Imu):
