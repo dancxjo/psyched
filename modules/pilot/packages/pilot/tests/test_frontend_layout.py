@@ -21,16 +21,17 @@ def test_control_cascade_maps_key_metrics():
 
 
 def test_dpad_buttons_have_direction_metadata():
-    """D-pad buttons need explicit direction markers for styling and logic."""
+    """D-pad removed: joystick should be present instead of discrete D-pad buttons."""
     html = read_html()
-    for direction in ("up", "down", "left", "right"):
-        assert f'data-direction="{direction}"' in html
+    # Ensure the joystick element exists and has expected IDs/classes
+    assert 'id="joystick"' in html
+    assert 'class="joystick' in html or 'class="joystick-container' in html
 
 
 def test_css_defines_dpad_and_joystick_styles():
     """The custom stylesheet should render the D-pad cross and joystick."""
     css = read_css()
-    assert ".dpad-grid" in css and "grid-template-areas" in css
+    # D-pad styles removed; ensure joystick styles remain
     assert ".joystick" in css and ("aspect-ratio" in css or "padding-top" in css)
     assert "@media" in css and "max-width" in css
 
