@@ -274,7 +274,7 @@ const registerAlpineStore = () => {
     if (typeof pilotGlobals.Alpine.data === 'function') {
         pilotGlobals.Alpine.data('pilotApp', () => ({
             state: pilotStore,
-            init() {},
+            init() { },
         }));
     }
     pilotGlobals.__pilotStoreRegistered = true;
