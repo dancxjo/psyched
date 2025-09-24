@@ -264,25 +264,7 @@
                             <h2 class="go-center" id="movement">Movement Control</h2>
                         </div>
                         <div class="drive-grid">
-                            <!-- D-Pad -->
-                            <div class="dpad-section">
-                                <div class="slider-title">D-Pad</div>
-                                <div id="dpad" class="dpad-grid" aria-label="Directional pad controls">
-                                    <div></div>
-                                    <button id="dpadUp" class="dpad-btn up" data-direction="up"
-                                        aria-label="Forward">▲</button>
-                                    <div></div>
-                                    <button id="dpadLeft" class="dpad-btn left" data-direction="left"
-                                        aria-label="Left">◀</button>
-                                    <div class="dpad-center" aria-hidden="true"></div>
-                                    <button id="dpadRight" class="dpad-btn right" data-direction="right"
-                                        aria-label="Right">▶</button>
-                                    <div></div>
-                                    <button id="dpadDown" class="dpad-btn down" data-direction="down"
-                                        aria-label="Backward">▼</button>
-                                    <div></div>
-                                </div>
-                            </div>
+                            <!-- D-Pad removed: using enlarged joystick for finer control -->
 
                             <!-- Joystick -->
                             <div class="joystick-container">
@@ -443,6 +425,53 @@
         @media (min-width: 1200px) {
             .data-columns-grid {
                 gap: 12px;
+            }
+        }
+
+        /* Enlarged joystick for finer-grained control */
+        .drive-grid {
+            display: grid;
+            grid-template-columns: 1fr auto; /* joystick column and aux column */
+            gap: 16px;
+            align-items: center;
+        }
+
+        /* Center joystick and cap its size for small screens */
+        .joystick-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        /* Double the effective joystick size. The SVG uses 200x200 viewBox so 400px gives 2x scale. */
+        .joystick {
+            width: 400px;
+            height: 400px;
+            max-width: 90vw;
+            max-height: 90vw;
+            touch-action: none; /* allow pointer events without browser gestures */
+            position: relative;
+        }
+
+        /* Make the knob scale proportionally to the larger joystick */
+        .joystick .joystick-knob {
+            width: 20%;
+            height: 20%;
+            max-width: 120px;
+            max-height: 120px;
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        @media (max-width: 600px) {
+            .joystick {
+                width: 300px;
+                height: 300px;
             }
         }
     </style>

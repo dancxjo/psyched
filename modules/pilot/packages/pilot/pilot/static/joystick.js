@@ -191,12 +191,12 @@ const createPilotStore = () => {
 
         setHostHealth(health) {
             Object.assign(this.host, {
-                cpu: numberOrNull(health?.cpu_percent) !== null ? `CPU ${numberOrNull(health.cpu_percent).toFixed(0)}%` : '--',
+                cpu: numberOrNull(health?.cpu_percent) !== null ? `${numberOrNull(health.cpu_percent).toFixed(0)}%` : '--',
                 temp: numberOrNull(health?.temp_c) !== null
-                    ? `Temp ${numberOrNull(health.temp_c).toFixed(0)}°C / ${(numberOrNull(health.temp_c) * 9 / 5 + 32).toFixed(0)}°F`
+                    ? `${numberOrNull(health.temp_c).toFixed(0)}°C / ${(numberOrNull(health.temp_c) * 9 / 5 + 32).toFixed(0)}°F`
                     : '--',
                 mem: numberOrNull(health?.mem_used_percent) !== null
-                    ? `Mem ${numberOrNull(health.mem_used_percent).toFixed(0)}%`
+                    ? `${numberOrNull(health.mem_used_percent).toFixed(0)}%`
                     : '--',
             });
             return this.host;
@@ -337,8 +337,7 @@ class PilotController {
         this.setupJoystick();
         this.setupButtons();
         this.setupVoice();
-        // Throttle slider removed; use D-Pad instead
-        this.setupDpad();
+        // Throttle slider removed; D-Pad removed from UI — no setup needed
         this.updateAddressDisplay();
 
         // Battery DOM refs
@@ -906,58 +905,8 @@ class PilotController {
     setupSlider() { /* removed */ }
 
     setupDpad() {
-        const up = document.getElementById('dpadUp');
-        const down = document.getElementById('dpadDown');
-        const left = document.getElementById('dpadLeft');
-        const right = document.getElementById('dpadRight');
-        if (!up || !down || !left || !right) return;
-
-        // State of pressed buttons
-        this.dpadState = { up: false, down: false, left: false, right: false };
-        this.dpadLoopId = null;
-
-        const setPressed = (key, pressed) => {
-            this.dpadState[key] = pressed;
-            if (pressed) {
-                this.startDpadLoop();
-            } else if (!this.dpadState.up && !this.dpadState.down && !this.dpadState.left && !this.dpadState.right) {
-                this.stopDpadLoop();
-                // When released all, stop motion
-                this.currentVelocity = {
-                    linear: { x: 0, y: 0, z: 0 },
-                    angular: { x: 0, y: 0, z: 0 }
-                };
-                this.updateVelocityDisplay();
-                this.sendVelocityCommand();
-            }
-        };
-
-        const makeHandlers = (key) => ({
-            down: (e) => { e.preventDefault(); setPressed(key, true); },
-            up: (e) => { e.preventDefault(); setPressed(key, false); }
-        });
-
-        const u = makeHandlers('up');
-        const d = makeHandlers('down');
-        const l = makeHandlers('left');
-        const r = makeHandlers('right');
-
-        // Mouse
-        up.addEventListener('mousedown', u.down);
-        down.addEventListener('mousedown', d.down);
-        left.addEventListener('mousedown', l.down);
-        right.addEventListener('mousedown', r.down);
-        document.addEventListener('mouseup', (e) => {
-            u.up(e); d.up(e); l.up(e); r.up(e);
-        });
-        // Touch
-        up.addEventListener('touchstart', u.down, { passive: false });
-        down.addEventListener('touchstart', d.down, { passive: false });
-        left.addEventListener('touchstart', l.down, { passive: false });
-        right.addEventListener('touchstart', r.down, { passive: false });
-        const touchEndAll = (e) => { u.up(e); d.up(e); l.up(e); r.up(e); };
-        document.addEventListener('touchend', touchEndAll, { passive: false });
-        document.addEventListener('touchcancel', touchEndAll, { passive: false });
+        // D-Pad removed from markup; leave as no-op to avoid errors from older builds
+        return;
     }
 
     startDpadLoop() {
@@ -2340,13 +2289,13 @@ class PilotController {
             : null;
         if (!els) return;
         if (els.cpu) {
-            els.cpu.textContent = formatted ? formatted.cpu : (typeof h.cpu_percent === 'number' ? `CPU ${h.cpu_percent.toFixed(0)}%` : '--');
+            els.cpu.textContent = formatted ? formatted.cpu : (typeof h.cpu_percent === 'number' ? `${h.cpu_percent.toFixed(0)}%` : '--');
         }
         if (els.temp) {
             els.temp.textContent = formatted ? formatted.temp : '--';
         }
         if (els.mem) {
-            els.mem.textContent = formatted ? formatted.mem : (typeof h.mem_used_percent === 'number' ? `Mem ${h.mem_used_percent.toFixed(0)}%` : '--');
+            els.mem.textContent = formatted ? formatted.mem : (typeof h.mem_used_percent === 'number' ? `${h.mem_used_percent.toFixed(0)}%` : '--');
         }
     }
 
