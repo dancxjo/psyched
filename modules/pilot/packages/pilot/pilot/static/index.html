@@ -192,6 +192,8 @@
                     <span class="font-alpha-blue" data-source="connectionStatus"
                         x-text="$store.pilot.connection.label">Offline</span>
                 </div>
+                <!-- Alert rotator: shows up to 4 blinking/important status items in a rotating board -->
+                <div id="alertRotator" class="alert-rotator" aria-live="polite" aria-atomic="true"></div>
                 <div class="data-cascade-button-group">
                     <div class="data-wrapper" id="controlCascade" role="group" aria-label="Control status cascade">
                         <!-- container that will be populated from templates on load -->
@@ -299,21 +301,50 @@
                                 <div class="lcars-text-bar">
                                     <h3>Voice</h3>
                                 </div>
-                                <div class="voice-row">
-                                    <input id="voiceInput" type="text"
-                                        placeholder="Type something for the robot to say..." />
-                                    <div class="buttons">
-                                        <button id="voiceSendButton" class="voice-button">Speak</button>
-                                        <button id="marcoButton" class="voice-button button-bluey">Marco?</button>
+                                <div class="voice-panel">
+                                    <div class="voice-input-row">
+                                        <input id="voiceInput" type="text" inputmode="text" enterkeyhint="send"
+                                            autocomplete="off" autocorrect="on" autocapitalize="sentences"
+                                            spellcheck="true" placeholder="Type something for the robot to say..." />
+                                        <div class="buttons">
+                                            <button id="voiceSendButton" class="voice-button">Speak</button>
+                                            <button id="marcoButton" class="voice-button button-bluey"
+                                                title="Ping the robot">Marco?</button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="buttons">
-                                    <button id="voicePause" class="button-default">Pause</button>
-                                    <button id="voiceResume" class="button-default">Resume</button>
-                                    <button id="voiceClear" class="button-bluey">Clear</button>
-                                    <label for="voiceVolume">Volume</label>
-                                    <input id="voiceVolume" type="range" min="0" max="200" value="100" />
-                                    <span id="voiceVolumeValue">100%</span>
+
+                                    <div class="voice-controls-row">
+                                        <div class="left-controls buttons">
+                                            <button id="voicePause" class="button-default" title="Pause">⏸</button>
+                                            <button id="voiceResume" class="button-default" title="Resume">▶</button>
+                                            <button id="voiceClear" class="button-bluey" title="Clear">✖</button>
+                                        </div>
+                                        <div class="right-controls">
+                                            <label for="voiceVolume">Volume</label>
+                                            <input id="voiceVolume" type="range" min="0" max="200" value="100" />
+                                            <span id="voiceVolumeValue">100%</span>
+                                        </div>
+                                    </div>
+
+                                    <div id="voicePreview" class="voice-preview" aria-live="polite"></div>
+                                    <!-- Container to receive cloned templates or moved info items -->
+                                    <div id="voiceTemplatesContainer" class="voice-templates" style="margin-top:8px;">
+                                        <div class="dc-row dc-row-1">
+                                            <span class="dc-key">SPEAK</span>
+                                            <span class="dc-value font-arctic-ice"><span id="voiceSpeakingMs"
+                                                    x-text="$store.pilot.audio.speakingMs">0</span></span>
+                                        </div>
+                                        <div class="dc-row dc-row-2">
+                                            <span class="dc-key">VAD</span>
+                                            <span class="dc-value"><span id="vadSpeechMs"
+                                                    x-text="$store.pilot.audio.vadMs">0</span></span>
+                                        </div>
+                                        <div class="dc-row dc-row-3">
+                                            <span class="dc-key">MIC</span>
+                                            <span class="dc-value font-night-rain"><span id="micInfo"
+                                                    x-text="$store.pilot.audio.mic">--</span></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -361,14 +392,7 @@
                                     x-text="$store.pilot.host.temp">--</span></div>
                             <div class="info-item"><label>Memory</label><span id="memChip"
                                     x-text="$store.pilot.host.mem">--</span></div>
-                            <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs"
-                                    x-text="$store.pilot.audio.speakingMs">0</span>
-                            </div>
-                            <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs"
-                                    x-text="$store.pilot.audio.vadMs">0</span>
-                            </div>
-                            <div class="info-item"><label>Mic</label><span id="micInfo"
-                                    x-text="$store.pilot.audio.mic">--</span></div>
+                            <!-- Audio controls were moved to the Voice panel -->
                             <div class="info-item"><label>GPS Fix</label><span id="gpsFixStatus"
                                     x-text="$store.pilot.gps.fix">--</span></div>
                             <div class="info-item"><label>Latitude</label><span id="gpsLat"
@@ -482,13 +506,13 @@
         // Populate the control cascade from templates so columns are reusable
         document.addEventListener('DOMContentLoaded', function () {
             const order = [
+                'tmpl-host',
                 'tmpl-drive',
                 'tmpl-safety',
                 'tmpl-energy',
                 'tmpl-audio',
                 'tmpl-gps',
                 'tmpl-network',
-                'tmpl-host'
             ];
             const container = document.getElementById('controlCascadeContent');
             if (!container) return;
@@ -508,6 +532,335 @@
                 window.Alpine.discover(function () { });
             }
         });
+    </script>
+    <style>
+        /* Voice panel styles */
+        .voice-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 8px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        .voice-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .voice-input-row input#voiceInput {
+            flex: 1 1 auto;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.45);
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .voice-input-row input#voiceInput:focus {
+            box-shadow: 0 0 0 3px rgba(100, 160, 255, 0.12);
+            border-color: rgba(100, 160, 255, 0.9);
+        }
+
+        .voice-button {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: none;
+            background: linear-gradient(180deg, #1e90ff, #0066cc);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .voice-button.button-bluey {
+            background: linear-gradient(180deg, #6fb8ff, #2b8cff);
+        }
+
+        .voice-controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .voice-controls-row .left-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .voice-controls-row .right-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        input#voiceVolume {
+            width: 160px;
+        }
+
+        .voice-preview {
+            min-height: 28px;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 6px 8px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+            .voice-input-row {
+                flex-direction: row;
+            }
+
+            input#voiceVolume {
+                width: 120px;
+            }
+        }
+    </style>
+
+    <script>
+        // Voice UI wiring: live preview, volume display, Enter-to-send, and simple send over pilot websocket.
+        (function () {
+            function $(id) { return document.getElementById(id); }
+            const input = $('voiceInput');
+            const sendBtn = $('voiceSendButton');
+            const marcoBtn = $('marcoButton');
+            const pauseBtn = $('voicePause');
+            const resumeBtn = $('voiceResume');
+            const clearBtn = $('voiceClear');
+            const vol = $('voiceVolume');
+            const volVal = $('voiceVolumeValue');
+            const preview = $('voicePreview');
+            const playSend = $('audio1');
+            const playError = $('audio3');
+
+            if (!input) return;
+
+            // Ensure tapping anywhere in the voice panel focuses the input on mobile
+            const speechPanel = input.closest('.voice-panel');
+            if (speechPanel) {
+                speechPanel.addEventListener('click', (e) => {
+                    if (e.target === speechPanel) input.focus();
+                });
+            }
+
+            // Volume display
+            if (vol && volVal) {
+                const update = () => { volVal.textContent = Math.round(vol.value) + '%'; };
+                vol.addEventListener('input', update);
+                update();
+            }
+
+            // Live preview
+            const updatePreview = () => {
+                const v = input.value || '';
+                preview.textContent = v.length ? 'Preview: ' + v : 'Preview: (empty)';
+            };
+            input.addEventListener('input', updatePreview);
+            updatePreview();
+
+            // Send action: attempt to use existing pilot websocket or controller API
+            function sendVoice(text) {
+                const payload = { type: 'voice_say', text: String(text || ''), volume: Number(vol ? vol.value : 100) };
+                if (!payload.text.trim()) {
+                    if (playError) playError.play().catch(() => { });
+                    // flash preview
+                    preview.style.transition = 'background 0.15s';
+                    preview.style.background = 'rgba(255,40,40,0.18)';
+                    setTimeout(() => preview.style.background = 'rgba(0,0,0,0.2)', 250);
+                    return;
+                }
+
+                // Send feedback sound disabled (keep speak/polo actions silent)
+
+                // Push to conversation log UI if available
+                try {
+                    const conv = document.getElementById('conversationLog');
+                    if (conv) {
+                        const el = document.createElement('div');
+                        el.className = 'conversation-entry';
+                        el.textContent = 'You: ' + payload.text;
+                        conv.appendChild(el);
+                        conv.scrollTop = conv.scrollHeight;
+                    }
+                } catch (e) { /* ignore UI failures */ }
+
+                // Try to send via pilotController websocket if present
+                try {
+                    const pc = window.pilotController || (window.PilotController && window.PilotController.instance);
+                    if (pc && pc.websocket && pc.websocket.readyState === WebSocket.OPEN) {
+                        pc.websocket.send(JSON.stringify({ type: 'voice', payload }));
+                        return;
+                    }
+                    // Fallback: if store exposes a send method
+                    if (pc && typeof pc.send === 'function') {
+                        pc.send({ type: 'voice', payload });
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('Voice send via pilotController failed', e);
+                }
+
+                // Final fallback: try to open a temporary websocket to the API host (best-effort)
+                try {
+                    const host = (window.PILOT_API_HOST && window.PILOT_API_HOST.trim()) || (window.location.hostname || 'localhost');
+                    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const port = (window.location.port ? Number(window.location.port) + 1 : (window.location.protocol === 'https:' ? 443 : 80));
+                    const url = `${proto}//${host}:${port}/subscribe?topic=${encodeURIComponent('/voice')}`;
+                    const ws = new WebSocket(url);
+                    ws.addEventListener('open', () => { ws.send(JSON.stringify(payload)); ws.close(); });
+                } catch (e) {
+                    console.log('Voice send fallback: would send', payload);
+                }
+            }
+
+            // Button hookups
+            sendBtn && sendBtn.addEventListener('click', () => { sendVoice(input.value); input.focus(); });
+            marcoBtn && marcoBtn.addEventListener('click', () => { sendVoice('Marco?'); });
+            clearBtn && clearBtn.addEventListener('click', () => { input.value = ''; updatePreview(); input.focus(); });
+            pauseBtn && pauseBtn.addEventListener('click', () => { sendVoice('[PAUSE]'); });
+            resumeBtn && resumeBtn.addEventListener('click', () => { sendVoice('[RESUME]'); });
+
+            // Enter to send (single-line). Shift+Enter allows newline — but input is single-line so just use Enter.
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendVoice(input.value);
+                    // keep focus so mobile keyboard stays up if user wants to continue
+                    setTimeout(() => input.focus(), 50);
+                }
+            });
+
+            // Make tapping the preview focus the input (helpful on some phones)
+            if (preview) preview.addEventListener('click', () => input.focus());
+        })();
+
+        // audio info elements have been moved into the voice panel directly; no migration script required
+    </script>
+    <style>
+        /* Alert rotator styling (airport arrivals style) */
+        .alert-rotator {
+            margin-top: 6px;
+            color: #fff;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 6px 8px;
+            border-radius: 6px;
+            min-height: 28px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .alert-rotator .row {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .alert-rotator .item {
+            flex: 1 1 auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .alert-severity-low {
+            color: #ffdd57;
+        }
+
+        .alert-severity-med {
+            color: #ff9a57;
+        }
+
+        .alert-severity-high {
+            color: #ff6b6b;
+            font-weight: 700;
+        }
+    </style>
+
+    <script>
+        // Alert rotator: collect blinking items and status indicators, page through up to 4 per frame
+        (function () {
+            const rotator = document.getElementById('alertRotator');
+            if (!rotator) return;
+
+            function collectAlerts() {
+                const alerts = [];
+
+                // Prioritize battery percent if present
+                try {
+                    const bpEl = document.getElementById('batteryPercentInfo');
+                    if (bpEl) {
+                        const val = parseFloat(bpEl.textContent) || 0;
+                        const severity = val <= 10 ? 'high' : (val <= 30 ? 'med' : (val <= 50 ? 'low' : 'ok'));
+                        if (severity !== 'ok') alerts.push({ text: `Battery ${bpEl.textContent}%`, severity });
+                    }
+                } catch (e) { }
+
+                // Find visible .blink elements and add their text
+                document.querySelectorAll('.blink').forEach(el => {
+                    try {
+                        const txt = el.textContent.trim();
+                        if (!txt) return;
+                        // Avoid duplicating battery if it already showed
+                        if (txt.toLowerCase().includes('battery')) return;
+                        alerts.push({ text: txt, severity: 'low' });
+                    } catch (e) { }
+                });
+
+                // Additional heuristics: robot bumper/cliff status
+                try {
+                    const bum = document.getElementById('robotBumper');
+                    if (bum && bum.textContent && !/--/.test(bum.textContent)) alerts.push({ text: `Bumper: ${bum.textContent}`, severity: 'med' });
+                    const cliff = document.getElementById('robotCliff');
+                    if (cliff && cliff.textContent && !/--/.test(cliff.textContent)) alerts.push({ text: `Cliff: ${cliff.textContent}`, severity: 'high' });
+                } catch (e) { }
+
+                return alerts;
+            }
+
+            let page = 0;
+            function renderPage() {
+                const alerts = collectAlerts();
+                if (!alerts.length) {
+                    rotator.innerHTML = '<div class="row"><div class="item">All clear</div></div>';
+                    return;
+                }
+                const perPage = 4;
+                const pages = Math.ceil(alerts.length / perPage) || 1;
+                page = page % pages;
+                const start = page * perPage;
+                const slice = alerts.slice(start, start + perPage);
+                const row = document.createElement('div');
+                row.className = 'row';
+                slice.forEach(a => {
+                    const div = document.createElement('div');
+                    div.className = 'item alert-severity-' + (a.severity || 'low');
+                    div.textContent = a.text;
+                    row.appendChild(div);
+                });
+                rotator.innerHTML = '';
+                rotator.appendChild(row);
+                page = (page + 1) % pages;
+            }
+
+            // Initial render and periodic rotation
+            renderPage();
+            setInterval(renderPage, 4000);
+            // Also repaint when important DOM changes happen (simple watcher)
+            const observer = new MutationObserver(() => renderPage());
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        })();
     </script>
     <div class="headtrim"> </div>
     <div class="baseboard"> </div>
