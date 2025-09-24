@@ -9,9 +9,10 @@
     <meta name="format-detection" content="date=no">
     <link rel="stylesheet" type="text/css" href="assets/lower-decks-padd.css">
     <link rel="stylesheet" type="text/css" href="style.css">
+    <script defer src="https://unpkg.com/alpinejs@3.14.4/dist/cdn.min.js"></script>
 </head>
 
-<body>
+<body x-data="pilotApp">
     <audio id="audio1" src="assets/beep1.mp3" preload="auto"></audio>
     <audio id="audio2" src="assets/beep2.mp3" preload="auto"></audio>
     <audio id="audio3" src="assets/beep3.mp3" preload="auto"></audio>
@@ -23,141 +24,170 @@
                 <div class="panel-2">02<span class="hop">-262000</span></div>
             </div>
             <div class="right-frame-top">
-                <div class="banner">Pilot Interface &bull; <span class="font-alpha-blue"
-                        data-source=" connectionStatus">Offline</span></div>
+                <div class="banner">Pilot Interface &bull;
+                    <span id="statusIndicator" class="status-indicator" aria-hidden="true"
+                        x-text="$store.pilot.connection.indicator">🔴</span>
+                    <span class="font-alpha-blue" data-source="connectionStatus"
+                        x-text="$store.pilot.connection.label">Offline</span>
+                </div>
                 <div class="data-cascade-button-group">
                     <div class="data-wrapper" id="controlCascade" role="group" aria-label="Control status cascade">
                         <div class="data-column" data-column="drive">
                             <div class="dc-header font-arctic-ice">DRIVE</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">LIN X</span>
-                                <span class="dc-value font-arctic-ice blink" data-source="linearX">0.00</span>
+                                <span class="dc-value font-arctic-ice blink" data-source="linearX"
+                                    x-text="$store.pilot.twist.linearX">0.00</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">LIN Y</span>
-                                <span class="dc-value font-night-rain" data-source="linearY">0.00</span>
+                                <span class="dc-value font-night-rain" data-source="linearY"
+                                    x-text="$store.pilot.twist.linearY">0.00</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">ANG Z</span>
-                                <span class="dc-value font-alpha-blue" data-source="angularZ">0.00</span>
+                                <span class="dc-value font-alpha-blue" data-source="angularZ"
+                                    x-text="$store.pilot.twist.angularZ">0.00</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">MODE</span>
-                                <span class="dc-value font-arctic-ice" data-source="robotMode">--</span>
+                                <span class="dc-value font-arctic-ice" data-source="robotMode"
+                                    x-text="$store.pilot.robot.mode">--</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="safety">
                             <div class="dc-header">SAFETY</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">SPEED</span>
-                                <span class="dc-value font-arctic-ice" data-source="robotSpeed">--</span>
+                                <span class="dc-value font-arctic-ice" data-source="robotSpeed"
+                                    x-text="$store.pilot.robot.speed">--</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">BUMPR</span>
-                                <span class="dc-value font-night-rain blink" data-source="robotBumper">--</span>
+                                <span class="dc-value font-night-rain blink" data-source="robotBumper"
+                                    x-text="$store.pilot.robot.bumper">--</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">CLIFF</span>
-                                <span class="dc-value font-night-rain" data-source="robotCliff">--</span>
+                                <span class="dc-value font-night-rain" data-source="robotCliff"
+                                    x-text="$store.pilot.robot.cliff">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">IR</span>
-                                <span class="dc-value font-alpha-blue" data-source="robotIrOmni">--</span>
+                                <span class="dc-value font-alpha-blue" data-source="robotIrOmni"
+                                    x-text="$store.pilot.robot.ir">--</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="energy">
                             <div class="dc-header">ENERGY</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">BAT %</span>
-                                <span class="dc-value font-arctic-ice blink" data-source="batteryPercentInfo">--</span>
+                                <span class="dc-value font-arctic-ice blink" data-source="batteryPercentInfo"
+                                    x-text="$store.pilot.battery.percent">--</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">VOLT</span>
-                                <span class="dc-value" data-source="batteryVoltage">--</span>
+                                <span class="dc-value" data-source="batteryVoltage"
+                                    x-text="$store.pilot.battery.voltage">--</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">CURR</span>
-                                <span class="dc-value" data-source="batteryCurrent">--</span>
+                                <span class="dc-value" data-source="batteryCurrent"
+                                    x-text="$store.pilot.battery.current">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">STAT</span>
-                                <span class="dc-value font-night-rain" data-source="batteryStateInfo">--</span>
+                                <span class="dc-value font-night-rain" data-source="batteryStateInfo"
+                                    x-text="$store.pilot.battery.state">--</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="audio">
                             <div class="dc-header">AUDIO</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">SPEAK</span>
-                                <span class="dc-value font-arctic-ice" data-source="voiceSpeakingMs">0</span>
+                                <span class="dc-value font-arctic-ice" data-source="voiceSpeakingMs"
+                                    x-text="$store.pilot.audio.speakingMs">0</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">VAD</span>
-                                <span class="dc-value" data-source="vadSpeechMs">0</span>
+                                <span class="dc-value" data-source="vadSpeechMs"
+                                    x-text="$store.pilot.audio.vadMs">0</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">MIC</span>
-                                <span class="dc-value font-night-rain" data-source="micInfo">--</span>
+                                <span class="dc-value font-night-rain" data-source="micInfo"
+                                    x-text="$store.pilot.audio.mic">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">VOICE</span>
-                                <span class="dc-value font-alpha-blue" data-source="voiceTopic">/voice</span>
+                                <span class="dc-value font-alpha-blue" data-source="voiceTopic"
+                                    x-text="$store.pilot.addresses.voiceSubscribers !== null ? `${$store.pilot.addresses.voice} (${$store.pilot.addresses.voiceSubscribers} subscribers)` : $store.pilot.addresses.voice">/voice</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="gps">
                             <div class="dc-header">GPS</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">FIX</span>
-                                <span class="dc-value font-arctic-ice" data-source="gpsFixStatus">--</span>
+                                <span class="dc-value font-arctic-ice" data-source="gpsFixStatus"
+                                    x-text="$store.pilot.gps.fix">--</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">LAT</span>
-                                <span class="dc-value" data-source="gpsLat">--</span>
+                                <span class="dc-value" data-source="gpsLat" x-text="$store.pilot.gps.lat">--</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">LON</span>
-                                <span class="dc-value" data-source="gpsLon">--</span>
+                                <span class="dc-value" data-source="gpsLon" x-text="$store.pilot.gps.lon">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">ALT</span>
-                                <span class="dc-value" data-source="gpsAlt">--</span>
+                                <span class="dc-value" data-source="gpsAlt" x-text="$store.pilot.gps.alt">--</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="network">
                             <div class="dc-header">NETWORK</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">CMD</span>
-                                <span class="dc-value" data-source="cmdVelTopic">/cmd_vel</span>
+                                <span class="dc-value" data-source="cmdVelTopic"
+                                    x-text="$store.pilot.addresses.cmdVelSubscribers !== null ? `${$store.pilot.addresses.cmdVel} (${$store.pilot.addresses.cmdVelSubscribers} subscribers)` : $store.pilot.addresses.cmdVel">/cmd_vel</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">VOICE</span>
-                                <span class="dc-value" data-source="voiceTopic">/voice</span>
+                                <span class="dc-value" data-source="voiceTopic"
+                                    x-text="$store.pilot.addresses.voiceSubscribers !== null ? `${$store.pilot.addresses.voice} (${$store.pilot.addresses.voiceSubscribers} subscribers)` : $store.pilot.addresses.voice">/voice</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">WEB</span>
-                                <span class="dc-value" data-source="webAddress">--</span>
+                                <span class="dc-value" data-source="webAddress"
+                                    x-text="$store.pilot.addresses.web">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">WS</span>
-                                <span class="dc-value" data-source="wsAddress">--</span>
+                                <span class="dc-value" data-source="wsAddress"
+                                    x-text="$store.pilot.addresses.ws">--</span>
                             </div>
                         </div>
                         <div class="data-column" data-column="host">
                             <div class="dc-header">HOST</div>
                             <div class="dc-row dc-row-1">
                                 <span class="dc-key">CPU</span>
-                                <span class="dc-value darkfont" data-source="cpuChip">--</span>
+                                <span class="dc-value darkfont" data-source="cpuChip"
+                                    x-text="$store.pilot.host.cpu">--</span>
                             </div>
                             <div class="dc-row dc-row-2">
                                 <span class="dc-key">TEMP</span>
-                                <span class="dc-value font-alpha-blue" data-source="tempChip">--</span>
+                                <span class="dc-value font-alpha-blue" data-source="tempChip"
+                                    x-text="$store.pilot.host.temp">--</span>
                             </div>
                             <div class="dc-row dc-row-3">
                                 <span class="dc-key">MEM</span>
-                                <span class="dc-value font-arctic-ice" data-source="memChip">--</span>
+                                <span class="dc-value font-arctic-ice" data-source="memChip"
+                                    x-text="$store.pilot.host.mem">--</span>
                             </div>
                             <div class="dc-row dc-row-4">
                                 <span class="dc-key">DIAG</span>
-                                <span class="dc-value font-night-rain" data-source="robotDiag">--</span>
+                                <span class="dc-value font-night-rain" data-source="robotDiag"
+                                    x-text="$store.pilot.robot.diag">--</span>
                             </div>
                         </div>
                     </div>
@@ -266,7 +296,7 @@
 
                         <div class="aux-controls">
                             <div class="controls buttons justify-space-evenly">
-                                <button id=" resetButton" class="reset-button">Reset</button>
+                                <button id="resetButton" class="reset-button">Reset</button>
                                 <button id="stopButton" class="blink stop-button button-sunset-red"
                                     onclick="playSoundAndRedirect('audio3', '#movement');/* todo: stop the robot!*/">Emergency
                                     Stop</button>
@@ -300,35 +330,59 @@
                             <h2 class="go-center">Control Information</h2>
                         </div>
                         <div class=" info-grid">
-                            <div class="info-item"><label>Linear X</label><span id="linearX">0.00</span></div>
-                            <div class="info-item"><label>Linear Y</label><span id="linearY">0.00</span></div>
-                            <div class="info-item"><label>Angular Z</label><span id="angularZ">0.00</span></div>
-                            <div class="info-item"><label>Mode</label><span id="robotMode">--</span></div>
-                            <div class="info-item"><label>Speed (m/s)</label><span id="robotSpeed">--</span></div>
-                            <div class="info-item"><label>Bumper</label><span id="robotBumper">--</span></div>
-                            <div class="info-item"><label>Cliff</label><span id="robotCliff">--</span></div>
-                            <div class="info-item"><label>IR Omni</label><span id="robotIrOmni">--</span></div>
-                            <div class="info-item"><label>Diagnostics</label><span id="robotDiag">--</span></div>
-                            <div class="info-item"><label>Battery %</label><span id="batteryPercentInfo">--</span>
+                            <div class="info-item"><label>Linear X</label><span id="linearX"
+                                    x-text="$store.pilot.twist.linearX">0.00</span></div>
+                            <div class="info-item"><label>Linear Y</label><span id="linearY"
+                                    x-text="$store.pilot.twist.linearY">0.00</span></div>
+                            <div class="info-item"><label>Angular Z</label><span id="angularZ"
+                                    x-text="$store.pilot.twist.angularZ">0.00</span></div>
+                            <div class="info-item"><label>Mode</label><span id="robotMode"
+                                    x-text="$store.pilot.robot.mode">--</span></div>
+                            <div class="info-item"><label>Speed (m/s)</label><span id="robotSpeed"
+                                    x-text="$store.pilot.robot.speed">--</span></div>
+                            <div class="info-item"><label>Bumper</label><span id="robotBumper"
+                                    x-text="$store.pilot.robot.bumper">--</span></div>
+                            <div class="info-item"><label>Cliff</label><span id="robotCliff"
+                                    x-text="$store.pilot.robot.cliff">--</span></div>
+                            <div class="info-item"><label>IR Omni</label><span id="robotIrOmni"
+                                    x-text="$store.pilot.robot.ir">--</span></div>
+                            <div class="info-item"><label>Diagnostics</label><span id="robotDiag"
+                                    x-text="$store.pilot.robot.diag">--</span></div>
+                            <div class="info-item"><label>Battery %</label><span id="batteryPercentInfo"
+                                    x-text="$store.pilot.battery.percent">--</span>
                             </div>
-                            <div class="info-item"><label>Voltage (V)</label><span id="batteryVoltage">--</span>
+                            <div class="info-item"><label>Voltage (V)</label><span id="batteryVoltage"
+                                    x-text="$store.pilot.battery.voltage">--</span>
                             </div>
-                            <div class="info-item"><label>Current (A)</label><span id="batteryCurrent">--</span>
+                            <div class="info-item"><label>Current (A)</label><span id="batteryCurrent"
+                                    x-text="$store.pilot.battery.current">--</span>
                             </div>
-                            <div class="info-item"><label>Temperature</label><span id="batteryTemp">--</span></div>
-                            <div class="info-item"><label>State</label><span id="batteryStateInfo">--</span></div>
-                            <div class="info-item"><label>CPU Load</label><span id="cpuChip">--</span></div>
-                            <div class="info-item"><label>Main Temp</label><span id="tempChip">--</span></div>
-                            <div class="info-item"><label>Memory</label><span id="memChip">--</span></div>
-                            <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs">0</span>
+                            <div class="info-item"><label>Temperature</label><span id="batteryTemp"
+                                    x-text="$store.pilot.battery.temperature">--</span></div>
+                            <div class="info-item"><label>State</label><span id="batteryStateInfo"
+                                    x-text="$store.pilot.battery.state">--</span></div>
+                            <div class="info-item"><label>CPU Load</label><span id="cpuChip"
+                                    x-text="$store.pilot.host.cpu">--</span></div>
+                            <div class="info-item"><label>Main Temp</label><span id="tempChip"
+                                    x-text="$store.pilot.host.temp">--</span></div>
+                            <div class="info-item"><label>Memory</label><span id="memChip"
+                                    x-text="$store.pilot.host.mem">--</span></div>
+                            <div class="info-item"><label>Speaking (ms)</label><span id="voiceSpeakingMs"
+                                    x-text="$store.pilot.audio.speakingMs">0</span>
                             </div>
-                            <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs">0</span>
+                            <div class="info-item"><label>VAD Speech (ms)</label><span id="vadSpeechMs"
+                                    x-text="$store.pilot.audio.vadMs">0</span>
                             </div>
-                            <div class="info-item"><label>Mic</label><span id="micInfo">--</span></div>
-                            <div class="info-item"><label>GPS Fix</label><span id="gpsFixStatus">--</span></div>
-                            <div class="info-item"><label>Latitude</label><span id="gpsLat">--</span></div>
-                            <div class="info-item"><label>Longitude</label><span id="gpsLon">--</span></div>
-                            <div class="info-item"><label>Altitude (m)</label><span id="gpsAlt">--</span></div>
+                            <div class="info-item"><label>Mic</label><span id="micInfo"
+                                    x-text="$store.pilot.audio.mic">--</span></div>
+                            <div class="info-item"><label>GPS Fix</label><span id="gpsFixStatus"
+                                    x-text="$store.pilot.gps.fix">--</span></div>
+                            <div class="info-item"><label>Latitude</label><span id="gpsLat"
+                                    x-text="$store.pilot.gps.lat">--</span></div>
+                            <div class="info-item"><label>Longitude</label><span id="gpsLon"
+                                    x-text="$store.pilot.gps.lon">--</span></div>
+                            <div class="info-item"><label>Altitude (m)</label><span id="gpsAlt"
+                                    x-text="$store.pilot.gps.alt">--</span></div>
                         </div>
                     </section>
 
@@ -342,10 +396,12 @@
                 </main>
                 <footer>
                     <div class="connection-info">
-                        <div>Web: <span id="webAddress"></span></div>
-                        <div>WebSocket: <span id="wsAddress"></span></div>
-                        <div>Publishing to: <strong id="cmdVelTopic">/cmd_vel</strong></div>
-                        <div>Voice topic: <strong id="voiceTopic">/voice</strong></div>
+                        <div>Web: <span id="webAddress" x-text="$store.pilot.addresses.web"></span></div>
+                        <div>WebSocket: <span id="wsAddress" x-text="$store.pilot.addresses.ws"></span></div>
+                        <div>Publishing to: <strong id="cmdVelTopic"
+                                x-text="$store.pilot.addresses.cmdVelSubscribers !== null ? `${$store.pilot.addresses.cmdVel} (${$store.pilot.addresses.cmdVelSubscribers} subscribers)` : $store.pilot.addresses.cmdVel">/cmd_vel</strong></div>
+                        <div>Voice topic: <strong id="voiceTopic"
+                                x-text="$store.pilot.addresses.voiceSubscribers !== null ? `${$store.pilot.addresses.voice} (${$store.pilot.addresses.voiceSubscribers} subscribers)` : $store.pilot.addresses.voice">/voice</strong></div>
                     </div>
                 </footer>
             </div>
@@ -354,114 +410,6 @@
 
     <script type="text/javascript" src="assets/lcars.js"></script>
     <script src="joystick.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const cascadeEl = document.getElementById('controlCascade');
-            if (!cascadeEl) {
-                return;
-            }
-
-            const valueEls = Array.from(cascadeEl.querySelectorAll('[data-source]'));
-            if (!valueEls.length) {
-                return;
-            }
-
-            const sourceMap = new Map();
-            valueEls.forEach(el => {
-                const key = el.getAttribute('data-source');
-                if (!key) {
-                    return;
-                }
-                if (!sourceMap.has(key)) {
-                    sourceMap.set(key, []);
-                }
-                sourceMap.get(key).push(el);
-            });
-
-            const readSourceValue = (source) => {
-                if (!source) {
-                    return '';
-                }
-                if (source instanceof HTMLInputElement || source instanceof HTMLSelectElement || source instanceof HTMLTextAreaElement) {
-                    return source.value;
-                }
-                return source.textContent || '';
-            };
-
-            const formatValue = (raw) => {
-                const text = (raw || '').trim();
-                if (!text) {
-                    return '--';
-                }
-                if (/^-?\d+(?:\.\d+)?$/.test(text)) {
-                    const num = parseFloat(text);
-                    const magnitude = Math.abs(num);
-                    if (magnitude >= 1000) {
-                        return num.toFixed(0);
-                    }
-                    if (magnitude >= 100) {
-                        return num.toFixed(1);
-                    }
-                    if (magnitude >= 10) {
-                        return num.toFixed(2);
-                    }
-                    if (magnitude >= 1) {
-                        return num.toFixed(2);
-                    }
-                    if (magnitude === 0) {
-                        return '0';
-                    }
-                    return num.toFixed(3);
-                }
-                return text.length > 14 ? `${text.slice(0, 13)}…` : text;
-            };
-
-            const updateTargets = (id) => {
-                const targets = sourceMap.get(id);
-                if (!targets) {
-                    return;
-                }
-                const source = document.getElementById(id);
-                const formatted = formatValue(readSourceValue(source));
-                targets.forEach(el => {
-                    el.textContent = formatted;
-                    if (source) {
-                        el.classList.remove('dc-value--missing');
-                    } else {
-                        el.classList.add('dc-value--missing');
-                    }
-                });
-            };
-
-            const observerConfig = { childList: true, characterData: true, subtree: true };
-            sourceMap.forEach((_, id) => {
-                const source = document.getElementById(id);
-                if (!source) {
-                    updateTargets(id);
-                    return;
-                }
-
-                const observer = new MutationObserver(() => updateTargets(id));
-                observer.observe(source, observerConfig);
-
-                if (source instanceof HTMLInputElement || source instanceof HTMLSelectElement || source instanceof HTMLTextAreaElement) {
-                    const handler = () => updateTargets(id);
-                    source.addEventListener('input', handler);
-                    source.addEventListener('change', handler);
-                }
-
-                updateTargets(id);
-            });
-
-            document.addEventListener('pilot:cascade:sync', (event) => {
-                const detail = event.detail;
-                if (!detail || !detail.id) {
-                    return;
-                }
-                updateTargets(detail.id);
-            });
-        });
-    </script>
     <div class="headtrim"> </div>
     <div class="baseboard"> </div>
 </body>

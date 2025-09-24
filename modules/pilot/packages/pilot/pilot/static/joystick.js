@@ -3,9 +3,299 @@
  * Handles joystick interaction and WebSocket communication for robot control
  */
 
+const pilotGlobals = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+
+const numberOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+const formatDecimal = (value, digits = 2) => {
+    const num = numberOrNull(value);
+    return num === null ? '--' : num.toFixed(digits);
+};
+
+/**
+ * Build a websocket endpoint for subscribing to a ROS topic.
+ *
+ * Supports the following host inputs:
+ *   - Bare hostnames ("api") or host:port pairs ("api:8081")
+ *   - Hosts with path prefixes ("api/v1")
+ *   - Protocol-qualified URLs ("https://api.example.com/base/")
+ *   - Protocol-relative URLs ("//api.local:8081")
+ *
+ * The helper normalises schemes so HTTP ➜ ws:// and HTTPS ➜ wss:// while leaving
+ * explicit ws:// / wss:// values unchanged.  Paths keep their prefix and are
+ * suffixed with "/subscribe" so multiple topic sockets can share the same API
+ * host without having to hardcode the full URL in the UI.
+ *
+ * @param {string} topic - ROS topic name (leading slash optional).
+ * @param {string} rawHost - Configured API host value.
+ * @param {string} defaultProtocol - Either "ws:" or "wss:" based on page scheme.
+ * @returns {string|null} Fully-qualified websocket URL or null when the host is invalid.
+ */
+const buildTopicSubscriptionUrl = (topic, rawHost, defaultProtocol) => {
+    const cleanTopic = (topic || '').trim();
+    if (!cleanTopic) {
+        return null;
+    }
+    const proto = defaultProtocol === 'wss:' ? 'wss:' : 'ws:';
+    const trimmedHost = (rawHost || '').trim();
+    if (!trimmedHost) {
+        return null;
+    }
+    const collapsed = trimmedHost.replace(/\s+/g, '');
+    const lower = collapsed.toLowerCase();
+    let url;
+    try {
+        if (lower.startsWith('ws://') || lower.startsWith('wss://')) {
+            url = new URL(collapsed);
+        } else if (lower.startsWith('http://') || lower.startsWith('https://')) {
+            url = new URL(collapsed);
+            url.protocol = lower.startsWith('https://') ? 'wss:' : 'ws:';
+        } else if (lower.startsWith('//')) {
+            url = new URL(`${proto}${collapsed}`);
+        } else {
+            url = new URL(`${proto}//${collapsed}`);
+        }
+    } catch (error) {
+        try {
+            url = new URL(`${proto}//${collapsed}`);
+        } catch (fallbackError) {
+            console.error('subscribeToTopic: unable to resolve API host', collapsed, fallbackError);
+            return null;
+        }
+    }
+    const path = url.pathname ? url.pathname.replace(/\/+$/, '') : '';
+    const suffix = `${path}/subscribe`.replace(/\/+/g, '/');
+    url.pathname = suffix.startsWith('/') ? suffix : `/${suffix}`;
+    url.search = `?topic=${encodeURIComponent(cleanTopic)}`;
+    url.hash = '';
+    return url.toString();
+};
+
+const createPilotStore = () => {
+    const store = {
+        connection: { status: 'disconnected', label: 'Offline', indicator: '🔴' },
+        addresses: {
+            web: '',
+            ws: '—',
+            cmdVel: '/cmd_vel',
+            cmdVelSubscribers: null,
+            voice: '/voice',
+            voiceSubscribers: null,
+        },
+        twist: { linearX: '0.00', linearY: '0.00', angularZ: '0.00' },
+        robot: { mode: '--', speed: '--', bumper: '--', cliff: '--', ir: '--', diag: '--' },
+        battery: { percent: '--', voltage: '--', current: '--', temperature: '--', state: '--' },
+        host: { cpu: '--', temp: '--', mem: '--' },
+        audio: { speakingMs: '0', vadMs: '0', mic: '--' },
+        gps: { fix: '--', lat: '--', lon: '--', alt: '--' },
+        conversation: [],
+
+        setConnection(status, label) {
+            const normalized = (status || '').toString().toLowerCase();
+            this.connection.status = normalized || 'unknown';
+            this.connection.label = label || '--';
+            this.connection.indicator = normalized === 'connected'
+                ? '🟢'
+                : normalized === 'connecting'
+                    ? '🟡'
+                    : '🔴';
+        },
+
+        setWebAddress(url) {
+            this.addresses.web = url || '';
+        },
+
+        setWsAddress(url) {
+            this.addresses.ws = url && url.trim() ? url : '—';
+        },
+
+        setCmdVelTopic(topic, subscribers) {
+            this.addresses.cmdVel = topic || '--';
+            this.addresses.cmdVelSubscribers = (typeof subscribers === 'number' && Number.isFinite(subscribers))
+                ? subscribers
+                : null;
+        },
+
+        setVoiceTopic(topic, subscribers) {
+            this.addresses.voice = topic || '--';
+            this.addresses.voiceSubscribers = (typeof subscribers === 'number' && Number.isFinite(subscribers))
+                ? subscribers
+                : null;
+        },
+
+        setTwist(twist) {
+            const linear = twist && twist.linear ? twist.linear : {};
+            const angular = twist && twist.angular ? twist.angular : {};
+            Object.assign(this.twist, {
+                linearX: formatDecimal(linear.x, 2),
+                linearY: formatDecimal(linear.y, 2),
+                angularZ: formatDecimal(angular.z, 2),
+            });
+            return this.twist;
+        },
+
+        setRobotStatus(status) {
+            const modeValue = typeof status?.mode === 'string' ? status.mode : status?.mode;
+            const formatMode = (code) => {
+                switch (code) {
+                    case 0: return 'OFF';
+                    case 1: return 'PASSIVE';
+                    case 2: return 'SAFE';
+                    case 3: return 'FULL';
+                    default: return '--';
+                }
+            };
+            const diagCounts = Array.isArray(status?.diag_counts) ? status.diag_counts : [];
+            const diagLevel = typeof status?.diag_level === 'number' ? status.diag_level : null;
+            const diagText = diagCounts.length
+                ? `L${diagLevel ?? 0} ok:${diagCounts[0] || 0} warn:${diagCounts[1] || 0} err:${diagCounts[2] || 0}`
+                : '--';
+            Object.assign(this.robot, {
+                mode: typeof modeValue === 'string' ? modeValue : formatMode(modeValue),
+                speed: numberOrNull(status?.speed) !== null ? numberOrNull(status.speed).toFixed(2) : '--',
+                bumper: typeof status?.bumper === 'boolean' ? (status.bumper ? 'PRESSED' : 'OK') : '--',
+                cliff: typeof status?.cliff === 'boolean' ? (status.cliff ? 'DETECTED' : 'OK') : '--',
+                ir: numberOrNull(status?.ir_omni) !== null ? String(numberOrNull(status.ir_omni)) : '--',
+                diag: diagText,
+            });
+            return this.robot;
+        },
+
+        setBattery(battery) {
+            const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
+            const percent = numberOrNull(battery?.percent);
+            const pctText = percent !== null ? `${clamp(percent, 0, 100).toFixed(0)}%` : '--';
+            const tempC = numberOrNull(battery?.temperature);
+            const tempText = tempC !== null
+                ? `${tempC.toFixed(1)}°C / ${(tempC * 9 / 5 + 32).toFixed(1)}°F`
+                : '--';
+            const formatState = (code) => {
+                switch (code) {
+                    case 0: return 'Not charging';
+                    case 1: return 'Reconditioning';
+                    case 2: return 'Full';
+                    case 3: return 'Trickle';
+                    case 4: return 'Waiting';
+                    case 5: return 'Fault';
+                    default: return '--';
+                }
+            };
+            Object.assign(this.battery, {
+                percent: pctText,
+                voltage: numberOrNull(battery?.voltage) !== null ? numberOrNull(battery.voltage).toFixed(2) : '--',
+                current: numberOrNull(battery?.current) !== null ? numberOrNull(battery.current).toFixed(2) : '--',
+                temperature: tempText,
+                state: formatState(battery?.charging_state),
+            });
+            return this.battery;
+        },
+
+        setHostHealth(health) {
+            Object.assign(this.host, {
+                cpu: numberOrNull(health?.cpu_percent) !== null ? `CPU ${numberOrNull(health.cpu_percent).toFixed(0)}%` : '--',
+                temp: numberOrNull(health?.temp_c) !== null
+                    ? `Temp ${numberOrNull(health.temp_c).toFixed(0)}°C / ${(numberOrNull(health.temp_c) * 9 / 5 + 32).toFixed(0)}°F`
+                    : '--',
+                mem: numberOrNull(health?.mem_used_percent) !== null
+                    ? `Mem ${numberOrNull(health.mem_used_percent).toFixed(0)}%`
+                    : '--',
+            });
+            return this.host;
+        },
+
+        setAudio(audio) {
+            Object.assign(this.audio, {
+                speakingMs: numberOrNull(audio?.autophony_ms) !== null ? String(numberOrNull(audio.autophony_ms)) : '0',
+                vadMs: numberOrNull(audio?.speech_ms) !== null ? String(numberOrNull(audio.speech_ms)) : '0',
+                mic: audio?.mic
+                    ? this.formatMicInfo(audio.mic)
+                    : this.audio.mic,
+            });
+            return this.audio;
+        },
+
+        formatMicInfo(info) {
+            const sr = numberOrNull(info?.sample_rate) !== null ? `${numberOrNull(info.sample_rate)} Hz` : '--';
+            const ch = numberOrNull(info?.channels) !== null ? `${numberOrNull(info.channels)} ch` : '--';
+            const text = `${sr}, ${ch}`;
+            this.audio.mic = text;
+            return text;
+        },
+
+        setGps(gps) {
+            Object.assign(this.gps, {
+                fix: this.formatGpsStatus(gps?.status),
+                lat: numberOrNull(gps?.lat) !== null ? numberOrNull(gps.lat).toFixed(6) : '--',
+                lon: numberOrNull(gps?.lon) !== null ? numberOrNull(gps.lon).toFixed(6) : '--',
+                alt: numberOrNull(gps?.alt) !== null ? numberOrNull(gps.alt).toFixed(1) : '--',
+            });
+            return this.gps;
+        },
+
+        formatGpsStatus(code) {
+            switch (code) {
+                case -1:
+                case 0:
+                    return 'No Fix';
+                case 1:
+                    return 'Fix (2D/3D)';
+                case 2:
+                    return 'DGPS';
+                default:
+                    return '--';
+            }
+        },
+
+        pushConversation(entry) {
+            if (!entry) {
+                return;
+            }
+            this.conversation.push(entry);
+            if (this.conversation.length > 200) {
+                this.conversation.shift();
+            }
+            return entry;
+        },
+    };
+
+    return store;
+};
+
+const pilotStore = pilotGlobals.__pilotStore || createPilotStore();
+if (!pilotGlobals.__pilotStore) {
+    pilotGlobals.__pilotStore = pilotStore;
+}
+pilotGlobals.pilotStore = pilotStore;
+
+const registerAlpineStore = () => {
+    if (!pilotGlobals.Alpine || typeof pilotGlobals.Alpine.store !== 'function') {
+        return;
+    }
+    pilotGlobals.Alpine.store('pilot', pilotStore);
+    if (typeof pilotGlobals.Alpine.data === 'function') {
+        pilotGlobals.Alpine.data('pilotApp', () => ({
+            state: pilotStore,
+            init() {},
+        }));
+    }
+    pilotGlobals.__pilotStoreRegistered = true;
+};
+
+if (pilotGlobals.addEventListener) {
+    pilotGlobals.addEventListener('alpine:init', registerAlpineStore);
+}
+if (pilotGlobals.Alpine && !pilotGlobals.__pilotStoreRegistered) {
+    registerAlpineStore();
+}
+
 class PilotController {
     constructor(options = {}) {
         const opts = options || {};
+        this.store = pilotStore;
+        this.topicSubscriptions = new Map();
+        this.cmdVelSubscription = null;
+        this.currentCmdVelTopic = null;
+        this.apiHost = this.resolveApiHost();
+
         this.websocket = null;
         this.isConnected = false;
         this.joystick = null;
@@ -125,8 +415,33 @@ class PilotController {
                         try { this.websocket.send(JSON.stringify({ type: 'systemd', action: 'unwatch', unit })); } catch (_) { }
                     });
                 }
+                Array.from(this.topicSubscriptions.values()).forEach(handle => {
+                    try { handle.close(); } catch (_) { }
+                });
             } catch (_) { }
         });
+    }
+
+    resolveApiHost() {
+        if (typeof window === 'undefined') {
+            return this.apiHost || 'api';
+        }
+        if (typeof window.PILOT_API_HOST === 'string' && window.PILOT_API_HOST.trim()) {
+            return window.PILOT_API_HOST.trim();
+        }
+        const attrSource = (typeof document !== 'undefined' && document) ? (document.body || document.documentElement) : null;
+        if (attrSource && typeof attrSource.getAttribute === 'function') {
+            const attr = attrSource.getAttribute('data-pilot-api-host');
+            if (attr && attr.trim()) {
+                return attr.trim();
+            }
+        }
+        return this.apiHost || 'api';
+    }
+
+    getApiHost() {
+        this.apiHost = this.resolveApiHost();
+        return this.apiHost;
     }
 
     setupHostHealthToggle() {
@@ -402,13 +717,127 @@ class PilotController {
         const wsPort = parseInt(window.location.port) + 1;
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsAddress = `${wsProtocol}//${window.location.hostname}:${wsPort}`;
+        if (this.store && typeof this.store.setWebAddress === 'function') {
+            this.store.setWebAddress(webAddress);
+        }
+        if (this.store && typeof this.store.setWsAddress === 'function') {
+            this.store.setWsAddress(wsAddress);
+        }
         document.getElementById('webAddress').textContent = webAddress;
         document.getElementById('wsAddress').textContent = wsAddress;
     }
 
     updateWsAddress(url) {
         const el = document.getElementById('wsAddress');
-        if (el) el.textContent = url || '—';
+        const value = url && url.trim() ? url : '—';
+        if (this.store && typeof this.store.setWsAddress === 'function') {
+            this.store.setWsAddress(value);
+        }
+        if (el) el.textContent = value;
+    }
+
+    subscribeToTopic(topic, options = {}) {
+        const cleanTopic = (topic || '').trim();
+        if (!cleanTopic) {
+            return null;
+        }
+        const key = (options.key || cleanTopic) || cleanTopic;
+        const protocol = (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+        const host = options.apiHost || this.getApiHost() || 'api';
+        const endpoint = buildTopicSubscriptionUrl(cleanTopic, host, protocol);
+        if (!endpoint) {
+            console.error('Failed to build topic subscription URL for', cleanTopic, host);
+            return null;
+        }
+        try {
+            if (this.topicSubscriptions.has(key)) {
+                const existing = this.topicSubscriptions.get(key);
+                if (existing && typeof existing.close === 'function') {
+                    existing.close();
+                }
+                this.topicSubscriptions.delete(key);
+            }
+            const socket = new WebSocket(endpoint);
+            const handle = {
+                topic: cleanTopic,
+                socket,
+                close: () => {
+                    try { socket.close(); } catch (_) { }
+                    this.topicSubscriptions.delete(key);
+                },
+            };
+            const parseJson = options.parseJson !== false;
+            socket.addEventListener('message', (event) => {
+                let payload = event.data;
+                if (parseJson && typeof payload === 'string') {
+                    try { payload = JSON.parse(payload); } catch (_) { /* ignore malformed payload */ }
+                }
+                if (typeof options.onMessage === 'function') {
+                    try { options.onMessage(payload); } catch (error) { console.error('subscribeToTopic onMessage error:', error); }
+                }
+                if (typeof options.onTopic === 'function' && payload && typeof payload === 'object' && payload.type === 'topic') {
+                    try { options.onTopic(payload.message, payload); } catch (error) { console.error('subscribeToTopic onTopic error:', error); }
+                }
+            });
+            socket.addEventListener('close', () => {
+                this.topicSubscriptions.delete(key);
+                if (typeof options.onClose === 'function') {
+                    try { options.onClose(); } catch (_) { }
+                }
+            });
+            socket.addEventListener('error', (err) => {
+                if (typeof options.onError === 'function') {
+                    try { options.onError(err); } catch (_) { }
+                }
+            });
+            this.topicSubscriptions.set(key, handle);
+            return handle;
+        } catch (error) {
+            console.error('Failed to subscribe to topic:', error);
+            return null;
+        }
+    }
+
+    ensureCmdVelSubscription(topic) {
+        const cleanTopic = (topic || '').trim();
+        if (!cleanTopic) {
+            return;
+        }
+        if (this.cmdVelSubscription && this.cmdVelSubscription.topic === cleanTopic) {
+            return;
+        }
+        if (this.cmdVelSubscription && typeof this.cmdVelSubscription.close === 'function') {
+            try { this.cmdVelSubscription.close(); } catch (_) { }
+        }
+        const handle = this.subscribeToTopic(cleanTopic, {
+            key: 'cmd_vel',
+            onTopic: (message) => this.handleCmdVelTopicMessage(message),
+        });
+        if (handle) {
+            this.cmdVelSubscription = handle;
+        }
+    }
+
+    handleCmdVelTopicMessage(message) {
+        if (!message) {
+            return;
+        }
+        const linearSrc = message.linear || {};
+        const angularSrc = message.angular || {};
+        const twist = {
+            linear: {
+                x: numberOrNull(linearSrc.x ?? message.linear_x ?? message.x) ?? 0,
+                y: numberOrNull(linearSrc.y ?? message.linear_y ?? message.y) ?? 0,
+                z: numberOrNull(linearSrc.z ?? message.linear_z ?? 0) ?? 0,
+            },
+            angular: {
+                x: numberOrNull(angularSrc.x ?? message.angular_x ?? 0) ?? 0,
+                y: numberOrNull(angularSrc.y ?? message.angular_y ?? 0) ?? 0,
+                z: numberOrNull(angularSrc.z ?? message.angular_z ?? message.z) ?? 0,
+            },
+        };
+        this.currentVelocity = twist;
+        this.renderTwist(twist);
     }
 
     onJoystickStart(event) {
@@ -689,10 +1118,25 @@ class PilotController {
         this.sendVelocityCommand();
     }
 
+    renderTwist(twist) {
+        const formatted = this.store && typeof this.store.setTwist === 'function'
+            ? this.store.setTwist(twist)
+            : {
+                linearX: formatDecimal(twist?.linear?.x, 2),
+                linearY: formatDecimal(twist?.linear?.y, 2),
+                angularZ: formatDecimal(twist?.angular?.z, 2),
+            };
+        const apply = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        };
+        apply('linearX', formatted.linearX);
+        apply('linearY', formatted.linearY);
+        apply('angularZ', formatted.angularZ);
+    }
+
     updateVelocityDisplay() {
-        document.getElementById('linearX').textContent = this.currentVelocity.linear.x.toFixed(2);
-        document.getElementById('linearY').textContent = this.currentVelocity.linear.y.toFixed(2);
-        document.getElementById('angularZ').textContent = this.currentVelocity.angular.z.toFixed(2);
+        this.renderTwist(this.currentVelocity);
     }
 
     sendVelocityCommand() {
@@ -767,23 +1211,18 @@ class PilotController {
     }
 
     updateStatus(text, className) {
-        const statusText = document.getElementById('statusText');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const status = document.getElementById('status');
-
-        statusText.textContent = text;
-        // set semantic status attribute instead of forcing a class name
-        status.setAttribute('data-status', className);
-
-        switch (className) {
-            case 'connected':
-                statusIndicator.textContent = '🟢';
-                break;
-            case 'disconnected':
-                statusIndicator.textContent = '🔴';
-                break;
-            default:
-                statusIndicator.textContent = '🟡';
+        const label = text || '--';
+        if (this.store && typeof this.store.setConnection === 'function') {
+            this.store.setConnection(className, label);
+        }
+        const banner = document.querySelector('[data-source="connectionStatus"]');
+        if (banner) {
+            banner.textContent = label;
+        }
+        const indicator = document.getElementById('statusIndicator');
+        if (indicator) {
+            const indicatorText = this.store ? this.store.connection.indicator : (className === 'connected' ? '🟢' : className === 'disconnected' ? '🔴' : '🟡');
+            indicator.textContent = indicatorText;
         }
     }
 
@@ -1054,36 +1493,54 @@ class PilotController {
         this.convLog.appendChild(el);
         // autoscroll to bottom
         this.convLog.scrollTop = this.convLog.scrollHeight;
+        if (this.store && typeof this.store.pushConversation === 'function') {
+            this.store.pushConversation({ role, content });
+        }
     }
 
     updateAudioStatus(a) {
         const els = this.audioEls;
+        const formatted = this.store && typeof this.store.setAudio === 'function'
+            ? this.store.setAudio(a)
+            : null;
         if (!els) return;
-        if (typeof a.autophony_ms === 'number' && els.speakingMs) {
-            els.speakingMs.textContent = String(a.autophony_ms);
+        if (els.speakingMs) {
+            const speaking = formatted ? formatted.speakingMs : (typeof a.autophony_ms === 'number' ? String(a.autophony_ms) : '0');
+            els.speakingMs.textContent = speaking;
         }
-        if (typeof a.speech_ms === 'number' && els.vadMs) {
-            els.vadMs.textContent = String(a.speech_ms);
+        if (els.vadMs) {
+            const vad = formatted ? formatted.vadMs : (typeof a.speech_ms === 'number' ? String(a.speech_ms) : '0');
+            els.vadMs.textContent = vad;
         }
-        if (a.mic) this.updateMicInfo(a.mic);
+        if (a.mic) {
+            this.updateMicInfo(a.mic);
+        } else if (formatted && els.micInfo) {
+            els.micInfo.textContent = formatted.mic;
+        }
     }
 
     updateMicInfo(m) {
         const el = this.audioEls?.micInfo;
-        if (!el) return;
-        const sr = (typeof m.sample_rate === 'number' && m.sample_rate) ? `${m.sample_rate} Hz` : '--';
-        const ch = (typeof m.channels === 'number' && m.channels) ? `${m.channels} ch` : '--';
-        el.textContent = `${sr}, ${ch}`;
+        const text = this.store && typeof this.store.formatMicInfo === 'function'
+            ? this.store.formatMicInfo(m)
+            : (() => {
+                const sr = (typeof m?.sample_rate === 'number' && m.sample_rate) ? `${m.sample_rate} Hz` : '--';
+                const ch = (typeof m?.channels === 'number' && m.channels) ? `${m.channels} ch` : '--';
+                return `${sr}, ${ch}`;
+            })();
+        if (el) el.textContent = text;
     }
 
     updateGps(g) {
         const els = this.gpsEls;
+        const formatted = this.store && typeof this.store.setGps === 'function'
+            ? this.store.setGps(g)
+            : null;
         if (!els) return;
-        const statusStr = this.formatGpsStatus(g.status);
-        if (els.fix) els.fix.textContent = statusStr;
-        if (typeof g.lat === 'number' && els.lat) els.lat.textContent = g.lat.toFixed(6);
-        if (typeof g.lon === 'number' && els.lon) els.lon.textContent = g.lon.toFixed(6);
-        if (typeof g.alt === 'number' && els.alt) els.alt.textContent = g.alt.toFixed(1);
+        if (els.fix) els.fix.textContent = formatted ? formatted.fix : this.formatGpsStatus(g.status);
+        if (els.lat) els.lat.textContent = formatted ? formatted.lat : (typeof g.lat === 'number' ? g.lat.toFixed(6) : '--');
+        if (els.lon) els.lon.textContent = formatted ? formatted.lon : (typeof g.lon === 'number' ? g.lon.toFixed(6) : '--');
+        if (els.alt) els.alt.textContent = formatted ? formatted.alt : (typeof g.alt === 'number' ? g.alt.toFixed(1) : '--');
     }
 
     formatGpsStatus(code) {
@@ -1757,17 +2214,32 @@ class PilotController {
         setTimeout(() => { el.removeAttribute('data-error'); }, 1200);
     }
 
+    renderTopicLabel(topic, count) {
+        const label = (topic || '').trim() || '--';
+        if (typeof count === 'number' && Number.isFinite(count)) {
+            return `${label} (${count} subscribers)`;
+        }
+        return label;
+    }
+
     updateCmdVelTopic(topic, count) {
+        if (this.store && typeof this.store.setCmdVelTopic === 'function') {
+            this.store.setCmdVelTopic(topic, count);
+        }
         const el = document.getElementById('cmdVelTopic');
         if (el) {
-            el.textContent = topic + (typeof count === 'number' ? ` (${count} subscribers)` : '');
+            el.textContent = this.renderTopicLabel(topic, count);
         }
+        this.ensureCmdVelSubscription(topic);
     }
 
     updateVoiceTopic(topic, count) {
+        if (this.store && typeof this.store.setVoiceTopic === 'function') {
+            this.store.setVoiceTopic(topic, count);
+        }
         const el = document.getElementById('voiceTopic');
         if (el) {
-            el.textContent = topic + (typeof count === 'number' ? ` (${count} subscribers)` : '');
+            el.textContent = this.renderTopicLabel(topic, count);
         }
     }
 
@@ -1775,6 +2247,10 @@ class PilotController {
         // payload may include: percent, voltage, current, temperature, charging_state, charge_ratio
         const els = this.batteryEls;
         if (!els) return;
+
+        const formatted = this.store && typeof this.store.setBattery === 'function'
+            ? this.store.setBattery(payload)
+            : null;
 
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
         const percent = typeof payload.percent === 'number' && isFinite(payload.percent)
@@ -1786,23 +2262,21 @@ class PilotController {
             // Change fill color smoothly by adjusting background position along gradient
             // Already gradient-based; width reflects SoC.
         }
-        const pctText = percent != null ? `${percent.toFixed(0)}%` : '--%';
+        const pctText = formatted ? formatted.percent : (percent != null ? `${percent.toFixed(0)}%` : '--');
         if (els.percent) els.percent.textContent = pctText;
         if (els.percentInfo) els.percentInfo.textContent = pctText;
 
-        if (els.voltage && typeof payload.voltage === 'number') {
-            els.voltage.textContent = payload.voltage.toFixed(2);
+        if (els.voltage) {
+            els.voltage.textContent = formatted ? formatted.voltage : (typeof payload.voltage === 'number' ? payload.voltage.toFixed(2) : '--');
         }
-        if (els.current && typeof payload.current === 'number') {
-            els.current.textContent = payload.current.toFixed(2);
+        if (els.current) {
+            els.current.textContent = formatted ? formatted.current : (typeof payload.current === 'number' ? payload.current.toFixed(2) : '--');
         }
-        if (els.temp && typeof payload.temperature === 'number') {
-            const c = payload.temperature;
-            const f = c * 9 / 5 + 32;
-            els.temp.textContent = `${c.toFixed(1)}°C / ${f.toFixed(1)}°F`;
+        if (els.temp) {
+            els.temp.textContent = formatted ? formatted.temperature : '--';
         }
 
-        const stateStr = this.formatChargingState(payload.charging_state);
+        const stateStr = formatted ? formatted.state : this.formatChargingState(payload.charging_state);
         if (els.state) els.state.textContent = stateStr;
         if (els.stateInfo) els.stateInfo.textContent = stateStr;
     }
@@ -1821,18 +2295,31 @@ class PilotController {
 
     updateRobotStatus(s) {
         const els = this.robotEls;
+        const formatted = this.store && typeof this.store.setRobotStatus === 'function'
+            ? this.store.setRobotStatus(s)
+            : null;
         if (!els) return;
-        const modeStr = this.formatMode(s.mode);
+        const modeStr = formatted ? formatted.mode : this.formatMode(s.mode);
         if (els.mode) els.mode.textContent = modeStr;
-        if (els.speed && typeof s.speed === 'number') els.speed.textContent = s.speed.toFixed(2);
-        if (els.bumper && typeof s.bumper === 'boolean') els.bumper.textContent = s.bumper ? 'PRESSED' : 'OK';
-        if (els.cliff && typeof s.cliff === 'boolean') els.cliff.textContent = s.cliff ? 'DETECTED' : 'OK';
-        if (els.ir && typeof s.ir_omni === 'number') els.ir.textContent = String(s.ir_omni);
-        if (els.diag && s.diag_counts) {
-            const lvl = s.diag_level ?? 0;
-            const counts = s.diag_counts;
-            const txt = `L${lvl} ok:${counts[0] || 0} warn:${counts[1] || 0} err:${counts[2] || 0}`;
-            els.diag.textContent = txt;
+        if (els.speed) {
+            const speedText = formatted ? formatted.speed : (typeof s.speed === 'number' ? s.speed.toFixed(2) : '--');
+            els.speed.textContent = speedText;
+        }
+        if (els.bumper) {
+            const bumperText = formatted ? formatted.bumper : (typeof s.bumper === 'boolean' ? (s.bumper ? 'PRESSED' : 'OK') : '--');
+            els.bumper.textContent = bumperText;
+        }
+        if (els.cliff) {
+            const cliffText = formatted ? formatted.cliff : (typeof s.cliff === 'boolean' ? (s.cliff ? 'DETECTED' : 'OK') : '--');
+            els.cliff.textContent = cliffText;
+        }
+        if (els.ir) {
+            const irText = formatted ? formatted.ir : (typeof s.ir_omni === 'number' ? String(s.ir_omni) : '--');
+            els.ir.textContent = irText;
+        }
+        if (els.diag) {
+            const diagText = formatted ? formatted.diag : '--';
+            els.diag.textContent = diagText;
         }
     }
 
@@ -1848,17 +2335,18 @@ class PilotController {
 
     updateHostHealth(h) {
         const els = this.hostEls;
+        const formatted = this.store && typeof this.store.setHostHealth === 'function'
+            ? this.store.setHostHealth(h)
+            : null;
         if (!els) return;
-        if (typeof h.cpu_percent === 'number') {
-            els.cpu.textContent = `CPU ${h.cpu_percent.toFixed(0)}%`;
+        if (els.cpu) {
+            els.cpu.textContent = formatted ? formatted.cpu : (typeof h.cpu_percent === 'number' ? `CPU ${h.cpu_percent.toFixed(0)}%` : '--');
         }
-        if (typeof h.temp_c === 'number') {
-            const c = h.temp_c;
-            const f = c * 9 / 5 + 32;
-            els.temp.textContent = `Temp ${c.toFixed(0)}°C / ${f.toFixed(0)}°F`;
+        if (els.temp) {
+            els.temp.textContent = formatted ? formatted.temp : '--';
         }
-        if (typeof h.mem_used_percent === 'number') {
-            els.mem.textContent = `Mem ${h.mem_used_percent.toFixed(0)}%`;
+        if (els.mem) {
+            els.mem.textContent = formatted ? formatted.mem : (typeof h.mem_used_percent === 'number' ? `Mem ${h.mem_used_percent.toFixed(0)}%` : '--');
         }
     }
 

@@ -33,3 +33,11 @@ def test_css_defines_dpad_and_joystick_styles():
     assert ".dpad-grid" in css and "grid-template-areas" in css
     assert ".joystick" in css and ("aspect-ratio" in css or "padding-top" in css)
     assert "@media" in css and "max-width" in css
+
+
+def test_index_bootstraps_alpine_store():
+    """The frontend should expose an Alpine data context for live telemetry."""
+    html = read_html()
+    assert 'alpinejs' in html.lower()
+    assert 'x-data="pilotApp"' in html
+    assert '$store.pilot.twist.linearX' in html

@@ -86,6 +86,13 @@ or conflicting package sources.
 - Pilot control cascade reads from DOM elements flagged with `data-source`
   attributes; update `modules/pilot/packages/pilot/tests/test_frontend_layout.py`
   if you adjust that markup.
+- Pilot frontend telemetry is bound through an Alpine `$store.pilot` defined in
+  `joystick.js`; keep store fields and the `x-text` bindings in
+  `static/index.html` in sync when adjusting displayed metrics.
+- Topic websocket endpoints are normalised via
+  `buildTopicSubscriptionUrl` in `joystick.js`; keep
+  `modules/pilot/packages/pilot/tests/test_frontend_topics.py` updated when
+  changing host resolution logic.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.
