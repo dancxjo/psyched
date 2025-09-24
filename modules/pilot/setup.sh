@@ -62,4 +62,53 @@ else
   echo "[pilot/setup] websockets library already available"
 fi
 
+# Install system packages required to host an access point and provide DHCP/DNS
+# Note: network access and apt availability are required. We try to be helpful
+# but fall back to warnings if the install cannot be completed.
+echo "[pilot/setup] Checking system packages for AP support..."
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO=sudo
+  else
+    echo "[pilot/setup] Warning: not running as root and sudo not available; cannot install system packages automatically"
+  fi
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+  PKGS=(hostapd dnsmasq iproute2 iw)
+  echo "[pilot/setup] Detected apt-get. Will attempt to install: ${PKGS[*]}"
+  if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
+    echo "[pilot/setup] Updating apt cache..."
+    # Don't fail the whole script if update fails; continue with best-effort
+    $SUDO apt-get update -y || echo "[pilot/setup] apt-get update failed (network may be unavailable)"
+    echo "[pilot/setup] Installing packages: ${PKGS[*]}"
+    if $SUDO apt-get install -y "${PKGS[@]}" >/dev/null 2>&1; then
+      echo "[pilot/setup] System packages installed successfully"
+    else
+      echo "[pilot/setup] Warning: Failed to install some system packages. You may need to run as root or install manually:"
+      echo "[pilot/setup]   sudo apt-get install -y ${PKGS[*]}"
+    fi
+  else
+    echo "[pilot/setup] Warning: Cannot install system packages because sudo/root is not available"
+    echo "[pilot/setup] Install manually: sudo apt-get install -y ${PKGS[*]}"
+  fi
+else
+  echo "[pilot/setup] apt-get not found; automatic installation of hostapd/dnsmasq skipped. Install them manually on Debian-based systems:"
+  echo "[pilot/setup]   sudo apt-get install -y hostapd dnsmasq iproute2 iw"
+fi
+
+# Ensure Python zeroconf is available for mDNS support
+if ! python3 -c 'import zeroconf' >/dev/null 2>&1; then
+  echo "[pilot/setup] Installing Python zeroconf package (with --break-system-packages)..."
+  if pip3 install --break-system-packages zeroconf >/dev/null 2>&1 || sudo pip3 install --break-system-packages zeroconf >/dev/null 2>&1; then
+    echo "[pilot/setup] zeroconf installed successfully"
+  else
+    echo "[pilot/setup] Warning: Failed to install zeroconf. You may need to install it manually:"
+    echo "[pilot/setup]   pip3 install --break-system-packages zeroconf"
+  fi
+else
+  echo "[pilot/setup] zeroconf package already available"
+fi
+
 echo "[pilot/setup] Done. Build with: make build"
