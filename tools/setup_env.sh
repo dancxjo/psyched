@@ -143,6 +143,7 @@ ensure("py_trees", "py_trees")
 try:
     importlib.import_module("py_trees_ros")
 except ModuleNotFoundError:
+    # The GitHub dependency tracks ros2 main; pin a commit for deterministic installs.
     ensure("py_trees_ros", "git+https://github.com/splintered-reality/py_trees_ros.git")
 PY
 }

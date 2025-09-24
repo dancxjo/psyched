@@ -100,6 +100,7 @@ from psyched_bt.trees.common_blackboard import (
     VOICE_TEXT_KEY,
     SetText,
 )
+from psyched_bt.trees.common_actions import Speak
 from psyched_bt.trees import converse_on_face
 from psyched_bt.regime_manager_node import parse_face_payload
 
@@ -164,6 +165,11 @@ def test_parse_face_payload_handles_json() -> None:
     assert payload == {"name": "Stranger"}
 
 
+def test_parse_face_payload_empty_string_returns_none() -> None:
+    """Empty payloads should be ignored by the regime manager."""
+    assert parse_face_payload("   ") is None
+
+
 def test_set_text_populates_blackboard() -> None:
     """SetText should convert a detection into voice + conversation prompts."""
     manager_client = py_trees.blackboard.Client(name="manager")
@@ -205,8 +211,8 @@ def test_converse_tree_runs_to_completion() -> None:
     utterance = getattr(publisher.messages[-1], "data", None)
     assert isinstance(utterance, str) and "Grace" in utterance
 
-    # Simulate the voice_done callback and tick again to finish.
-    done_msg = types.SimpleNamespace(data=utterance)
+    # Simulate the voice_done callback with a generic payload and tick again.
+    done_msg = types.SimpleNamespace(data="done")
     node.subscriptions[0][1](done_msg)
 
     tree.tick()
@@ -219,3 +225,51 @@ def test_converse_tree_runs_to_completion() -> None:
     message = conversation_pub.messages[-1]
     assert getattr(message, "role", "") == "user"
     assert "Grace" in getattr(message, "content", "")
+
+
+def test_speak_accepts_generic_voice_done_when_enabled() -> None:
+    """Speak should finish when configured to accept any completion signal."""
+
+    client = py_trees.blackboard.Client(name="voice_writer")
+    client.register_key(key=VOICE_TEXT_KEY, access=Access.WRITE)
+    setattr(client, VOICE_TEXT_KEY, "Testing one two")
+
+    behaviour = Speak(accept_any_done=True, voice_topic="/voice", voice_done_topic="voice_done")
+    node = DummyNode()
+    behaviour.setup(node=node)
+    behaviour.initialise()
+    assert behaviour.update() == Status.RUNNING
+
+    # Publish completion with a mismatched payload.
+    callback = node.subscriptions[0][1]
+    callback(types.SimpleNamespace(data="done"))
+
+    assert behaviour.update() == Status.SUCCESS
+
+
+def test_converse_tree_respects_custom_topics() -> None:
+    """Tree wiring should honour overrides for the speech and conversation topics."""
+
+    manager_client = py_trees.blackboard.Client(name="manager_custom")
+    manager_client.register_key(key=PERSON_INFO_KEY, access=Access.WRITE)
+    setattr(manager_client, PERSON_INFO_KEY, {"name": "Custom"})
+
+    node = DummyNode()
+    root = converse_on_face.create_tree(
+        voice_topic="/alt_voice",
+        voice_done_topic="alt_done",
+        conversation_topic="/alt_conversation",
+    )
+    tree = py_trees.trees.BehaviourTree(root=root)
+    tree.setup(timeout=1.0, node=node)
+
+    tree.tick()
+    publisher = node.publishers[0]
+    assert publisher.topic == "/alt_voice"
+    subscription_topic, _ = node.subscriptions[0]
+    assert subscription_topic == "alt_done"
+
+    # Complete speech and ensure conversation uses the overridden topic.
+    node.subscriptions[0][1](types.SimpleNamespace(data="done"))
+    tree.tick()
+    assert node.publishers[1].topic == "/alt_conversation"

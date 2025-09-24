@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import types
 from typing import Any, Optional
 
@@ -24,6 +25,13 @@ class Speak(py_trees.behaviour.Behaviour):
         Topic that accepts :class:`std_msgs.msg.String` messages for synthesis.
     voice_done_topic:
         Topic used by the voice node to signal completion of playback.
+    accept_any_done:
+        When ``True`` the behaviour treats any ``voice_done`` payload as a
+        completion signal. When ``False`` it only succeeds when the payload
+        matches the published utterance.
+    max_wait_sec:
+        Maximum seconds to wait for a completion signal before timing out and
+        returning :class:`~py_trees.common.Status.SUCCESS`.
     """
 
     def __init__(
@@ -33,11 +41,15 @@ class Speak(py_trees.behaviour.Behaviour):
         text_key: str = VOICE_TEXT_KEY,
         voice_topic: str = "/voice",
         voice_done_topic: str = "voice_done",
+        accept_any_done: bool = False,
+        max_wait_sec: float = 10.0,
     ) -> None:
         super().__init__(name=name)
         self.text_key = text_key
         self.voice_topic = voice_topic
         self.voice_done_topic = voice_done_topic
+        self._accept_any_done = accept_any_done
+        self._max_wait_sec = max_wait_sec
         self._blackboard = py_trees.blackboard.Client(name=f"{name}_bb")
         self._blackboard.register_key(key=self.text_key, access=Access.READ)
         self._publisher: Optional[Any] = None
@@ -47,6 +59,7 @@ class Speak(py_trees.behaviour.Behaviour):
         self._last_utterance: Optional[str] = None
         self._node: Any = None
         self._string_type: Optional[type] = None
+        self._start_time: float = 0.0
 
     @property
     def last_utterance(self) -> Optional[str]:
@@ -73,6 +86,7 @@ class Speak(py_trees.behaviour.Behaviour):
         self._voice_done = False
         self._spoken = False
         self._last_utterance = None
+        self._start_time = time.monotonic()
 
     def update(self) -> Status:
         if self._publisher is None:
@@ -91,8 +105,12 @@ class Speak(py_trees.behaviour.Behaviour):
             self.logger.info(f"Speaking: {utterance}")
             return Status.RUNNING
 
+        elapsed = time.monotonic() - self._start_time
         if self._voice_done:
             self.logger.debug("voice_done received; Speak succeeded")
+            return Status.SUCCESS
+        if elapsed > self._max_wait_sec:
+            self.logger.debug("Timed out waiting for voice_done; Speak succeeded")
             return Status.SUCCESS
 
         return Status.RUNNING
@@ -111,7 +129,7 @@ class Speak(py_trees.behaviour.Behaviour):
 
     def _on_voice_done(self, msg: Any) -> None:
         completed = getattr(msg, "data", None)
-        if completed == self._last_utterance:
+        if self._accept_any_done or completed == self._last_utterance:
             self._voice_done = True
 
 

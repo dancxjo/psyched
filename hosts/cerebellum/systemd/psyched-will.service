@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/will/launch.sh
-ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh bash -c "\"/home/pete/psyched/hosts/cerebellum/modules/will/shutdown.sh\""
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/hosts/cerebellum/modules/will/shutdown.sh
 Restart=on-failure
 RestartSec=2
 User=pete

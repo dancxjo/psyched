@@ -18,4 +18,4 @@ if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
 fi
 
-ros2 launch psyched_bt brain.launch.py "${@:-}"
+ros2 launch psyched_bt brain.launch.py "$@"
