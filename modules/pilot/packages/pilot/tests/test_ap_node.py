@@ -1,6 +1,8 @@
 import time
 
-import rclpy
+import pytest
+
+rclpy = pytest.importorskip('rclpy')
 
 from pilot.ap_node import APNode
 
