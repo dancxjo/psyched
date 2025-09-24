@@ -87,6 +87,30 @@ source_now() {
     # shellcheck disable=SC1090
     . "${ws_setup}"
   fi
+  # Ensure any manual package prefixes placed under $REPO_ROOT/install are
+  # visible to tools that rely on AMENT_PREFIX_PATH / ROS_PACKAGE_PATH.
+  # Colcon's generated install/local_setup.bash may not include manually
+  # added prefixes created after the last build, so scan install/* and
+  # prepend any sensible prefixes.
+  if [[ -d "$REPO_ROOT/install" ]]; then
+    for _p in "$REPO_ROOT"/install/*; do
+      # skip non-directories
+      if [[ ! -d "$_p" ]]; then
+        continue
+      fi
+      # consider this a prefix if it has a share/ament_index or a share/*
+      if [[ -d "$_p/share/ament_index/resource_index/packages" || -d "$_p/share" ]]; then
+        case ":${AMENT_PREFIX_PATH:-}:" in
+          *":$_p:"*) ;;
+          *) export AMENT_PREFIX_PATH="$_p${AMENT_PREFIX_PATH:+:}$AMENT_PREFIX_PATH" ;;
+        esac
+        case ":${ROS_PACKAGE_PATH:-}:" in
+          *":$_p/share:"*) ;;
+          *) export ROS_PACKAGE_PATH="$_p/share${ROS_PACKAGE_PATH:+:}$ROS_PACKAGE_PATH" ;;
+        esac
+      fi
+    done
+  fi
   if (( had_u )); then set -u; fi
 }
 

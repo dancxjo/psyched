@@ -136,7 +136,7 @@ class PilotController {
         const small = window.matchMedia('(max-width: 640px)');
         const applyDefault = () => {
             const collapsed = small.matches; // default collapsed on small screens
-            panel.classList.toggle('collapsed', collapsed);
+            panel.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
             toggle.setAttribute('aria-expanded', String(!collapsed));
             toggle.textContent = collapsed ? 'System ▸' : 'System ▾';
         };
@@ -149,7 +149,9 @@ class PilotController {
             small.addListener(applyDefault);
         }
         toggle.addEventListener('click', () => {
-            const collapsed = panel.classList.toggle('collapsed');
+            const currently = panel.getAttribute('data-collapsed') === 'true';
+            const collapsed = !currently;
+            panel.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
             toggle.setAttribute('aria-expanded', String(!collapsed));
             toggle.textContent = collapsed ? 'System ▸' : 'System ▾';
         });
@@ -162,13 +164,13 @@ class PilotController {
         if (!depthEl) return;
         if (toggle) {
             toggle.addEventListener('change', () => {
-                depthEl.style.display = toggle.checked ? 'block' : 'none';
+                depthEl.setAttribute('data-visible', toggle.checked ? 'true' : 'false');
             });
         }
         if (slider) {
             const setOpacity = (v) => {
                 const op = Math.max(0, Math.min(100, parseInt(v, 10))) / 100.0;
-                depthEl.style.opacity = String(op);
+                depthEl.setAttribute('data-opacity', String(op));
             };
             // set initial
             setOpacity(slider.value);
@@ -411,7 +413,7 @@ class PilotController {
 
     onJoystickStart(event) {
         this.isDragging = true;
-        this.joystick.classList.add('dragging');
+        this.joystick.setAttribute('data-dragging', 'true');
 
         // Update joystick center position
         const rect = this.joystick.getBoundingClientRect();
@@ -454,7 +456,7 @@ class PilotController {
         if (!this.isDragging) return;
 
         this.isDragging = false;
-        this.joystick.classList.remove('dragging');
+        this.joystick.removeAttribute('data-dragging');
 
         // Return knob to center with smooth animation
         this.joystickKnob.style.transform = 'translate(-50%, -50%)';
@@ -746,7 +748,7 @@ class PilotController {
 
     resetJoystick() {
         this.isDragging = false;
-        this.joystick.classList.remove('dragging');
+        this.joystick.removeAttribute('data-dragging');
         this.joystickKnob.style.transform = 'translate(-50%, -50%)';
 
         // Center slider too
@@ -770,7 +772,8 @@ class PilotController {
         const status = document.getElementById('status');
 
         statusText.textContent = text;
-        status.className = `status ${className}`;
+        // set semantic status attribute instead of forcing a class name
+        status.setAttribute('data-status', className);
 
         switch (className) {
             case 'connected':
@@ -1016,7 +1019,8 @@ class PilotController {
     renderModuleSection(moduleName, moduleConfig) {
         const moduleId = 'module-' + moduleName.replace(/[^a-zA-Z0-9_-]/g, '-');
         const section = document.createElement('div');
-        section.className = 'module-section';
+        // mark module section semantically
+        section.setAttribute('data-role', 'module-section');
         section.id = moduleId;
 
         section.innerHTML = `
@@ -1040,7 +1044,8 @@ class PilotController {
     addConversation(msg) {
         if (!this.convLog) return;
         const el = document.createElement('div');
-        el.className = 'conversation-entry';
+        // semantic marker for conversation entries
+        el.setAttribute('data-role', 'conversation-entry');
         const role = (msg.role || '').toString().trim() || 'assistant';
         const content = (msg.content || '').toString();
         el.innerHTML = `<span class="role">${role}:</span> <span class="content"></span>`;
@@ -1170,9 +1175,10 @@ class PilotController {
         const existingSections = new Set();
         const children = Array.from(this.servicesLogs.children || []);
         children.forEach(child => {
-            if (!child || !child.classList) return;
+            if (!child) return;
             try {
-                if (child.classList.contains('module-section') && child.id) {
+                const role = child.getAttribute ? child.getAttribute('data-role') : null;
+                if (role === 'module-section' && child.id) {
                     existingSections.add(child.id);
                 }
             } catch (e) {
@@ -1507,7 +1513,8 @@ class PilotController {
 
     renderServicePill(svc) {
         const el = document.createElement('div');
-        el.className = 'service-pill';
+        // semantic marker for service pill
+        el.setAttribute('data-role', 'service-pill');
         el.id = this.serviceId(svc.name);
         el.title = svc.description || svc.name;
         el.innerHTML = `
@@ -1527,10 +1534,12 @@ class PilotController {
         if (nameEl) nameEl.textContent = this.prettyServiceName(svc.name);
         const active = (svc.active || '').toLowerCase();
         stateEl.textContent = active || 'unknown';
-        stateEl.className = 'state ' + (active === 'active' ? 'active' : (active === 'inactive' ? 'inactive' : 'unknown'));
+        // expose the state as a data attribute for styling without inline classes
+        stateEl.setAttribute('data-state', (active === 'active' ? 'active' : (active === 'inactive' ? 'inactive' : 'unknown')));
         const enabled = (svc.enabled || '').toLowerCase();
         enEl.textContent = enabled ? `(${enabled})` : '';
-        enEl.className = 'enabled ' + (enabled === 'enabled' ? 'on' : 'off');
+        // expose enabled status as data attribute
+        enEl.setAttribute('data-enabled', (enabled === 'enabled' ? 'on' : 'off'));
         el.title = (svc.description || svc.name) + `\nState: ${stateEl.textContent}  Enabled: ${enabled || 'unknown'}`;
     }
 
@@ -1617,7 +1626,8 @@ class PilotController {
     renderServiceLogBlock(unit) {
         const id = this.serviceId(unit) + '-detail';
         const wrap = document.createElement('div');
-        wrap.className = 'service-log-block';
+        // semantic wrapper for service logs
+        wrap.setAttribute('data-role', 'service-log-block');
         wrap.id = id;
         wrap.innerHTML = `
             <div class="service-log-header">
@@ -1741,10 +1751,10 @@ class PilotController {
         const id = this.serviceId(unit);
         const el = document.getElementById(id);
         if (!el) return;
-        const old = el.style.outline;
-        el.style.outline = '2px solid #ef4444';
+        // Toggle a data attribute so styling remains in CSS instead of inline
+        el.setAttribute('data-error', 'true');
         el.title = (el.title || unit) + `\nError: ${msg}`;
-        setTimeout(() => { el.style.outline = old || ''; }, 1200);
+        setTimeout(() => { el.removeAttribute('data-error'); }, 1200);
     }
 
     updateCmdVelTopic(topic, count) {
@@ -1853,54 +1863,77 @@ class PilotController {
     }
 
     updateImu(imu) {
-        // imu: { ax, ay, az, gx, gy, gz, yaw }
         const els = this.imuEls;
         if (!els || !els.overlay) return;
 
-        // Rotate robot by yaw (radians to degrees)
-        if (typeof imu.yaw === 'number' && isFinite(imu.yaw) && els.robotYaw) {
-            const deg = imu.yaw * 180 / Math.PI;
-            els.robotYaw.setAttribute('transform', `rotate(${deg})`);
+        // --- 1) Cache circle geometry & set a full-circle path once ---
+        if (!this._imuGeom) {
+            // Use the base circle already in your SVG so radii always match
+            const baseCircle = els.overlay.querySelector('circle');
+            const r = baseCircle ? parseFloat(baseCircle.getAttribute('r')) : 88;
+            const cx = baseCircle ? parseFloat(baseCircle.getAttribute('cx')) : 100;
+            const cy = baseCircle ? parseFloat(baseCircle.getAttribute('cy')) : 100;
+
+            // Full circle path that starts at TOP and proceeds CLOCKWISE
+            // (two 180° arcs)
+            const dCircle =
+                `M ${cx} ${cy - r} ` +
+                `A ${r} ${r} 0 1 1 ${cx} ${cy + r} ` +
+                `A ${r} ${r} 0 1 1 ${cx} ${cy - r}`;
+
+            els.gyroZ.setAttribute('d', dCircle);
+
+            // Cache circumference for dash math
+            this._imuGeom = { cx, cy, r, C: 2 * Math.PI * r };
         }
 
-        // Acceleration vector in plane (x: forward, y: left). Scale visually.
+        const { cx, cy, r, C } = this._imuGeom;
+
+        // --- 2) Yaw (heading) rotation for the robot icon ---
+        if (typeof imu.yaw === 'number' && isFinite(imu.yaw) && els.robotYaw) {
+            els.robotYaw.setAttribute('transform', `rotate(${imu.yaw * 180 / Math.PI})`);
+        }
+
+        // --- 3) Acceleration vector (ax forward, ay left) ---
         if (typeof imu.ax === 'number' && typeof imu.ay === 'number' && els.accelVec) {
-            const scale = 10; // pixels per m/s^2 (tuned visually)
-            // In our world, +x forward = upward in joystick SVG (y decreases). +y left = left (x decreases)
+            const scale = 10;
             const dx = -imu.ay * scale; // left/right
             const dy = -imu.ax * scale; // up/down
-            const x2 = 100 + Math.max(-80, Math.min(80, dx));
-            const y2 = 100 + Math.max(-80, Math.min(80, dy));
+            const x2 = cx + Math.max(-0.9 * r, Math.min(0.9 * r, dx));
+            const y2 = cy + Math.max(-0.9 * r, Math.min(0.9 * r, dy));
             els.accelVec.setAttribute('x2', String(x2));
             els.accelVec.setAttribute('y2', String(y2));
             els.accelVec.setAttribute('opacity', (Math.hypot(dx, dy) > 2) ? '0.95' : '0.5');
         }
 
-        // Gyro Z arc: map gz rad/s to arc length and direction
+        // --- 4) Gyro Z (yaw rate) as a dash segment on that circle ---
         if (typeof imu.gz === 'number' && isFinite(imu.gz) && els.gyroZ) {
-            const maxGz = 4.0; // rad/s corresponding to full semicircle
-            const clamped = Math.max(-maxGz, Math.min(maxGz, imu.gz));
-            const frac = Math.abs(clamped) / maxGz; // 0..1
-            const sweep = Math.max(0.02, Math.PI * frac); // up to 180 degrees
+            const maxGz = 4.0;                 // rad/s → full half-circle
+            const dead = 0.06;                 // small deadzone
+            const gz = Math.max(-maxGz, Math.min(maxGz, imu.gz));
+            const mag = Math.abs(gz);
 
-            // Draw arc centered at top (start angle depends on sign)
-            const r = 88;
-            const cx = 100, cy = 100;
-            const sign = clamped >= 0 ? 1 : -1; // CCW positive
-            // Base angle is -90deg; arc goes left for positive, right for negative
-            const start = (-Math.PI / 2) + (sign > 0 ? -sweep : 0);
-            const end = (-Math.PI / 2) + (sign > 0 ? 0 : sweep);
-            const x0 = cx + r * Math.cos(start);
-            const y0 = cy + r * Math.sin(start);
-            const x1 = cx + r * Math.cos(end);
-            const y1 = cy + r * Math.sin(end);
-            const largeArc = sweep > Math.PI ? 1 : 0;
-            const sweepFlag = sign > 0 ? 1 : 0; // CCW for positive
-            const d = `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
-            els.gyroZ.setAttribute('d', d);
-            els.gyroZ.setAttribute('opacity', frac > 0.05 ? '0.9' : '0.3');
+            if (mag < dead) {
+                els.gyroZ.style.strokeDasharray = '0 ' + C; // hide
+                els.gyroZ.setAttribute('opacity', '0.25');
+                return;
+            }
+
+            // We display up to 180° of arc (half the circumference)
+            const sweepFrac = mag / maxGz;                 // 0..1
+            const arcLen = (C / 2) * sweepFrac;            // length of visible dash
+            const gapLen = Math.max(1, C - arcLen);        // remainder
+
+            // Path is CW from TOP. For positive gz, show right-hand side (CW).
+            // For negative gz, shift the dash so it appears to the LEFT of top.
+            els.gyroZ.style.strokeDasharray = `${arcLen} ${gapLen}`;
+            els.gyroZ.style.strokeDashoffset = (gz >= 0) ? '0' : String(-arcLen);
+
+            els.gyroZ.setAttribute('opacity', sweepFrac > 0.05 ? '0.9' : '0.4');
         }
     }
+
+
 }
 
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
