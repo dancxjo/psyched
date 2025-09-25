@@ -71,8 +71,8 @@ if (import.meta.main) {
     })
     .command("env", "Print shell code to source ROS2 and workspace setup scripts for use with 'source $(psh env)'")
     .alias("environment")
-    .action(() => {
-      printEnvSource();
+    .action(async () => {
+      await printEnvSource();
     })
     .command("mod", "Run module action (setup, launch, etc). Usage: psh mod <module> [action]")
     .alias("module")

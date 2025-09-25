@@ -1,7 +1,7 @@
 // psh_env.ts
 // Prints shell code to source ROS2 and workspace setup scripts for use with 'source $(psh env)'
 
-export function printEnvSource() {
+export async function printEnvSource() {
     // Find installed ROS2 setup script (prefer kilted, fallback to any)
     const rosSetup = [
         "/opt/ros/kilted/setup.bash",
@@ -37,6 +37,23 @@ export function printEnvSource() {
     // Workspace install setup
     const user = Deno.env.get("USER") ?? "$(whoami)";
     const wsSetup = `/home/${user}/psyched/install/setup.bash`;
-    // Print shell code for sourcing both
-    console.log(`source ${foundRos} && source ${wsSetup}`);
+
+    // Add function to ~/.bashrc
+    const bashrcPath = `${Deno.env.get("HOME")}/.bashrc`;
+    const funcDef = `psyched_env() {\n    source ${foundRos} && source ${wsSetup}\n}`;
+    let bashrcContent = "";
+    try {
+        bashrcContent = await Deno.readTextFile(bashrcPath);
+    } catch (_) {
+        bashrcContent = "";
+    }
+    if (!bashrcContent.includes("psyched_env()")) {
+        bashrcContent += (bashrcContent.endsWith("\n") ? "" : "\n") + funcDef + "\n" + "psyched_env\n";
+        await Deno.writeTextFile(bashrcPath, bashrcContent);
+        console.log("Added 'psyched_env' function to ~/.bashrc");
+    } else {
+        console.log("'psyched_env' function already present in ~/.bashrc");
+    }
+    // Print instructions
+    console.log(`\nTo activate the environment, run:\n\nsource ~/.bashrc\npsyched_env\n`);
 }
