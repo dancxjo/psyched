@@ -60,7 +60,7 @@ export async function setup(_options: Record<string, unknown>, args: unknown[]):
     const hostArg = args?.[0]?.toString();
     let host = hostArg;
     if (!host) {
-        const hn = await $`hostname -s`;
+        const hn = await $`hostname -s`.stdout("piped").stderr("piped");
         host = (hn.stdout || hn.stderr || "").toString().trim() || Deno.env.get("HOST") || undefined;
     }
     if (!host) {
