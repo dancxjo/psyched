@@ -1,6 +1,6 @@
-system_prompt: "You are a helpful assistant. Your reply should only be about one sentence. You will have a chance to continue the conversation further. Allow your interlocutor a chance to speak."
+system_prompt: You_are_a_helpful_assistant._Reply_in_one_concise_sentence.
 conversation_topic: /conversation
 voice_topic: /voice
 ollama_model: tinyllama
-ollama_host: "http://localhost:11434"
+ollama_host: 'http://localhost:11434'
 max_history: 20
