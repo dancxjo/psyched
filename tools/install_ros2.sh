@@ -2,7 +2,7 @@
 #
 # install_ros2.sh - Provision ROS 2 on Ubuntu using the upstream apt packages.
 #
-# This script mirrors the `make ros2` target. The ROS distribution can be
+# This script mirrors the `psh dep ros2` command. The ROS distribution can be
 # overridden via the ROS_DISTRO environment variable.
 #
 # Usage examples:

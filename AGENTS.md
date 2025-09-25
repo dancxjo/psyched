@@ -23,8 +23,8 @@ workspace.
   setup` can orchestrate work without bespoke shell scripts. When adding new
   actions check `psh/modules.ts` for supported types.
 - `hosts/` – Host-specific configuration, symlinks, and generated systemd units.
-- `tools/` – Provisioning helpers (ROS installation, bringup orchestration,
-  diagnostics, etc.).
+- `tools/` – Provisioning helpers (ROS/Docker installers, env shims used by
+  `psh`).
 - `src/` – Additional workspace packages pulled in during builds.
 
 ## Working style expectations
@@ -64,8 +64,9 @@ Important workflow note:
 
 ```bash
 rm -rf ./src
-HOST=<your-host> ./tools/setup
-make build
+psh setup <your-host>
+source tools/setup_env.sh
+colcon build --symlink-install --base-paths src
 ```
 
 This ensures old or stale package copies don't cause colcon build duplicates
@@ -88,6 +89,8 @@ or conflicting package sources.
 - `py_trees_ros` is not published to PyPI; `tools/setup_env.sh` installs it
   from GitHub. Ensure network access is available the first time you source the
   environment on a new machine.
+- The legacy Makefile has been removed; rely on `psh` commands and direct
+  `colcon` invocations for setup/build/systemd tasks.
 - Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure
   frontend updates don't depend on it before processing service data.
 - Pilot control cascade reads from DOM elements flagged with `data-source`

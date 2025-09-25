@@ -1,5 +1,5 @@
 // --- Utility Imports & Helpers ---
-import { $, repoPath } from "./util.ts";
+import { $ } from "./util.ts";
 import { parse as parseToml } from "@std/toml";
 import { join } from "@std/path";
 import {
@@ -7,30 +7,32 @@ import {
   cleanupModuleContext,
   loadModuleSpec,
   prepareModuleContext,
+  repoDirFromModules,
 } from "./modules.ts";
+import { runInstallDocker, runInstallRos2 } from "./install.ts";
 
-// --- Installers ---
-async function runInstallRos2(): Promise<void> {
-  const script = repoPath("../tools/install_ros2.sh");
-  console.log(`Running ROS2 install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    throw new Error(`ROS2 installer failed (${r.code})`);
+type ModuleConfigTable = Record<string, Record<string, unknown>>;
+
+async function determineHostName(): Promise<string> {
+  const hn = await $`hostname -s`.stdout("piped").stderr("piped");
+  const hostname = (hn.stdout || hn.stderr || "").toString().trim();
+  return hostname || Deno.env.get("HOST") || "";
+}
+
+async function readHostSpec(host: string): Promise<Record<string, unknown>> {
+  const repoDir = repoDirFromModules();
+  const tomlPath = join(repoDir, "hosts", `${host}.toml`);
+  try {
+    const text = await Deno.readTextFile(tomlPath);
+    return parseToml(text) as Record<string, unknown>;
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) {
+      throw new Error(`Host specification not found at ${tomlPath}`);
+    }
+    throw new Error(`Failed to read host spec ${tomlPath}: ${String(err)}`);
   }
 }
 
-async function runInstallDocker(): Promise<void> {
-  const script = repoPath("../tools/install_docker.sh");
-  console.log(`Running Docker install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    throw new Error(`Docker installer failed (${r.code})`);
-  }
-}
-
-// --- Module Setup ---
 async function runModuleSetup(
   moduleName: string,
   config: Record<string, unknown> | null,
@@ -53,7 +55,7 @@ async function ensureHostModuleSymlink(
   host: string,
   moduleName: string,
 ): Promise<void> {
-  const repoDir = Deno.cwd();
+  const repoDir = repoDirFromModules();
   const hostModulesDir = join(repoDir, "hosts", host, "modules");
   await Deno.mkdir(hostModulesDir, { recursive: true });
   const linkPath = join(hostModulesDir, moduleName);
@@ -71,90 +73,71 @@ async function ensureHostModuleSymlink(
   await Deno.symlink(target, linkPath);
 }
 
-// --- Main Setup Flow ---
-export async function setup(
-  _options: Record<string, unknown>,
-  args: unknown[],
-): Promise<void> {
-  // Determine host name
-  const hostArg = args?.[0]?.toString();
-  let host = hostArg;
-  if (!host) {
-    const hn = await $`hostname -s`.stdout("piped").stderr("piped");
-    host = (hn.stdout || hn.stderr || "").toString().trim() ||
-      Deno.env.get("HOST") || undefined;
+function extractModuleList(spec: Record<string, unknown>): string[] {
+  const modules = spec.modules;
+  if (!modules) return [];
+  if (Array.isArray(modules)) {
+    return modules.map((m) => String(m));
   }
-  if (!host) {
-    console.error(
-      "Unable to determine host name. Provide it as `psh setup <host>` or set HOST env var.",
-    );
-    Deno.exit(2);
-  }
+  return [String(modules)];
+}
 
-  // Read host TOML
-  const tomlPath = `${Deno.cwd()}/hosts/${host}.toml`;
-  let tomlText: string;
-  try {
-    tomlText = await Deno.readTextFile(tomlPath);
-  } catch (err) {
-    console.error(`Host TOML not found at ${tomlPath}:`, String(err));
-    Deno.exit(2);
+function extractModuleConfigs(
+  spec: Record<string, unknown>,
+): ModuleConfigTable {
+  const table = spec.module_configs && typeof spec.module_configs === "object"
+    ? spec.module_configs as Record<string, unknown>
+    : {};
+  const configs: ModuleConfigTable = {};
+  for (const [moduleName, cfg] of Object.entries(table)) {
+    if (cfg && typeof cfg === "object") {
+      configs[moduleName] = cfg as Record<string, unknown>;
+    }
   }
+  return configs;
+}
 
-  // Parse TOML
-  let spec: Record<string, unknown>;
-  try {
-    spec = parseToml(tomlText) as Record<string, unknown>;
-  } catch (err) {
-    console.error(`Failed to parse TOML for host ${host}:`, String(err));
-    Deno.exit(2);
-  }
-
+async function applyHost(host: string): Promise<void> {
+  const spec = await readHostSpec(host);
   console.log(`Applying host '${host}'`);
 
-  // Optional installers
-  try {
-    if (spec?.setup_ros2) {
-      console.log("Host requests ROS2 installation.");
-      await runInstallRos2();
-    }
-    if (spec?.setup_docker) {
-      console.log("Host requests Docker installation.");
-      await runInstallDocker();
-    }
-  } catch (err) {
-    console.error("Installer failed:", String(err));
-    Deno.exit(3);
+  if (spec.setup_ros2) {
+    console.log("Host requests ROS2 installation.");
+    await runInstallRos2();
+  }
+  if (spec.setup_docker) {
+    console.log("Host requests Docker installation.");
+    await runInstallDocker();
   }
 
-  // Modules activation
-  const modulesList = Array.isArray(spec.modules)
-    ? (spec.modules as unknown[]).map((m) => String(m))
-    : [];
-  if (!modulesList.length) {
+  const modules = extractModuleList(spec);
+  if (!modules.length) {
     console.log("No modules listed for this host in TOML. Nothing more to do.");
     return;
   }
 
-  // Extract module-specific config tables
-  const modulesConfigTable =
-    (spec.module_configs && typeof spec.module_configs === "object")
-      ? spec.module_configs as Record<string, unknown>
-      : {};
-
-  for (const moduleName of modulesList) {
+  const configs = extractModuleConfigs(spec);
+  for (const moduleName of modules) {
     await ensureHostModuleSymlink(host, moduleName);
-    const moduleConfig =
-      modulesConfigTable && typeof modulesConfigTable[moduleName] === "object"
-        ? modulesConfigTable[moduleName] as Record<string, unknown>
-        : null;
+    const moduleConfig = configs[moduleName] ?? null;
     try {
       await runModuleSetup(moduleName, moduleConfig);
     } catch (err) {
       console.error(`Failed to setup module ${moduleName}:`, String(err));
-      // Continue with other modules
     }
   }
 
   console.log("Host setup finished.");
+}
+
+export async function setupHosts(hosts: string[]): Promise<void> {
+  const targets = hosts.length ? hosts : [await determineHostName()];
+  if (!targets[0]) {
+    throw new Error(
+      "Unable to determine host name. Provide it as `psh setup <host>` or set HOST env var.",
+    );
+  }
+  for (const host of targets) {
+    await applyHost(host);
+  }
 }
