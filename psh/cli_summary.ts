@@ -114,5 +114,5 @@ export async function printSummaryTable() {
     }
 
     // Friendly tip
-    console.log(colors.gray("Tip: Use 'psh setup' to provision hosts and 'psh mod <module> launch' to start services."));
+    console.log(colors.gray("Tip: Use 'psh provision' to provision hosts and 'psh mod <module> launch' to start services."));
 }

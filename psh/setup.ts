@@ -134,7 +134,7 @@ export async function setupHosts(hosts: string[]): Promise<void> {
   const targets = hosts.length ? hosts : [await determineHostName()];
   if (!targets[0]) {
     throw new Error(
-      "Unable to determine host name. Provide it as `psh setup <host>` or set HOST env var.",
+      "Unable to determine host name. Provide it as `psh provision <host>` or set HOST env var.",
     );
   }
   for (const host of targets) {

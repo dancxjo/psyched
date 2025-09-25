@@ -67,7 +67,7 @@ Important workflow note:
 
 ```bash
 rm -rf ./src
-psh setup <your-host>
+psh provision <your-host>
 source tools/setup_env.sh
 colcon build --symlink-install --base-paths src
 ```

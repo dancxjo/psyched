@@ -12,7 +12,7 @@ Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. W
 
 ## Run
 ```
-psh setup <host>
+psh provision <host>
 source tools/setup_env.sh
 colcon build --symlink-install --base-paths src
 psh mod chat launch

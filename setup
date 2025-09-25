@@ -3,7 +3,7 @@ set -euo pipefail
 # Update and upgrade; fail the script on error
 sudo apt update && sudo apt upgrade -y
 
-sudo apt install -y curl shellcheck micro mc git build-essential make
+sudo apt install -y curl shellcheck micro mc git build-essential make python3-full python3-pip python3-venv python-is-python3
 
 # Try to install unzip; tolerate failure but send stdout to stderr so messages
 # appear on the standard error stream like the original intent. Use an if

@@ -87,6 +87,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
 
   cli.command("provision")
     .alias("p")
+    .alias("setup")
     .description("Setup host modules and dependencies (default: current host)")
     .arguments("[host:string] [...hosts:string]")
     .action(

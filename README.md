@@ -84,7 +84,7 @@ hosts/
    ls hosts/
 
    # Apply the configuration for the current machine
-   psh setup <host>
+   psh provision <host>
    ```
 
    Important: module setup actions create a clean `src/` tree by symlinking
@@ -94,7 +94,7 @@ hosts/
 
    ```bash
    rm -rf ./src
-   psh setup <host>
+   psh provision <host>
    ```
 
    Each module should place its ROS2 package(s) under
@@ -189,7 +189,7 @@ hosts/
 
 ```bash
 # Provision modules for the current host
-psh setup <host>
+psh provision <host>
 
 # Build workspace
 source tools/setup_env.sh
@@ -207,7 +207,7 @@ psh mod pilot launch
 2. Add ROS 2 package(s) under `modules/mymodule/packages/<pkg>`
 3. Define module actions and systemd commands in `modules/mymodule/module.toml`
    (use `link_packages`, dependency actions, and `launch_command`/`shutdown_command`).
-4. Add the module name to your host configuration in `hosts/<host>.toml` so `psh setup`
+4. Add the module name to your host configuration in `hosts/<host>.toml` so `psh provision`
    can provision it.
 
 ### Testing Changes
