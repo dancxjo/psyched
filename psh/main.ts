@@ -195,5 +195,11 @@ if (import.meta.main) {
       Deno.exit(2);
     })
     // (removed unused 'bar' command)
+    .command("env", "Print the path to the environment setup script (for sourcing)")
+    .action(() => {
+      // Print the absolute path to tools/setup_env.sh so callers can do:
+      //   source $(psh env)
+      console.log(repoPath('../tools/setup_env.sh'));
+    })
     .parse(Deno.args);
 }
