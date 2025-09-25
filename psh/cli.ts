@@ -101,6 +101,30 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       async (_options: unknown, host?: string, ...rest: (string | undefined)[]) => {
         const targets = [host, ...rest].filter((value): value is string => Boolean(value));
         await deps.setupHosts(targets);
+        // Also run module setup via the module runner (equivalent to `psh m setup`)
+        try {
+          await deps.runModuleScript("*", "setup");
+        } catch (err) {
+          console.error("[psh] Module setup via 'psh m setup' failed:", String(err));
+        }
+
+        // Build the workspace between module setup and systemd installation.
+        try {
+          await deps.colconBuild();
+        } catch (err) {
+          console.error("[psh] Build step (psh build) failed:", String(err));
+        }
+
+        // Generate and enable systemd units (equivalent to `psh sys gen` and `psh sys enable`)
+        try {
+          // `systemdInstall` performs generation and copies units into systemd dir.
+          await deps.systemdInstall();
+          if (deps.systemdEnable) {
+            await deps.systemdEnable();
+          }
+        } catch (err) {
+          console.error("[psh] Systemd generation/enable failed:", String(err));
+        }
       },
     );
 
