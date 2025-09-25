@@ -9,6 +9,8 @@ import { systemdGenerate, systemdInstall, systemdUninstall } from "./systemd.ts"
 import { uninstallPsh } from "./uninstall.ts";
 import { clean } from "./clean.ts";
 import { printSummaryTable } from "./cli_summary.ts";
+import { runModuleScript } from "./mod.ts";
+
 
 if (import.meta.main) {
   await new Command()
@@ -35,13 +37,16 @@ if (import.meta.main) {
       }
     })
     .command("dep", "Install system dependencies (ros2, docker). Usage: psh dep <ros2|docker>")
+    .alias("dependency")
+    .alias("dependencies")
     .arguments("<dep:string>")
     .action(async (_options: Record<string, unknown>, dep: string) => {
-      if (dep === 'ros2') {
+      const depNorm = dep.toLowerCase();
+      if (["ros2", "ros", "r"].includes(depNorm)) {
         await runInstallRos2();
         return;
       }
-      if (dep === 'docker') {
+      if (["docker", "d"].includes(depNorm)) {
         await runInstallDocker();
         return;
       }
@@ -65,8 +70,15 @@ if (import.meta.main) {
       Deno.exit(2);
     })
     .command("env", "Print shell code to source ROS2 and workspace setup scripts for use with 'source $(psh env)'")
+    .alias("environment")
     .action(() => {
       printEnvSource();
+    })
+    .command("mod", "Run module action (setup, launch, etc). Usage: psh mod <module> [action]")
+    .alias("module")
+    .arguments("<module:string> [action:string]")
+    .action(async (_options: Record<string, unknown>, module: string, action?: string) => {
+      await runModuleScript(module, action);
     })
     .command("clean", "Undo work made by psh and remove generated garbage")
     .arguments("[target:string]")
