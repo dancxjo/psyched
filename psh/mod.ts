@@ -1,5 +1,11 @@
 import { join } from "@std/path";
-import { loadModuleSpec, repoDirFromModules } from "./modules.ts";
+import {
+  loadModuleSpec,
+  repoDirFromModules,
+  prepareModuleContext,
+  applyModuleActions,
+  cleanupModuleContext,
+} from "./modules.ts";
 import { $, type DaxCommandBuilder, type DaxTemplateTag } from "./util.ts";
 
 let commandRunner: DaxTemplateTag = $;
@@ -47,6 +53,54 @@ export async function runModuleScript(module: string, action?: string) {
 
   const specInfo = await loadModuleSpec(module).catch(() => null);
   const systemd = specInfo?.spec.systemd;
+
+  // Special-case: run the action for all modules when module is '*' or 'all'.
+  if (module === "*" || module.toLowerCase?.() === "all") {
+    try {
+      for await (const entry of Deno.readDir(join(repoDir, "modules"))) {
+        if (!entry.isDirectory) continue;
+        // skip hidden entries
+        if (entry.name.startsWith(".")) continue;
+        console.log(`[mod] Invoking ${action ?? "(default)"} for module: ${entry.name}`);
+        // await each module sequentially to avoid noisy parallel shell output
+        // and to preserve ordering when linking packages into src/
+        // eslint-disable-next-line no-await-in-loop
+        await runModuleScript(entry.name, action);
+      }
+    } catch (err) {
+      console.error(`[mod] Failed iterating modules: ${err}`);
+      Deno.exit(2);
+    }
+    return;
+  }
+
+  // Special-case: list available modules
+  if (requested === "list") {
+    try {
+      console.log("Available modules:");
+      for await (const entry of Deno.readDir(join(repoDir, "modules"))) {
+        if (!entry.isDirectory) continue;
+        if (entry.name.startsWith(".")) continue;
+        console.log(` - ${entry.name}`);
+      }
+      return;
+    } catch (err) {
+      console.error(`[mod] Failed listing modules: ${err}`);
+      Deno.exit(2);
+    }
+  }
+
+  // Special-case: module setup (link packages, install deps, etc.)
+  if (requested === "setup") {
+    const spec = specInfo?.spec;
+    const ctx = await prepareModuleContext(module, null);
+    try {
+      await applyModuleActions(spec?.actions, ctx);
+    } finally {
+      await cleanupModuleContext(ctx);
+    }
+    return;
+  }
 
   for (const act of actionOrder) {
     const scriptPath = join(moduleDir, `${act}.sh`);

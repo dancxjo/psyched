@@ -71,7 +71,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
 
   const cli = new Command()
     .name("psh")
-    .description("Psyched CLI")
+    .description("Psyched shell, a CLI for managing ROS2 workspaces and modules and for provisioning hosts in a robot")
     .version("v1.0.0")
     .throwErrors()
     .action(async () => {
@@ -79,20 +79,14 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     });
 
   cli.command("install")
+    .alias("i")
     .description("Install the psh shim under /usr/bin/psh")
     .action(async () => {
       await deps.installPsh();
     });
 
-  cli.command("build")
-    .description("Run colcon build and install for the workspace")
-    .action(async () => {
-      // TODO: Clear out build/ and install/ folders first.
-      await deps.colconBuild();
-      await deps.colconInstall();
-    });
-
-  cli.command("setup")
+  cli.command("provision")
+    .alias("p")
     .description("Setup host modules and dependencies (default: current host)")
     .arguments("[host:string] [...hosts:string]")
     .action(
@@ -102,10 +96,8 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       },
     );
 
-  cli.command("dep")
-    .alias("dependency")
-    .alias("dependencies")
-    .description("Install a system dependency (ros2 or docker)")
+  cli.command("basics")
+    .description("Install a system dependency (ros2 or docker). Called by `psh provision` automatically.")
     .arguments("<dep:string>")
     .action(async (_options, dep: string) => {
       const normalized = normalize(dep, "");
@@ -119,6 +111,28 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       }
       throw new Error(`Unknown dependency: ${dep}`);
     });
+
+  cli.command("module")
+    .alias("mod")
+    .alias("m")
+    .description("Setup, launch, or shutdown modules")
+    .arguments("[module:string] [action:string]")
+    .action(
+      async (_options, module: string = '*', action: string = 'list') => {
+        await deps.runModuleScript(module, action);
+      },
+    );
+
+
+  cli.command("build")
+    .description("Run colcon build and install for the workspace")
+    .action(async () => {
+      // TODO: Clear out build/ and install/ folders first.
+      await deps.colconBuild();
+      await deps.colconInstall();
+    });
+
+
 
   // Systemd command: dispatch action and optional units as arguments
   const _sys = cli.command("systemd")
@@ -190,23 +204,15 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       throw new Error(`Unknown systemd action: ${action}`);
     });
 
-  cli.command("env")
+  cli.command("environment")
+    .alias("env")
     .description(
-      "Print shell code that sources ROS 2 and workspace setup scripts",
+      "Setup bash to use the ROS 2 and workspace environment",
     )
     .action(async () => {
       await deps.printEnvSource();
     });
 
-  cli.command("mod")
-    .alias("module")
-    .description("Run a module action (launch, shutdown, etc.)")
-    .arguments("<module:string> [action:string]")
-    .action(
-      async (_options, module: string, action?: string) => {
-        await deps.runModuleScript(module, action);
-      },
-    );
 
   cli.command("clean")
     .description("Remove generated artifacts or uninstall helpers")
