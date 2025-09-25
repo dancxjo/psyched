@@ -99,13 +99,15 @@ or conflicting package sources.
 - Pilot control cascade reads from DOM elements flagged with `data-source`
   attributes; update `modules/pilot/packages/pilot/tests/test_frontend_layout.py`
   if you adjust that markup.
-- Pilot frontend telemetry is bound through an Alpine `$store.pilot` defined in
-  `joystick.js`; keep store fields and the `x-text` bindings in
-  `static/index.html` in sync when adjusting displayed metrics.
-- Topic websocket endpoints are normalised via
-  `buildTopicSubscriptionUrl` in `joystick.js`; keep
-  `modules/pilot/packages/pilot/tests/test_frontend_topics.py` updated when
-  changing host resolution logic.
+- Pilot frontend telemetry now flows through the Svelte store in
+  `frontend/src/components/PilotApp.svelte`; update the Alpine interop events
+  in `static/index.html` when renaming sections.
+- Topic websocket creation lives in `PilotApp.svelte`; adjust
+  `test_api_routes.py` and `test_topic_manager.py` when changing connection or
+  QoS negotiation logic.
+- Git ignores any `src/` directories by default; when adding Svelte sources
+  under `modules/pilot/packages/pilot/pilot/frontend/src`, use
+  `git add -f ...` to stage them.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.

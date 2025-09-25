@@ -1,6 +1,24 @@
 name = "voice"
 description = "Text-to-speech pipeline"
 
+[pilot]
+display_name = "Voice"
+description = "Text-to-speech synthesis"
+
+[[pilot.topics]]
+name = "/voice"
+type = "std_msgs/msg/String"
+access = "rw"
+presentation = "text"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/interrupt"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "button"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["voice", "psyched_msgs"]

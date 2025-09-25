@@ -1,6 +1,24 @@
 name = "foot"
 description = "Create platform motor control"
 
+[pilot]
+display_name = "Foot"
+description = "Drive base interface for the iRobot Create"
+
+[[pilot.topics]]
+name = "/odom"
+type = "nav_msgs/msg/Odometry"
+access = "ro"
+presentation = "pose"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/joint_states"
+type = "sensor_msgs/msg/JointState"
+access = "ro"
+presentation = "status"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "git_clone"
 repo = "https://github.com/autonomylab/create_robot.git"

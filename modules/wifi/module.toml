@@ -1,6 +1,17 @@
 name = "wifi"
 description = "User-space Wi-Fi tooling and ROS 2 status publisher"
 
+[pilot]
+display_name = "Wi-Fi"
+description = "Wireless network health"
+
+[[pilot.topics]]
+name = "/wifi_status"
+type = "std_msgs/msg/String"
+access = "ro"
+presentation = "status"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["wifi"]

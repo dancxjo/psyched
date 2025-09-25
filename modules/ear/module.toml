@@ -1,6 +1,31 @@
 name = "ear"
 description = "Microphone capture and voice activity detection"
 
+[pilot]
+display_name = "Ear"
+description = "Audio intake and VAD telemetry"
+
+[[pilot.topics]]
+name = "/audio/raw"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_duration"
+type = "std_msgs/msg/UInt32"
+access = "ro"
+presentation = "gauge"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_segment"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["ear", "psyched_msgs"]

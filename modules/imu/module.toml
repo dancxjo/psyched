@@ -1,6 +1,24 @@
 name = "imu"
 description = "MPU6050 inertial measurement integration"
 
+[pilot]
+display_name = "IMU"
+description = "Inertial measurement data from the MPU6050"
+
+[[pilot.topics]]
+name = "/imu"
+type = "sensor_msgs/msg/Imu"
+access = "ro"
+presentation = "imu"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/imu/temperature"
+type = "sensor_msgs/msg/Temperature"
+access = "ro"
+presentation = "gauge"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "git_clone"
 repo = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"

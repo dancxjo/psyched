@@ -1,6 +1,24 @@
 name = "eye"
 description = "Kinect depth camera integration"
 
+[pilot]
+display_name = "Eye"
+description = "RGB-D perception from the Kinect"
+
+[[pilot.topics]]
+name = "/camera/color/image_raw"
+type = "sensor_msgs/msg/Image"
+access = "ro"
+presentation = "image"
+qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/camera/depth/image_raw"
+type = "sensor_msgs/msg/Image"
+access = "ro"
+presentation = "depth"
+qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }
+
 [[actions]]
 type = "run"
 description = "Ensure cv_bridge overlay when headers missing"
