@@ -45,7 +45,7 @@ Deno.test("colcon install shells out via dax", async () => {
     captured = invocation;
     return { code: 0 };
   });
-  await colconInstall(stub);
+  colconInstall();
   const invocation = expectInvocation(
     captured,
     "Expected colcon install to invoke dax",

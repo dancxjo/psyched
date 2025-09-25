@@ -9,7 +9,12 @@ import {
   prepareModuleContext,
   repoDirFromModules,
 } from "./modules.ts";
-import { runInstallDocker, runInstallRos2 } from "./install.ts";
+import {
+  runInstallDocker,
+  runInstallRos2,
+  isRos2Installed,
+  isDockerInstalled,
+} from "./install.ts";
 
 type ModuleConfigTable = Record<string, Record<string, unknown>>;
 
@@ -103,11 +108,19 @@ async function applyHost(host: string): Promise<void> {
 
   if (spec.setup_ros2) {
     console.log("Host requests ROS2 installation.");
-    await runInstallRos2();
+    if (await isRos2Installed()) {
+      console.log("ROS2 already detected on system — skipping installation.");
+    } else {
+      await runInstallRos2();
+    }
   }
   if (spec.setup_docker) {
     console.log("Host requests Docker installation.");
-    await runInstallDocker();
+    if (await isDockerInstalled()) {
+      console.log("Docker already detected on system — skipping installation.");
+    } else {
+      await runInstallDocker();
+    }
   }
 
   const modules = extractModuleList(spec);

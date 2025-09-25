@@ -243,15 +243,24 @@ async function applyAptInstall(
   action: AptInstallAction,
   ctx: ModuleContext,
 ): Promise<void> {
-  const aptPath = await $`command -v apt-get`.stdout("piped").stderr("piped")
-    .noThrow();
+  // Use the user's shell to resolve `apt-get` (so shell builtins like `command`
+  // are available). Some template runners execute commands directly which
+  // means `command -v` (a shell builtin) can fail even though `apt-get` is
+  // present on the filesystem. Fall back to a direct path existence check
+  // if the shell check fails.
+  const shell = Deno.env.get("SHELL") || "/bin/bash";
+  const aptPath = await $`${shell} -lc 'command -v apt-get'`
+    .stdout("piped").stderr("piped").noThrow();
   if (aptPath.code !== 0) {
-    console.warn(
-      `[module:${ctx.module}] apt-get not available; skipping packages: ${
-        action.packages.join(", ")
-      }`,
-    );
-    return;
+    try {
+      await Deno.stat("/usr/bin/apt-get");
+    } catch (_err) {
+      console.warn(
+        `[module:${ctx.module}] apt-get not available; skipping packages: ${action.packages.join(", ")
+        }`,
+      );
+      return;
+    }
   }
   if (action.update) {
     console.log(`[module:${ctx.module}] Running apt-get update`);
@@ -259,8 +268,7 @@ async function applyAptInstall(
   }
   if (action.packages.length === 0) return;
   console.log(
-    `[module:${ctx.module}] Installing apt packages: ${
-      action.packages.join(", ")
+    `[module:${ctx.module}] Installing apt packages: ${action.packages.join(", ")
     }`,
   );
   const result = await $`sudo apt-get install -y ${action.packages}`.noThrow();
@@ -283,8 +291,7 @@ async function applyPipInstall(
     const check = await $`${python} -c ${program}`.noThrow();
     if (check.code === 0) {
       console.log(
-        `[module:${ctx.module}] Python modules already installed: ${
-          action.import_check.join(", ")
+        `[module:${ctx.module}] Python modules already installed: ${action.import_check.join(", ")
         }`,
       );
       return;
@@ -294,8 +301,7 @@ async function applyPipInstall(
   if (action.break_system) pipArgs.push("--break-system-packages");
   if (action.user) pipArgs.push("--user");
   console.log(
-    `[module:${ctx.module}] Installing Python packages via ${python}: ${
-      action.packages.join(", ")
+    `[module:${ctx.module}] Installing Python packages via ${python}: ${action.packages.join(", ")
     }`,
   );
   let result = await $`${python} ${pipArgs}`.noThrow();
@@ -372,8 +378,7 @@ export async function applyModuleActions(
         break;
       default:
         console.warn(
-          `[module:${ctx.module}] Unknown action type: ${
-            (action as ModuleActionBase).type
+          `[module:${ctx.module}] Unknown action type: ${(action as ModuleActionBase).type
           }`,
         );
     }

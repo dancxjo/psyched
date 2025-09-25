@@ -8,6 +8,13 @@ import {
   systemdGenerate,
   systemdInstall,
   systemdUninstall,
+  systemdStart,
+  systemdEnable,
+  systemdDisable,
+  systemdStop,
+  systemdReload,
+  systemdRestart,
+  systemdDebug,
 } from "./systemd.ts";
 import { uninstallPsh } from "./uninstall.ts";
 import { setupHosts } from "./setup.ts";
@@ -48,13 +55,13 @@ const defaultDeps: CliDeps = {
   systemdGenerate: () => systemdGenerate(),
   systemdInstall: (units?: string[]) => systemdInstall(units),
   systemdUninstall: () => systemdUninstall(),
-  systemdDebug: () => { throw new Error("systemdDebug not implemented"); },
-  systemdEnable: () => { throw new Error("systemdEnable not implemented"); },
-  systemdDisable: () => { throw new Error("systemdDisable not implemented"); },
-  systemdStart: () => { throw new Error("systemdStart not implemented"); },
-  systemdStop: () => { throw new Error("systemdStop not implemented"); },
-  systemdReload: () => { throw new Error("systemdReload not implemented"); },
-  systemdRestart: () => { throw new Error("systemdRestart not implemented"); },
+  systemdDebug: (units?: string[]) => systemdDebug(units),
+  systemdEnable: (units?: string[]) => systemdEnable(units),
+  systemdDisable: (units?: string[]) => systemdDisable(units),
+  systemdStart: (units?: string[]) => systemdStart(units),
+  systemdStop: (units?: string[]) => systemdStop(units),
+  systemdReload: (units?: string[]) => systemdReload(units),
+  systemdRestart: (units?: string[]) => systemdRestart(units),
   printEnvSource,
   runModuleScript,
   cleanWorkspace,
@@ -91,7 +98,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .description("Setup host modules and dependencies (default: current host)")
     .arguments("[host:string] [...hosts:string]")
     .action(
-      async (_options, host?: string, ...rest: (string | undefined)[]) => {
+      async (_options: unknown, host?: string, ...rest: (string | undefined)[]) => {
         const targets = [host, ...rest].filter((value): value is string => Boolean(value));
         await deps.setupHosts(targets);
       },
@@ -100,7 +107,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
   cli.command("basics")
     .description("Install a system dependency (ros2 or docker). Called by `psh provision` automatically.")
     .arguments("<dep:string>")
-    .action(async (_options, dep: string) => {
+    .action(async (_options: unknown, dep: string) => {
       const normalized = normalize(dep, "");
       if (["ros2", "ros", "r"].includes(normalized)) {
         await deps.runInstallRos2();
@@ -119,7 +126,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .description("Setup, launch, or shutdown modules")
     .arguments("[module:string] [action:string]")
     .action(
-      async (_options, module: string = '*', action: string = 'list') => {
+      async (_options: unknown, module: string = '*', action: string = 'list') => {
         await deps.runModuleScript(module, action);
       },
     );
@@ -132,9 +139,11 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       try {
         await deps.colconBuild();
         // await deps.colconInstall();
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Provide a clearer hint when Deno lacks permissions to spawn processes
-        const msg = String(err?.message || err);
+        const msg = typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message?: unknown }).message)
+          : String(err);
         if (msg.includes("Requires --allow-run") || msg.includes("NotCapable") || msg.includes("allow-run")) {
           console.error("[psh] Deno permission error: running external commands requires Deno to be granted run permissions.");
           console.error("Try: deno run -A --config psh/deno.json psh/main.ts build");
@@ -154,7 +163,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .alias("srv")
     .description("Manage systemd unit files (gen/install, debug, enable, disable, stop, start, reload, restart)")
     .arguments("[action:string] [...units:string]")
-    .action(async (_options, action?: string, ...units: string[]) => {
+    .action(async (_options: unknown, action?: string, ...units: string[]) => {
       const act = normalize(action, "gen");
       if (["*", "gen", "generate"].includes(act)) {
         // generate now merges install (write + copy into systemd dir)
@@ -230,7 +239,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
   cli.command("clean")
     .description("Remove generated artifacts or uninstall helpers")
     .arguments("[scope:string]")
-    .action(async (_options, scope?: string) => {
+    .action(async (_options: unknown, scope?: string) => {
       const target = normalize(scope, "workspace");
       if (["workspace", "ws", "src"].includes(target)) {
         await deps.cleanWorkspace();

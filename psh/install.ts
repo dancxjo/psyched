@@ -1,7 +1,56 @@
 // Installer functions for ROS2, Docker, etc.
 import { $, repoPath } from "./util.ts";
+import { join } from "@std/path";
+
+/**
+ * Check whether ROS2 appears to be installed on the system.
+ * We check for a `ros2` executable in PATH and for an /opt/ros directory.
+ */
+export async function isRos2Installed(): Promise<boolean> {
+  // Check for ros2 executable in PATH without invoking a shell builtin.
+  if (await existsInPath("ros2")) return true;
+
+  // Fall back to checking the common installation path
+  try {
+    const st = await Deno.stat("/opt/ros");
+    if (st.isDirectory) return true;
+  } catch (_err) {
+    // missing /opt/ros is fine
+  }
+  return false;
+}
+
+/**
+ * Check whether Docker appears to be installed on the system.
+ * We check for a `docker` executable in PATH.
+ */
+export async function isDockerInstalled(): Promise<boolean> {
+  return await existsInPath("docker");
+}
+
+async function existsInPath(name: string): Promise<boolean> {
+  const pathEnv = Deno.env.get("PATH") || "";
+  if (!pathEnv) return false;
+  const parts = pathEnv.split(":");
+  for (const p of parts) {
+    if (!p) continue;
+    const fp = join(p, name);
+    try {
+      const st = await Deno.lstat(fp);
+      if (st.isFile || st.isSymlink) return true;
+    } catch (_err) {
+      // missing file — continue
+    }
+  }
+  return false;
+}
 
 export async function runInstallRos2(): Promise<void> {
+  if (await isRos2Installed()) {
+    console.log("ROS2 appears to be installed already — skipping ROS2 install.");
+    return;
+  }
+
   const script = repoPath("../tools/install_ros2.sh");
   console.log(`Running ROS2 install script: ${script}`);
   const r = await $`bash ${script}`;
@@ -12,6 +61,11 @@ export async function runInstallRos2(): Promise<void> {
 }
 
 export async function runInstallDocker(): Promise<void> {
+  if (await isDockerInstalled()) {
+    console.log("Docker appears to be installed already — skipping Docker install.");
+    return;
+  }
+
   const script = repoPath("../tools/install_docker.sh");
   console.log(`Running Docker install script: ${script}`);
   const r = await $`bash ${script}`;
