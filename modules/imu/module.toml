@@ -1,0 +1,35 @@
+name = "imu"
+description = "MPU6050 inertial measurement integration"
+
+[[actions]]
+type = "git_clone"
+repo = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
+dest = "ros2_mpu6050_driver"
+
+[[actions]]
+type = "run"
+description = "Ensure mpu6050 header includes <array>"
+command = """
+HEADER="src/ros2_mpu6050_driver/include/mpu6050driver/mpu6050sensor.h"
+if [ -f "$HEADER" ] && ! grep -q '#include <array>' "$HEADER"; then
+  if grep -q '#include <string>' "$HEADER"; then
+    sed -i '/#include <string>/a #include <array>' "$HEADER"
+  else
+    sed -i '1i #include <array>' "$HEADER"
+  fi
+fi
+"""
+optional = true
+
+[[actions]]
+type = "apt_install"
+packages = ["libi2c-dev", "i2c-tools"]
+update = true
+
+[systemd]
+description = "Psyched IMU Sensor"
+after = ["network.target"]
+launch = "modules/imu/launch.sh"
+shutdown = "modules/imu/shutdown.sh"
+restart = "on-failure"
+restart_sec = 4

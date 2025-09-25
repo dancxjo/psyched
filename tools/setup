@@ -1,65 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Setup all modules for this host by running each module's setup.sh, waiting for
-# completion, and then invoking a single workspace build once at the end.
-# It scans hosts/$(hostname -s)/modules/* and executes $module/setup.sh.
-
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_SHORT="${HOST:-$(hostname -s)}"
-MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
 
-# Optionally source ROS and workspace environments if available
-if [ -f "${REPO_DIR}/tools/setup_env.sh" ]; then
-  # shellcheck disable=SC1091
-  set +u
-  source "${REPO_DIR}/tools/setup_env.sh"
-  set -u
+if ! command -v deno >/dev/null 2>&1; then
+  echo "[setup] deno is required to run module provisioning. Install from https://deno.land/ before continuing." >&2
+  exit 1
 fi
 
-# Nothing to do if modules dir missing or empty
-if [ ! -d "${MODULES_DIR}" ]; then
-  echo "[setup] No modules directory for host '${HOST_SHORT}' at ${MODULES_DIR}. Nothing to setup." >&2
-  exit 0
-fi
-
-shopt -s nullglob
-modules=("${MODULES_DIR}"/*)
-shopt -u nullglob
-
-if [ ${#modules[@]} -eq 0 ]; then
-  echo "[setup] No modules configured under ${MODULES_DIR}." >&2
-  exit 0
-fi
-
-status=0
-for module in "${modules[@]}"; do
-  if [ -d "$module" ] && [ -x "$module/setup.sh" ]; then
-    echo "[setup] Running setup for $(basename "$module")..."
-    ( cd "$module" && "./setup.sh" ) || status=$?
-  elif [ -d "$module" ] && [ -f "$module/setup.sh" ]; then
-    echo "[setup] Running setup for $(basename "$module") (non-exec setup.sh)..."
-    ( cd "$module" && bash "./setup.sh" ) || status=$?
-  else
-    echo "[setup] Skipping $(basename "$module"): no setup.sh found" >&2
-  fi
-done
-
-if [ $status -ne 0 ]; then
-  echo "[setup] One or more module setups failed (last status=$status). Aborting build." >&2
-  exit $status
-fi
-
-# After all module setups succeed, perform a single build with a simple lock to
-# prevent multiple overlapping spins.
-LOCK_DIR="${REPO_DIR}/.build.lock"
-if mkdir "$LOCK_DIR" 2>/dev/null; then
-  trap 'rmdir "$LOCK_DIR" >/dev/null 2>&1 || true' EXIT
-  echo "[setup] Building workspace (single pass)..."
-  make build
-  echo "[setup] Build complete."
-else
-  echo "[setup] Another build appears to be in progress (lock present). Skipping build."
-fi
-
-exit 0
+exec deno run -A "${REPO_DIR}/psh/main.ts" setup "${HOST_SHORT}"

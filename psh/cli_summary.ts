@@ -1,4 +1,4 @@
-import { repoPath, $ } from "./util.ts";
+import { $ } from "./util.ts";
 import { colors } from "@cliffy/ansi/colors";
 
 export async function printSummaryTable() {
@@ -65,7 +65,7 @@ export async function printSummaryTable() {
                 try {
                     const r = await $`systemctl is-active ${ent.name}`.stdout("null").stderr("null");
                     active = (r.stdout || "").toString().trim() === "active";
-                } catch { }
+                } catch { /* ignore systemctl errors */ }
                 units.push({ name: ent.name, active });
             }
         }

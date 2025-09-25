@@ -1,0 +1,21 @@
+name = "foot"
+description = "Create platform motor control"
+
+[[actions]]
+type = "git_clone"
+repo = "https://github.com/autonomylab/create_robot.git"
+dest = "create_robot"
+
+[[actions]]
+type = "git_clone"
+repo = "https://github.com/revyos-ros/libcreate.git"
+dest = "libcreate"
+branch = "fix-std-string"
+
+[systemd]
+description = "Psyched Foot Motion"
+after = ["network.target"]
+launch = "modules/foot/launch.sh"
+shutdown = "modules/foot/shutdown.sh"
+restart = "on-failure"
+restart_sec = 4

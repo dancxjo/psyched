@@ -1,0 +1,58 @@
+name = "chat"
+description = "Conversational agent with Ollama backend"
+
+[[actions]]
+type = "link_packages"
+packages = ["chat", "psyched_msgs", "voice"]
+
+[[actions]]
+type = "pip_install"
+packages = ["requests"]
+import_check = ["requests"]
+break_system = true
+
+[[actions]]
+type = "run"
+description = "Install Ollama if missing"
+command = """
+if ! command -v ollama >/dev/null 2>&1; then
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://ollama.com/install.sh | sh
+  else
+    echo "curl not found; please install Ollama manually" >&2
+  fi
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Enable Ollama service when available"
+command = """
+if command -v ollama >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable --now ollama || true
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Ensure configured Ollama model is present"
+command = """
+MODEL=${OLLAMA_MODEL:-tinyllama}
+if command -v ollama >/dev/null 2>&1; then
+  if ! ollama list | awk '{print $1}' | grep -qx "$MODEL"; then
+    ollama pull "$MODEL" || true
+  fi
+fi
+"""
+optional = true
+
+[systemd]
+description = "Psyched Chat Service"
+after = ["network-online.target"]
+wants = ["network-online.target"]
+launch = "modules/chat/launch.sh"
+shutdown = "modules/chat/shutdown.sh"
+restart = "on-failure"
+restart_sec = 4

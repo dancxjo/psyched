@@ -8,6 +8,8 @@
     "@cliffy/table": "jsr:@cliffy/table@^1.0.0-rc.7",
     "@david/dax": "jsr:@david/dax@^0.43.2",
     "@std/toml": "jsr:@std/toml@1",
-    "@std/assert": "jsr:@std/assert@1"
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/path": "jsr:@std/path@1",
+    "@std/yaml": "jsr:@std/yaml@1"
   }
 }

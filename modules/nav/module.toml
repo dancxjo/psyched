@@ -1,0 +1,81 @@
+name = "nav"
+description = "Navigation stack bring-up"
+
+[[actions]]
+type = "link_packages"
+packages = ["psyched_nav"]
+
+[[actions]]
+type = "run"
+description = "Install Nav2 apt dependencies when available"
+command = """
+if command -v apt-get >/dev/null 2>&1; then
+  ROS_DISTRO=${ROS_DISTRO:-humble}
+  PKGS=(
+    "ros-${ROS_DISTRO}-nav2-bringup"
+    "ros-${ROS_DISTRO}-nav2-amcl"
+    "ros-${ROS_DISTRO}-nav2-controller"
+    "ros-${ROS_DISTRO}-nav2-core"
+    "ros-${ROS_DISTRO}-nav2-behavior-tree"
+    "ros-${ROS_DISTRO}-nav2-costmap-2d"
+    "ros-${ROS_DISTRO}-nav2-map-server"
+    "ros-${ROS_DISTRO}-nav2-navfn-planner"
+    "ros-${ROS_DISTRO}-nav2-smac-planner"
+    "ros-${ROS_DISTRO}-nav2-lifecycle-manager"
+    "ros-${ROS_DISTRO}-pcl-ros"
+    "libpcl-dev"
+  )
+  TO_INSTALL=()
+  for pkg in "${PKGS[@]}"; do
+    if apt-cache show "$pkg" >/dev/null 2>&1; then
+      TO_INSTALL+=("$pkg")
+    fi
+  done
+  if [ ${#TO_INSTALL[@]} -gt 0 ]; then
+    sudo apt-get update || true
+    sudo apt-get install -y "${TO_INSTALL[@]}" || true
+  fi
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Link custom Nav2 sources when NAV2_LOCAL_DIR is set"
+command = """
+if [ -n "${NAV2_LOCAL_DIR:-}" ] && [ -d "$NAV2_LOCAL_DIR" ]; then
+  mkdir -p src
+  ln -sfn "$NAV2_LOCAL_DIR" src/nav2_local
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Optionally build psyched_nav"
+command = """
+if [ "${BUILD:-true}" = "true" ]; then
+  ROS_DISTRO=${ROS_DISTRO:-humble}
+  if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
+    # shellcheck disable=SC1090
+    source "/opt/ros/${ROS_DISTRO}/setup.bash"
+  fi
+  if [ -f "install/setup.bash" ]; then
+    # shellcheck disable=SC1090
+    source "install/setup.bash"
+  fi
+  if command -v colcon >/dev/null 2>&1; then
+    colcon build --packages-select psyched_nav --symlink-install || true
+  fi
+fi
+"""
+optional = true
+
+[systemd]
+description = "Psyched Navigation"
+after = ["network-online.target"]
+wants = ["network-online.target"]
+launch = "modules/nav/launch.sh"
+shutdown = "modules/nav/shutdown.sh"
+restart = "on-failure"
+restart_sec = 5

@@ -12,14 +12,12 @@ setup_docker = true
 # be executed in the same order.
 modules = ["wifi"]
 
-# Optional per-module configuration tables. The module setup script will be
-# invoked with the path to a temporary JSON file containing the table if it
-# needs to read additional options.
-[modules.wifi]
+# Optional per-module configuration tables.
+[module_configs.wifi]
 
 
 
-[modules.ear]
+[module_configs.ear]
 # example options that the ear/setup.sh could inspect
 capture_device = "hw:0,0"
 vad_aggressiveness = 3
@@ -31,7 +29,7 @@ rate = 16000
 channels = 1
 chunk = 2048
 
-[modules.pilot]
+[module_configs.pilot]
 web_port = 8080
 ws_port = 8081
 
@@ -43,7 +41,7 @@ enable_http = true
 enable_ws = false
 run_separate_ws = true
 
-[modules.voice]
+[module_configs.voice]
 enable_tts = false
 
 # Voice module configuration
@@ -58,7 +56,7 @@ interrupt = "/voice/interrupt"
 resume = "/voice/resume"
 clear = "/voice/clear"
  
-[modules.chat]
+[module_configs.chat]
 # Chat module configuration
 system_prompt = "You_are_a_helpful_assistant._Reply_in_one_concise_sentence."
 conversation_topic = "/conversation"
@@ -67,11 +65,11 @@ ollama_model = "tinyllama"
 ollama_host = "http://localhost:11434"
 max_history = 20
 
-[modules.foot]
+[module_configs.foot]
 # Foot module configuration
 topic = "/foot"
 
-[modules.imu]
+[module_configs.imu]
 # MPU6050 module configuration
 # Optional: override path to params.yaml if you have a calibrated copy
 # param_file = "/home/pete/psyched/src/ros2_mpu6050/config/params.yaml"
