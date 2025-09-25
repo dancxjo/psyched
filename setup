@@ -39,8 +39,12 @@ if command -v deno >/dev/null 2>&1; then
 exec deno run -A '${PSH_SRC}' "\$@"
 PSH
 		sudo chmod a+x /usr/bin/psh
-		echo "Launching ./psh/main.ts with deno run -A (install)..."
-		exec deno run -A "${PSH_SRC}" install
+	echo "Launching ./psh/main.ts with deno run -A (install)..."
+	# Run the installer but don't use `exec` here: `exec` would replace
+	# the calling shell and the following `exec ... setup` would never run.
+	deno run -A "${PSH_SRC}" install >&2 || true
+	# Replace the shell with the setup run so it becomes the final process.
+	exec deno run -A "${PSH_SRC}" setup
 	else
 		echo "File ./psh/main.ts not found. Exiting." >&2
 		exit 1
@@ -79,9 +83,12 @@ echo "Deno installation step finished."
 # If installation succeeded and deno is available in PATH, attempt to run main.ts
 if command -v deno >/dev/null 2>&1; then
 	if [ -f "./psh/main.ts" ]; then
-		echo "Launching ./psh/main.ts with deno run -A..."
-		deno run -A ./psh/main.ts install
-		psh setup
+	echo "Launching ./psh/main.ts with deno run -A..."
+	# Run the installer but don't use `exec` here: `exec` would replace
+	# the calling shell and the following `exec ... setup` would never run.
+	deno run -A ./psh/main.ts install >&2 || true
+	# Replace the shell with the setup run so it becomes the final process.
+	exec deno run -A ./psh/main.ts setup
 	else
 		echo "File ./psh/main.ts not found. Installation complete."
 	fi

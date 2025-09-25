@@ -2,155 +2,12 @@
 
 import { Command } from "@cliffy/command";
 import { setup } from "./setup.ts";
-// Use the project's shell runner for readable command execution when we need
-// to run external scripts from TypeScript.
-// deno-lint-ignore-file no-import-prefix no-unversioned-import
-// @ts-ignore runtime import via jsr
-import $ from "jsr:@david/dax";
+import { repoPath, $ } from "./util.ts";
+import { runInstallRos2, runInstallDocker } from "./install.ts";
+import { systemdGenerate, systemdInstall } from "./systemd.ts";
+import { uninstallPsh } from "./uninstall.ts";
+import { colors } from "@cliffy/ansi/colors";
 
-function repoPath(relative: string) {
-  // Resolve a path relative to this file (psh/...). Example: '../tools/install_ros2.sh'
-  return decodeURIComponent(new URL(relative, import.meta.url).pathname);
-}
-
-async function installPsh() {
-  const scriptPath = decodeURIComponent(new URL(import.meta.url).pathname);
-  const wrapper = `#!/usr/bin/env bash\nexec deno run -A '${scriptPath}' "${"$@"}"\n`;
-
-  console.log("Installing psh to /usr/bin/psh (requires sudo)...");
-
-  // If /usr/bin/psh already exists and its contents exactly match the
-  // desired wrapper, do nothing. This makes the install idempotent and
-  // avoids unnecessary writes that could change permissions/mtime.
-  const exists = await $`sudo test -f /usr/bin/psh`;
-  if (exists.code === 0) {
-    // Dump the root-owned file to a temp file using sudo, then read it with
-    // Deno. This avoids attempting to access command stdout via the shell
-    // runner which may not be configured to pipe stdout.
-    const tmp = `/tmp/psh_existing.${Deno.pid}`;
-    const dump = await $`sudo bash -c 'cat /usr/bin/psh > ${$.path(tmp)}'`;
-    if (dump.code !== 0) {
-      console.log("Unable to read existing /usr/bin/psh; will overwrite.");
-    } else {
-      try {
-        const existing = await Deno.readTextFile(tmp);
-        if (existing.trim() === wrapper.trim()) {
-          console.log("psh is already installed and up-to-date; skipping write.");
-          // cleanup
-          await $`sudo rm -f ${$.path(tmp)}`;
-          return;
-        }
-        console.log("Existing /usr/bin/psh differs from desired wrapper; updating...");
-      } catch (_err) {
-        console.log("Failed to read temp file; will overwrite /usr/bin/psh.");
-      }
-      // cleanup
-      await $`sudo rm -f ${$.path(tmp)}`;
-    }
-  }
-
-  // Stream the wrapper content into sudo tee to avoid nested quoting/heredoc
-  // issues and to ensure we don't call tee with no stdin (which blocks).
-  const write = await $`printf '%s\n' ${wrapper} | sudo tee /usr/bin/psh >/dev/null`;
-  if (write.code !== 0) {
-    console.error("Failed to write /usr/bin/psh:", write.stderr || write.stdout);
-    Deno.exit(write.code);
-  }
-  const chmod = await $`sudo chmod a+x /usr/bin/psh`;
-  if (chmod.code !== 0) {
-    console.error("Failed to set executable on /usr/bin/psh:", chmod.stderr || chmod.stdout);
-    Deno.exit(chmod.code);
-  }
-  console.log("psh installed to /usr/bin/psh");
-}
-
-async function runInstallRos2() {
-  const script = repoPath('../tools/install_ros2.sh');
-  console.log(`Running ROS2 install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    Deno.exit(r.code);
-  }
-}
-
-async function runInstallDocker() {
-  const script = repoPath('../tools/install_docker.sh');
-  console.log(`Running Docker install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    Deno.exit(r.code);
-  }
-}
-
-async function systemdGenerate() {
-  const script = repoPath('../tools/systemd_generate');
-  console.log(`Running systemd_generate -> ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    Deno.exit(r.code);
-  }
-}
-
-async function systemdInstall() {
-  // Generate first
-  await systemdGenerate();
-
-  // Determine host shortname
-  const hn = await $`hostname -s`;
-  const host = (hn.stdout || hn.stderr || "").toString().trim() || Deno.env.get('HOST') || "$(hostname)";
-  const unitsDir = `${Deno.cwd()}/hosts/${host}/systemd`;
-
-  try {
-    const stat = await Deno.stat(unitsDir);
-    if (!stat.isDirectory) throw new Error('not dir');
-  } catch (_err) {
-    console.error(`No generated unit directory at ${unitsDir}`);
-    Deno.exit(1);
-  }
-
-  console.log(`Installing unit files from ${unitsDir} -> /etc/systemd/system`);
-  for await (const ent of Deno.readDir(unitsDir)) {
-    if (!ent.name.endsWith('.service')) continue;
-    const src = `${unitsDir}/${ent.name}`;
-    const cp = await $`sudo cp ${src} /etc/systemd/system/${ent.name}`;
-    if (cp.code !== 0) {
-      console.error(`Failed to copy ${ent.name}:`, cp.stderr || cp.stdout);
-      Deno.exit(cp.code);
-    }
-    const enable = await $`sudo systemctl enable --now ${ent.name}`;
-    if (enable.code !== 0) {
-      console.error(`Failed to enable ${ent.name}:`, enable.stderr || enable.stdout);
-      // Continue; services can be enabled individually later
-    }
-    console.log(`Installed and enabled ${ent.name}`);
-  }
-
-  const reload = await $`sudo systemctl daemon-reload`;
-  if (reload.code !== 0) {
-    console.error(reload.stderr || reload.stdout);
-    Deno.exit(reload.code);
-  }
-  console.log('Systemd units installed and daemon reloaded.');
-}
-
-async function uninstallPsh() {
-  console.log('Uninstalling /usr/bin/psh (requires sudo)...');
-  const exists = await $`sudo test -f /usr/bin/psh`;
-  if (exists.code !== 0) {
-    console.log('/usr/bin/psh does not exist; nothing to do.');
-    return;
-  }
-
-  const rm = await $`sudo rm -f /usr/bin/psh`;
-  if (rm.code !== 0) {
-    console.error('Failed to remove /usr/bin/psh:', rm.stderr || rm.stdout);
-    Deno.exit(rm.code);
-  }
-  console.log('Removed /usr/bin/psh');
-}
 
 async function systemdUninstall() {
   // Determine host shortname
@@ -196,17 +53,142 @@ async function systemdUninstall() {
 }
 
 if (import.meta.main) {
+  // Import ansi and table from cliffy
+  const { Table } = await import("@cliffy/table");
+  // Use statically imported colors from @cliffy/ansi
+
   await new Command()
     .name("psh")
     .description("Psyched CLI")
     .version("v1.0.0")
     .globalOption("-d, --debug", "Enable debug output.")
-    .action((_options: Record<string, unknown>, ..._args: string[]) => { })
+    .action(async () => {
+      // Print a colored welcome banner
+      console.log(colors.bold.underline.rgb24("Welcome to Psyched Robotics", 0x00bfff));
+      console.log(colors.gray("─────────────────────────────────────────────"));
+
+      // Print current setup summary in a beautiful table (suppress all info-gathering output)
+      let ros2Installed = false;
+      try {
+        const ros2Dir = "/opt/ros/";
+        for await (const ent of Deno.readDir(ros2Dir)) {
+          if (ent.isDirectory) {
+            ros2Installed = true;
+            break;
+          }
+        }
+      } catch {
+        ros2Installed = false;
+      }
+
+      let dockerInstalled = false;
+      try {
+        const r = await $`docker --version`.stdout("null").stderr("null");
+        dockerInstalled = r.code === 0;
+      } catch {
+        dockerInstalled = false;
+      }
+
+      const hn = await $`hostname -s`.stdout("piped").stderr("piped");
+      const host = (hn.stdout || hn.stderr || "").toString().trim() || Deno.env.get("HOST") || "$(hostname)";
+      const tomlPath = `${Deno.cwd()}/hosts/${host}.toml`;
+      let modules: string[] = [];
+      try {
+        const tomlText = await Deno.readTextFile(tomlPath);
+        const { parse: parseToml } = await import("@std/toml");
+        const spec = parseToml(tomlText) as Record<string, unknown>;
+        if (Array.isArray(spec.modules)) modules = spec.modules as string[];
+      } catch {
+        try {
+          const modsDir = `${Deno.cwd()}/hosts/${host}/modules`;
+          for await (const ent of Deno.readDir(modsDir)) {
+            modules.push(ent.name);
+          }
+        } catch { /* ignore missing modules dir */ }
+      }
+
+      // Gather running status for each module
+      const running: string[] = [];
+      const moduleStatus: Array<[string, boolean, boolean]> = [];
+      for (const mod of modules) {
+        let isRunning = false;
+        try {
+          const r = await $`systemctl is-active psyched-${mod}.service`.stdout("null").stderr("null");
+          isRunning = (r.stdout || "").toString().trim() === "active";
+        } catch { /* ignore systemctl errors */ }
+        moduleStatus.push([mod, true, isRunning]);
+        if (isRunning) running.push(mod);
+      }
+
+      // Gather systemd units and their status
+      const unitsDir = `${Deno.cwd()}/hosts/${host}/systemd`;
+      const units: Array<{ name: string, active: boolean }> = [];
+      try {
+        for await (const ent of Deno.readDir(unitsDir)) {
+          if (ent.name.endsWith('.service')) {
+            let active = false;
+            try {
+              const r = await $`systemctl is-active ${ent.name}`.stdout("null").stderr("null");
+              active = (r.stdout || "").toString().trim() === "active";
+            } catch { }
+            units.push({ name: ent.name, active });
+          }
+        }
+      } catch { /* ignore missing systemd dir */ }
+
+      // Build summary table
+      const table = new Table()
+        .header([
+          colors.bold("Info"),
+          colors.bold("Status")
+        ])
+        .body([
+          [colors.cyan("ROS2 Installed"), ros2Installed ? colors.green("Yes") : colors.red("No")],
+          [colors.cyan("Docker Installed"), dockerInstalled ? colors.green("Yes") : colors.red("No")],
+          [colors.cyan("Enabled Modules"), modules.length ? colors.yellow(modules.join(", ")) : colors.gray("none")],
+          [colors.cyan("Running Modules"), running.length ? colors.green(running.join(", ")) : colors.gray("none")],
+          [colors.cyan("Systemd Units"), units.length ? colors.magenta(units.map(u => u.name).join(", ")) : colors.gray("none")],
+        ])
+        .border(true)
+        .render();
+
+      // Build module status table
+      if (modules.length) {
+        // Flip: columns are module names, rows are statuses
+        const header = [colors.bold("Status"), ...modules.map(mod => colors.bold(colors.cyan(mod)))];
+        const enabledRow = [colors.bold("Enabled"), ...moduleStatus.map(([_, enabled, _r]) => enabled ? colors.green("Yes") : colors.red("No"))];
+        const runningRow = [colors.bold("Running"), ...moduleStatus.map(([_, _e, running]) => running ? colors.green("Yes") : colors.red("No"))];
+        // Table is rendered, variable is unused
+        // deno-lint-ignore no-unused-vars
+        const modTable = new Table()
+          .header(header)
+          .body([
+            enabledRow,
+            runningRow
+          ])
+          .border(true)
+          .render();
+      }
+
+      // Build flipped systemd units table (columns: unit names, row: Active status)
+      if (units.length) {
+        const header = units.map(u => colors.bold(colors.magenta(u.name)));
+        const statusRow = units.map(u => u.active ? colors.green("Yes") : colors.red("No"));
+        const _unitTable = new Table()
+          .header(header)
+          .body([statusRow])
+          .border(true)
+          .render();
+      }
+
+      // Friendly tip
+      console.log(colors.gray("Tip: Use 'psh setup' or 'psh bringup' to configure modules."));
+    })
     .command("install", "Install psh to /usr/bin/psh")
-    .action(async () => await installPsh())
+    .action(async () => await uninstallPsh())
     .command("setup", "Setup sub-command.")
     .arguments("[target:string] [...rest:string]")
-    .action(async (options: Record<string, unknown>, ...args: string[]) => {
+    .action(async (options: Record<string, unknown>, ...args: (string | undefined)[]) => {
       // Support multiple setup targets, e.g. `psh setup ros2 docker`.
       // If no known targets are provided, fall back to the existing setup() behaviour.
       if (!args || args.length === 0) {
@@ -214,7 +196,7 @@ if (import.meta.main) {
         return;
       }
 
-      const requested = args.map((a) => a.toString());
+      const requested = args.filter(Boolean).map((a) => String(a));
 
       // Run matching installers in the order they were provided.
       let ranAny = false;
@@ -240,7 +222,7 @@ if (import.meta.main) {
     .command("systemd", "Manage systemd units for this host")
     .alias("sys")
     .arguments("[action:string]")
-    .action(async (_options: Record<string, unknown>, ...args: string[]) => {
+    .action(async (_options: Record<string, unknown>, ...args: (string | undefined)[]) => {
       const action = args[0] || 'generate';
       if (action === '*' || action === 'generate' || action === 'gen') {
         await systemdGenerate();
@@ -262,10 +244,10 @@ if (import.meta.main) {
     })
     .command("clean", "Undo work made by psh and remove generated garbage")
     .arguments("[target:string]")
-    .action(async (_options: Record<string, unknown>, ...args: string[]) => {
-      const target = args && args[0] ? args[0].toString() : 'all';
+    .action(async (_options: Record<string, unknown>, ...args: (string | undefined)[]) => {
+      const target = args && args[0] ? String(args[0]) : 'all';
       if (target === 'install') {
-        await uninstallPsh();
+        await uninstallPsh(); // installPsh is now imported from uninstall.ts
         return;
       }
       if (target === 'systemd') {

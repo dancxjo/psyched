@@ -4,14 +4,7 @@ export interface Requirement {
     install(): Promise<void>;
 }
 
-// psh/reqs.ts
-// Useful Requirement helpers for host/module setup scripts.
-// The file uses the project's runner binding `jsr:@david/dax` for command
-// execution. Suppress import lint rules and TypeScript strict checks here
-// because this file targets multiple runtime environments.
-// deno-lint-ignore-file no-import-prefix no-unversioned-import
-// @ts-nocheck: uses the project's jsr runner import which is resolved at runtime
-import $ from "jsr:@david/dax";
+import $ from "@david/dax";
 
 export class AptRequirement implements Requirement {
     constructor(readonly name: string, readonly packageName: string) { }

@@ -1,0 +1,75 @@
+# Host description for cerebellum
+# Controls which modules are enabled and optional installers.
+
+# Install ROS2 on this host during `psh setup`?
+setup_ros2 = false
+
+# Install Docker on this host during `psh setup`?
+setup_docker = false
+
+# Ordered list of modules to enable for this host. Each entry corresponds to
+# a directory under modules/ and if that module contains a setup.sh it will
+# be executed in the same order.
+modules = ["ear", "eye", "foot", "imu", "nav", "pilot", "voice", "will"]
+
+# Optional per-module configuration tables. The module setup script will be
+# invoked with the path to a temporary JSON file containing the table if it
+# needs to read additional options.
+
+[modules.ear]
+# example options that the ear/setup.sh could inspect
+capture_device = "hw:0,0"
+vad_aggressiveness = 3
+
+# Ear module configuration
+topic = "/audio/pcm"
+device = "default"
+rate = 16000
+channels = 1
+chunk = 2048
+
+[modules.pilot]
+web_port = 8080
+ws_port = 8081
+
+# Pilot module configuration
+host = "0.0.0.0"
+cmd_vel_topic = "/cmd_vel"
+voice_topic = "/voice"
+enable_http = true
+enable_ws = false
+run_separate_ws = true
+
+[modules.voice]
+enable_tts = false
+
+# Voice module configuration
+engine = "espeak"
+model = "en_US-john-medium"
+voices_dir = "${HOME}/.local/piper/voices"
+model_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true"
+config_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true"
+voice = "${HOME}/.local/piper/voices/en_US-john-medium.onnx"
+topic = "/voice"
+interrupt = "/voice/interrupt"
+resume = "/voice/resume"
+clear = "/voice/clear"
+ 
+[modules.chat]
+# Chat module configuration
+system_prompt = "You_are_a_helpful_assistant._Reply_in_one_concise_sentence."
+conversation_topic = "/conversation"
+voice_topic = "/voice"
+ollama_model = "tinyllama"
+ollama_host = "http://localhost:11434"
+max_history = 20
+
+[modules.foot]
+# Foot module configuration
+topic = "/foot"
+
+[modules.imu]
+# MPU6050 module configuration
+# Optional: override path to params.yaml if you have a calibrated copy
+# param_file = "/home/pete/psyched/src/ros2_mpu6050/config/params.yaml"
+
