@@ -12,6 +12,8 @@ import {
 import { uninstallPsh } from "./uninstall.ts";
 import { setupHosts } from "./setup.ts";
 
+import { colconBuild, colconInstall } from "./colcon.ts";
+
 export interface CliDeps {
   printSummaryTable(): Promise<void> | void;
   installPsh(): Promise<void> | void;
@@ -25,6 +27,8 @@ export interface CliDeps {
   printEnvSource(): Promise<void> | void;
   runModuleScript(module: string, action?: string): Promise<void> | void;
   cleanWorkspace(): Promise<void> | void;
+  colconBuild(): Promise<void> | void;
+  colconInstall(): Promise<void> | void;
 }
 
 const defaultDeps: CliDeps = {
@@ -40,6 +44,8 @@ const defaultDeps: CliDeps = {
   printEnvSource,
   runModuleScript,
   cleanWorkspace,
+  colconBuild,
+  colconInstall,
 };
 
 function normalize(text: string | undefined, fallback: string): string {
@@ -64,18 +70,24 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       await deps.installPsh();
     });
 
+  cli.command("build")
+    .description("Run colcon build for the workspace")
+    .action(async () => {
+      await deps.colconBuild();
+    });
+
+  cli.command("colcon-install")
+    .description("Run colcon install for the workspace")
+    .action(async () => {
+      await deps.colconInstall();
+    });
+
   cli.command("setup")
     .description("Setup host modules and dependencies (default: current host)")
     .arguments("[host:string] [...hosts:string]")
     .action(
-      async (
-        _options: Record<string, unknown>,
-        host?: string,
-        ...rest: (string | undefined)[]
-      ) => {
-        const targets = [host, ...rest].filter((value): value is string =>
-          Boolean(value)
-        );
+      async (_options, host?: string, ...rest: (string | undefined)[]) => {
+        const targets = [host, ...rest].filter((value): value is string => Boolean(value));
         await deps.setupHosts(targets);
       },
     );
@@ -85,7 +97,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .alias("dependencies")
     .description("Install a system dependency (ros2 or docker)")
     .arguments("<dep:string>")
-    .action(async (_options: Record<string, unknown>, dep: string) => {
+    .action(async (_options, dep: string) => {
       const normalized = normalize(dep, "");
       if (["ros2", "ros", "r"].includes(normalized)) {
         await deps.runInstallRos2();
@@ -101,7 +113,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
   cli.command("systemd")
     .description("Generate or install systemd unit files")
     .arguments("[action:string]")
-    .action(async (_options: Record<string, unknown>, action?: string) => {
+    .action(async (_options, action?: string) => {
       const normalized = normalize(action, "generate");
       if (["*", "generate", "gen"].includes(normalized)) {
         await deps.systemdGenerate();
@@ -131,11 +143,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .description("Run a module action (launch, shutdown, etc.)")
     .arguments("<module:string> [action:string]")
     .action(
-      async (
-        _options: Record<string, unknown>,
-        module: string,
-        action?: string,
-      ) => {
+      async (_options, module: string, action?: string) => {
         await deps.runModuleScript(module, action);
       },
     );
@@ -143,7 +151,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
   cli.command("clean")
     .description("Remove generated artifacts or uninstall helpers")
     .arguments("[scope:string]")
-    .action(async (_options: Record<string, unknown>, scope?: string) => {
+    .action(async (_options, scope?: string) => {
       const target = normalize(scope, "workspace");
       if (["workspace", "ws", "src"].includes(target)) {
         await deps.cleanWorkspace();
