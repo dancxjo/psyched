@@ -8,46 +8,46 @@ function createStubDeps() {
   };
 
   const deps: CliDeps = {
-    async printSummaryTable() {
+    printSummaryTable() {
       record("printSummaryTable");
     },
-    async installPsh() {
+    installPsh() {
       record("installPsh");
     },
-    async uninstallPsh() {
+    uninstallPsh() {
       record("uninstallPsh");
     },
-    async setupHosts(hosts) {
+    setupHosts(hosts) {
       record("setupHosts", [hosts]);
     },
-    async runInstallRos2() {
+    runInstallRos2() {
       record("runInstallRos2");
     },
-    async runInstallDocker() {
+    runInstallDocker() {
       record("runInstallDocker");
     },
-    async systemdGenerate() {
+    systemdGenerate() {
       record("systemdGenerate");
     },
-    async systemdInstall() {
+    systemdInstall() {
       record("systemdInstall");
     },
-    async systemdUninstall() {
+    systemdUninstall() {
       record("systemdUninstall");
     },
-    async printEnvSource() {
+    printEnvSource() {
       record("printEnvSource");
     },
-    async runModuleScript(module, action) {
-      record("runModuleScript", [module, action]);
+    runModuleScript(modules, action) {
+      record("runModuleScript", [modules, action]);
     },
-    async cleanWorkspace() {
+    cleanWorkspace() {
       record("cleanWorkspace");
     },
-    async colconBuild() {
+    colconBuild() {
       record("colconBuild");
     },
-    async colconInstall() {
+    colconInstall() {
       record("colconInstall");
     },
   };
@@ -122,7 +122,7 @@ Deno.test("mod command forwards module and action", async () => {
   const { calls, deps } = createStubDeps();
   const cli = createCli(deps);
   await cli.parse(["mod", "pilot", "launch"]);
-  assertEquals(calls.runModuleScript, ["pilot", "launch"]);
+  assertEquals(calls.runModuleScript, [["pilot"], "launch"]);
 });
 
 Deno.test("clean command defaults to workspace", async () => {

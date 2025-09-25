@@ -41,7 +41,26 @@ async function runProcess(
   }
 }
 
-export async function runModuleScript(module: string, action?: string) {
+export function runModuleScript(module: string, action?: string): Promise<void>;
+export function runModuleScript(modules: string[], action?: string): Promise<void>;
+export async function runModuleScript(modulesOrModule: string | string[], action?: string) {
+  // Allow calling with an array of modules (execute sequentially) or a single
+  // module name. This mirrors the systemd helpers which accept an optional
+  // string[] of units.
+  if (Array.isArray(modulesOrModule)) {
+    const modules = modulesOrModule;
+    if (modules.length === 0) return;
+    for (const m of modules) {
+      if (!m) continue;
+      // Ensure sequential invocation to preserve ordering and avoid noisy
+      // parallel output.
+      // eslint-disable-next-line no-await-in-loop
+      await runModuleScript(m, action);
+    }
+    return;
+  }
+
+  const module = modulesOrModule;
   const repoDir = repoDirFromModules();
   const moduleDir = join(repoDir, "modules", module);
   const entrypoint = join(repoDir, "tools", "systemd_entrypoint.sh");

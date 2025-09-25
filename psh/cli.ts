@@ -39,7 +39,7 @@ export interface CliDeps {
   systemdReload?(units?: string[]): Promise<void> | void;
   systemdRestart?(units?: string[]): Promise<void> | void;
   printEnvSource(): Promise<void> | void;
-  runModuleScript(module: string, action?: string): Promise<void> | void;
+  runModuleScript(modules: string[] | string, action?: string): Promise<void> | void;
   cleanWorkspace(): Promise<void> | void;
   colconBuild(): Promise<void> | void;
   colconInstall(): Promise<void> | void;
@@ -124,10 +124,27 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .alias("mod")
     .alias("m")
     .description("Setup, launch, or shutdown modules")
-    .arguments("[module:string] [action:string]")
+    .arguments("[action:string] [...modules:string]")
     .action(
-      async (_options: unknown, module: string = '*', action: string = 'list') => {
-        await deps.runModuleScript(module, action);
+      async (_options: unknown, action: string = 'list', ...modules: string[]) => {
+        let moduleList = modules;
+        if (moduleList.length === 0) {
+          // Load default modules from current host's toml
+          // For now, hardcode cerebellum.toml; in future, detect hostname
+          const tomlPath = "hosts/cerebellum.toml";
+          const decoder = new TextDecoder("utf-8");
+          const tomlRaw = Deno.readFileSync(tomlPath);
+          const tomlText = decoder.decode(tomlRaw);
+          // Simple regex to extract modules array
+          const match = tomlText.match(/modules\s*=\s*\[(.*?)\]/s);
+          if (match) {
+            moduleList = match[1]
+              .split(',')
+              .map(x => x.trim().replace(/['\"]/g, ""))
+              .filter(Boolean);
+          }
+        }
+        await deps.runModuleScript(moduleList, action);
       },
     );
 
