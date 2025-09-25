@@ -58,9 +58,18 @@ elif [[ $(id -u) -ne 0 ]]; then
 fi
 
 if [[ -n "${TARGET_USER}" ]]; then
-  echo "Adding user ${TARGET_USER} to 'docker' group (you may need to log out and back in for this to take effect)..."
+  echo "Adding user ${TARGET_USER} to 'docker' group..."
   ${SUDO[@]} groupadd -f docker
   ${SUDO[@]} usermod -aG docker "${TARGET_USER}"
+  # If not running as root, activate new group in current shell
+  if [[ $(id -u) -ne 0 ]]; then
+    echo "Activating docker group for current shell (newgrp docker)..."
+    newgrp docker <<EONG
+echo "Current user now in docker group."
+EONG
+  else
+    echo "You may need to log out and back in, or run 'newgrp docker', to use docker without sudo."
+  fi
 else
   echo "No non-root invoking user detected; skipping automatic docker group add."
   echo "If you want to use docker without sudo, run as a privileged user and re-run this script, or run as root:"
