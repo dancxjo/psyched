@@ -81,6 +81,7 @@ if command -v deno >/dev/null 2>&1; then
 	if [ -f "./psh/main.ts" ]; then
 		echo "Launching ./psh/main.ts with deno run -A..."
 		deno run -A ./psh/main.ts install
+		psh setup
 	else
 		echo "File ./psh/main.ts not found. Installation complete."
 	fi
