@@ -112,12 +112,11 @@ source_now() {
     done
   fi
   if (( had_u )); then set -u; fi
-  # py_trees dependency installation moved to modules/will/setup.sh
+  # py_trees dependency installation is handled by the will module actions
 }
 
-## NOTE: py_trees / py_trees_ros installation intentionally moved to
-## modules/will/setup.sh so module provisioning handles its own Python
-## dependencies (including any system package installs or pip options).
+## NOTE: py_trees / py_trees_ros installation is handled by the will module
+## actions so module provisioning can manage its own dependencies.
 
 case "$MODE" in
   print)

@@ -25,7 +25,42 @@ update = true
 [systemd]
 description = "Psyched Ear Audio Capture"
 after = ["network.target"]
-launch = "modules/ear/launch.sh"
-shutdown = "modules/ear/shutdown.sh"
 restart = "on-failure"
 restart_sec = 5
+launch_command = """
+set -euo pipefail
+TOPIC_VAL="${EAR_TOPIC:-/audio/pcm}"
+DEVICE_VAL="${EAR_DEVICE:-default}"
+RATE_VAL="${EAR_RATE:-16000}"
+CHANNELS_VAL="${EAR_CHANNELS:-1}"
+CHUNK_VAL="${EAR_CHUNK:-2048}"
+exec ros2 launch ear ear.launch.py \
+  topic:="${TOPIC_VAL}" \
+  device:="${DEVICE_VAL}" \
+  rate:="${RATE_VAL}" \
+  channels:="${CHANNELS_VAL}" \
+  chunk:="${CHUNK_VAL}"
+"""
+shutdown_command = """
+set -euo pipefail
+PATTERN="ros2 launch ear ear.launch.py"
+TIMEOUT=${TIMEOUT:-10}
+if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
+  echo "[ear/shutdown] No matching processes found for pattern: $PATTERN"
+  exit 0
+fi
+
+echo "[ear/shutdown] Sending SIGTERM to processes for: $PATTERN"
+pkill -TERM -f "$PATTERN" || true
+
+for ((i=0; i<TIMEOUT; i++)); do
+  sleep 1
+  if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
+    echo "[ear/shutdown] All processes stopped"
+    exit 0
+  fi
+done
+
+echo "[ear/shutdown] Forcing SIGKILL for remaining processes"
+pkill -KILL -f "$PATTERN" || true
+"""

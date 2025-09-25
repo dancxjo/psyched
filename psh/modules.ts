@@ -69,6 +69,8 @@ export interface ModuleSystemdSpec {
   description?: string;
   launch?: string;
   shutdown?: string;
+  launch_command?: string;
+  shutdown_command?: string;
   environment?: Record<string, string>;
   after?: string[];
   wants?: string[];

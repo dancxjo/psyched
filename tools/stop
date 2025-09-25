@@ -1,95 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Stop selected modules for this host by running each module's shutdown.sh.
-# Usage:
-#   ./tools/stop pilot gps imu
-# Options:
-#   --foreground   : run scripts in foreground (don't background them)
-#   --no-exec      : only check for presence and executability, don't run
-#   --help         : show this help
-
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST_SHORT="${HOST:-$(hostname -s)}"
-MODULES_DIR="${REPO_DIR}/hosts/${HOST_SHORT}/modules"
+PSH_CLI="${REPO_DIR}/psh/main.ts"
 
-foreground=0
-no_exec=0
+if ! command -v deno >/dev/null 2>&1; then
+  echo "[stop] deno is required to control modules. Install from https://deno.land/ and retry." >&2
+  exit 1
+fi
 
 print_help() {
-  cat <<EOF
-Usage: $0 [OPTIONS] MODULE [MODULE...]
+  cat <<'USAGE'
+Usage: ./tools/stop [OPTIONS] MODULE [MODULE ...]
 
-Run module shutdown scripts from ${MODULES_DIR}.
+Stop module services using psh mod.
 
 Options:
-  --foreground   Run scripts in foreground (don't background them)
-  --no-exec      Only verify scripts exist and are executable; don't run
-  --help         Show this help
+  --foreground   Run in foreground (default: background)
+  --help         Show this message
 
-Examples:
-  $0 pilot gps imu
-  HOST=myhost $0 pilot
-  $0 --no-exec pilot
-EOF
+Example:
+  ./tools/stop pilot gps
+USAGE
 }
 
-if [ ${#@} -eq 0 ]; then
-  # If no args provided, show help
+if (( $# == 0 )); then
   print_help
   exit 1
 fi
 
-args=()
+foreground=0
+modules=()
+
 while (( $# )); do
   case "$1" in
     --foreground)
-      foreground=1; shift;;
-    --no-exec)
-      no_exec=1; shift;;
+      foreground=1
+      shift
+      ;;
     --help|-h)
-      print_help; exit 0;;
+      print_help
+      exit 0
+      ;;
     --*)
-      echo "Unknown option: $1" >&2; exit 2;;
+      echo "[stop] Unknown option: $1" >&2
+      exit 2
+      ;;
     *)
-      args+=("$1"); shift;;
+      modules+=("$1")
+      shift
+      ;;
   esac
 done
 
-if [ ! -d "$MODULES_DIR" ]; then
-  echo "[stop] No modules directory for host '$HOST_SHORT' at $MODULES_DIR" >&2
+if (( ${#modules[@]} == 0 )); then
+  echo "[stop] No modules specified." >&2
   exit 1
 fi
 
-for m in "${args[@]}"; do
-  SHUTDOWN="$MODULES_DIR/$m/shutdown.sh"
-  if [ -f "$SHUTDOWN" ]; then
-    if [ ! -x "$SHUTDOWN" ]; then
-      echo "[stop] Found $SHUTDOWN but it is not executable. Will attempt to run with bash." >&2
-      exec_cmd="bash \"$SHUTDOWN\""
-    else
-      exec_cmd="\"$SHUTDOWN\""
-    fi
-
-    if [ "$no_exec" -eq 1 ]; then
-      echo "[stop] OK: $SHUTDOWN exists";
-      continue
-    fi
-
-    echo "[stop] Running shutdown for $m -> $SHUTDOWN";
-    if [ "$foreground" -eq 1 ]; then
-      ( cd "$(dirname "$SHUTDOWN")" && eval $exec_cmd )
-    else
-      ( cd "$(dirname "$SHUTDOWN")" && eval $exec_cmd ) &
-    fi
+for module in "${modules[@]}"; do
+  echo "[stop] Stopping ${module}"
+  if (( foreground )); then
+    deno run -A "$PSH_CLI" mod "$module" shutdown
   else
-    echo "[stop] ERROR: $SHUTDOWN not found" >&2
-    exit 1
+    ( deno run -A "$PSH_CLI" mod "$module" shutdown ) &
   fi
 done
 
-if [ "$foreground" -eq 0 ] && [ "$no_exec" -eq 0 ]; then
-  echo "[stop] All shutdown commands dispatched in background."
+if (( ! foreground )); then
+  echo "[stop] Shutdown commands dispatched in background."
 fi
-
-exit 0

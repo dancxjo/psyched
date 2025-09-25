@@ -662,8 +662,9 @@ class PilotWebSocketNode(Node):
                 # Trigger save_map helper script asynchronously
                 name = data.get('name') or 'nav_map'
                 try:
-                    res = self._run_background_script(['modules/nav/save_map.sh', name])
-                    await websocket.send(json.dumps({'type': 'save_map_ack', 'name': name, 'pid': res}))
+                    cmd = ['ros2', 'run', 'nav2_map_server', 'map_saver_cli', '-f', name]
+                    pid = self._spawn_background_process(cmd, f'Started map saver: {name}')
+                    await websocket.send(json.dumps({'type': 'save_map_ack', 'name': name, 'pid': pid}))
                 except Exception as e:
                     await websocket.send(json.dumps({'type': 'error', 'error': f'save_map failed: {e}'}))
             elif t == 'record_bag':
@@ -1541,44 +1542,29 @@ class PilotWebSocketNode(Node):
         except Exception as e:
             return {'code': -1, 'out': '', 'err': str(e)}
 
-    def _run_background_script(self, args):
-        """Run a shell helper script in background returning the pid (or raise).
-
-        Args is a list like ['modules/nav/save_map.sh', 'name'] (relative repo path).
-        """
-        repo_root = Path(__file__).resolve().parents[3]
-        script = repo_root.joinpath(*args)
-        # If args list provided includes path components, script currently resolves wrong; accept full path string join
+    def _spawn_background_process(self, cmd, description=None):
+        """Run a background process and track it for later cleanup."""
+        display = description or ' '.join(str(part) for part in cmd)
         try:
-            # If first element is a path to script relative to repo, normalize
-            if isinstance(args, (list, tuple)):
-                spath = repo_root.joinpath(args[0]) if not Path(args[0]).is_absolute() else Path(args[0])
-                cmd = [str(spath)] + list(args[1:])
-            else:
-                cmd = [str(args)]
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            with self._bg_lock:
-                self._bg_recordings[p.pid] = p
-            self.get_logger().info(f'Started background script: {cmd} (pid {p.pid})')
-            return p.pid
+            p = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=os.environ.copy(),
+            )
         except Exception as e:
+            self.get_logger().warn(f'Failed to start background process {display}: {e}')
             raise
+        with self._bg_lock:
+            self._bg_recordings[p.pid] = p
+        self.get_logger().info(f'{display} (pid {p.pid})')
+        return p.pid
 
     def _start_recording(self, name='nav_record'):
-        """Start ros2 bag recording via helper script and return pid."""
-        repo_root = Path(__file__).resolve().parents[3]
-        script = repo_root / 'modules' / 'nav' / 'record_bag.sh'
-        if not script.exists():
-            raise FileNotFoundError(str(script))
-        try:
-            p = subprocess.Popen([str(script), name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            with self._bg_lock:
-                self._bg_recordings[p.pid] = p
-            self.get_logger().info(f'Started ros2 bag recording: {name} (pid {p.pid})')
-            return p.pid
-        except Exception as e:
-            self.get_logger().warn(f'Failed to start recording: {e}')
-            raise
+        """Start ros2 bag recording and return the spawned PID."""
+        topics = ['/tf', '/tf_static', '/camera/color/image_raw', '/camera/depth/image_raw', '/odom']
+        cmd = ['ros2', 'bag', 'record', '-o', name, *topics]
+        return self._spawn_background_process(cmd, f'Started ros2 bag recording: {name}')
 
     def _stop_recording(self, name=None):
         """Stop background recording(s). If name is None, stop all recordings started by this process."""

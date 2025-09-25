@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[teardown] DEPRECATED: module-level teardown is replaced by shutdown.sh. Forwarding to tools/stop..."
+echo "[teardown] Module teardown is handled by shutdown commands now. Forwarding to tools/stop..."
 exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/stop" "$@"

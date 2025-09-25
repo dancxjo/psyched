@@ -77,20 +77,20 @@ hosts/
    ls hosts/
 4. **Prepare and build the workspace:**
 
-    Important: module setup scripts create a clean `src/` tree by symlinking
+    Important: module setup actions create a clean `src/` tree by symlinking
     module-local packages into the repository `src/` directory. To ensure a
     deterministic setup, delete any existing `./src` folder before running the
     setup step so it can be recreated from scratch:
 
     ```bash
     rm -rf ./src
-    HOST=cerebellum ./tools/setup   # or run individual module setup scripts
+    HOST=cerebellum ./tools/setup
     make build
     ```
 
-    Each module is expected to place its ROS2 package(s) under
+    Each module should place its ROS2 package(s) under
     `modules/<module>/packages/<pkg>` (for example: `modules/ear/packages/ear`).
-    The module's `setup.sh` will symlink the module-local package(s) into
+    The `link_packages` action in `module.toml` symlinks module-local packages into
     `src/` so `colcon build` (invoked by `make build`) will build them.
 
 4. **Build the workspace:**
@@ -110,15 +110,6 @@ hosts/
 
 3. **Check system status:**
    ```bash
-1. Create module directory: `modules/mymodule/`
-2. Add ROS2 package(s) under module-local packages directory:
-    `modules/mymodule/packages/mymodule` (and any additional package folders as
-    needed)
-3. Create setup script: `modules/mymodule/setup.sh` that links the module-local
-    packages into the repository `src/` directory (see examples in
-    `modules/*/setup.sh`)
-4. Link in host config: `ln -s ../../modules/mymodule hosts/myhost/modules/mymodule`
-
 ### Pilot Module
 - **Purpose**: Web-based robot control interface
 - **Features**: Joystick control, system monitoring, volume control
@@ -174,22 +165,24 @@ hosts/
 ### Building Individual Modules
 
 ```bash
-# Setup specific module
-./modules/pilot/setup.sh
+# Provision modules for the current host
+./tools/setup
 
 # Build workspace
 make build
 
-# Launch specific module
-ros2 launch pilot pilot.launch.py
+# Launch specific module via psh
+deno run -A psh/main.ts mod pilot launch
 ```
 
 ### Adding New Modules
 
 1. Create module directory: `modules/mymodule/`
-2. Add ROS2 package: `packages/mymodule/`
-3. Create setup script: `modules/mymodule/setup.sh`
-4. Link in host config: `ln -s ../../modules/mymodule hosts/myhost/modules/`
+2. Add ROS 2 package(s) under `modules/mymodule/packages/<pkg>`
+3. Define module actions and systemd commands in `modules/mymodule/module.toml`
+   (use `link_packages`, dependency actions, and `launch_command`/`shutdown_command`).
+4. Add the module name to your host configuration in `hosts/<host>.toml` so `psh setup`
+   can provision it.
 
 ### Testing Changes
 
@@ -246,7 +239,7 @@ echo $ROS_DISTRO
 make systemd-debug UNIT=psyched-<module>.service
 
 # Test module setup
-./modules/<module>/setup.sh
+modules/<module>/module.toml
 
 # Check ROS2 connectivity
 ros2 node list

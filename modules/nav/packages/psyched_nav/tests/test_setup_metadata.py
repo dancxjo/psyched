@@ -5,7 +5,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 MODULE_ROOT = Path(__file__).resolve().parents[3]
-SETUP_SCRIPT = MODULE_ROOT / "setup.sh"
+MODULE_TOML = MODULE_ROOT / "module.toml"
 
 
 def test_python_package_imports() -> None:
@@ -21,17 +21,17 @@ def test_python_package_directory_matches_name() -> None:
     assert PACKAGE_ROOT.name == "psyched_nav"
 
 
-def test_setup_installs_nav2_amcl_without_rtabmap() -> None:
-    """Ensure the setup script installs Nav2 with AMCL but avoids RTAB-Map."""
+def test_module_installs_nav2_amcl_without_rtabmap() -> None:
+    """Ensure the module actions install Nav2 with AMCL but avoid RTAB-Map."""
 
-    script = SETUP_SCRIPT.read_text()
-    assert "ros-${ROS_DISTRO}-nav2-amcl" in script
-    assert "ros-${ROS_DISTRO}-nav2-bringup" in script
-    assert "rtabmap" not in script.lower()
+    config = MODULE_TOML.read_text()
+    assert "ros-${ROS_DISTRO}-nav2-amcl" in config
+    assert "ros-${ROS_DISTRO}-nav2-bringup" in config
+    assert "rtabmap" not in config.lower()
 
 
-def test_setup_uses_non_conflicting_package_name() -> None:
-    """The colcon build invocation should target our `psyched_nav` package."""
+def test_module_builds_psyched_nav_package() -> None:
+    """The optional build step should target the `psyched_nav` package."""
 
-    script = SETUP_SCRIPT.read_text()
-    assert "--packages-select psyched_nav" in script
+    config = MODULE_TOML.read_text()
+    assert "--packages-select psyched_nav" in config

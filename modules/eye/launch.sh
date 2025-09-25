@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-ros2 run kinect_ros2 kinect_ros2_node 

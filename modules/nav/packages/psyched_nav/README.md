@@ -8,7 +8,7 @@ restricted environments.
 
 Installation
 ------------
-Run the module setup script or install the required debs manually:
+Run `./tools/setup` so the module actions install dependencies, or install the required debs manually:
 
 ```bash
 sudo apt update
@@ -25,13 +25,12 @@ sudo apt install -y \
   libpcl-dev
 ```
 
-The setup script auto-detects which packages are available for the current ROS
-release and installs the subset that exists in the apt repository.
+The module actions auto-detect which packages are available for the current ROS
+release and install the subset that exists in the apt repository.
 
 Package layout
 --------------
-- `setup.sh` — installs the Nav2 + AMCL dependencies and links the module into
-  the workspace.
+- `module.toml` — declares dependency installation and systemd launch commands.
 - `packages/psyched_nav/nav_bringup.launch.py` — minimalist launch description
   that includes Nav2 bringup and an AMCL parameter file.
 - `packages/psyched_nav/params/nav2_params.yaml` — starter Nav2 configuration

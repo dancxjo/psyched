@@ -30,7 +30,13 @@ optional = true
 [systemd]
 description = "Psyched Behaviour Tree"
 after = ["network.target"]
-launch = "modules/will/launch.sh"
-shutdown = "modules/will/shutdown.sh"
 restart = "on-failure"
 restart_sec = 5
+launch_command = """
+set -euo pipefail
+exec ros2 launch psyched_bt brain.launch.py
+"""
+shutdown_command = """
+set -euo pipefail
+echo "will module shutdown: no actions required"
+"""

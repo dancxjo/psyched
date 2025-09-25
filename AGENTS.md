@@ -14,10 +14,10 @@ workspace.
 ## Repository orientation
 - `packages/` – (Legacy) top-level ROS 2 packages. New structure favors
   module-local packages under `modules/<module>/packages/<pkg>`.
-- `modules/` – Module containers and shell scripts that provision and launch
+- `modules/` – Module containers and metadata that provision and launch
   packages for a given host. Each module should place its ROS2 package(s)
-  under `modules/<module>/packages/` so its `setup.sh` can link them into
-  the repository `src/` directory before building.
+  under `modules/<module>/packages/` so its `link_packages` action can symlink
+  them into the repository `src/` directory before building.
 - Module setup is now driven by `modules/<name>/module.toml`. Declare module
   actions (package linking, apt/pip installs, shell commands) there so `psh
   setup` can orchestrate work without bespoke shell scripts. When adding new
@@ -53,13 +53,13 @@ workspace.
   necessary.
 - Capture the commands you executed and report their outcomes in the final
   summary. If you must skip a check, state why.
-- Smoke-test launch or setup scripts when you modify them (e.g.
-  `./modules/<module>/setup.sh --help`).
+- Smoke-test module commands when you modify them (e.g.
+  `deno run -A psh/main.ts mod <module> launch`).
 
 Important workflow note:
 
 - Before running the host/module setup step, remove any existing `./src` so
-  module `setup.sh` scripts can recreate it deterministically by symlinking
+  module setup actions can recreate it deterministically by symlinking
   module-local packages into `src/`:
 
 ```bash

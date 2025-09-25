@@ -12,9 +12,9 @@ Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. W
 
 ## Run
 ```
-./modules/chat/setup.sh
+./tools/setup
 make build
-ros2 launch chat chat.launch.py
+deno run -A psh/main.ts mod chat launch
 ```
 
 Ensure Ollama is installed and `ollama pull gemma3` completed.

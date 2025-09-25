@@ -40,7 +40,7 @@ else
     echo "[bootstrap] Warning: tools/setup_env.sh not found; continuing without sourcing" >&2
 fi
 
-# Module-specific dependencies (e.g., audio, TTS) are handled by each module's setup.sh
+# Module-specific dependencies (e.g., audio, TTS) are handled by module actions declared in module.toml
 
 # Determine host (env var HOST overrides system hostname)
 HOST="${HOST:-$(hostname -s)}"
@@ -87,19 +87,7 @@ BRC
                 echo "$BASHRC_MARK_END"
             } >> "$BASHRC"
 
-    # Add launch script to crontab (idempotent)
-    LAUNCH_SCRIPT="$REPO_ROOT/tools/launch.sh"
-    if [[ -x "$LAUNCH_SCRIPT" || -f "$LAUNCH_SCRIPT" ]]; then
-        CRON_ENTRY="@reboot sleep 30 && $LAUNCH_SCRIPT &"
-        if ! crontab -l 2>/dev/null | grep -Fqx "$CRON_ENTRY"; then
-            echo "[bootstrap] Adding launch script to crontab (@reboot)"
-            (crontab -l 2>/dev/null; echo "$CRON_ENTRY") | crontab -
-        else
-            echo "[bootstrap] Crontab entry already present; skipping"
-        fi
-    else
-        echo "[bootstrap] Warning: launch script not found at $LAUNCH_SCRIPT; skipping crontab entry" >&2
-    fi
+
 else
     echo "[bootstrap] Error: no host configuration for '$HOST' at $HOST_DIR" >&2
     exit 1
