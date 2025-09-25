@@ -12,9 +12,10 @@ Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. W
 
 ## Run
 ```
-./tools/setup
-make build
-deno run -A psh/main.ts mod chat launch
+psh setup <host>
+source tools/setup_env.sh
+colcon build --symlink-install --base-paths src
+psh mod chat launch
 ```
 
 Ensure Ollama is installed and `ollama pull gemma3` completed.

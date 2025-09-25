@@ -65,51 +65,74 @@ hosts/
    cd psyched
    ```
 
-2. **Bootstrap the system (first-time setup):**
-3. **Configure your host:**
-   make bootstrap
+2. **Install the CLI shim (optional but recommended):**
+   ```bash
+   deno run -A psh/main.ts install
    ```
-   This installs ROS2, system dependencies, and sets up the basic environment.
+   This installs a `/usr/bin/psh` wrapper so the CLI is always on `PATH`.
 
-3. **Configure your host:**
+3. **Provision host dependencies:**
    ```bash
-   # Check available host configurations
+   # Install ROS 2 (repeat if you need to install Docker as well)
+   psh dep ros2
+   psh dep docker
+   ```
+
+4. **Configure your host:**
+   ```bash
+   # Inspect available host definitions
    ls hosts/
-4. **Prepare and build the workspace:**
 
-    Important: module setup actions create a clean `src/` tree by symlinking
-    module-local packages into the repository `src/` directory. To ensure a
-    deterministic setup, delete any existing `./src` folder before running the
-    setup step so it can be recreated from scratch:
+   # Apply the configuration for the current machine
+   psh setup <host>
+   ```
 
-    ```bash
-    rm -rf ./src
-    HOST=cerebellum ./tools/setup
-    make build
-    ```
+   Important: module setup actions create a clean `src/` tree by symlinking
+   module-local packages into the repository `src/` directory. To ensure a
+   deterministic setup, delete any existing `./src` folder before running the
+   setup step so it can be recreated from scratch:
 
-    Each module should place its ROS2 package(s) under
-    `modules/<module>/packages/<pkg>` (for example: `modules/ear/packages/ear`).
-    The `link_packages` action in `module.toml` symlinks module-local packages into
-    `src/` so `colcon build` (invoked by `make build`) will build them.
-
-4. **Build the workspace:**
    ```bash
-   make build
+   rm -rf ./src
+   psh setup <host>
+   ```
+
+   Each module should place its ROS2 package(s) under
+   `modules/<module>/packages/<pkg>` (for example: `modules/ear/packages/ear`).
+   The `link_packages` action in `module.toml` symlinks module-local packages into
+   `src/` so `colcon build` will build them.
+
+5. **Build the workspace:**
+   ```bash
+   # Source ROS 2 and the workspace environment
+   source tools/setup_env.sh
+
+   # Install dependencies and build
+   rosdep update
+   rosdep install --from-paths src --ignore-src -r -y
+   colcon build --symlink-install --base-paths src
    ```
 
 ### Basic Usage
 
-1. **Launch all configured modules:**
+1. **Launch a module:**
    ```bash
-   make bringup
+   psh mod pilot launch
    ```
 
-2. **Access the web interface:**
+2. **Stop a module:**
+   ```bash
+   psh mod pilot shutdown
+   ```
+
+3. **Access the web interface:**
    Open http://localhost:8080 in your browser for robot control
 
-3. **Check system status:**
+4. **Check system status:**
    ```bash
+   psh
+   ```
+
 ### Pilot Module
 - **Purpose**: Web-based robot control interface
 - **Features**: Joystick control, system monitoring, volume control
@@ -166,13 +189,16 @@ hosts/
 
 ```bash
 # Provision modules for the current host
-./tools/setup
+psh setup <host>
 
 # Build workspace
-make build
+source tools/setup_env.sh
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install --base-paths src
 
 # Launch specific module via psh
-deno run -A psh/main.ts mod pilot launch
+psh mod pilot launch
 ```
 
 ### Adding New Modules
@@ -188,7 +214,8 @@ deno run -A psh/main.ts mod pilot launch
 
 ```bash
 # Rebuild after changes
-make build
+source tools/setup_env.sh
+colcon build --symlink-install --base-paths src
 
 # Test specific functionality
 ros2 topic echo /cmd_vel
@@ -202,15 +229,14 @@ ros2 node list
 
 ```bash
 # Generate service units for current host
-make systemd-generate
+psh systemd generate
 
 # Install and enable services
-sudo make systemd-install
-make systemd-enable
+psh systemd install
 
 # Monitor services
-make systemd-status
-make systemd-debug UNIT=psyched-pilot.service
+systemctl status psyched-pilot.service
+journalctl -u psyched-pilot.service -n 200 -f
 ```
 
 ### Configuration Management
@@ -223,7 +249,7 @@ Host-specific settings can be configured in:
 
 ### Common Issues
 
-1. **ROS2 not found**: Run `make ros2` to install ROS2
+1. **ROS2 not found**: Run `psh dep ros2` to install ROS2
 2. **Build failures**: Check that all module dependencies are installed
 3. **Network dependencies**: Some modules require internet access for model downloads
 4. **Permission errors**: Ensure user has access to audio/USB devices
@@ -236,7 +262,7 @@ source tools/setup_env.sh
 echo $ROS_DISTRO
 
 # View logs
-make systemd-debug UNIT=psyched-<module>.service
+journalctl -u psyched-<module>.service -n 200 -f
 
 # Test module setup
 modules/<module>/module.toml
@@ -261,7 +287,7 @@ documented in [AGENTS.md](AGENTS.md).
 1. Fork the repository
 2. Create a feature branch
 3. Make changes following the modular architecture
-4. Test with `make build` and module-specific tests
+4. Test with `colcon build --symlink-install --base-paths src` and module-specific tests
 5. Submit a pull request
 
 ### Code Style
