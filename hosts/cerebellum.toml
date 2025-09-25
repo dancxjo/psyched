@@ -2,10 +2,10 @@
 # Controls which modules are enabled and optional installers.
 
 # Install ROS2 on this host during `psh setup`?
-setup_ros2 = false
+setup_ros2 = true
 
 # Install Docker on this host during `psh setup`?
-setup_docker = false
+setup_docker = true
 
 # Ordered list of modules to enable for this host. Each entry corresponds to
 # a directory under modules/ and if that module contains a setup.sh it will
