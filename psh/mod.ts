@@ -53,6 +53,21 @@ export async function runModuleScript(module: string, action?: string) {
 
   const specInfo = await loadModuleSpec(module).catch(() => null);
   const systemd = specInfo?.spec.systemd;
+  // Special-case: list available modules (print once)
+  if (requested === "list") {
+    try {
+      console.log("Available modules:");
+      for await (const entry of Deno.readDir(join(repoDir, "modules"))) {
+        if (!entry.isDirectory) continue;
+        if (entry.name.startsWith(".")) continue;
+        console.log(` - ${entry.name}`);
+      }
+      return;
+    } catch (err) {
+      console.error(`[mod] Failed listing modules: ${err}`);
+      Deno.exit(2);
+    }
+  }
 
   // Special-case: run the action for all modules when module is '*' or 'all'.
   if (module === "*" || module.toLowerCase?.() === "all") {
@@ -72,22 +87,6 @@ export async function runModuleScript(module: string, action?: string) {
       Deno.exit(2);
     }
     return;
-  }
-
-  // Special-case: list available modules
-  if (requested === "list") {
-    try {
-      console.log("Available modules:");
-      for await (const entry of Deno.readDir(join(repoDir, "modules"))) {
-        if (!entry.isDirectory) continue;
-        if (entry.name.startsWith(".")) continue;
-        console.log(` - ${entry.name}`);
-      }
-      return;
-    } catch (err) {
-      console.error(`[mod] Failed listing modules: ${err}`);
-      Deno.exit(2);
-    }
   }
 
   // Special-case: module setup (link packages, install deps, etc.)

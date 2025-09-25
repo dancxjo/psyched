@@ -1,0 +1,3 @@
+name = "psyched_msgs"
+packages = ["psyched_msgs"]
+description = "Shared ROS message definitions for Psyched"

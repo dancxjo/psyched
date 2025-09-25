@@ -34,12 +34,10 @@ export async function colconBuild(runner: DaxTemplateTag = $): Promise<void> {
   );
 }
 
-export async function colconInstall(runner: DaxTemplateTag = $): Promise<void> {
-  await runColcon(
-    runner,
-    "install",
-    [],
-    "Colcon install complete.",
-    "colcon install",
-  );
+export function colconInstall(): void {
+  // Historically we attempted to run `colcon install` here, however the
+  // `colcon` CLI does not provide an `install` subcommand. The workspace is
+  // installed as part of `colcon build` (and using --symlink-install).
+  // Keep this function for backwards compatibility but make it a no-op.
+  console.log("[psh] Skipping 'colcon install' (not supported); ensure 'colcon build' was run instead.");
 }

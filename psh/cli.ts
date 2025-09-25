@@ -128,8 +128,20 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .description("Run colcon build and install for the workspace")
     .action(async () => {
       // TODO: Clear out build/ and install/ folders first.
-      await deps.colconBuild();
-      await deps.colconInstall();
+      try {
+        await deps.colconBuild();
+        // await deps.colconInstall();
+      } catch (err: any) {
+        // Provide a clearer hint when Deno lacks permissions to spawn processes
+        const msg = String(err?.message || err);
+        if (msg.includes("Requires --allow-run") || msg.includes("NotCapable") || msg.includes("allow-run")) {
+          console.error("[psh] Deno permission error: running external commands requires Deno to be granted run permissions.");
+          console.error("Try: deno run -A --config psh/deno.json psh/main.ts build");
+          console.error("Or install the psh shim and run 'psh build' normally after installation.");
+          Deno.exit(125);
+        }
+        throw err;
+      }
     });
 
 
