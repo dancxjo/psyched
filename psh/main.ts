@@ -15,13 +15,43 @@ function repoPath(relative: string) {
 
 async function installPsh() {
   const scriptPath = decodeURIComponent(new URL(import.meta.url).pathname);
-  const wrapper = `#!/usr/bin/env bash\nexec deno run -A '${scriptPath}' "$@"\n`;
+  const wrapper = `#!/usr/bin/env bash\nexec deno run -A '${scriptPath}' "${"$@"}"\n`;
 
   console.log("Installing psh to /usr/bin/psh (requires sudo)...");
-  // Write wrapper and make executable
-  const tee = await $`sudo tee /usr/bin/psh >/dev/null`;
-  // Use a here-doc to send the wrapper content to sudo tee
-  const write = await $`sudo bash -c "cat > /usr/bin/psh <<'PSH'\n${wrapper}\nPSH"`;
+
+  // If /usr/bin/psh already exists and its contents exactly match the
+  // desired wrapper, do nothing. This makes the install idempotent and
+  // avoids unnecessary writes that could change permissions/mtime.
+  const exists = await $`sudo test -f /usr/bin/psh`;
+  if (exists.code === 0) {
+    // Dump the root-owned file to a temp file using sudo, then read it with
+    // Deno. This avoids attempting to access command stdout via the shell
+    // runner which may not be configured to pipe stdout.
+    const tmp = `/tmp/psh_existing.${Deno.pid}`;
+    const dump = await $`sudo bash -c 'cat /usr/bin/psh > ${$.path(tmp)}'`;
+    if (dump.code !== 0) {
+      console.log("Unable to read existing /usr/bin/psh; will overwrite.");
+    } else {
+      try {
+        const existing = await Deno.readTextFile(tmp);
+        if (existing.trim() === wrapper.trim()) {
+          console.log("psh is already installed and up-to-date; skipping write.");
+          // cleanup
+          await $`sudo rm -f ${$.path(tmp)}`;
+          return;
+        }
+        console.log("Existing /usr/bin/psh differs from desired wrapper; updating...");
+      } catch (_err) {
+        console.log("Failed to read temp file; will overwrite /usr/bin/psh.");
+      }
+      // cleanup
+      await $`sudo rm -f ${$.path(tmp)}`;
+    }
+  }
+
+  // Stream the wrapper content into sudo tee to avoid nested quoting/heredoc
+  // issues and to ensure we don't call tee with no stdin (which blocks).
+  const write = await $`printf '%s\n' ${wrapper} | sudo tee /usr/bin/psh >/dev/null`;
   if (write.code !== 0) {
     console.error("Failed to write /usr/bin/psh:", write.stderr || write.stdout);
     Deno.exit(write.code);
@@ -37,6 +67,16 @@ async function installPsh() {
 async function runInstallRos2() {
   const script = repoPath('../tools/install_ros2.sh');
   console.log(`Running ROS2 install script: ${script}`);
+  const r = await $`bash ${script}`;
+  if (r.code !== 0) {
+    console.error(r.stderr || r.stdout);
+    Deno.exit(r.code);
+  }
+}
+
+async function runInstallDocker() {
+  const script = repoPath('../tools/install_docker.sh');
+  console.log(`Running Docker install script: ${script}`);
   const r = await $`bash ${script}`;
   if (r.code !== 0) {
     console.error(r.stderr || r.stdout);
@@ -66,7 +106,7 @@ async function systemdInstall() {
   try {
     const stat = await Deno.stat(unitsDir);
     if (!stat.isDirectory) throw new Error('not dir');
-  } catch (err) {
+  } catch (_err) {
     console.error(`No generated unit directory at ${unitsDir}`);
     Deno.exit(1);
   }
@@ -102,24 +142,46 @@ if (import.meta.main) {
     .description("Psyched CLI")
     .version("v1.0.0")
     .globalOption("-d, --debug", "Enable debug output.")
-    .action((_options, ..._args) => console.log("Main command called."))
+    .action((_options: Record<string, unknown>, ..._args: string[]) => { })
     .command("install", "Install psh to /usr/bin/psh")
     .action(async () => await installPsh())
     .command("setup", "Setup sub-command.")
-    .option("-f, --foo", "Foo option.")
     .arguments("[target:string] [...rest:string]")
-    .action(async (options, ...args) => {
-      const target = args[0];
-      if (target === 'ros2') {
-        await runInstallRos2();
+    .action(async (options: Record<string, unknown>, ...args: string[]) => {
+      // Support multiple setup targets, e.g. `psh setup ros2 docker`.
+      // If no known targets are provided, fall back to the existing setup() behaviour.
+      if (!args || args.length === 0) {
+        await setup(options, args as unknown[]);
         return;
       }
-      await setup(options, args as unknown[]);
+
+      const requested = args.map((a) => a.toString());
+
+      // Run matching installers in the order they were provided.
+      let ranAny = false;
+      for (const t of requested) {
+        if (t === 'ros2') {
+          await runInstallRos2();
+          ranAny = true;
+          continue;
+        }
+        if (t === 'docker') {
+          await runInstallDocker();
+          ranAny = true;
+          continue;
+        }
+      }
+
+      // If we didn't run any known installers, pass through to setup() for
+      // backward compatibility.
+      if (!ranAny) {
+        await setup(options, args as unknown[]);
+      }
     })
     .command("systemd", "Manage systemd units for this host")
     .alias("sys")
     .arguments("[action:string]")
-    .action(async (_options, ...args) => {
+    .action(async (_options: Record<string, unknown>, ...args: string[]) => {
       const action = args[0] || 'generate';
       if (action === '*' || action === 'generate' || action === 'gen') {
         await systemdGenerate();
@@ -132,10 +194,6 @@ if (import.meta.main) {
       console.error(`Unknown systemd action: ${action}`);
       Deno.exit(2);
     })
-    // Child command 2.
-    .command("bar", "Bar sub-command.")
-    .option("-b, --bar", "Bar option.")
-    .arguments("<input:string> [output:string]")
-    .action((_options, ..._args) => console.log("Bar command called."))
+    // (removed unused 'bar' command)
     .parse(Deno.args);
 }

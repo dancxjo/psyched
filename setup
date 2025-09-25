@@ -1,13 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Update and upgrade; fail the script on error
+sudo apt update && sudo apt upgrade -y
+
+sudo apt install -y curl shellcheck micro mc git build-essential make
+
+# Try to install unzip; tolerate failure but send stdout to stderr so messages
+# appear on the standard error stream like the original intent. Use an if
+# wrapper so a failure doesn't cause the script to exit under `set -e`.
+if ! sudo apt install -y unzip 1>&2; then
+	echo "Warning: 'sudo apt install -y unzip' failed; continuing" >&2
+fi
 
 # Check whether Deno is installed; if not, run the official installer non-interactively.
 if command -v deno >/dev/null 2>&1; then
 	echo "Deno is already installed: $(command -v deno)"
 	# If main.ts exists, run it with full permissions; otherwise exit.
 	if [ -f "./psh/main.ts" ]; then
-		echo "Launching ./psh/main.ts with deno run -A..."
-		exec deno run -A ./psh/main.ts
+		# Install the /usr/bin/psh wrapper so the command is available globally.
+		PSH_SRC="$(pwd)/psh/main.ts"
+		if [ ! -f "${PSH_SRC}" ]; then
+			echo "Expected ${PSH_SRC} to exist but it does not. Aborting." >&2
+			exit 1
+		fi
+		# Ensure a copy of the deno binary exists in /usr/bin so the wrapper can
+		# always call `deno` from a predictable path. Use the currently available
+		# deno executable (command -v deno) and copy it to /usr/bin/deno.
+		DENO_PATH=$(command -v deno || true)
+		if [ -n "${DENO_PATH}" ]; then
+			echo "Copying deno binary from ${DENO_PATH} -> /usr/bin/deno (requires sudo)..."
+			sudo cp "${DENO_PATH}" /usr/bin/deno
+			sudo chmod a+x /usr/bin/deno
+		fi
+		chmod a+x "${PSH_SRC}" || true
+		echo "Installing psh wrapper -> /usr/bin/psh (requires sudo)..."
+	sudo tee /usr/bin/psh >/dev/null <<PSH
+#!/usr/bin/env bash
+exec deno run -A '${PSH_SRC}' "\$@"
+PSH
+		sudo chmod a+x /usr/bin/psh
+		echo "Launching ./psh/main.ts with deno run -A (install)..."
+		exec deno run -A "${PSH_SRC}" install
 	else
 		echo "File ./psh/main.ts not found. Exiting." >&2
 		exit 1
@@ -47,7 +80,7 @@ echo "Deno installation step finished."
 if command -v deno >/dev/null 2>&1; then
 	if [ -f "./psh/main.ts" ]; then
 		echo "Launching ./psh/main.ts with deno run -A..."
-		exec deno run -A ./psh/main.ts
+		deno run -A ./psh/main.ts install
 	else
 		echo "File ./psh/main.ts not found. Installation complete."
 	fi
