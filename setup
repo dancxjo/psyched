@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Check whether Deno is installed; if not, run the official installer non-interactively.
+if command -v deno >/dev/null 2>&1; then
+	echo "Deno is already installed: $(command -v deno)"
+	# If main.ts exists, run it with full permissions; otherwise exit.
+	if [ -f "./psh/main.ts" ]; then
+		echo "Launching ./psh/main.ts with deno run -A..."
+		exec deno run -A ./psh/main.ts
+	else
+		echo "File ./psh/main.ts not found. Exiting." >&2
+		exit 1
+	fi
+fi
+
+# Ensure curl is available
+if ! command -v curl >/dev/null 2>&1; then
+	echo "curl is required to install Deno but was not found. Please install curl and re-run this script." >&2
+	exit 1
+fi
+
+echo "Deno not found. Installing Deno (non-interactive, auto-yes)..."
+# Run the official Deno install script with auto-confirmation (--yes)
+curl -fsSL https://deno.land/install.sh | sh -s -- --yes
+
+# Detect common install locations and remind the user to add to PATH if necessary
+if [ -d "$HOME/.deno/bin" ]; then
+	DENO_BIN="$HOME/.deno/bin"
+elif [ -d "$HOME/.local/share/deno/bin" ]; then
+	DENO_BIN="$HOME/.local/share/deno/bin"
+else
+	DENO_BIN=""
+fi
+
+if [ -n "${DENO_BIN}" ]; then
+	echo "Deno installed to $DENO_BIN"
+	if ! echo "$PATH" | tr ':' '\n' | grep -qx "$DENO_BIN"; then
+		echo "Warning: $DENO_BIN is not on your PATH. You may want to add:"
+		echo "  export PATH=\"$DENO_BIN:\$PATH\""
+	fi
+fi
+
+echo "Deno installation step finished."
+
+# If installation succeeded and deno is available in PATH, attempt to run main.ts
+if command -v deno >/dev/null 2>&1; then
+	if [ -f "./psh/main.ts" ]; then
+		echo "Launching ./psh/main.ts with deno run -A..."
+		exec deno run -A ./psh/main.ts
+	else
+		echo "File ./psh/main.ts not found. Installation complete."
+	fi
+else
+	echo "Deno was installed but is not on PATH. Add the Deno bin directory to your PATH and re-run the script to launch ./psh/main.ts." >&2
+fi
