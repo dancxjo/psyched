@@ -44,6 +44,12 @@ function createStubDeps() {
     async cleanWorkspace() {
       record("cleanWorkspace");
     },
+    async colconBuild() {
+      record("colconBuild");
+    },
+    async colconInstall() {
+      record("colconInstall");
+    },
   };
 
   return { calls, deps };

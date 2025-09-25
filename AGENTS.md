@@ -55,6 +55,9 @@ workspace.
   summary. If you must skip a check, state why.
 - Smoke-test module commands when you modify them (e.g.
   `deno run -A psh/main.ts mod <module> launch`).
+- Deno-based tests require local CA trust; run them with
+  `DENO_TLS_CA_STORE=system` and grant the needed permissions (e.g.
+  `--allow-read --allow-write --allow-env`).
 
 Important workflow note:
 
