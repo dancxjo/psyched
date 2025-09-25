@@ -1,4 +1,4 @@
-import { repoPath, $ } from "./util.ts";
+import { $ } from "./util.ts";
 
 export async function systemdUninstall() {
     const hn = await $`hostname -s`;

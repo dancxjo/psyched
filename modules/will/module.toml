@@ -1,0 +1,36 @@
+name = "will"
+description = "Behaviour tree orchestrator"
+
+[[actions]]
+type = "link_packages"
+packages = ["psyched_bt"]
+
+[[actions]]
+type = "apt_install"
+packages = ["python3-pip", "git"]
+update = true
+
+[[actions]]
+type = "pip_install"
+packages = ["py_trees"]
+import_check = ["py_trees"]
+break_system = true
+
+[[actions]]
+type = "run"
+description = "Install py_trees_ros with Git fallback"
+command = """
+if ! python3 -c 'import py_trees_ros' >/dev/null 2>&1; then
+  python3 -m pip install py_trees_ros --break-system-packages || \
+    python3 -m pip install 'git+https://github.com/splintered-reality/py_trees_ros.git' --break-system-packages || true
+fi
+"""
+optional = true
+
+[systemd]
+description = "Psyched Behaviour Tree"
+after = ["network.target"]
+launch = "modules/will/launch.sh"
+shutdown = "modules/will/shutdown.sh"
+restart = "on-failure"
+restart_sec = 5

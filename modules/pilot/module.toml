@@ -1,0 +1,32 @@
+name = "pilot"
+description = "Pilot UI and teleop bridge"
+
+[[actions]]
+type = "link_packages"
+packages = ["pilot"]
+
+[[actions]]
+type = "pip_install"
+packages = ["websockets"]
+import_check = ["websockets"]
+break_system = true
+
+[[actions]]
+type = "pip_install"
+packages = ["zeroconf"]
+import_check = ["zeroconf"]
+break_system = true
+
+[[actions]]
+type = "apt_install"
+packages = ["hostapd", "dnsmasq", "iproute2", "iw"]
+update = true
+
+[systemd]
+description = "Psyched Pilot UI"
+after = ["network-online.target"]
+wants = ["network-online.target"]
+launch = "modules/pilot/launch.sh"
+shutdown = "modules/pilot/shutdown.sh"
+restart = "on-failure"
+restart_sec = 4

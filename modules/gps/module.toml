@@ -1,0 +1,78 @@
+name = "gps"
+description = "u-blox GPS bring-up with gpsd integration"
+
+[[actions]]
+type = "link_packages"
+packages = ["ublox_gps", "psyched_msgs"]
+
+[[actions]]
+type = "apt_install"
+packages = ["gpsd", "gpsd-clients"]
+update = true
+
+[[actions]]
+type = "run"
+description = "Ensure user has dialout access"
+command = """
+if ! id -nG "$USER" | grep -qw dialout; then
+  sudo usermod -aG dialout "$USER" || true
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Create udev rule for u-blox adapters"
+command = """
+if [ "${GPS_SKIP_UDEV:-0}" != "1" ]; then
+  sudo install -d -m 0755 /etc/udev/rules.d
+  cat <<'EOF' | sudo tee /etc/udev/rules.d/99-gps-ublox.rules >/dev/null
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a7", SYMLINK+="gps0"
+EOF
+  sudo udevadm control --reload-rules
+  sudo udevadm trigger || true
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Configure gpsd defaults"
+command = """
+if [ -f /etc/default/gpsd ]; then
+  sudo sed -i 's/^START_DAEMON=.*/START_DAEMON="true"/' /etc/default/gpsd || true
+  sudo sed -i 's#^USBAUTO=.*#USBAUTO="true"#' /etc/default/gpsd || true
+  if grep -q '^DEVICES=' /etc/default/gpsd; then
+    sudo sed -i 's#^DEVICES=.*#DEVICES="/dev/gps0"#' /etc/default/gpsd || true
+  else
+    echo 'DEVICES="/dev/gps0"' | sudo tee -a /etc/default/gpsd >/dev/null
+  fi
+fi
+"""
+optional = true
+
+[[actions]]
+type = "run"
+description = "Enable and start gpsd"
+command = """
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable gpsd.service || true
+  sudo systemctl restart gpsd.service || sudo systemctl start gpsd.service || true
+fi
+"""
+optional = true
+
+[[actions]]
+type = "pip_install"
+packages = ["gps3"]
+import_check = ["gps3"]
+break_system = true
+
+[systemd]
+description = "Psyched GPS Service"
+after = ["network-online.target"]
+wants = ["network-online.target"]
+launch = "modules/gps/launch.sh"
+shutdown = "modules/gps/shutdown.sh"
+restart = "on-failure"
+restart_sec = 5

@@ -55,17 +55,17 @@ export class CommandRequirement implements Requirement {
         return r.code === 0;
     }
 
-    async install(): Promise<void> {
-        throw new Error(`Automatic install not available for command '${this.command}'. Please install it manually.`);
+    install(): Promise<void> {
+        return Promise.reject(new Error(`Automatic install not available for command '${this.command}'. Please install it manually.`));
     }
 }
 
 export class DebUrlRequirement implements Requirement {
     constructor(readonly name: string, readonly url: string, readonly targetPath = `/tmp/${Date.now()}-package.deb`) { }
 
-    async check(): Promise<boolean> {
+    check(): Promise<boolean> {
         // Hard to determine; conservative: not installed.
-        return false;
+        return Promise.resolve(false);
     }
 
     async install(): Promise<void> {
@@ -90,7 +90,7 @@ export class FileRequirement implements Requirement {
         return r.code === 0;
     }
 
-    async install(): Promise<void> {
-        throw new Error(`No automated install for file requirement: ${this.path}`);
+    install(): Promise<void> {
+        return Promise.reject(new Error(`No automated install for file requirement: ${this.path}`));
     }
 }

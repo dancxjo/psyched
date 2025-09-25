@@ -1,0 +1,19 @@
+name = "rtabmap"
+description = "RTAB-Map placeholder"
+
+[[actions]]
+type = "run"
+description = "Inform user about manual RTAB-Map installation"
+command = """
+echo "RTAB-Map setup requires manual installation on supported hosts."
+"""
+optional = true
+
+[systemd]
+description = "Psyched RTAB-Map"
+after = ["network-online.target"]
+wants = ["network-online.target"]
+launch = "modules/rtabmap/launch.sh"
+shutdown = "modules/rtabmap/shutdown.sh"
+restart = "on-failure"
+restart_sec = 10

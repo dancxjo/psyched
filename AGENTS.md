@@ -18,6 +18,10 @@ workspace.
   packages for a given host. Each module should place its ROS2 package(s)
   under `modules/<module>/packages/` so its `setup.sh` can link them into
   the repository `src/` directory before building.
+- Module setup is now driven by `modules/<name>/module.toml`. Declare module
+  actions (package linking, apt/pip installs, shell commands) there so `psh
+  setup` can orchestrate work without bespoke shell scripts. When adding new
+  actions check `psh/modules.ts` for supported types.
 - `hosts/` – Host-specific configuration, symlinks, and generated systemd units.
 - `tools/` – Provisioning helpers (ROS installation, bringup orchestration,
   diagnostics, etc.).
