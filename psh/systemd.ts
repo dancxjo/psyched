@@ -138,7 +138,7 @@ async function ensureHostModuleConfig(
   return null;
 }
 
-async function generateUnits(host: string): Promise<void> {
+async function generateUnits(host: string, unitsFilter?: string[]): Promise<void> {
   const repoDir = repoDirFromModules();
   const hostSpec = await readHostSpec(host);
   const modulesList = ensureArray(hostSpec.modules);
@@ -148,6 +148,11 @@ async function generateUnits(host: string): Promise<void> {
 
   const desired = new Set<string>();
   for (const moduleName of modulesList) {
+    if (unitsFilter && unitsFilter.length > 0) {
+      // unitsFilter contains module names or service names; normalize
+      const matches = unitsFilter.some((u) => u === moduleName || u === `psyched-${moduleName}` || u === `psyched-${moduleName}.service`);
+      if (!matches) continue;
+    }
     const moduleSpecInfo = await loadModuleSpec(moduleName);
     if (!moduleSpecInfo?.spec.systemd) {
       console.log(
@@ -192,14 +197,16 @@ export async function systemdGenerate(): Promise<void> {
   const hn = await $`hostname -s`.stdout("piped");
   const host = (hn.stdout || hn.stderr || "").toString().trim() ||
     Deno.env.get("HOST") || "default";
+  // no units filter by default
   await generateUnits(host);
 }
 
-export async function systemdInstall(): Promise<void> {
-  await systemdGenerate();
+export async function systemdInstall(units?: string[]): Promise<void> {
+  // regenerate units for current host, optionally filtered
   const hn = await $`hostname -s`.stdout("piped");
   const host = (hn.stdout || hn.stderr || "").toString().trim() ||
     Deno.env.get("HOST") || "default";
+  await generateUnits(host, units);
   const repoDir = repoDirFromModules();
   const unitsDir = join(repoDir, "hosts", host, "systemd");
   const systemdDir = Deno.env.get("SYSTEMD_DIR") ??
@@ -217,9 +224,9 @@ export async function systemdInstall(): Promise<void> {
       );
       continue;
     }
-    await $`sudo systemctl enable --now ${ent.name}`.noThrow();
   }
   await $`sudo systemctl daemon-reload`.noThrow();
+  // enable units if requested explicitly via enable command
 }
 
 export async function systemdUninstall(): Promise<void> {
@@ -248,4 +255,115 @@ export async function systemdUninstall(): Promise<void> {
     console.log(`[systemd] Removed ${dest}`);
   }
   await $`sudo systemctl daemon-reload`.noThrow();
+}
+
+async function resolveUnitsForHost(host: string, units?: string[]): Promise<string[]> {
+  const repoDir = repoDirFromModules();
+  const unitsDir = join(repoDir, "hosts", host, "systemd");
+  if (units && units.length > 0) {
+    return units.map((u) => {
+      if (u.endsWith(".service")) return u;
+      if (u.startsWith("psyched-")) return `${u}.service`;
+      return `psyched-${u}.service`;
+    });
+  }
+  // No units specified: enumerate generated units
+  const list: string[] = [];
+  try {
+    for await (const ent of Deno.readDir(unitsDir)) {
+      if (!ent.isFile || !ent.name.endsWith(".service")) continue;
+      list.push(ent.name);
+    }
+  } catch {
+    // no generated units
+  }
+  return list;
+}
+
+export async function systemdEnable(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  // Ensure units are present by regenerating/copying
+  await systemdInstall(units);
+  const resolved = await resolveUnitsForHost(host, units);
+  await $`sudo systemctl daemon-reload`.noThrow();
+  for (const u of resolved) {
+    console.log(`[systemd] Enabling ${u}`);
+    await $`sudo systemctl enable --now ${u}`.noThrow();
+  }
+}
+
+export async function systemdDisable(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  for (const u of resolved) {
+    console.log(`[systemd] Disabling ${u}`);
+    await $`sudo systemctl disable --now ${u}`.noThrow();
+  }
+  await $`sudo systemctl daemon-reload`.noThrow();
+}
+
+export async function systemdStart(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  for (const u of resolved) {
+    console.log(`[systemd] Starting ${u}`);
+    await $`sudo systemctl start ${u}`.noThrow();
+  }
+}
+
+export async function systemdStop(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  for (const u of resolved) {
+    console.log(`[systemd] Stopping ${u}`);
+    await $`sudo systemctl stop ${u}`.noThrow();
+  }
+}
+
+export async function systemdReload(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  await $`sudo systemctl daemon-reload`.noThrow();
+  for (const u of resolved) {
+    console.log(`[systemd] Reloading ${u}`);
+    await $`sudo systemctl reload ${u}`.noThrow();
+  }
+}
+
+export async function systemdRestart(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  for (const u of resolved) {
+    console.log(`[systemd] Restarting ${u}`);
+    await $`sudo systemctl restart ${u}`.noThrow();
+  }
+}
+
+export async function systemdDebug(units?: string[]): Promise<void> {
+  const hn = await $`hostname -s`.stdout("piped");
+  const host = (hn.stdout || hn.stderr || "").toString().trim() ||
+    Deno.env.get("HOST") || "default";
+  const resolved = await resolveUnitsForHost(host, units);
+  if (resolved.length === 0) {
+    console.log("[systemd] No units to debug");
+    return;
+  }
+  for (const u of resolved) {
+    console.log(`\n[systemd] Status for ${u}:`);
+    await $`sudo systemctl status ${u}`.noThrow();
+    console.log(`\n[systemd] Journal for ${u}:`);
+    await $`sudo journalctl -u ${u} -n 200 -e --no-pager`.noThrow();
+  }
 }

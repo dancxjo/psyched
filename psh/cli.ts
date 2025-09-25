@@ -21,9 +21,16 @@ export interface CliDeps {
   setupHosts(hosts: string[]): Promise<void> | void;
   runInstallRos2(): Promise<void> | void;
   runInstallDocker(): Promise<void> | void;
-  systemdGenerate(): Promise<void> | void;
-  systemdInstall(): Promise<void> | void;
-  systemdUninstall(): Promise<void> | void;
+  systemdGenerate(units?: string[]): Promise<void> | void;
+  systemdInstall(units?: string[]): Promise<void> | void;
+  systemdUninstall(units?: string[]): Promise<void> | void;
+  systemdDebug?(units?: string[]): Promise<void> | void;
+  systemdEnable?(units?: string[]): Promise<void> | void;
+  systemdDisable?(units?: string[]): Promise<void> | void;
+  systemdStart?(units?: string[]): Promise<void> | void;
+  systemdStop?(units?: string[]): Promise<void> | void;
+  systemdReload?(units?: string[]): Promise<void> | void;
+  systemdRestart?(units?: string[]): Promise<void> | void;
   printEnvSource(): Promise<void> | void;
   runModuleScript(module: string, action?: string): Promise<void> | void;
   cleanWorkspace(): Promise<void> | void;
@@ -38,9 +45,16 @@ const defaultDeps: CliDeps = {
   setupHosts,
   runInstallRos2,
   runInstallDocker,
-  systemdGenerate,
-  systemdInstall,
-  systemdUninstall,
+  systemdGenerate: () => systemdGenerate(),
+  systemdInstall: (units?: string[]) => systemdInstall(units),
+  systemdUninstall: () => systemdUninstall(),
+  systemdDebug: () => { throw new Error("systemdDebug not implemented"); },
+  systemdEnable: () => { throw new Error("systemdEnable not implemented"); },
+  systemdDisable: () => { throw new Error("systemdDisable not implemented"); },
+  systemdStart: () => { throw new Error("systemdStart not implemented"); },
+  systemdStop: () => { throw new Error("systemdStop not implemented"); },
+  systemdReload: () => { throw new Error("systemdReload not implemented"); },
+  systemdRestart: () => { throw new Error("systemdRestart not implemented"); },
   printEnvSource,
   runModuleScript,
   cleanWorkspace,
@@ -71,14 +85,10 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     });
 
   cli.command("build")
-    .description("Run colcon build for the workspace")
+    .description("Run colcon build and install for the workspace")
     .action(async () => {
+      // TODO: Clear out build/ and install/ folders first.
       await deps.colconBuild();
-    });
-
-  cli.command("colcon-install")
-    .description("Run colcon install for the workspace")
-    .action(async () => {
       await deps.colconInstall();
     });
 
@@ -110,25 +120,72 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       throw new Error(`Unknown dependency: ${dep}`);
     });
 
-  cli.command("systemd")
-    .description("Generate or install systemd unit files")
-    .arguments("[action:string]")
+  // Systemd command: dispatch action and optional units as arguments
+  const _sys = cli.command("systemd")
     .alias("sys")
     .alias("service")
     .alias("srv")
-    .action(async (_options, action?: string) => {
-      const normalized = normalize(action, "generate");
-      if (["*", "generate", "gen"].includes(normalized)) {
-        await deps.systemdGenerate();
+    .description("Manage systemd unit files (gen/install, debug, enable, disable, stop, start, reload, restart)")
+    .arguments("[action:string] [...units:string]")
+    .action(async (_options, action?: string, ...units: string[]) => {
+      const act = normalize(action, "gen");
+      if (["*", "gen", "generate"].includes(act)) {
+        // generate now merges install (write + copy into systemd dir)
+        await deps.systemdInstall(units.length ? units : undefined);
         return;
       }
-      if (normalized === "install") {
-        await deps.systemdInstall();
+      if (["uninstall", "remove", "rm"].includes(act)) {
+        await deps.systemdUninstall(units.length ? units : undefined);
         return;
       }
-      if (["uninstall", "remove", "rm"].includes(normalized)) {
-        await deps.systemdUninstall();
-        return;
+      if (["debug", "dbg", "d"].includes(act)) {
+        if (deps.systemdDebug) {
+          await deps.systemdDebug(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdDebug not implemented");
+      }
+      if (["enable", "en"].includes(act)) {
+        if (deps.systemdEnable) {
+          await deps.systemdEnable(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdEnable not implemented");
+      }
+      if (["disable", "dis"].includes(act)) {
+        if (deps.systemdDisable) {
+          await deps.systemdDisable(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdDisable not implemented");
+      }
+      if (["start"].includes(act)) {
+        if (deps.systemdStart) {
+          await deps.systemdStart(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdStart not implemented");
+      }
+      if (["stop"].includes(act)) {
+        if (deps.systemdStop) {
+          await deps.systemdStop(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdStop not implemented");
+      }
+      if (["reload", "reload-daemon", "rd"].includes(act)) {
+        if (deps.systemdReload) {
+          await deps.systemdReload(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdReload not implemented");
+      }
+      if (["restart", "re"].includes(act)) {
+        if (deps.systemdRestart) {
+          await deps.systemdRestart(units.length ? units : undefined);
+          return;
+        }
+        throw new Error("systemdRestart not implemented");
       }
       throw new Error(`Unknown systemd action: ${action}`);
     });
