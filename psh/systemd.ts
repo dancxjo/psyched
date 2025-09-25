@@ -75,8 +75,8 @@ function buildUnitContent(
   const execStop = shutdownCommand
     ? `${entrypoint} bash -lc ${JSON.stringify(shutdownCommand)}`
     : shutdownPath
-    ? `${entrypoint} bash -lc "\"${shutdownPath}\""`
-    : null;
+      ? `${entrypoint} bash -lc "\"${shutdownPath}\""`
+      : null;
 
   const envLines: string[] = [];
   const env = spec.environment ?? {};
@@ -189,7 +189,7 @@ async function generateUnits(host: string): Promise<void> {
 }
 
 export async function systemdGenerate(): Promise<void> {
-  const hn = await $`hostname -s`;
+  const hn = await $`hostname -s`.stdout("piped");
   const host = (hn.stdout || hn.stderr || "").toString().trim() ||
     Deno.env.get("HOST") || "default";
   await generateUnits(host);
@@ -197,7 +197,7 @@ export async function systemdGenerate(): Promise<void> {
 
 export async function systemdInstall(): Promise<void> {
   await systemdGenerate();
-  const hn = await $`hostname -s`;
+  const hn = await $`hostname -s`.stdout("piped");
   const host = (hn.stdout || hn.stderr || "").toString().trim() ||
     Deno.env.get("HOST") || "default";
   const repoDir = repoDirFromModules();

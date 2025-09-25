@@ -113,6 +113,9 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
   cli.command("systemd")
     .description("Generate or install systemd unit files")
     .arguments("[action:string]")
+    .alias("sys")
+    .alias("service")
+    .alias("srv")
     .action(async (_options, action?: string) => {
       const normalized = normalize(action, "generate");
       if (["*", "generate", "gen"].includes(normalized)) {
@@ -157,7 +160,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
         await deps.cleanWorkspace();
         return;
       }
-      if (["systemd", "units"].includes(target)) {
+      if (["systemd", "units", "sys", "service", "srv"].includes(target)) {
         await deps.systemdUninstall();
         return;
       }

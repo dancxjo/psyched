@@ -10,11 +10,10 @@ setup_docker = true
 # Ordered list of modules to enable for this host. Each entry corresponds to
 # a directory under modules/ and its module.toml actions will be executed in
 # the same order.
-modules = ["wifi"]
+modules = ["chat"]
 
 # Optional per-module configuration tables.
 [module_configs.wifi]
-
 
 
 [module_configs.ear]
@@ -55,7 +54,7 @@ topic = "/voice"
 interrupt = "/voice/interrupt"
 resume = "/voice/resume"
 clear = "/voice/clear"
- 
+
 [module_configs.chat]
 # Chat module configuration
 system_prompt = "You_are_a_helpful_assistant._Reply_in_one_concise_sentence."
@@ -73,4 +72,3 @@ topic = "/foot"
 # MPU6050 module configuration
 # Optional: override path to params.yaml if you have a calibrated copy
 # param_file = "/home/pete/psyched/src/ros2_mpu6050/config/params.yaml"
-
