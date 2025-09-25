@@ -1,0 +1,244 @@
+"""FastAPI application for the pilot control surface."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from .module_catalog import ModuleCatalog, ModuleInfo, ModuleTopic
+from .topic_manager import TopicSessionManager, TopicSession
+
+
+class CommandRequest(BaseModel):
+    """Request payload for executing module/system commands."""
+
+    scope: str = Field(pattern="^(mod|sys)$", description="Command scope: mod or sys")
+    command: str
+    args: List[str] | None = Field(default=None, description="Additional command arguments")
+
+
+class TopicRequest(BaseModel):
+    """Request payload for creating topic sessions."""
+
+    topic: str
+    access: str = Field(default="ro", pattern="^(ro|wo|rw)$")
+    module: str | None = None
+    qos: Dict[str, Any] | None = None
+    message_type: str | None = None
+
+
+class PauseRequest(BaseModel):
+    """Request payload for toggling topic flow."""
+
+    paused: bool = True
+
+
+class CommandExecutor:
+    """Executes `psh` commands asynchronously."""
+
+    def __init__(self, repo_root: Path) -> None:
+        self._repo_root = repo_root
+
+    async def run(self, scope: str, module: str, command: str, args: List[str] | None = None) -> Dict[str, Any]:
+        args = args or []
+        psh_path = self._repo_root / "psh" / "main.ts"
+        if not psh_path.exists():  # pragma: no cover - should exist in deployed repo
+            raise RuntimeError("psh toolchain not available")
+        deno = "deno"
+        command_args = ["run", "-A", str(psh_path), scope, module, command, *args]
+        process = await asyncio.create_subprocess_exec(
+            deno,
+            *command_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        return {
+            "code": process.returncode,
+            "stdout": stdout.decode(),
+            "stderr": stderr.decode(),
+        }
+
+
+class PilotApplication:
+    """Encapsulates the FastAPI router and backend dependencies."""
+
+    def __init__(
+        self,
+        *,
+        catalog: ModuleCatalog,
+        topic_manager: TopicSessionManager,
+        command_executor: CommandExecutor,
+        static_root: Path | None = None,
+    ) -> None:
+        self.catalog = catalog
+        self.topic_manager = topic_manager
+        self.command_executor = command_executor
+        self.static_root = static_root
+        self.app = FastAPI(title="Psyched Pilot", version="2.0.0", lifespan=self._lifespan)
+        self._configure_routes()
+
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):  # noqa: D401
+        """FastAPI lifespan handler that tears down topic sessions on shutdown."""
+
+        try:
+            yield
+        finally:  # pragma: no cover - exercised during application shutdown
+            self.topic_manager.shutdown()
+
+    # ------------------------------------------------------------------
+    # Route configuration
+    # ------------------------------------------------------------------
+    def _configure_routes(self) -> None:
+        router = APIRouter(prefix="/api")
+
+        @router.get("/modules")
+        async def list_modules() -> Dict[str, Any]:
+            modules = [module.to_dict() for module in self.catalog.list_modules()]
+            return {"modules": modules}
+
+        @router.get("/topics")
+        async def list_topics() -> Dict[str, Any]:
+            sessions = [session.to_dict() for session in self.topic_manager.list_sessions()]
+            return {"sessions": sessions}
+
+        @router.post("/modules/{module}/commands", status_code=202)
+        async def run_command(module: str, payload: CommandRequest) -> Dict[str, Any]:
+            if payload.scope == "mod":
+                catalog_entry = self.catalog.get_module(module)
+                if payload.command not in catalog_entry.commands.mod:
+                    raise HTTPException(status_code=400, detail="Unsupported module command")
+            else:
+                catalog_entry = self.catalog.get_module(module)
+                if payload.command not in catalog_entry.commands.system:
+                    raise HTTPException(status_code=400, detail="Unsupported system command")
+            result = await self.command_executor.run(payload.scope, module, payload.command, payload.args or [])
+            return {"result": result}
+
+        @router.post("/topics", status_code=201)
+        async def create_topic(payload: TopicRequest) -> Dict[str, Any]:
+            message_type = payload.message_type
+            qos = payload.qos
+            module_name = payload.module
+            if message_type is None:
+                module_topic = _find_topic(self.catalog, payload.topic, module_name)
+                if module_topic is None:
+                    raise HTTPException(status_code=404, detail="Unknown topic")
+                message_type = module_topic.type
+                qos = qos or module_topic.qos.asdict()
+            session = self.topic_manager.create_session(
+                topic=payload.topic,
+                access=payload.access,
+                qos=qos,
+                module=module_name,
+                message_type=message_type,
+            )
+            return {"session": session.to_dict()}
+
+        @router.delete("/topics/{session_id}", status_code=204)
+        async def delete_topic(session_id: str) -> JSONResponse:
+            self.topic_manager.drop_session(session_id)
+            return JSONResponse(status_code=204, content=None)
+
+        @router.post("/topics/{session_id}/pause")
+        async def pause_topic(session_id: str, payload: PauseRequest) -> Dict[str, Any]:
+            session = self.topic_manager.set_paused(session_id, payload.paused)
+            return {"session": session.to_dict()}
+
+        self.app.include_router(router)
+
+        if self.static_root and self.static_root.exists():
+            self.app.mount("/", StaticFiles(directory=str(self.static_root), html=True), name="static")
+
+        @self.app.websocket("/ws/topics/{session_id}")
+        async def websocket_topic(session_id: str, websocket: WebSocket) -> None:
+            session = self.topic_manager.get_session(session_id)
+            if not session:
+                await websocket.close(code=4404)
+                return
+            await websocket.accept()
+
+            send_task = None
+            receive_task = None
+
+            async def sender_loop():
+                async for payload in self.topic_manager.pump_messages(session_id):
+                    if session.paused:
+                        await asyncio.sleep(0.05)
+                        continue
+                    await websocket.send_json({"topic": session.topic, "data": payload})
+
+            async def receiver_loop():
+                while True:
+                    message = await websocket.receive_text()
+                    data = json.loads(message)
+                    await self.topic_manager.publish(session_id, data)
+
+            try:
+                if session.access in {"ro", "rw"}:
+                    send_task = asyncio.create_task(sender_loop())
+                if session.access in {"wo", "rw"}:
+                    receive_task = asyncio.create_task(receiver_loop())
+
+                tasks = [task for task in [send_task, receive_task] if task is not None]
+                if not tasks:
+                    await websocket.close(code=4400)
+                    return
+                await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            except WebSocketDisconnect:  # pragma: no cover - handled during runtime
+                pass
+            finally:
+                if send_task:
+                    send_task.cancel()
+                if receive_task:
+                    receive_task.cancel()
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+    def build_app(self) -> FastAPI:
+        return self.app
+
+
+def _find_topic(catalog: ModuleCatalog, topic_name: str, module_name: str | None) -> ModuleTopic | None:
+    if module_name:
+        try:
+            module = catalog.get_module(module_name)
+        except KeyError:  # pragma: no cover - validated earlier
+            return None
+        for topic in module.topics:
+            if topic.topic == topic_name:
+                return topic
+        return None
+    for module in catalog.list_modules():
+        for topic in module.topics:
+            if topic.topic == topic_name:
+                return topic
+    return None
+
+
+def create_app(
+    *,
+    catalog: ModuleCatalog,
+    topic_manager: TopicSessionManager,
+    command_executor: CommandExecutor,
+    static_root: Path | None = None,
+) -> FastAPI:
+    """Factory used by tests and runtime entrypoints."""
+
+    application = PilotApplication(
+        catalog=catalog,
+        topic_manager=topic_manager,
+        command_executor=command_executor,
+        static_root=static_root,
+    )
+    return application.build_app()

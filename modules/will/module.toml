@@ -1,6 +1,24 @@
 name = "will"
 description = "Behaviour tree orchestrator"
 
+[pilot]
+display_name = "Will"
+description = "Behaviour tree coordinator"
+
+[[pilot.topics]]
+name = "/psyched/will/status"
+type = "std_msgs/msg/String"
+access = "ro"
+presentation = "status"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/psyched/will/blackboard"
+type = "std_msgs/msg/String"
+access = "ro"
+presentation = "log"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["psyched_bt"]

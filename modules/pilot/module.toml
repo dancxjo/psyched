@@ -1,20 +1,41 @@
 name = "pilot"
 description = "Pilot UI and teleop bridge"
 
+[pilot]
+display_name = "Pilot"
+description = "Teleoperation dashboard and ROS 2 bridge"
+mod_commands = ["setup", "build", "launch", "restart", "shutdown"]
+system_commands = ["start", "stop", "restart", "status"]
+
+[[pilot.topics]]
+name = "/cmd_vel"
+type = "geometry_msgs/msg/Twist"
+access = "rw"
+presentation = "joystick"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/imu"
+type = "sensor_msgs/msg/Imu"
+access = "ro"
+presentation = "imu"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/host/health"
+type = "psyched_msgs/msg/HostHealth"
+access = "ro"
+presentation = "status"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["pilot"]
 
 [[actions]]
 type = "pip_install"
-packages = ["websockets"]
-import_check = ["websockets"]
-break_system = true
-
-[[actions]]
-type = "pip_install"
-packages = ["zeroconf"]
-import_check = ["zeroconf"]
+packages = ["fastapi", "uvicorn[standard]", "pydantic"]
+import_check = ["fastapi"]
 break_system = true
 
 [[actions]]
@@ -54,21 +75,11 @@ echo "[pilot/launch] Starting pilot web interface..."
 echo "[pilot/launch] Web: http://${HOST_VAL}:${WEB_PORT_VAL}"
 echo "[pilot/launch] WebSocket: ws://${HOST_VAL}:${WEBSOCKET_PORT_VAL}"
 echo "[pilot/launch] Publishing to: ${CMD_VEL_TOPIC_VAL}"
-exec ros2 launch pilot pilot.launch.py \
-  web_port:="${WEB_PORT_VAL}" \
-  websocket_port:="${WEBSOCKET_PORT_VAL}" \
-  cmd_vel_topic:="${CMD_VEL_TOPIC_VAL}" \
-  voice_topic:="${VOICE_TOPIC_VAL}" \
-  gps_fix_topic:="${GPS_FIX_TOPIC_VAL}" \
-  conversation_topic:="${CONV_TOPIC_VAL}" \
-  host:="${HOST_VAL}" \
-  enable_http:="${ENABLE_HTTP_VAL}" \
-  enable_websocket:="${ENABLE_WS_VAL}" \
-  run_separate_websocket:="${RUN_SEPARATE_WS_VAL}"
+exec pilot_backend --host "${HOST_VAL}" --port "${WEB_PORT_VAL}" --modules-root "$(dirname "$PWD")" --log-level "info"
 """
 shutdown_command = """
 set -euo pipefail
-PATTERN="ros2 launch pilot pilot.launch.py"
+PATTERN="pilot_backend"
 TIMEOUT=${TIMEOUT:-10}
 WEB_PORT=${PILOT_WEB_PORT:-8080}
 WS_PORT=${PILOT_WS_PORT:-8081}
