@@ -1,5 +1,18 @@
 import { join } from "@std/path";
 import { loadModuleSpec, repoDirFromModules } from "./modules.ts";
+import { $, type DaxCommandBuilder, type DaxTemplateTag } from "./util.ts";
+
+let commandRunner: DaxTemplateTag = $;
+
+/** Allow tests to intercept shell execution. */
+export function setModCommandRunner(runner: DaxTemplateTag): void {
+  commandRunner = runner;
+}
+
+/** Restore the default Dax command runner. */
+export function resetModCommandRunner(): void {
+  commandRunner = $;
+}
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -11,12 +24,14 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-async function runProcess(cmd: Deno.Command, label: string): Promise<void> {
-  const child = cmd.spawn();
-  const status = await child.status;
-  if (!status.success) {
-    console.error(`[mod] ${label} failed with code ${status.code ?? 1}`);
-    Deno.exit(status.code ?? 1);
+async function runProcess(
+  builder: DaxCommandBuilder,
+  label: string,
+): Promise<void> {
+  const result = await builder.stdout("inherit").stderr("inherit").noThrow();
+  if (result.code !== 0) {
+    console.error(`[mod] ${label} failed with code ${result.code ?? 1}`);
+    Deno.exit(result.code ?? 1);
   }
 }
 
@@ -37,12 +52,7 @@ export async function runModuleScript(module: string, action?: string) {
     const scriptPath = join(moduleDir, `${act}.sh`);
     if (await fileExists(scriptPath)) {
       console.log(`[mod] Running: ${scriptPath}`);
-      const cmd = new Deno.Command("bash", {
-        args: [scriptPath],
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      await runProcess(cmd, scriptPath);
+      await runProcess(commandRunner`bash ${[scriptPath]}`, scriptPath);
       return;
     }
 
@@ -57,12 +67,10 @@ export async function runModuleScript(module: string, action?: string) {
       const launchCommand = systemd.launch_command?.trim();
       if (launchCommand) {
         console.log(`[mod] Running launch command for ${module}`);
-        const cmd = new Deno.Command(entrypoint, {
-          args: ["bash", "-lc", launchCommand],
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        await runProcess(cmd, `${module} launch command`);
+        await runProcess(
+          commandRunner`${entrypoint} ${["bash", "-lc", launchCommand]}`,
+          `${module} launch command`,
+        );
         return;
       }
       const launchScript = systemd.launch;
@@ -70,12 +78,10 @@ export async function runModuleScript(module: string, action?: string) {
         const absPath = join(repoDir, launchScript);
         if (await fileExists(absPath)) {
           console.log(`[mod] Running launch script for ${module}: ${absPath}`);
-          const cmd = new Deno.Command(entrypoint, {
-            args: [absPath],
-            stdout: "inherit",
-            stderr: "inherit",
-          });
-          await runProcess(cmd, `${module} launch script`);
+          await runProcess(
+            commandRunner`${entrypoint} ${[absPath]}`,
+            `${module} launch script`,
+          );
           return;
         }
       }
@@ -85,12 +91,10 @@ export async function runModuleScript(module: string, action?: string) {
       const shutdownCommand = systemd.shutdown_command?.trim();
       if (shutdownCommand) {
         console.log(`[mod] Running shutdown command for ${module}`);
-        const cmd = new Deno.Command(entrypoint, {
-          args: ["bash", "-lc", shutdownCommand],
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        await runProcess(cmd, `${module} shutdown command`);
+        await runProcess(
+          commandRunner`${entrypoint} ${["bash", "-lc", shutdownCommand]}`,
+          `${module} shutdown command`,
+        );
         return;
       }
       const shutdownScript = systemd.shutdown;
@@ -100,12 +104,10 @@ export async function runModuleScript(module: string, action?: string) {
           console.log(
             `[mod] Running shutdown script for ${module}: ${absPath}`,
           );
-          const cmd = new Deno.Command(entrypoint, {
-            args: ["bash", "-lc", absPath],
-            stdout: "inherit",
-            stderr: "inherit",
-          });
-          await runProcess(cmd, `${module} shutdown script`);
+          await runProcess(
+            commandRunner`${entrypoint} ${["bash", "-lc", absPath]}`,
+            `${module} shutdown script`,
+          );
           return;
         }
       }

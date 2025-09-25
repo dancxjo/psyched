@@ -1,7 +1,23 @@
 import { parse as parseToml } from "@std/toml";
 import { stringify as stringifyYaml } from "@std/yaml";
 import { dirname, fromFileUrl, join } from "@std/path";
-import { $ } from "./util.ts";
+import { $, type DaxTemplateTag } from "./util.ts";
+
+let commandRunner: DaxTemplateTag = $;
+
+/**
+ * Override the command runner used for executing shell commands. Primarily
+ * exposed for tests so they can capture invocations instead of running real
+ * commands.
+ */
+export function setModuleCommandRunner(runner: DaxTemplateTag): void {
+  commandRunner = runner;
+}
+
+/** Reset the command runner back to the default Dax tag. */
+export function resetModuleCommandRunner(): void {
+  commandRunner = $;
+}
 
 export interface ModuleActionBase {
   type: string;
@@ -128,24 +144,20 @@ async function runCommand(command: string, options: {
 } = {}): Promise<void> {
   const { description, cwd, env, optional } = options;
   const shell = Deno.env.get("SHELL") || "/bin/bash";
-  const args = ["-lc", command];
   const mergedEnv = env ? { ...Deno.env.toObject(), ...env } : undefined;
-  const cmd = new Deno.Command(shell, {
-    args,
-    cwd,
-    env: mergedEnv,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
   if (description) {
     console.log(`→ ${description}`);
   } else {
     console.log(`→ ${command}`);
   }
-  const child = cmd.spawn();
-  const status = await child.status;
-  if (!status.success && !optional) {
-    throw new Error(`Command failed (${status.code ?? 1}): ${command}`);
+  let builder = commandRunner`${shell} -lc ${command}`
+    .stdout("inherit")
+    .stderr("inherit");
+  if (cwd) builder = builder.cwd(cwd);
+  if (mergedEnv) builder = builder.env(mergedEnv);
+  const result = await builder.noThrow();
+  if (result.code !== 0 && !optional) {
+    throw new Error(`Command failed (${result.code ?? 1}): ${command}`);
   }
 }
 
@@ -212,13 +224,11 @@ async function applyGitClone(
   }
   cloneArgs.push(action.repo, destDir);
   console.log(`[module:${ctx.module}] Cloning ${action.repo} -> ${destDir}`);
-  const git = new Deno.Command("git", {
-    args: cloneArgs,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const result = await git.spawn().status;
-  if (!result.success) {
+  const result = await commandRunner`git ${cloneArgs}`
+    .stdout("inherit")
+    .stderr("inherit")
+    .noThrow();
+  if (result.code !== 0) {
     if ((action as ModuleActionBase).optional) {
       console.warn(
         `[module:${ctx.module}] Optional clone failed: ${action.repo}`,
