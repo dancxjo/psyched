@@ -46,6 +46,8 @@ curl -fsSL -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ro
 
 echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 
+
+# Install only minimal ROS2 base (no desktop/GUI/Qt dependencies)
 "${SUDO[@]}" dpkg -i /tmp/ros2-apt-source.deb
 "${SUDO[@]}" apt update
 "${SUDO[@]}" apt upgrade -y
@@ -53,12 +55,13 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 "${SUDO[@]}" apt install -y \
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-  ros-dev-tools \
   python3-colcon-common-extensions
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
   "${SUDO[@]}" rosdep init
 fi
+
+# Note: desktop/GUI packages (rviz, Qt, etc.) are intentionally excluded for minimal install.
 rosdep update
 
 "${SUDO[@]}" tee /etc/profile.d/ros2-defaults.sh >/dev/null <<PROFILE
