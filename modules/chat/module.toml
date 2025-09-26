@@ -32,38 +32,19 @@ break_system = true
 [[actions]]
 type = "run"
 description = "Install Ollama if missing"
-command = """
-if ! command -v ollama >/dev/null 2>&1; then
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://ollama.com/install.sh | sh
-  else
-    echo "curl not found; please install Ollama manually" >&2
-  fi
-fi
-"""
+script = "scripts/install_ollama.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Enable Ollama service when available"
-command = """
-if command -v ollama >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
-  sudo systemctl enable --now ollama || true
-fi
-"""
+script = "scripts/enable_ollama_service.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Ensure configured Ollama model is present"
-command = """
-MODEL=${OLLAMA_MODEL:-tinyllama}
-if command -v ollama >/dev/null 2>&1; then
-  if ! ollama list | awk '{print $1}' | grep -qx "$MODEL"; then
-    ollama pull "$MODEL" || true
-  fi
-fi
-"""
+script = "scripts/ensure_ollama_model.sh"
 optional = true
 
 [systemd]
@@ -72,42 +53,5 @@ after = ["network-online.target"]
 wants = ["network-online.target"]
 restart = "on-failure"
 restart_sec = 4
-launch_command = """
-set -euo pipefail
-SYSTEM_PROMPT_VAL="${CHAT_SYSTEM_PROMPT:-${SYSTEM_PROMPT:-You_are_a_helpful_assistant._Reply_in_one_concise_sentence.}}"
-CONV_TOPIC_VAL="${CHAT_CONVERSATION_TOPIC:-${CONVERSATION_TOPIC:-/conversation}}"
-VOICE_TOPIC_VAL="${CHAT_VOICE_TOPIC:-${VOICE_TOPIC:-/voice}}"
-MODEL_VAL="${CHAT_MODEL:-${OLLAMA_MODEL:-tinyllama}}"
-OLLAMA_HOST_VAL="${OLLAMA_HOST:-http://localhost:11434}"
-MAX_HISTORY_VAL="${CHAT_MAX_HISTORY:-${MAX_HISTORY:-20}}"
-exec ros2 launch chat chat.launch.py \
-  system_prompt:="${SYSTEM_PROMPT_VAL}" \
-  conversation_topic:="${CONV_TOPIC_VAL}" \
-  voice_topic:="${VOICE_TOPIC_VAL}" \
-  model:="${MODEL_VAL}" \
-  ollama_host:="${OLLAMA_HOST_VAL}" \
-  max_history:="${MAX_HISTORY_VAL}"
-"""
-shutdown_command = """
-set -euo pipefail
-PATTERN="ros2 launch chat chat.launch.py"
-TIMEOUT=${TIMEOUT:-10}
-if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
-  echo "[chat/shutdown] No matching processes found for pattern: $PATTERN"
-  exit 0
-fi
-
-echo "[chat/shutdown] Sending SIGTERM to processes for: $PATTERN"
-pkill -TERM -f "$PATTERN" || true
-
-for ((i=0; i<TIMEOUT; i++)); do
-  sleep 1
-  if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
-    echo "[chat/shutdown] All processes stopped"
-    exit 0
-  fi
-done
-
-echo "[chat/shutdown] Forcing SIGKILL for remaining processes"
-pkill -KILL -f "$PATTERN" || true
-"""
+launch_command = "${MODULE_DIR}/chat.launch.sh"
+shutdown_command = "${MODULE_DIR}/chat.shutdown.sh"

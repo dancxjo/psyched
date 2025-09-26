@@ -31,53 +31,25 @@ update = true
 [[actions]]
 type = "run"
 description = "Ensure user has dialout access"
-command = """
-if ! id -nG "$USER" | grep -qw dialout; then
-  sudo usermod -aG dialout "$USER" || true
-fi
-"""
+script = "scripts/ensure_dialout.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Create udev rule for u-blox adapters"
-command = """
-if [ "${GPS_SKIP_UDEV:-0}" != "1" ]; then
-  sudo install -d -m 0755 /etc/udev/rules.d
-  cat <<'EOF' | sudo tee /etc/udev/rules.d/99-gps-ublox.rules >/dev/null
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a7", SYMLINK+="gps0"
-EOF
-  sudo udevadm control --reload-rules
-  sudo udevadm trigger || true
-fi
-"""
+script = "scripts/install_udev_rule.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Configure gpsd defaults"
-command = """
-if [ -f /etc/default/gpsd ]; then
-  sudo sed -i 's/^START_DAEMON=.*/START_DAEMON="true"/' /etc/default/gpsd || true
-  sudo sed -i 's#^USBAUTO=.*#USBAUTO="true"#' /etc/default/gpsd || true
-  if grep -q '^DEVICES=' /etc/default/gpsd; then
-    sudo sed -i 's#^DEVICES=.*#DEVICES="/dev/gps0"#' /etc/default/gpsd || true
-  else
-    echo 'DEVICES="/dev/gps0"' | sudo tee -a /etc/default/gpsd >/dev/null
-  fi
-fi
-"""
+script = "scripts/configure_gpsd.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Enable and start gpsd"
-command = """
-if command -v systemctl >/dev/null 2>&1; then
-  sudo systemctl enable gpsd.service || true
-  sudo systemctl restart gpsd.service || sudo systemctl start gpsd.service || true
-fi
-"""
+script = "scripts/enable_gpsd.sh"
 optional = true
 
 [[actions]]
@@ -92,36 +64,5 @@ after = ["network-online.target"]
 wants = ["network-online.target"]
 restart = "on-failure"
 restart_sec = 5
-launch_command = """
-set -euo pipefail
-FRAME_ID_VAL="${GPS_FRAME_ID:-gps_link}"
-DEVICE_VAL="${GPS_DEVICE:-/dev/gps0}"
-PUBLISH_RATE_VAL="${GPS_PUBLISH_RATE:-5.0}"
-exec ros2 launch ublox_gps ublox_gps.launch.py \
-  frame_id:="${FRAME_ID_VAL}" \
-  device:="${DEVICE_VAL}" \
-  publish_rate:="${PUBLISH_RATE_VAL}"
-"""
-shutdown_command = """
-set -euo pipefail
-PATTERN="ros2 launch ublox_gps ublox_gps.launch.py"
-TIMEOUT=${TIMEOUT:-10}
-if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
-  echo "[gps/shutdown] No matching processes found for pattern: $PATTERN"
-  exit 0
-fi
-
-echo "[gps/shutdown] Sending SIGTERM to processes for: $PATTERN"
-pkill -TERM -f "$PATTERN" || true
-
-for ((i=0; i<TIMEOUT; i++)); do
-  sleep 1
-  if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
-    echo "[gps/shutdown] All processes stopped"
-    exit 0
-  fi
-done
-
-echo "[gps/shutdown] Forcing SIGKILL for remaining processes"
-pkill -KILL -f "$PATTERN" || true
-"""
+launch_command = "${MODULE_DIR}/gps.launch.sh"
+shutdown_command = "${MODULE_DIR}/gps.shutdown.sh"

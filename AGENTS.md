@@ -22,6 +22,9 @@ workspace.
   actions (package linking, apt/pip installs, shell commands) there so `psh
   setup` can orchestrate work without bespoke shell scripts. When adding new
   actions check `psh/modules.ts` for supported types.
+- Prefer referencing shell helpers via the `script` field on `run` actions
+  (e.g. `script = "scripts/install_dep.sh"`) and keep those scripts under the
+  module directory with executable permissions so `psh` can resolve them.
 - `hosts/` – Host-specific configuration, symlinks, and generated systemd units.
 - `tools/` – Provisioning helpers (ROS/Docker installers, env shims used by
   `psh`).

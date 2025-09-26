@@ -33,67 +33,19 @@ packages = ["psyched_nav"]
 [[actions]]
 type = "run"
 description = "Install Nav2 apt dependencies when available"
-command = """
-if command -v apt-get >/dev/null 2>&1; then
-  ROS_DISTRO=${ROS_DISTRO:-humble}
-  PKGS=(
-    "ros-${ROS_DISTRO}-nav2-bringup"
-    "ros-${ROS_DISTRO}-nav2-amcl"
-    "ros-${ROS_DISTRO}-nav2-controller"
-    "ros-${ROS_DISTRO}-nav2-core"
-    "ros-${ROS_DISTRO}-nav2-behavior-tree"
-    "ros-${ROS_DISTRO}-nav2-costmap-2d"
-    "ros-${ROS_DISTRO}-nav2-map-server"
-    "ros-${ROS_DISTRO}-nav2-navfn-planner"
-    "ros-${ROS_DISTRO}-nav2-smac-planner"
-    "ros-${ROS_DISTRO}-nav2-lifecycle-manager"
-    "ros-${ROS_DISTRO}-pcl-ros"
-    "libpcl-dev"
-  )
-  TO_INSTALL=()
-  for pkg in "${PKGS[@]}"; do
-    if apt-cache show "$pkg" >/dev/null 2>&1; then
-      TO_INSTALL+=("$pkg")
-    fi
-  done
-  if [ ${#TO_INSTALL[@]} -gt 0 ]; then
-    sudo apt-get update || true
-    sudo apt-get install -y "${TO_INSTALL[@]}" || true
-  fi
-fi
-"""
+script = "scripts/install_nav2_deps.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Link custom Nav2 sources when NAV2_LOCAL_DIR is set"
-command = """
-if [ -n "${NAV2_LOCAL_DIR:-}" ] && [ -d "$NAV2_LOCAL_DIR" ]; then
-  mkdir -p src
-  ln -sfn "$NAV2_LOCAL_DIR" src/nav2_local
-fi
-"""
+script = "scripts/link_nav2_sources.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Optionally build psyched_nav"
-command = """
-if [ "${BUILD:-true}" = "true" ]; then
-  ROS_DISTRO=${ROS_DISTRO:-humble}
-  if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
-    # shellcheck disable=SC1090
-    source "/opt/ros/${ROS_DISTRO}/setup.bash"
-  fi
-  if [ -f "install/setup.bash" ]; then
-    # shellcheck disable=SC1090
-    source "install/setup.bash"
-  fi
-  if command -v colcon >/dev/null 2>&1; then
-    colcon build --packages-select psyched_nav --symlink-install || true
-  fi
-fi
-"""
+script = "scripts/build_psyched_nav.sh"
 optional = true
 
 [systemd]
@@ -102,22 +54,5 @@ after = ["network-online.target"]
 wants = ["network-online.target"]
 restart = "on-failure"
 restart_sec = 5
-launch_command = """
-set -euo pipefail
-if [ -z "${ROS_DISTRO:-}" ]; then
-  echo "Please source your ROS2 workspace (e.g. source /opt/ros/kilted/setup.bash and workspace install/setup.bash)"
-  exit 1
-fi
-
-echo "Launching nav bringup (psyched_nav)..."
-export AMENT_PREFIX_PATH="$(pwd)/install/psyched_nav:${AMENT_PREFIX_PATH:-}"
-export ROS_PACKAGE_PATH="$(pwd)/install/psyched_nav/share:${ROS_PACKAGE_PATH:-}"
-exec ros2 launch psyched_nav nav_bringup.launch.py
-"""
-shutdown_command = """
-set -euo pipefail
-echo "Shutting down nav-related ROS nodes (attempting graceful shutdown)..."
-ros2 node list | grep -E "nav2|map_server|lifecycle" || true
-pkill -f nav2 || true
-echo "Done."
-"""
+launch_command = "${MODULE_DIR}/nav.launch.sh"
+shutdown_command = "${MODULE_DIR}/nav.shutdown.sh"
