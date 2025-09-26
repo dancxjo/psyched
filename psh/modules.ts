@@ -173,7 +173,28 @@ async function applyLinkPackages(
       }
       throw err;
     }
-    console.log(`[module:${ctx.module}] Skipped linking package ${pkg}`);
+    const destPath = join(destDir, pkg);
+    try {
+      // Ensure parent dir for nested package names exists
+      await Deno.mkdir(dirname(destPath), { recursive: true });
+      // If destination already exists, skip linking
+      try {
+        const destInfo = await Deno.lstat(destPath);
+        console.log(
+          `[module:${ctx.module}] Destination already exists, skipping link: ${destPath}`,
+        );
+        continue;
+      } catch (err) {
+        if (!(err instanceof Deno.errors.NotFound)) throw err;
+      }
+
+      await Deno.symlink(srcPath, destPath);
+      console.log(`[module:${ctx.module}] Linked package ${pkg} -> ${destPath}`);
+    } catch (err) {
+      console.warn(
+        `[module:${ctx.module}] Failed to link package ${pkg}: ${String(err)}`,
+      );
+    }
   }
 }
 
