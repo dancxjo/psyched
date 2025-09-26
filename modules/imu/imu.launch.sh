@@ -6,3 +6,6 @@ if [ -n "$PARAM_FILE_VAL" ]; then
 else
   exec ros2 launch mpu6050driver mpu6050driver_launch.py
 fi
+
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+export REPO_DIR

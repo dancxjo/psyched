@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-REPO_DIR="$(pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+export REPO_DIR
 HOST_SHORT="${HOST:-$(hostname -s)}"
 CONF_FILE=""
 if [ -f "${REPO_DIR}/hosts/${HOST_SHORT}/config/voice.env" ]; then
@@ -13,6 +14,8 @@ fi
 if [ -n "$CONF_FILE" ] && [ -f "$CONF_FILE" ]; then
   source "$CONF_FILE"
 fi
+
+ENGINE_VAL="${VOICE_ENGINE:-espeak}"
 ENGINE_VAL="${VOICE_ENGINE:-espeak}"
 TOPIC_VAL="${VOICE_TOPIC:-/voice}"
 PAUSE_VAL="${VOICE_PAUSE:-${VOICE_INTERRUPT:-/voice/interrupt}}"

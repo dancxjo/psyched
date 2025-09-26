@@ -10,8 +10,8 @@ WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 Environment=PSH_MODULE_NAME=voice
 Environment=PSH_MODULE_CONFIG=/home/pete/psyched/hosts/cerebellum/config/voice.yaml
-ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/voice.launch.sh"
-ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/voice.shutdown.sh"
+ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/voice/voice.launch.sh
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/voice/voice.shutdown.sh
 Restart=on-failure
 RestartSec=4
 User=pete

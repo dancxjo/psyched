@@ -6,6 +6,9 @@ VOICE_TOPIC_VAL="${CHAT_VOICE_TOPIC:-${VOICE_TOPIC:-/voice}}"
 MODEL_VAL="${CHAT_MODEL:-${OLLAMA_MODEL:-tinyllama}}"
 OLLAMA_HOST_VAL="${OLLAMA_HOST:-http://localhost:11434}"
 MAX_HISTORY_VAL="${CHAT_MAX_HISTORY:-${MAX_HISTORY:-20}}"
+
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+export REPO_DIR
 exec ros2 launch chat chat.launch.py \
   system_prompt:="${SYSTEM_PROMPT_VAL}" \
   conversation_topic:="${CONV_TOPIC_VAL}" \

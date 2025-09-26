@@ -9,8 +9,8 @@ Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 Environment=PSH_MODULE_NAME=imu
-ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/imu.launch.sh"
-ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/imu.shutdown.sh"
+ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/imu/imu.launch.sh
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/imu/imu.shutdown.sh
 Restart=on-failure
 RestartSec=4
 User=pete

@@ -58,12 +58,12 @@ function buildUnitContent(
     : "network-online.target";
   const launchCommand = spec.launch_command?.trim() || null;
   const shutdownCommand = spec.shutdown_command?.trim() || null;
-  const launchScript = launchCommand
-    ? null
-    : (spec.launch ?? `modules/${moduleName}/launch.sh`);
-  const shutdownScript = shutdownCommand ? null : (spec.shutdown ?? null);
-  const launchPath = launchScript ? join(repoDir, launchScript) : null;
-  const shutdownPath = shutdownScript ? join(repoDir, shutdownScript) : null;
+  const moduleDir = join(repoDir, "modules", moduleName);
+  // Always use absolute path for launch/shutdown scripts unless launch_command/shutdown_command is set
+  const defaultLaunchRel = `modules/${moduleName}/${moduleName}.launch.sh`;
+  const defaultShutdownRel = `modules/${moduleName}/${moduleName}.shutdown.sh`;
+  const launchPath = launchCommand ? null : join(repoDir, defaultLaunchRel);
+  const shutdownPath = shutdownCommand ? null : join(repoDir, defaultShutdownRel);
   const entrypoint = join(repoDir, "tools", "systemd_entrypoint.sh");
   const workingDir = spec.working_directory
     ? join(repoDir, spec.working_directory)
@@ -81,15 +81,48 @@ function buildUnitContent(
     );
   }
 
-  const execStart = launchCommand
-    ? `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(launchCommand))}`
-    : `${entrypoint} ${launchPath}`;
+  // Expand ${MODULE_DIR} in user-provided commands to absolute module path
+  let resolvedLaunchCommand: string | null = launchCommand;
+  if (resolvedLaunchCommand) {
+    resolvedLaunchCommand = resolvedLaunchCommand.replace(/\$\{MODULE_DIR\}/g, moduleDir).replace(/\$MODULE_DIR/g, moduleDir);
+  }
+  let resolvedShutdownCommand: string | null = shutdownCommand;
+  if (resolvedShutdownCommand) {
+    resolvedShutdownCommand = resolvedShutdownCommand.replace(/\$\{MODULE_DIR\}/g, moduleDir).replace(/\$MODULE_DIR/g, moduleDir);
+  }
 
-  const execStop = shutdownCommand
-    ? `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(shutdownCommand))}`
-    : shutdownPath
-      ? `${entrypoint} bash -lc "\"${shutdownPath}\""`
-      : null;
+  // Helper to decide if a command is just a single script path we can pass directly
+  function isSinglePath(cmd: string): boolean {
+    const stripped = cmd.trim().replace(/^['"]|['"]$/g, "");
+    // no whitespace and contains a slash (path-like) or starts with repo/module dir
+    return !/\s/.test(stripped) && (stripped.startsWith("/") || stripped.startsWith(moduleDir) || stripped.includes("/"));
+  }
+
+  // Compose ExecStart
+  let execStart: string | null = null;
+  if (resolvedLaunchCommand) {
+    if (isSinglePath(resolvedLaunchCommand)) {
+      const p = resolvedLaunchCommand.trim().replace(/^['"]|['"]$/g, "");
+      execStart = `${entrypoint} ${p}`;
+    } else {
+      execStart = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedLaunchCommand))}`;
+    }
+  } else if (launchPath) {
+    execStart = `${entrypoint} ${launchPath}`;
+  }
+
+  // Compose ExecStop
+  let execStop: string | null = null;
+  if (resolvedShutdownCommand) {
+    if (isSinglePath(resolvedShutdownCommand)) {
+      const p = resolvedShutdownCommand.trim().replace(/^['"]|['"]$/g, "");
+      execStop = `${entrypoint} ${p}`;
+    } else {
+      execStop = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedShutdownCommand))}`;
+    }
+  } else if (shutdownPath) {
+    execStop = `${entrypoint} ${shutdownPath}`;
+  }
 
   const envLines: string[] = [];
   const env = spec.environment ?? {};

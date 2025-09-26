@@ -22,3 +22,6 @@ sudo dnsmasq -C /etc/dnsmasq.conf &
 sudo avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf &
 (cd www && python3 -m http.server 80) &
 wait -n
+
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+export REPO_DIR
