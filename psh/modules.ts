@@ -335,25 +335,45 @@ async function applyPipInstall(
       return;
     }
   }
-  const pipArgs = ["-m", "pip", "install", ...action.packages];
-  if (action.break_system) pipArgs.push("--break-system-packages");
-  if (action.user) pipArgs.push("--user");
-  console.log(
-    `[module:${ctx.module}] Installing Python packages via ${python}: ${action.packages.join(", ")
-    }`,
-  );
-  let result = await $`${python} ${pipArgs}`.noThrow();
+  // Build a safe, quoted command string so flags like
+  // --break-system-packages are passed reliably (some template runners
+  // do odd argument interpolation with arrays). Use runWithStreamingTee so
+  // output is streamed and captured for diagnostics.
+  const shellEscape = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+  const pkgList = action.packages.map(shellEscape).join(" ");
+  const breakFlag = action.break_system ? "--break-system-packages" : "";
+  const userFlag = action.user ? "--user" : "";
+  const baseCmd = `${python} -m pip install ${pkgList} ${breakFlag} ${userFlag}`.replace(/\s+/g, " ").trim();
+  console.log(`[module:${ctx.module}] Installing Python packages via ${python}: ${action.packages.join(", ")}`);
+
+  let result = await runWithStreamingTee(baseCmd);
+
+  // Retry with sudo if non-root install failed and user didn't request --user
   if (result.code !== 0 && !action.user) {
-    const sudo = await $`command -v sudo`.noThrow();
-    if (sudo.code === 0) {
+    const sudoCheck = await $`command -v sudo`.noThrow();
+    if (sudoCheck.code === 0) {
       console.log(`[module:${ctx.module}] Retrying pip install with sudo.`);
-      result = await $`sudo ${python} ${pipArgs}`.noThrow();
+      // Use sudo to run the same command. Don't use -E by default; preserve
+      // the python executable path by invoking the same ${python} command.
+      result = await runWithStreamingTee(`sudo ${baseCmd}`);
     }
   }
+
   if (result.code !== 0) {
-    console.warn(
-      `[module:${ctx.module}] pip install exited with code ${result.code}`,
-    );
+    console.warn(`[module:${ctx.module}] pip install exited with code ${result.code}`);
+    if (result.stderr) console.error(result.stderr);
+  }
+
+  // If import_check was provided, verify the modules are now importable and
+  // warn if they're still missing.
+  if (action.import_check && action.import_check.length > 0) {
+    const program = action.import_check.map((mod) => `import ${mod}`).join("; ");
+    const checkAfter = await $`${python} -c ${program}`.noThrow();
+    if (checkAfter.code === 0) {
+      console.log(`[module:${ctx.module}] Python modules now available: ${action.import_check.join(", ")}`);
+    } else {
+      console.warn(`[module:${ctx.module}] After pip install, imports still failing: ${action.import_check.join(", ")}`);
+    }
   }
 }
 
