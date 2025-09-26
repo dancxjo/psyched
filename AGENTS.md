@@ -117,6 +117,9 @@ or conflicting package sources.
   component in `modules/pilot/packages/pilot/pilot/static/components/pilot-app.js`;
   update the Alpine interop events in `pilot/static/index.html` when renaming
   sections.
+- Conversation topics render through `pilot-conversation-console`; adjust that
+  component alongside `topic-widget.js` when changing
+  `psyched_msgs/msg/Message` payloads or conversation workflows.
 - Topic websocket creation lives in
   `pilot/static/components/pilot-app.js`; adjust
   `test_api_routes.py` and `test_topic_manager.py` when changing connection or

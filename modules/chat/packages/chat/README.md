@@ -1,6 +1,8 @@
 # Chat Package
 
-Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. When a new `role: user` arrives, it sends the conversation (with a system prompt at the top) to Ollama (default model `gemma3`), truncates the answer to a single sentence, publishes it to `/voice` for TTS, and only after a matching `voice_done` signal is received does it publish the assistant message back to `/conversation`.
+Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. When a new `role: user` arrives, it sends the conversation (with a system prompt at the top) to Ollama (default model `gemma3`), truncates the answer to a single sentence, publishes it to `/voice` for TTS, and only after the corresponding `voice_done` signal is received does it publish the assistant message back to `/conversation`.
+
+The node always records the spoken payload, even if the acknowledgement text differs slightly (for example, because the synthesizer collapses whitespace). Mismatches are logged for debugging, but the conversation remains aligned with what the user actually heard.
 
 ## Parameters
 - `system_prompt` (string, env `CHAT_SYSTEM_PROMPT`): top system message

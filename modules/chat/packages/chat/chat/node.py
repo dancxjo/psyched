@@ -16,6 +16,12 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from psyched_msgs.msg import Message as MsgMessage, Transcript
 
+
+def _normalize_voice_text(text: str) -> str:
+    """Collapse whitespace for reliable voice acknowledgement matching."""
+
+    return " ".join(text.split())
+
 def first_sentence(text: str) -> str:
     s = text.strip()
     if not s:
@@ -245,22 +251,25 @@ class ChatNode(Node):
     def on_voice_done(self, msg: String) -> None:
         if not self.pending_to_confirm:
             return
-        spoken = msg.data.strip()
-        # Match the head of the queue (normalize whitespace)
-        head = self.pending_to_confirm[0].strip()
-        if spoken == head:
-            self.pending_to_confirm.pop(0)
-            # Now append assistant message to conversation
-            out = MsgMessage()
-            out.role = 'assistant'
-            out.content = spoken
-            out.speaker = 'assistant'
-            out.confidence = 1.0
-            self.pub_conversation.publish(out)
-            # Also keep history consistent
-            self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
-            if len(self.history) > self.max_history:
-                self.history = self.history[-self.max_history :]
+        spoken_raw = str(getattr(msg, 'data', '') or '')
+        spoken = spoken_raw.strip()
+        if not spoken:
+            return
+        head = self.pending_to_confirm.pop(0)
+        if _normalize_voice_text(spoken) != _normalize_voice_text(head):
+            self.get_logger().warning(
+                'voice_done payload did not match pending utterance; publishing spoken text anyway'
+            )
+        out = MsgMessage()
+        out.role = 'assistant'
+        out.content = spoken
+        out.speaker = 'assistant'
+        out.confidence = 1.0
+        self.pub_conversation.publish(out)
+        # Also keep history consistent
+        self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
+        if len(self.history) > self.max_history:
+            self.history = self.history[-self.max_history :]
 
 
 def main(argv=None):

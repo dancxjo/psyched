@@ -3,6 +3,7 @@ import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?
 import './joystick-control.js';
 import './imu-panel.js';
 import './voice-console.js';
+import './conversation-console.js';
 
 const MAX_PREVIEW = 1200;
 
@@ -108,6 +109,9 @@ class PilotTopicWidget extends LitElement {
     }
     if (this.topic?.presentation === 'imu') {
       return html`<pilot-imu-panel .data=${this.record.last}></pilot-imu-panel>`;
+    }
+    if (this.topic?.presentation === 'chat' || this.topic?.topic === '/conversation') {
+      return html`<pilot-conversation-console .record=${this.record}></pilot-conversation-console>`;
     }
     if (this.topic?.presentation === 'voice' || this.topic?.topic === '/voice') {
       return html`<pilot-voice-console .record=${this.record}></pilot-voice-console>`;
