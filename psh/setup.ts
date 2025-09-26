@@ -56,27 +56,6 @@ async function runModuleSetup(
   }
 }
 
-async function ensureHostModuleSymlink(
-  host: string,
-  moduleName: string,
-): Promise<void> {
-  const repoDir = repoDirFromModules();
-  const hostModulesDir = join(repoDir, "hosts", host, "modules");
-  await Deno.mkdir(hostModulesDir, { recursive: true });
-  const linkPath = join(hostModulesDir, moduleName);
-  const target = join(repoDir, "modules", moduleName);
-  try {
-    const info = await Deno.lstat(linkPath);
-    if (info.isSymlink) {
-      const existing = await Deno.readLink(linkPath).catch(() => null);
-      if (existing === target) return;
-    }
-    await Deno.remove(linkPath, { recursive: true });
-  } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) throw err;
-  }
-  await Deno.symlink(target, linkPath);
-}
 
 function extractModuleList(spec: Record<string, unknown>): string[] {
   const modules = spec.modules;
@@ -131,7 +110,7 @@ async function applyHost(host: string): Promise<void> {
 
   const configs = extractModuleConfigs(spec);
   for (const moduleName of modules) {
-    await ensureHostModuleSymlink(host, moduleName);
+    // Symlink creation removed
     const moduleConfig = configs[moduleName] ?? null;
     try {
       await runModuleSetup(moduleName, moduleConfig);

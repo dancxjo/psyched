@@ -13,129 +13,114 @@ let commandRunner: DaxTemplateTag = $;
  */
 export function setModuleCommandRunner(runner: DaxTemplateTag): void {
   commandRunner = runner;
-}
 
-/** Reset the command runner back to the default Dax tag. */
-export function resetModuleCommandRunner(): void {
-  commandRunner = $;
-}
-
-export interface ModuleActionBase {
-  type: string;
-  description?: string;
-  cwd?: string;
-  optional?: boolean;
-}
-
-export interface LinkPackagesAction extends ModuleActionBase {
-  type: "link_packages";
-  packages: string[];
-  base?: string;
-  destination?: string;
-}
-
-export interface GitCloneAction extends ModuleActionBase {
-  type: "git_clone";
-  repo: string;
-  dest: string;
-  branch?: string;
-  tag?: string;
-  depth?: number;
-  base?: string;
-  sparse?: boolean;
-}
-
-export interface AptInstallAction extends ModuleActionBase {
-  type: "apt_install";
-  packages: string[];
-  update?: boolean;
-}
-
-export interface PipInstallAction extends ModuleActionBase {
-  type: "pip_install";
-  packages: string[];
-  import_check?: string[];
-  python?: string;
-  break_system?: boolean;
-  user?: boolean;
-}
-
-export interface RosRunAction extends ModuleActionBase {
-  type: "ros_run";
-  package: string;
-  executable: string;
-  args?: string[];
-}
-
-export interface RunAction extends ModuleActionBase {
-  type: "run";
-  command?: string;
-  script?: string;
-  shell?: string;
-  env?: Record<string, string>;
-}
-
-export type ModuleAction =
-  | LinkPackagesAction
-  | GitCloneAction
-  | AptInstallAction
-  | PipInstallAction
-  | RosRunAction
-  | RunAction;
-
-export interface ModuleSystemdSpec {
-  description?: string;
-  launch?: string;
-  shutdown?: string;
-  launch_command?: string;
-  shutdown_command?: string;
-  environment?: Record<string, string>;
-  after?: string[];
-  wants?: string[];
-  restart?: string;
-  restart_sec?: number;
-  user?: string;
-  working_directory?: string;
-  kill_mode?: string;
-  timeout_stop_sec?: number;
-}
-
-export interface ModuleSpec {
-  name?: string;
-  description?: string;
-  actions?: ModuleAction[];
-  systemd?: ModuleSystemdSpec;
-}
-
-export interface ModuleContext {
-  module: string;
-  repoDir: string;
-  moduleDir: string;
-  srcDir: string;
-  moduleConfig: Record<string, unknown> | null;
-  moduleConfigPath: string | null;
-}
-
-function resolvePath(base: string, rel?: string | null): string {
-  if (!rel) return base;
-  if (rel.startsWith("/")) return rel;
-  return join(base, rel);
-}
-
-async function ensureSymlink(target: string, linkPath: string): Promise<void> {
-  try {
-    const info = await Deno.lstat(linkPath);
-    if (info.isSymlink) {
-      const existing = await Deno.readLink(linkPath).catch(() => null);
-      if (existing === target) {
-        return;
-      }
-    }
-    await Deno.remove(linkPath, { recursive: true });
-  } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) throw err;
+  /** Reset the command runner back to the default Dax tag. */
+  function resetModuleCommandRunner(): void {
+    commandRunner = $;
   }
-  await Deno.symlink(target, linkPath);
+
+  interface ModuleActionBase {
+    type: string;
+    description?: string;
+    cwd?: string;
+    optional?: boolean;
+  }
+
+  interface LinkPackagesAction extends ModuleActionBase {
+    type: "link_packages";
+    packages: string[];
+    base?: string;
+    destination?: string;
+  }
+
+  interface GitCloneAction extends ModuleActionBase {
+    type: "git_clone";
+    repo: string;
+    dest: string;
+    branch?: string;
+    tag?: string;
+    depth?: number;
+    base?: string;
+    sparse?: boolean;
+  }
+
+  interface AptInstallAction extends ModuleActionBase {
+    type: "apt_install";
+    packages: string[];
+    update?: boolean;
+  }
+
+  interface PipInstallAction extends ModuleActionBase {
+    type: "pip_install";
+    packages: string[];
+    import_check?: string[];
+    python?: string;
+    break_system?: boolean;
+    user?: boolean;
+  }
+
+  interface RosRunAction extends ModuleActionBase {
+    type: "ros_run";
+    package: string;
+    executable: string;
+    args?: string[];
+  }
+
+  interface RunAction extends ModuleActionBase {
+    type: "run";
+    command?: string;
+    script?: string;
+    shell?: string;
+    env?: Record<string, string>;
+  }
+
+  type ModuleAction =
+    | LinkPackagesAction
+    | GitCloneAction
+    | AptInstallAction
+    | PipInstallAction
+    | RosRunAction
+    | RunAction;
+
+  interface ModuleSystemdSpec {
+    description?: string;
+    launch?: string;
+    shutdown?: string;
+    launch_command?: string;
+    shutdown_command?: string;
+    environment?: Record<string, string>;
+    after?: string[];
+    wants?: string[];
+    restart?: string;
+    restart_sec?: number;
+    user?: string;
+    working_directory?: string;
+    kill_mode?: string;
+    timeout_stop_sec?: number;
+  }
+
+  interface ModuleSpec {
+    name?: string;
+    description?: string;
+    actions?: ModuleAction[];
+    systemd?: ModuleSystemdSpec;
+  }
+
+  interface ModuleContext {
+    module: string;
+    repoDir: string;
+    moduleDir: string;
+    srcDir: string;
+    moduleConfig: Record<string, unknown> | null;
+    moduleConfigPath: string | null;
+  }
+
+  function resolvePath(base: string, rel?: string | null): string {
+    if (!rel) return base;
+    if (rel.startsWith("/")) return rel;
+    return join(base, rel);
+  }
+
 }
 
 async function runCommand(command: string, options: {
@@ -189,9 +174,7 @@ async function applyLinkPackages(
       }
       throw err;
     }
-    const linkPath = resolvePath(destDir, pkg);
-    await ensureSymlink(srcPath, linkPath);
-    console.log(`[module:${ctx.module}] Linked package ${pkg} -> ${linkPath}`);
+    console.log(`[module:${ctx.module}] Skipped linking package ${pkg}`);
   }
 }
 
