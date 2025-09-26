@@ -6,6 +6,7 @@ Chat node that listens to `/conversation` for `psyched_msgs/Message` messages. W
 - `system_prompt` (string, env `CHAT_SYSTEM_PROMPT`): top system message
 - `conversation_topic` (default `/conversation`)
 - `voice_topic` (default `/voice`)
+- `transcript_topic` (default `/audio/transcription`)
 - `model` (env `CHAT_MODEL`, default `gemma3`)
 - `ollama_host` (env `OLLAMA_HOST`, default `http://localhost:11434`)
 - `max_history` (int, default 20)
@@ -18,4 +19,7 @@ colcon build --symlink-install --base-paths src
 psh mod chat launch
 ```
 
-Ensure Ollama is installed and `ollama pull gemma3` completed.
+Ensure Ollama is installed and `ollama pull gemma3` completed. When
+`transcript_topic` is populated, user turns are sourced from
+`psyched_msgs/Transcript` messages so metadata such as speaker and confidence
+propagates through the conversation history.

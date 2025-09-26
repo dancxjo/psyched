@@ -8,13 +8,13 @@ import threading
 import subprocess
 import json
 from types import ModuleType
-from typing import List, Dict
+from typing import Any, Dict, List, Optional
 
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
-from psyched_msgs.msg import Message as MsgMessage
+from psyched_msgs.msg import Message as MsgMessage, Transcript
 
 def first_sentence(text: str) -> str:
     s = text.strip()
@@ -29,6 +29,25 @@ def first_sentence(text: str) -> str:
     return (s[:200] + ("…" if len(s) > 200 else "")).strip()
 
 
+def transcript_to_message(transcript: Transcript) -> Optional[MsgMessage]:
+    """Convert a transcript into a chat ``Message`` while preserving metadata."""
+
+    text = str(getattr(transcript, 'text', '')).strip()
+    if not text:
+        return None
+
+    msg = MsgMessage()
+    msg.role = 'user'
+    msg.content = text
+    speaker = getattr(transcript, 'speaker', '') or 'user'
+    msg.speaker = str(speaker)
+    try:
+        msg.confidence = float(getattr(transcript, 'confidence', 0.0) or 0.0)
+    except Exception:
+        msg.confidence = 0.0
+    return msg
+
+
 class ChatNode(Node):
     def __init__(self) -> None:
         super().__init__('chat')
@@ -37,6 +56,7 @@ class ChatNode(Node):
         self.declare_parameter('system_prompt', os.environ.get('CHAT_SYSTEM_PROMPT', 'You are a helpful assistant. Always answer in one concise sentence.'))
         self.declare_parameter('conversation_topic', '/conversation')
         self.declare_parameter('voice_topic', '/voice')
+        self.declare_parameter('transcript_topic', '/audio/transcription')
         self.declare_parameter('model', os.environ.get('CHAT_MODEL', 'gemma3'))
         self.declare_parameter('ollama_host', os.environ.get('OLLAMA_HOST', 'http://localhost:11434'))
         self.declare_parameter('max_history', 20)
@@ -45,6 +65,7 @@ class ChatNode(Node):
         self.system_prompt: str = self.get_parameter('system_prompt').get_parameter_value().string_value
         self.conversation_topic: str = self.get_parameter('conversation_topic').get_parameter_value().string_value
         self.voice_topic: str = self.get_parameter('voice_topic').get_parameter_value().string_value
+        self.transcript_topic: str = self.get_parameter('transcript_topic').get_parameter_value().string_value
         self.model: str = self.get_parameter('model').get_parameter_value().string_value
         self.ollama_host: str = self.get_parameter('ollama_host').get_parameter_value().string_value.rstrip('/')
         self.max_history: int = int(self.get_parameter('max_history').get_parameter_value().integer_value or 20)
@@ -54,9 +75,10 @@ class ChatNode(Node):
         self.pub_conversation = self.create_publisher(MsgMessage, self.conversation_topic, 10)
         self.sub_conversation = self.create_subscription(MsgMessage, self.conversation_topic, self.on_conversation, 10)
         self.sub_voice_done = self.create_subscription(String, 'voice_done', self.on_voice_done, 10)
+        self.sub_transcript = self.create_subscription(Transcript, self.transcript_topic, self._handle_transcript, 10)
 
         # State
-        self.history: List[Dict[str, str]] = []  # list of {role, content}
+        self.history: List[Dict[str, Any]] = []  # list of {role, content, ...}
         self.pending_to_confirm: List[str] = []  # queue of assistant texts awaiting voice_done
         self._serve_proc: subprocess.Popen | None = None
         self._http_missing_warned = False
@@ -174,9 +196,25 @@ class ChatNode(Node):
         return ''
 
     # --- ROS callbacks ---
+    def _publish_user_turn(self, msg: MsgMessage) -> None:
+        self.pub_conversation.publish(msg)
+
+    def _handle_transcript(self, transcript: Transcript) -> None:
+        msg = transcript_to_message(transcript)
+        if msg is None:
+            return
+        if not msg.speaker:
+            msg.speaker = transcript.speaker or 'user'
+        self._publish_user_turn(msg)
+
     def on_conversation(self, msg: MsgMessage) -> None:
         # Append to history
-        self.history.append({'role': msg.role, 'content': msg.content})
+        self.history.append({
+            'role': msg.role,
+            'content': msg.content,
+            'speaker': getattr(msg, 'speaker', ''),
+            'confidence': float(getattr(msg, 'confidence', 0.0) or 0.0),
+        })
         # Trim
         if len(self.history) > self.max_history:
             self.history = self.history[-self.max_history :]
@@ -216,9 +254,11 @@ class ChatNode(Node):
             out = MsgMessage()
             out.role = 'assistant'
             out.content = spoken
+            out.speaker = 'assistant'
+            out.confidence = 1.0
             self.pub_conversation.publish(out)
             # Also keep history consistent
-            self.history.append({'role': 'assistant', 'content': spoken})
+            self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
             if len(self.history) > self.max_history:
                 self.history = self.history[-self.max_history :]
 
