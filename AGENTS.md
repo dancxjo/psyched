@@ -112,17 +112,18 @@ or conflicting package sources.
 - Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure
   frontend updates don't depend on it before processing service data.
 - Pilot control cascade reads from DOM elements flagged with `data-source`
-  attributes; update `modules/pilot/packages/pilot/tests/test_frontend_layout.py`
-  if you adjust that markup.
-- Pilot frontend telemetry now flows through the Svelte store in
-  `frontend/src/components/PilotApp.svelte`; update the Alpine interop events
-  in `static/index.html` when renaming sections.
-- Topic websocket creation lives in `PilotApp.svelte`; adjust
+  attributes; update the frontend tests if you adjust that markup.
+- Pilot frontend telemetry now flows through the Lit-based `<pilot-app>`
+  component in `modules/pilot/packages/pilot/pilot/static/components/pilot-app.js`;
+  update the Alpine interop events in `pilot/static/index.html` when renaming
+  sections.
+- Topic websocket creation lives in
+  `pilot/static/components/pilot-app.js`; adjust
   `test_api_routes.py` and `test_topic_manager.py` when changing connection or
   QoS negotiation logic.
-- Git ignores any `src/` directories by default; when adding Svelte sources
-  under `modules/pilot/packages/pilot/pilot/frontend/src`, use
-  `git add -f ...` to stage them.
+- Frontend assets now reside directly under `pilot/static`; update
+  `modules/pilot/packages/pilot/tests/test_frontend_static.py` when reorganising
+  those files so layout checks stay accurate.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.
