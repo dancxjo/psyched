@@ -64,6 +64,8 @@ def _chat_module():
             def __init__(self) -> None:
                 self.role = ""
                 self.content = ""
+                self.speaker = ""
+                self.confidence = 0.0
 
         fake_pkg_msg.Message = _Message
         sys.modules["psyched_msgs"] = fake_pkg

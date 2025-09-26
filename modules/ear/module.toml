@@ -44,6 +44,12 @@ import_check = ["webrtcvad"]
 break_system = true
 
 [[actions]]
+type = "pip_install"
+packages = ["numpy", "faster-whisper"]
+import_check = ["numpy", "faster_whisper"]
+break_system = true
+
+[[actions]]
 type = "apt_install"
 packages = ["alsa-utils"]
 update = true

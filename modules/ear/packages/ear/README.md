@@ -1,19 +1,71 @@
 # Ear
 
-Microphone PCM publisher for ROS 2. Captures raw S16_LE audio from ALSA via `arecord` and publishes `audio_common_msgs/AudioData` on a configurable topic (default `/audio/pcm`).
+PyAudio capture, WebRTC VAD, and streaming transcription for ROS 2.
+
+The ear package exposes three executables that form the audio intake pipeline:
+
+- `ear_node` – streams raw PCM16 audio from a PyAudio device to `/audio/raw` and
+  publishes a silence-duration gauge on `/audio/silence_ms`.
+- `vad_node` – resamples `/audio/raw` to 16 kHz, applies WebRTC VAD, and emits
+  voiced frames on `/audio/speech_segment` while tracking active speech
+  duration on `/audio/speech_duration`.
+- `transcriber_node` – batches `/audio/speech_segment` messages and invokes a
+  Whisper-compatible backend (prefers [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper)) to publish
+  recognized utterances on `/audio/transcription`.
 
 ## Parameters
-- `topic` (string): topic name for `audio_common_msgs/AudioData` (default `/audio/pcm`)
-- `device` (string): ALSA capture device (default `default`)
-- `rate` (int): sample rate in Hz (default `16000`)
-- `channels` (int): channels (1=mono, 2=stereo) (default `1`)
-- `chunk` (int): bytes per message read from arecord (default `2048`)
+
+### `ear_node`
+- `device_id` (int, default `0`): PyAudio device index.
+- `sample_rate` (int, default `44100`): Capture rate in Hz.
+- `channels` (int, default `1`): Channel count.
+- `chunk_size` (int, default `1024`): Frames per callback.
+- `silence_threshold` (float, default `500.0`): RMS threshold used to reset the
+  silence gauge.
+
+### `vad_node`
+- No runtime parameters; consumes `/audio/raw` and emits `/audio/speech_segment`
+  at 16 kHz PCM16.
+
+### `transcriber_node`
+- `segment_topic` (string, default `/audio/speech_segment`): Source for voiced
+  audio.
+- `transcript_topic` (string, default `/audio/transcription`): Destination for
+  `psyched_msgs/msg/Transcript` outputs.
+- `speaker` (string, default `user`): Speaker label to annotate each
+  transcription.
+- `segment_sample_rate` (int, default `16000`): Sample rate of the incoming
+  segments.
+- `model` (string, default `base`): Whisper model variant to load.
+- `device` (string, default `cpu`): Execution device passed to the backend.
+- `compute_type` (string, default `int8`): Precision hint forwarded to
+  `faster-whisper`.
+- `language` (string, optional): Force a language code instead of automatic
+  detection.
+- `beam_size` (int, default `5`): Beam search width for decoding.
 
 ## Launch
+
 ```bash
-ros2 launch ear ear.launch.py topic:=/audio/pcm device:=default rate:=16000 channels:=1 chunk:=2048
+ros2 launch ear ear.launch.py \
+    device_id:=0 \
+    sample_rate:=44100 \
+    channels:=1 \
+    chunk_size:=1024 \
+    silence_threshold:=500.0
+```
+
+Add the transcriber to an existing launch description or run it manually:
+
+```bash
+ros2 run ear transcriber_node --ros-args -p model:=small -p device:=cpu
 ```
 
 ## Notes
-- Requires `alsa-utils` for the `arecord` binary.
-- Message type is `audio_common_msgs/msg/AudioData` (byte array of raw PCM S16_LE).
+
+- The transcriber selects `faster-whisper` when available and falls back to the
+  reference `whisper` package. Install at least one of them to enable
+  transcription.
+- All topics use little-endian PCM16 audio, matching the VAD output format.
+- `psyched_msgs/msg/Transcript` includes the recognized text, speaker label, and
+  a coarse confidence score derived from Whisper log probabilities.
