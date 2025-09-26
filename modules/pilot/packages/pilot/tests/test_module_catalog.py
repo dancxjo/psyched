@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
 import pytest
@@ -75,6 +76,19 @@ def test_catalog_topics_include_qos(repo_root: Path) -> None:
     imu_topic = imu_topics[0]
     assert imu_topic.qos.depth >= 1
     assert imu_topic.qos.reliability in {"reliable", "best_effort"}
+
+
+def test_catalog_host_health_topic_matches_hostname(repo_root: Path) -> None:
+    """Pilot module should expose the resolved hosts/<hostname>/health path."""
+
+    catalog = ModuleCatalog(repo_root / "modules")
+    pilot = catalog.get_module("pilot")
+
+    short_host = socket.gethostname().split(".")[0]
+    expected = f"/hosts/{short_host}/health"
+
+    topics = [topic.topic for topic in pilot.topics]
+    assert expected in topics, f"Expected host health topic {expected}, found {topics}"
 
 
 def test_catalog_topics_are_unique(repo_root: Path) -> None:

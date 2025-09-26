@@ -246,6 +246,63 @@ body {
   gap: 0.75rem;
 }
 
+.voice-console {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.voice-console label {
+  font-size: 0.9rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  color: var(--lcars-accent-secondary);
+}
+
+.voice-console textarea {
+  resize: vertical;
+  min-height: 120px;
+  padding: 0.75rem;
+  background: rgba(15, 17, 26, 0.6);
+  border: 1px solid rgba(88, 178, 220, 0.4);
+  border-radius: 0.75rem;
+  color: var(--lcars-text);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.95rem;
+}
+
+.voice-console textarea:disabled {
+  opacity: 0.6;
+}
+
+.voice-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.voice-actions button {
+  background: rgba(248, 128, 60, 0.2);
+  border: 1px solid rgba(248, 128, 60, 0.5);
+  color: var(--lcars-text);
+  padding: 0.45rem 1.25rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  cursor: pointer;
+}
+
+.voice-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-last,
+.voice-hint {
+  font-size: 0.85rem;
+  color: var(--lcars-muted);
+}
+
 .topic-state {
   display: flex;
   align-items: center;

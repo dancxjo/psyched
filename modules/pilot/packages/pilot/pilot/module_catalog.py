@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, MutableMapping
+import socket
 
 try:  # Python 3.11+
     import tomllib
@@ -21,6 +22,21 @@ def _as_list(value: object | None) -> List[str]:
 
 
 from .qos import QosConfig
+
+
+def _host_shortname() -> str:
+    """Return the short hostname for the current machine."""
+
+    try:
+        hostname = socket.gethostname()
+    except Exception:  # pragma: no cover - extremely unlikely
+        return "host"
+    if not hostname:
+        return "host"
+    return hostname.split(".")[0]
+
+
+_HOST_HEALTH_TOPIC = f"/hosts/{_host_shortname()}/health"
 
 
 def _extract_pilot_block(contents: str) -> str | None:
@@ -141,6 +157,9 @@ class ModuleCatalog:
                     topic_name = str(topic_entry.get("name") or topic_entry.get("topic") or "")
                     if not topic_name:
                         continue
+                    normalized_name = topic_name.lstrip("/")
+                    if normalized_name == "host/health":
+                        topic_name = _HOST_HEALTH_TOPIC
                     type_name = str(topic_entry.get("type", "std_msgs/msg/String"))
                     access = str(topic_entry.get("access", "ro"))
                     presentation = (
