@@ -22,7 +22,12 @@ qos = { history = "keep_last", depth = 1, reliability = "reliable", durability =
 
 [[actions]]
 type = "link_packages"
-packages = ["voice", "psyched_msgs"]
+packages = ["voice"]
+
+[[actions]]
+type = "link_packages"
+base = "../chat/packages"
+packages = ["psyched_msgs"]
 
 [[actions]]
 type = "apt_install"
