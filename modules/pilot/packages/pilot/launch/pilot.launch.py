@@ -71,7 +71,7 @@ def generate_launch_description():
 
     run_separate_ws_arg = DeclareLaunchArgument(
         'run_separate_websocket',
-        default_value=EnvironmentVariable(name='PILOT_RUN_SEPARATE_WS', default_value='true'),
+        default_value=EnvironmentVariable(name='PILOT_RUN_SEPARATE_WS', default_value='false'),
         description='Launch the separate websocket node (recommended)'
     )
     host_health_enable_arg = DeclareLaunchArgument(
@@ -93,8 +93,8 @@ def generate_launch_description():
     # Pilot node
     pilot_node = Node(
         package='pilot',
-        executable='pilot_node',
-        name='pilot_node',
+        executable='pilot_backend',
+        name='pilot_backend',
         output='screen',
         parameters=[{
             'web_port': LaunchConfiguration('web_port'),
