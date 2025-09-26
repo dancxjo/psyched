@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Always resolve REPO_DIR and MODULE_DIR
-REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 MODULE_NAME="pilot"
 MODULE_DIR="$REPO_DIR/modules/$MODULE_NAME"
 export REPO_DIR
