@@ -22,7 +22,12 @@ qos = { history = "keep_last", depth = 10, reliability = "reliable", durability 
 
 [[actions]]
 type = "link_packages"
-packages = ["chat", "psyched_msgs", "voice"]
+packages = ["chat", "psyched_msgs"]
+
+[[actions]]
+type = "link_packages"
+base = "../voice/packages"
+packages = ["voice"]
 
 [[actions]]
 type = "pip_install"

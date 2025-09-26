@@ -1,5 +1,7 @@
 import { $, type DaxTemplateTag, repoPath } from "./util.ts";
 
+const withRosEnv = repoPath("../tools/with_ros_env.sh");
+
 async function runColcon(
   runner: DaxTemplateTag,
   subcommand: string,
@@ -8,7 +10,8 @@ async function runColcon(
   errorLabel: string,
 ): Promise<void> {
   const absSrc = repoPath("../src");
-  const builder = runner`colcon ${[
+  const builder = runner`${withRosEnv} ${[
+    "colcon",
     subcommand,
     ...args,
     "--base-paths",

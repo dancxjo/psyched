@@ -29,15 +29,19 @@ type = "link_packages"
 packages = ["pilot"]
 
 [[actions]]
+type = "run"
+description = "Install ROS Python shims via apt"
+script = "scripts/install_ros_python_deps.sh"
+
+[[actions]]
 type = "pip_install"
 packages = [
     "fastapi",
     "uvicorn[standard]",
     "pydantic",
     "psutil",
-    "rosidl_runtime_py",
 ]
-import_check = ["fastapi", "rosidl_runtime_py"]
+import_check = ["fastapi"]
 break_system = true
 
 [[actions]]

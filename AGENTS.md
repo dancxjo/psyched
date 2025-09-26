@@ -90,6 +90,9 @@ or conflicting package sources.
   cross-check for outdated references between them and fix any inconsistencies.
 - Record newly discovered gotchas or workflow aids here using concise bullet
   points.
+- `tools/with_ros_env.sh` sources the workspace environment before executing a
+  command. Use it (or mirror its behaviour) when scripting `colcon` or `ros2`
+  invocations so ROS 2 dependencies from apt are discoverable.
 - Keep the guide succinct and focused on actionable advice.
 - `pytest` is configured to ignore the `src/` symlink; place new tests under
   `packages/<pkg>/tests` and stub ROS interfaces when running in environments
