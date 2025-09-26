@@ -69,7 +69,8 @@ export interface RosRunAction extends ModuleActionBase {
 
 export interface RunAction extends ModuleActionBase {
   type: "run";
-  command: string;
+  command?: string;
+  script?: string;
   shell?: string;
   env?: Record<string, string>;
 }
@@ -377,7 +378,25 @@ async function applyRun(action: RunAction, ctx: ModuleContext): Promise<void> {
   if (ctx.moduleConfigPath && !env.PSH_MODULE_CONFIG) {
     env.PSH_MODULE_CONFIG = ctx.moduleConfigPath;
   }
-  await runCommand(action.command, {
+  if (!env.MODULE_DIR) {
+    env.MODULE_DIR = ctx.moduleDir;
+  }
+
+  let command = action.command?.trim();
+  if (action.script) {
+    const scriptPath = action.script.startsWith("/")
+      ? action.script
+      : resolvePath(ctx.moduleDir, action.script);
+    command = `"${scriptPath}"`;
+  }
+
+  if (!command) {
+    throw new Error(
+      `[module:${ctx.module}] run action is missing both 'command' and 'script' entries`,
+    );
+  }
+
+  await runCommand(command, {
     description: action.description,
     cwd: action.cwd ? resolvePath(ctx.repoDir, action.cwd) : ctx.repoDir,
     env,

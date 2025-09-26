@@ -22,8 +22,26 @@ from .module_catalog import ModuleCatalog
 from .topic_manager import TopicSessionManager
 
 
+def find_repo_root(start: Path) -> Path:
+    """Locate the repository root given a path inside the pilot package."""
+
+    current = start.resolve()
+    if current.is_file():
+        current = current.parent
+
+    for candidate in (current, *current.parents):
+        modules_dir = candidate / "modules"
+        psh_entry = candidate / "psh" / "main.ts"
+        if modules_dir.exists() and psh_entry.exists():
+            return candidate
+
+    raise RuntimeError(
+        "Unable to locate repository root – expected 'modules/' and 'psh/main.ts' sentinels."
+    )
+
+
 def _default_repo_root() -> Path:
-    return Path(__file__).resolve().parents[6]
+    return find_repo_root(Path(__file__))
 
 
 def _default_static_root() -> Path:

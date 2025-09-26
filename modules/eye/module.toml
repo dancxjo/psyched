@@ -22,25 +22,7 @@ qos = { history = "keep_last", depth = 3, reliability = "best_effort", durabilit
 [[actions]]
 type = "run"
 description = "Ensure cv_bridge overlay when headers missing"
-command = """
-ROS_DISTRO=${ROS_DISTRO:-kilted}
-HEADER="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge.hpp"
-REPO="src/vision_opencv"
-if [ ! -f "$HEADER" ]; then
-  if [ ! -d "$REPO/.git" ]; then
-    git clone https://github.com/ros-perception/vision_opencv.git "$REPO"
-  fi
-  if [ -d "$REPO/.git" ]; then
-    git -C "$REPO" fetch --tags --force >/dev/null 2>&1 || true
-    if git -C "$REPO" rev-parse --verify "$ROS_DISTRO" >/dev/null 2>&1; then
-      git -C "$REPO" checkout "$ROS_DISTRO" >/dev/null 2>&1 || true
-    elif git -C "$REPO" rev-parse --verify ros2 >/dev/null 2>&1; then
-      git -C "$REPO" checkout ros2 >/dev/null 2>&1 || true
-    fi
-    rm -f "$REPO/COLCON_IGNORE" || true
-  fi
-fi
-"""
+script = "scripts/ensure_cv_bridge_overlay.sh"
 optional = true
 
 [[actions]]
@@ -57,92 +39,25 @@ dest = "libfreenect"
 [[actions]]
 type = "run"
 description = "Patch kinect_ros2 for cv_bridge"
-command = """
-CMK="src/kinect_ros2/CMakeLists.txt"
-if [ -f "$CMK" ]; then
-  if ! grep -E 'find_package\(cv_bridge' "$CMK" >/dev/null 2>&1; then
-    if grep -n 'find_package(OpenCV' "$CMK" >/dev/null 2>&1; then
-      ln=$(grep -n 'find_package(OpenCV' "$CMK" | head -n1 | cut -d: -f1)
-      awk -v ln="$ln" 'NR==ln{print; print "find_package(cv_bridge REQUIRED)"; next}1' "$CMK" >"$CMK.tmp" && mv "$CMK.tmp" "$CMK"
-    else
-      printf '\nfind_package(cv_bridge REQUIRED)\n' >>"$CMK"
-    fi
-  fi
-  for target in kinect_ros2_component kinect_ros2_node; do
-    if ! grep -E "ament_target_dependencies\($target" "$CMK" | grep -q cv_bridge; then
-      awk -v tgt="ament_target_dependencies($target" 'BEGIN{inb=0} index($0,tgt){print;inb=1;next} inb&&/\)/{print "  cv_bridge";print;inb=0;next}1' "$CMK" >"$CMK.tmp" && mv "$CMK.tmp" "$CMK"
-    fi
-  done
-fi
-"""
+script = "scripts/patch_kinect_cv_bridge.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Replace legacy cv_bridge headers"
-command = """
-find src -type f -name '*.cpp' -o -name '*.hpp' | while read -r file; do
-  if grep -q 'cv_bridge/cv_bridge.h' "$file"; then
-    sed -i 's#cv_bridge/cv_bridge.h#cv_bridge/cv_bridge.hpp#g' "$file"
-  fi
-done
-"""
+script = "scripts/replace_cv_bridge_headers.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Install Kinect vision dependencies"
-command = """
-if command -v apt-get >/dev/null 2>&1; then
-  ROS_DISTRO=${ROS_DISTRO:-kilted}
-  sudo apt-get update || true
-  sudo apt-get install -y \
-    ros-${ROS_DISTRO}-cv-bridge \
-    ros-${ROS_DISTRO}-camera-calibration-parsers \
-    ros-${ROS_DISTRO}-image-transport \
-    ros-${ROS_DISTRO}-image-transport-plugins \
-    ros-${ROS_DISTRO}-image-pipeline \
-    ros-${ROS_DISTRO}-perception \
-    ros-${ROS_DISTRO}-perception-pcl \
-    ros-${ROS_DISTRO}-vision-msgs \
-    ros-${ROS_DISTRO}-usb-cam \
-    libopencv-dev \
-    python3-opencv \
-    libglu1-mesa-dev \
-    freeglut3-dev \
-    mesa-common-dev \
-    libogre-1.12-dev \
-    ros-${ROS_DISTRO}-rviz2 \
-    libgl1 \
-    libegl1 \
-    libxrandr2 \
-    libxrandr-dev \
-    libxinerama1 \
-    libxinerama-dev \
-    libxcursor1 \
-    libxcursor-dev \
-    libusb-1.0-0-dev \
-    pkg-config || true
-fi
-"""
+script = "scripts/install_kinect_deps.sh"
 optional = true
 
 [[actions]]
 type = "run"
 description = "Build and install libfreenect"
-command = """
-if [ -d src/libfreenect ]; then
-  mkdir -p src/libfreenect/build
-  cd src/libfreenect/build
-  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_EXAMPLES=OFF -DBUILD_FAKENECT=OFF ..
-  make -j"${NPROC:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
-  if command -v sudo >/dev/null 2>&1; then
-    sudo make install || true
-  else
-    make install || true
-  fi
-fi
-"""
+script = "scripts/build_libfreenect.sh"
 optional = true
 
 [systemd]
@@ -151,46 +66,5 @@ after = ["network-online.target"]
 wants = ["network-online.target"]
 restart = "on-failure"
 restart_sec = 6
-launch_command = """
-set -euo pipefail
-exec ros2 run kinect_ros2 kinect_ros2_node
-"""
-shutdown_command = """
-set -euo pipefail
-PATTERNS=(
-  "ros2 launch kinect_ros2 kinect.launch.py"
-  "kinect_ros2_node"
-)
-TIMEOUT=${TIMEOUT:-10}
-for pattern in "${PATTERNS[@]}"; do
-  mapfile -t pids < <(pgrep -f "$pattern" || true)
-  if [ ${#pids[@]} -eq 0 ]; then
-    echo "[eye/shutdown] No matching processes found for pattern: $pattern"
-    continue
-  fi
-
-  echo "[eye/shutdown] Stopping ${#pids[@]} process(es) for: $pattern (SIGTERM)"
-  for pid in "${pids[@]}"; do
-    if [ "$pid" -ne $$ ]; then
-      kill -TERM "$pid" 2>/dev/null || true
-    fi
-  done
-
-  for ((i=0; i<TIMEOUT; i++)); do
-    sleep 1
-    mapfile -t still_alive < <(pgrep -f "$pattern" || true)
-    if [ ${#still_alive[@]} -eq 0 ]; then
-      echo "[eye/shutdown] All processes stopped for pattern: $pattern"
-      continue 2
-    fi
-  done
-
-  echo "[eye/shutdown] Forcing stop (SIGKILL) for remaining processes"
-  for pid in "${still_alive[@]}"; do
-    if [ -n "$pid" ]; then
-      kill -KILL "$pid" 2>/dev/null || true
-    fi
-  done
-
-done
-"""
+launch_command = "${MODULE_DIR}/eye.launch.sh"
+shutdown_command = "${MODULE_DIR}/eye.shutdown.sh"
