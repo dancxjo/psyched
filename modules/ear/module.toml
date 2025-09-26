@@ -31,11 +31,6 @@ qos = { history = "keep_last", depth = 5, reliability = "best_effort", durabilit
 type = "link_packages"
 packages = ["ear", "psyched_msgs"]
 
-[[actions]]
-type = "pip_install"
-packages = ["pyaudio"]
-import_check = ["pyaudio"]
-break_system = true
 
 [[actions]]
 type = "pip_install"
@@ -51,7 +46,7 @@ break_system = true
 
 [[actions]]
 type = "apt_install"
-packages = ["alsa-utils"]
+packages = ["alsa-utils", "libasound2-dev", "portaudio19-dev", "python3-pyaudio"]
 update = true
 
 [systemd]
