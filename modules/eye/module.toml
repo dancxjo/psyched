@@ -4,6 +4,7 @@ description = "Kinect depth camera integration"
 [pilot]
 display_name = "Eye"
 description = "RGB-D perception from the Kinect"
+regimes = ["perception"]
 
 [[pilot.topics]]
 name = "/camera/color/image_raw"

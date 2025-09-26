@@ -4,6 +4,7 @@ description = "Text-to-speech pipeline"
 [pilot]
 display_name = "Voice"
 description = "Text-to-speech synthesis"
+regimes = ["audio"]
 
 [[pilot.topics]]
 name = "/voice"
@@ -25,9 +26,6 @@ packages = ["voice", "psyched_msgs"]
 
 [[actions]]
 type = "apt_install"
-
-[[actions]]
-type = "link_packages"
 packages = [
     "espeak-ng",
     "mbrola",

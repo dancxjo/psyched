@@ -4,6 +4,7 @@ description = "MPU6050 inertial measurement integration"
 [pilot]
 display_name = "IMU"
 description = "Inertial measurement data from the MPU6050"
+regimes = ["perception"]
 
 [[pilot.topics]]
 name = "/imu"

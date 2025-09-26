@@ -4,6 +4,7 @@ description = "Microphone capture and voice activity detection"
 [pilot]
 display_name = "Ear"
 description = "Audio intake and VAD telemetry"
+regimes = ["audio"]
 
 [[pilot.topics]]
 name = "/audio/raw"
@@ -54,7 +55,3 @@ restart = "on-failure"
 restart_sec = 5
 launch_command = "${MODULE_DIR}/ear.launch.sh"
 shutdown_command = "${MODULE_DIR}/ear.shutdown.sh"
-
-[[actions]]
-type = "link_packages"
-packages = ["ear", "psyched_msgs"]

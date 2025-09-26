@@ -68,12 +68,14 @@ class ModuleInfo:
     description: str
     topics: List[ModuleTopic] = field(default_factory=list)
     commands: ModuleCommands = field(default_factory=ModuleCommands)
+    regimes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, object]:
         return {
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
+            "regimes": list(self.regimes),
             "topics": [
                 {
                     "topic": topic.topic,
@@ -123,6 +125,8 @@ class ModuleCatalog:
             description = str(pilot_cfg.get("description", data.get("description", "")))
 
             default_commands = ModuleCommands()
+            regimes = _as_list(pilot_cfg.get("regimes")) or ["general"]
+
             commands = ModuleCommands(
                 mod=_as_list(pilot_cfg.get("mod_commands")) or list(default_commands.mod),
                 system=_as_list(pilot_cfg.get("system_commands")) or list(default_commands.system),
@@ -160,6 +164,7 @@ class ModuleCatalog:
                 description=description,
                 topics=topics,
                 commands=commands,
+                regimes=regimes,
             )
             modules[module_info.name] = module_info
 

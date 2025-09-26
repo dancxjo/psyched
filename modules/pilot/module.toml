@@ -3,6 +3,7 @@ display_name = "Pilot"
 description = "Teleoperation dashboard and ROS 2 bridge"
 mod_commands = ["setup", "build", "launch", "restart", "shutdown"]
 system_commands = ["start", "stop", "restart", "status"]
+regimes = ["system"]
 
 [[pilot.topics]]
 name = "/cmd_vel"
