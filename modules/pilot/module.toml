@@ -29,8 +29,14 @@ packages = ["pilot"]
 
 [[actions]]
 type = "pip_install"
-packages = ["fastapi", "uvicorn[standard]", "pydantic"]
-import_check = ["fastapi"]
+packages = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "psutil",
+    "rosidl_runtime_py",
+]
+import_check = ["fastapi", "rosidl_runtime_py"]
 break_system = true
 
 [[actions]]

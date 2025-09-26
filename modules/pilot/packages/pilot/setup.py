@@ -16,7 +16,7 @@ setup(
             'pilot/static/app.js',
         ]),
     ],
-    install_requires=['setuptools', 'fastapi', 'uvicorn[standard]', 'pydantic', 'psutil'],
+    install_requires=['setuptools', 'fastapi', 'uvicorn[standard]', 'pydantic', 'psutil', 'rosidl_runtime_py'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',

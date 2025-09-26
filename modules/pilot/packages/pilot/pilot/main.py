@@ -60,7 +60,13 @@ def _create_argument_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _create_argument_parser()
-    args = parser.parse_args(argv)
+    # Accept and ignore ROS2 launch arguments (e.g. "--ros-args ...") which
+    # ros2 launch injects. parse_known_args will return (known, unknown) and
+    # we only use the known args so the extra ROS args don't trigger errors.
+    if argv is None:
+        args, _ = parser.parse_known_args()
+    else:
+        args, _ = parser.parse_known_args(argv)
 
     repo_root = _default_repo_root()
     modules_root = args.modules_root or (repo_root / "modules")
@@ -85,9 +91,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     def _spin_executor():
-        with loop:
-            loop.create_task(_executor_spin(executor))
+        # Set the new event loop for this thread and run it. Some loop
+        # implementations do not support being used as a context manager
+        # (raising TypeError: object does not support the context manager
+        # protocol), so avoid "with loop:" and manage lifecycle explicitly.
+        asyncio.set_event_loop(loop)
+        loop.create_task(_executor_spin(executor))
+        try:
             loop.run_forever()
+        finally:
+            # Cleanup: stop any remaining tasks and close the loop.
+            try:
+                loop.call_soon_threadsafe(loop.stop)
+            except Exception:
+                pass
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception:
+                pass
+            try:
+                loop.close()
+            except Exception:
+                pass
 
     spin_thread = threading.Thread(target=_spin_executor, daemon=True)
     spin_thread.start()
