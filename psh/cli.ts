@@ -17,7 +17,7 @@ import {
   systemdDebug,
 } from "./systemd.ts";
 import { uninstallPsh } from "./uninstall.ts";
-import { setupHosts } from "./setup.ts";
+import { setupHosts, getHostModules } from "./setup.ts";
 
 import { colconBuild, colconInstall } from "./colcon.ts";
 
@@ -101,12 +101,6 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       async (_options: unknown, host?: string, ...rest: (string | undefined)[]) => {
         const targets = [host, ...rest].filter((value): value is string => Boolean(value));
         await deps.setupHosts(targets);
-        // Also run module setup via the module runner (equivalent to `psh m setup`)
-        try {
-          await deps.runModuleScript("*", "setup");
-        } catch (err) {
-          console.error("[psh] Module setup via 'psh m setup' failed:", String(err));
-        }
 
         // Build the workspace between module setup and systemd installation.
         try {
@@ -153,22 +147,13 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       async (_options: unknown, action: string = 'list', ...modules: string[]) => {
         let moduleList = modules;
         if (moduleList.length === 0) {
-          // Load default modules from current host's toml
-          // For now, hardcode cerebellum.toml; in future, detect hostname
-          const tomlPath = "hosts/cerebellum.toml";
-          const decoder = new TextDecoder("utf-8");
-          const tomlRaw = Deno.readFileSync(tomlPath);
-          const tomlText = decoder.decode(tomlRaw);
-          // Simple regex to extract modules array
-          const match = tomlText.match(/modules\s*=\s*\[(.*?)\]/s);
-          if (match) {
-            moduleList = match[1]
-              .split(',')
-              .map(x => x.trim().replace(/['\"]/g, ""))
-              .filter(Boolean);
-          }
+          // Prefer an explicit HOST env var if present (useful for tests and
+          // scripted runs). Otherwise defer to getHostModules which will
+          // determine the current hostname and read the host TOML.
+          const envHost = Deno.env.get("HOST");
+          moduleList = envHost ? await getHostModules(envHost) : await getHostModules();
         }
-        await deps.runModuleScript(moduleList, action);
+        await deps.runModuleScript(moduleList.length ? moduleList : "*", action);
       },
     );
 

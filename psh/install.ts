@@ -1,6 +1,7 @@
 // Installer functions for ROS2, Docker, etc.
-import { $, repoPath } from "./util.ts";
+import { $, repoPath, runWithStreamingTee } from "./util.ts";
 import { join } from "@std/path";
+import { colors } from "@cliffy/ansi/colors";
 
 /**
  * Check whether ROS2 appears to be installed on the system.
@@ -52,12 +53,20 @@ export async function runInstallRos2(): Promise<void> {
   }
 
   const script = repoPath("../tools/install_ros2.sh");
-  console.log(`Running ROS2 install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    throw new Error(`ROS2 installer failed (${r.code})`);
+  console.log(colors.cyan(`Starting ROS2 install: ${script}`));
+  // Stream output live but capture for a summarized report after completion.
+  const res = await runWithStreamingTee(`bash ${script}`);
+  if (res.code !== 0) {
+    console.error(colors.red(`ROS2 installer failed (code ${res.code})`));
+    if (res.stderr) console.error(colors.red(res.stderr));
+    throw new Error(`ROS2 installer failed (${res.code})`);
   }
+  // On success, summarize but always print any stderr that occurred.
+  if (res.stderr && res.stderr.trim().length > 0) {
+    console.log(colors.yellow("ROS2 installer produced stderr (see below):"));
+    console.log(res.stderr);
+  }
+  summarizeTextOutput(res.stdout, "ROS2 installer output");
 }
 
 export async function runInstallDocker(): Promise<void> {
@@ -67,12 +76,40 @@ export async function runInstallDocker(): Promise<void> {
   }
 
   const script = repoPath("../tools/install_docker.sh");
-  console.log(`Running Docker install script: ${script}`);
-  const r = await $`bash ${script}`;
-  if (r.code !== 0) {
-    console.error(r.stderr || r.stdout);
-    throw new Error(`Docker installer failed (${r.code})`);
+  console.log(colors.cyan(`Starting Docker install: ${script}`));
+  const res = await runWithStreamingTee(`bash ${script}`);
+  if (res.code !== 0) {
+    console.error(colors.red(`Docker installer failed (code ${res.code})`));
+    if (res.stderr) console.error(colors.red(res.stderr));
+    throw new Error(`Docker installer failed (${res.code})`);
   }
+  if (res.stderr && res.stderr.trim().length > 0) {
+    console.log(colors.yellow("Docker installer produced stderr (see below):"));
+    console.log(res.stderr);
+  }
+  summarizeTextOutput(res.stdout, "Docker installer output");
+}
+
+function summarizeTextOutput(text: string, label = "output") {
+  const t = (text || "").replace(/\r\n/g, "\n").trim();
+  if (!t) {
+    console.log(colors.gray(`${label}: (no output)`));
+    return;
+  }
+  const lines = t.split(/\n/);
+  const head = 20;
+  const tail = 10;
+  if (lines.length <= head + tail + 5) {
+    console.log(colors.gray(`${label}:`));
+    console.log(t);
+  } else {
+    console.log(colors.gray(`${label} (first ${head} lines):`));
+    console.log(lines.slice(0, head).join("\n"));
+    console.log(colors.gray(`... (${lines.length - head - tail} lines omitted) ...`));
+    console.log(colors.gray(`${label} (last ${tail} lines):`));
+    console.log(lines.slice(-tail).join("\n"));
+  }
+  console.log(colors.green(`${label} summarized.`));
 }
 
 export async function installPsh(): Promise<void> {

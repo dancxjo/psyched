@@ -1,7 +1,8 @@
 import { parse as parseToml } from "@std/toml";
 import { stringify as stringifyYaml } from "@std/yaml";
 import { dirname, fromFileUrl, join } from "@std/path";
-import { $, type DaxTemplateTag } from "./util.ts";
+import { $, type DaxTemplateTag, runWithStreamingTee } from "./util.ts";
+import { colors } from "@cliffy/ansi/colors";
 
 let commandRunner: DaxTemplateTag = $;
 
@@ -263,19 +264,52 @@ async function applyAptInstall(
     }
   }
   if (action.update) {
-    console.log(`[module:${ctx.module}] Running apt-get update`);
-    await $`sudo apt-get update`.noThrow();
+    console.log(colors.yellow(`[module:${ctx.module}] Running apt-get update`));
+    // Stream apt output live while capturing it for later summary
+    const upd = await runWithStreamingTee("sudo apt-get update");
+    if (upd.code !== 0) {
+      console.error(colors.red(`[module:${ctx.module}] apt-get update failed (code ${upd.code})`));
+      if (upd.stderr) console.error(colors.red(upd.stderr));
+    }
+    summarizeCommandOutput(upd.stdout, `[module:${ctx.module}] apt-get update`);
   }
   if (action.packages.length === 0) return;
-  console.log(
-    `[module:${ctx.module}] Installing apt packages: ${action.packages.join(", ")
-    }`,
-  );
-  const result = await $`sudo apt-get install -y ${action.packages}`.noThrow();
+  console.log(colors.yellow(
+    `[module:${ctx.module}] Installing apt packages: ${action.packages.join(", ")}`,
+  ));
+  const pkgCmd = `sudo apt-get install -y ${action.packages.join(" ")}`;
+  const result = await runWithStreamingTee(pkgCmd);
   if (result.code !== 0) {
-    console.warn(
+    console.warn(colors.red(
       `[module:${ctx.module}] apt-get install exited with code ${result.code}`,
-    );
+    ));
+    if (result.stderr) console.error(colors.red(result.stderr));
+  }
+  summarizeCommandOutput(result.stdout, `[module:${ctx.module}] apt-get install`);
+}
+
+function summarizeCommandOutput(text: string, label = "command") {
+  try {
+    const out = (text || "").replace(/\r\n/g, "\n").trim();
+    if (!out) {
+      console.log(colors.gray(`${label}: (no output)`));
+      return;
+    }
+    const lines = out.split(/\n/);
+    const head = 12;
+    const tail = 6;
+    if (lines.length <= head + tail + 3) {
+      console.log(colors.gray(`${label}: output:`));
+      console.log(out);
+    } else {
+      console.log(colors.gray(`${label}: output (first ${head} lines):`));
+      console.log(lines.slice(0, head).join("\n"));
+      console.log(colors.gray(`... (${lines.length - head - tail} lines omitted) ...`));
+      console.log(colors.gray(`${label}: output (last ${tail} lines):`));
+      console.log(lines.slice(-tail).join("\n"));
+    }
+  } catch (_err) {
+    // ignore summarization failures
   }
 }
 

@@ -154,3 +154,18 @@ export async function setupHosts(hosts: string[]): Promise<void> {
     await applyHost(host);
   }
 }
+
+/**
+ * Return the list of modules for the provided host. If host is not provided,
+ * the function will attempt to determine the current hostname.
+ */
+export async function getHostModules(host?: string): Promise<string[]> {
+  const target = host && host.length ? host : await determineHostName();
+  if (!target) return [];
+  try {
+    const spec = await readHostSpec(target);
+    return extractModuleList(spec);
+  } catch (_err) {
+    return [];
+  }
+}
