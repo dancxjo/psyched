@@ -9,8 +9,8 @@ Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 Environment=PSH_MODULE_NAME=imu
-ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "set -euo pipefail\nPARAM_FILE_VAL=\"$${IMU_PARAM_FILE:-}\"\nif [ -n \"$$PARAM_FILE_VAL\" ]; then\n  exec ros2 launch mpu6050driver mpu6050driver_launch.py param_file:=\"$${PARAM_FILE_VAL}\"\nelse\n  exec ros2 launch mpu6050driver mpu6050driver_launch.py\nfi"
-ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "set -euo pipefail\nPATTERN=\"ros2 launch mpu6050driver mpu6050driver_launch.py\"\nTIMEOUT=$${TIMEOUT:-10}\nif ! pgrep -f \"$$PATTERN\" >/dev/null 2>&1; then\n  echo \"[imu/shutdown] No matching processes found for pattern: $$PATTERN\"\n  exit 0\nfi\n\necho \"[imu/shutdown] Sending SIGTERM to processes for: $$PATTERN\"\npkill -TERM -f \"$$PATTERN\" || true\n\nfor ((i=0; i<TIMEOUT; i++)); do\n  sleep 1\n  if ! pgrep -f \"$$PATTERN\" >/dev/null 2>&1; then\n    echo \"[imu/shutdown] All processes stopped\"\n    exit 0\n  fi\ndone\n\necho \"[imu/shutdown] Forcing SIGKILL for remaining processes\"\npkill -KILL -f \"$$PATTERN\" || true"
+ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/imu.launch.sh"
+ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh bash -lc "$${MODULE_DIR}/imu.shutdown.sh"
 Restart=on-failure
 RestartSec=4
 User=pete
