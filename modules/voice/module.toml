@@ -25,7 +25,18 @@ packages = ["voice", "psyched_msgs"]
 
 [[actions]]
 type = "apt_install"
-packages = ["espeak-ng", "mbrola", "mbrola-en1", "ffmpeg", "fortune-mod", "fortunes", "fortunes-min"]
+
+[[actions]]
+type = "link_packages"
+packages = [
+    "espeak-ng",
+    "mbrola",
+    "mbrola-en1",
+    "ffmpeg",
+    "fortune-mod",
+    "fortunes",
+    "fortunes-min",
+]
 update = true
 
 [[actions]]

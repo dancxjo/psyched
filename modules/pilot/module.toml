@@ -23,6 +23,8 @@ access = "ro"
 presentation = "status"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
+[[actions]]
+type = "link_packages"
 packages = ["pilot"]
 
 [[actions]]

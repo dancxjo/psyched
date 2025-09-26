@@ -17,6 +17,9 @@ type = "link_packages"
 packages = ["wifi"]
 
 [[actions]]
+type = "link_packages"
+packages = ["wifi_setup.py", "wifi"]
+[[actions]]
 type = "ros_run"
 package = "wifi"
 executable = "wifi_setup"

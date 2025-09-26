@@ -54,3 +54,7 @@ restart = "on-failure"
 restart_sec = 5
 launch_command = "${MODULE_DIR}/ear.launch.sh"
 shutdown_command = "${MODULE_DIR}/ear.shutdown.sh"
+
+[[actions]]
+type = "link_packages"
+packages = ["ear", "psyched_msgs"]

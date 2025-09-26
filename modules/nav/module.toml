@@ -28,6 +28,11 @@ qos = { history = "keep_last", depth = 5, reliability = "reliable", durability =
 
 [[actions]]
 type = "link_packages"
+
+packages = ["psyched_nav"]
+
+[[actions]]
+type = "link_packages"
 packages = ["psyched_nav"]
 
 [[actions]]
