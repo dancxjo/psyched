@@ -3,7 +3,7 @@ set -euo pipefail
 SYSTEM_PROMPT_VAL="${CHAT_SYSTEM_PROMPT:-${SYSTEM_PROMPT:-You_are_a_helpful_assistant._Reply_in_one_concise_sentence.}}"
 CONV_TOPIC_VAL="${CHAT_CONVERSATION_TOPIC:-${CONVERSATION_TOPIC:-/conversation}}"
 VOICE_TOPIC_VAL="${CHAT_VOICE_TOPIC:-${VOICE_TOPIC:-/voice}}"
-MODEL_VAL="${CHAT_MODEL:-${OLLAMA_MODEL:-tinyllama}}"
+MODEL_VAL="${CHAT_MODEL:-${OLLAMA_MODEL:-gemma3}}"
 OLLAMA_HOST_VAL="${OLLAMA_HOST:-http://localhost:11434}"
 MAX_HISTORY_VAL="${CHAT_MAX_HISTORY:-${MAX_HISTORY:-20}}"
 
