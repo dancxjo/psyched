@@ -61,6 +61,8 @@ workspace.
 - Deno-based tests require local CA trust; run them with
   `DENO_TLS_CA_STORE=system` and grant the needed permissions (e.g.
   `--allow-read --allow-write --allow-env`).
+- The container image may not ship with the Deno CLI. Install it locally before
+  running `deno test` or other workspace scripts that depend on it.
 
 Important workflow note:
 
