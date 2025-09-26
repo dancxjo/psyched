@@ -1,0 +1,7 @@
+capture_device: 'hw:0,0'
+vad_aggressiveness: 3
+topic: /audio/pcm
+device: default
+rate: 16000
+channels: 1
+chunk: 2048
