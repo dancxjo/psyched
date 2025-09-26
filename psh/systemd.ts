@@ -15,6 +15,19 @@ interface HostSpec {
   module_configs?: Record<string, unknown>;
 }
 
+/**
+ * Escape characters that systemd expands in unit files when using
+ * ExecStart= with an inline command. systemd expands $ and % sequences,
+ * so replace them with doubled versions so the shell receives the literal
+ * characters. This keeps the generated unit stable and prevents systemd
+ * from evaluating variables meant for the inline shell script.
+ */
+function escapeForSystemd(s: string): string {
+  // In String.replace the replacement string treats "$" sequences specially
+  // (e.g. "$$" -> "$"), so use "$$$$" to insert two literal dollars.
+  return s.replace(/\$/g, "$$$$").replace(/%/g, "%%");
+}
+
 function ensureArray(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -69,11 +82,11 @@ function buildUnitContent(
   }
 
   const execStart = launchCommand
-    ? `${entrypoint} bash -lc ${JSON.stringify(launchCommand)}`
+    ? `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(launchCommand))}`
     : `${entrypoint} ${launchPath}`;
 
   const execStop = shutdownCommand
-    ? `${entrypoint} bash -lc ${JSON.stringify(shutdownCommand)}`
+    ? `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(shutdownCommand))}`
     : shutdownPath
       ? `${entrypoint} bash -lc "\"${shutdownPath}\""`
       : null;

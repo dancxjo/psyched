@@ -138,22 +138,20 @@ export async function runModuleScript(modulesOrModule: string | string[], action
     if (isLaunch) {
       const launchCommand = systemd.launch_command?.trim();
       if (launchCommand) {
-        console.log(`[mod] Running launch command for ${module}`);
-        await runProcess(
-          commandRunner`${entrypoint} ${["bash", "-lc", launchCommand]}`,
-          `${module} launch command`,
-        );
-        return;
-      }
-      const launchScript = systemd.launch;
-      if (launchScript) {
-        const absPath = join(repoDir, launchScript);
-        if (await fileExists(absPath)) {
+        // If the launch_command is a path to a script, run it directly
+        if (launchCommand.startsWith("/")) {
+          console.log(`[mod] Running launch script for ${module}: ${launchCommand}`);
+          await runProcess(commandRunner`bash ${[launchCommand]}`, `${module} launch script`);
+          return;
+        } else if (launchCommand.startsWith("${MODULE_DIR}")) {
+          const absPath = join(moduleDir, launchCommand.replace("${MODULE_DIR}/", ""));
           console.log(`[mod] Running launch script for ${module}: ${absPath}`);
-          await runProcess(
-            commandRunner`${entrypoint} ${[absPath]}`,
-            `${module} launch script`,
-          );
+          await runProcess(commandRunner`bash ${[absPath]}`, `${module} launch script`);
+          return;
+        } else {
+          // Fallback: treat as shell command
+          console.log(`[mod] Running launch command for ${module}`);
+          await runProcess(commandRunner`bash -lc ${launchCommand}`, `${module} launch command`);
           return;
         }
       }
@@ -162,24 +160,20 @@ export async function runModuleScript(modulesOrModule: string | string[], action
     if (isShutdown) {
       const shutdownCommand = systemd.shutdown_command?.trim();
       if (shutdownCommand) {
-        console.log(`[mod] Running shutdown command for ${module}`);
-        await runProcess(
-          commandRunner`${entrypoint} ${["bash", "-lc", shutdownCommand]}`,
-          `${module} shutdown command`,
-        );
-        return;
-      }
-      const shutdownScript = systemd.shutdown;
-      if (shutdownScript) {
-        const absPath = join(repoDir, shutdownScript);
-        if (await fileExists(absPath)) {
-          console.log(
-            `[mod] Running shutdown script for ${module}: ${absPath}`,
-          );
-          await runProcess(
-            commandRunner`${entrypoint} ${["bash", "-lc", absPath]}`,
-            `${module} shutdown script`,
-          );
+        // If the shutdown_command is a path to a script, run it directly
+        if (shutdownCommand.startsWith("/")) {
+          console.log(`[mod] Running shutdown script for ${module}: ${shutdownCommand}`);
+          await runProcess(commandRunner`bash ${[shutdownCommand]}`, `${module} shutdown script`);
+          return;
+        } else if (shutdownCommand.startsWith("${MODULE_DIR}")) {
+          const absPath = join(moduleDir, shutdownCommand.replace("${MODULE_DIR}/", ""));
+          console.log(`[mod] Running shutdown script for ${module}: ${absPath}`);
+          await runProcess(commandRunner`bash ${[absPath]}`, `${module} shutdown script`);
+          return;
+        } else {
+          // Fallback: treat as shell command
+          console.log(`[mod] Running shutdown command for ${module}`);
+          await runProcess(commandRunner`bash -lc ${shutdownCommand}`, `${module} shutdown command`);
           return;
         }
       }

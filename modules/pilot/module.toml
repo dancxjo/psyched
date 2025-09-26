@@ -1,6 +1,3 @@
-name = "pilot"
-description = "Pilot UI and teleop bridge"
-
 [pilot]
 display_name = "Pilot"
 description = "Teleoperation dashboard and ROS 2 bridge"
@@ -10,14 +7,12 @@ system_commands = ["start", "stop", "restart", "status"]
 [[pilot.topics]]
 name = "/cmd_vel"
 type = "geometry_msgs/msg/Twist"
-access = "rw"
 presentation = "joystick"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
 [[pilot.topics]]
 name = "/imu"
 type = "sensor_msgs/msg/Imu"
-access = "ro"
 presentation = "imu"
 qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
 
@@ -28,8 +23,6 @@ access = "ro"
 presentation = "status"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
-[[actions]]
-type = "link_packages"
 packages = ["pilot"]
 
 [[actions]]
@@ -49,74 +42,5 @@ after = ["network-online.target"]
 wants = ["network-online.target"]
 restart = "on-failure"
 restart_sec = 4
-launch_command = """
-set -euo pipefail
-WEB_PORT_VAL="${PILOT_WEB_PORT:-8080}"
-WEBSOCKET_PORT_VAL="${PILOT_WS_PORT:-8081}"
-CMD_VEL_TOPIC_VAL="${PILOT_CMD_VEL_TOPIC:-/cmd_vel}"
-HOST_VAL="${PILOT_HOST:-0.0.0.0}"
-VOICE_TOPIC_VAL="${PILOT_VOICE_TOPIC:-/voice}"
-GPS_FIX_TOPIC_VAL="${PILOT_GPS_FIX_TOPIC:-/gps/fix}"
-CONV_TOPIC_VAL="${PILOT_CONVERSATION_TOPIC:-/conversation}"
-ENABLE_HTTP_VAL="${PILOT_ENABLE_HTTP:-true}"
-ENABLE_WS_VAL="${PILOT_ENABLE_WS:-false}"
-RUN_SEPARATE_WS_VAL="${PILOT_RUN_SEPARATE_WS:-true}"
-export PILOT_WEB_PORT="$WEB_PORT_VAL"
-export PILOT_WS_PORT="$WEBSOCKET_PORT_VAL"
-export PILOT_CMD_VEL_TOPIC="$CMD_VEL_TOPIC_VAL"
-export PILOT_HOST="$HOST_VAL"
-export PILOT_VOICE_TOPIC="$VOICE_TOPIC_VAL"
-export PILOT_GPS_FIX_TOPIC="$GPS_FIX_TOPIC_VAL"
-export PILOT_CONVERSATION_TOPIC="$CONV_TOPIC_VAL"
-export PILOT_ENABLE_HTTP="$ENABLE_HTTP_VAL"
-export PILOT_ENABLE_WS="$ENABLE_WS_VAL"
-export PILOT_RUN_SEPARATE_WS="$RUN_SEPARATE_WS_VAL"
-echo "[pilot/launch] Starting pilot web interface..."
-echo "[pilot/launch] Web: http://${HOST_VAL}:${WEB_PORT_VAL}"
-echo "[pilot/launch] WebSocket: ws://${HOST_VAL}:${WEBSOCKET_PORT_VAL}"
-echo "[pilot/launch] Publishing to: ${CMD_VEL_TOPIC_VAL}"
-exec pilot_backend --host "${HOST_VAL}" --port "${WEB_PORT_VAL}" --modules-root "$(dirname "$PWD")" --log-level "info"
-"""
-shutdown_command = """
-set -euo pipefail
-PATTERN="pilot_backend"
-TIMEOUT=${TIMEOUT:-10}
-WEB_PORT=${PILOT_WEB_PORT:-8080}
-WS_PORT=${PILOT_WS_PORT:-8081}
-mapfile -t pids < <(pgrep -f "$PATTERN" || true)
-if [ ${#pids[@]} -gt 0 ]; then
-  echo "[pilot/shutdown] Stopping ${#pids[@]} process(es) for: $PATTERN (SIGTERM)"
-  for pid in "${pids[@]}"; do
-    if [ "$pid" -ne $$ ]; then
-      kill -TERM "$pid" 2>/dev/null || true
-    fi
-  done
-  for ((i=0; i<TIMEOUT; i++)); do
-    sleep 1
-    mapfile -t still_alive < <(pgrep -f "$PATTERN" || true)
-    if [ ${#still_alive[@]} -eq 0 ]; then
-      echo "[pilot/shutdown] All processes stopped"
-      break
-    fi
-  done
-  if [ ${#still_alive[@]} -gt 0 ]; then
-    echo "[pilot/shutdown] Forcing stop (SIGKILL) for remaining processes"
-    for pid in "${still_alive[@]}"; do
-      if [ -n "$pid" ]; then
-        kill -KILL "$pid" 2>/dev/null || true
-      fi
-    done
-  fi
-else
-  echo "[pilot/shutdown] No matching processes found for pattern: $PATTERN"
-fi
-for port in "$WEB_PORT" "$WS_PORT"; do
-  pids_on_port=$(ss -ltnp 2>/dev/null | awk -v p=":${port}" '$4 ~ p {print $7}' | sed -E 's/.*pid=([0-9]+).*/\\1/' | sort -u)
-  if [ -n "$pids_on_port" ]; then
-    echo "[pilot/shutdown] Killing PIDs on port ${port}: $pids_on_port"
-    kill -TERM $pids_on_port 2>/dev/null || true
-  else
-    echo "[pilot/shutdown] No process listening on port ${port}"
-  fi
-done
-"""
+launch_command = "${MODULE_DIR}/pilot.launch.sh"
+shutdown_command = "${MODULE_DIR}/pilot.shutdown.sh"
