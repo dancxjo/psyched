@@ -428,8 +428,12 @@ function readToml(filePath: string): Promise<Record<string, unknown>> {
 }
 
 export function repoDirFromModules(): string {
+  // Always resolve repo root as parent of psh/ directory
+  // This works even if cwd or import context is different
+  // __dirname equivalent for Deno:
   const moduleFile = fromFileUrl(import.meta.url);
   const pshDir = dirname(moduleFile);
+  // If this file is /home/pete/psyched/psh/modules.ts, repo root is /home/pete/psyched
   return dirname(pshDir);
 }
 
