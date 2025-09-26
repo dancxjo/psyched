@@ -4,6 +4,7 @@ description = "Navigation stack bring-up"
 [pilot]
 display_name = "Nav"
 description = "Autonomous navigation stack"
+regimes = ["navigation"]
 
 [[pilot.topics]]
 name = "/map"
@@ -25,11 +26,6 @@ type = "geometry_msgs/msg/PoseWithCovarianceStamped"
 access = "ro"
 presentation = "pose"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
-
-[[actions]]
-type = "link_packages"
-
-packages = ["psyched_nav"]
 
 [[actions]]
 type = "link_packages"

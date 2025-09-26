@@ -4,6 +4,7 @@ description = "Create platform motor control"
 [pilot]
 display_name = "Foot"
 description = "Drive base interface for the iRobot Create"
+regimes = ["mobility"]
 
 [[pilot.topics]]
 name = "/odom"

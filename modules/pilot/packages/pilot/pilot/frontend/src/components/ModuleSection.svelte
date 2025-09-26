@@ -6,6 +6,46 @@
   export let activeTopics;
 
   const dispatch = createEventDispatcher();
+  const defaultRegime = 'general';
+  const regimeLabels = {
+    system: 'System',
+    audio: 'Audio',
+    conversation: 'Conversation',
+    navigation: 'Navigation',
+    behavior: 'Behavior',
+    perception: 'Perception',
+    mobility: 'Mobility',
+    general: 'General',
+  };
+
+  function parseRegimes(value) {
+    if (Array.isArray(value)) {
+      const cleaned = value.map((item) => `${item}`.trim()).filter(Boolean);
+      return cleaned.length ? cleaned : [defaultRegime];
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed] : [defaultRegime];
+    }
+    if (value == null) {
+      return [defaultRegime];
+    }
+    const coerced = `${value}`.trim();
+    return coerced ? [coerced] : [defaultRegime];
+  }
+
+  function formatRegimeName(slug) {
+    if (slug in regimeLabels) {
+      return regimeLabels[slug];
+    }
+    return slug
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  $: moduleRegimes = parseRegimes(module?.regimes);
 
   function command(scope, command) {
     dispatch('runCommand', { scope, command });
@@ -37,6 +77,13 @@
     <h2>{module.display_name || module.name}</h2>
     {#if module.description}
       <p>{module.description}</p>
+    {/if}
+    {#if moduleRegimes.length}
+      <ul class="regime-tags">
+        {#each moduleRegimes as regime}
+          <li>{formatRegimeName(regime)}</li>
+        {/each}
+      </ul>
     {/if}
     <div class="command-groups">
       <div class="command-set">
@@ -88,3 +135,25 @@
     {/each}
   </div>
 </section>
+
+<style>
+  .regime-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .regime-tags li {
+    background: rgba(79, 70, 229, 0.12);
+    color: #4338ca;
+    border-radius: 9999px;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+</style>

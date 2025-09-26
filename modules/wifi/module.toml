@@ -4,6 +4,7 @@ description = "User-space Wi-Fi tooling and ROS 2 status publisher"
 [pilot]
 display_name = "Wi-Fi"
 description = "Wireless network health"
+regimes = ["system"]
 
 [[pilot.topics]]
 name = "/wifi_status"
@@ -16,9 +17,6 @@ qos = { history = "keep_last", depth = 5, reliability = "reliable", durability =
 type = "link_packages"
 packages = ["wifi"]
 
-[[actions]]
-type = "link_packages"
-packages = ["wifi_setup.py", "wifi"]
 [[actions]]
 type = "ros_run"
 package = "wifi"

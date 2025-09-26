@@ -32,6 +32,21 @@ def test_catalog_discovers_modules(repo_root: Path) -> None:
     assert any(topic.topic == "/cmd_vel" for topic in pilot.topics)
 
 
+def test_catalog_includes_regimes(repo_root: Path) -> None:
+    """Every module should advertise at least one regime for grouping."""
+
+    catalog = ModuleCatalog(repo_root / "modules")
+
+    modules = catalog.list_modules()
+    assert modules, "Expected modules to be discovered"
+
+    for module in modules:
+        assert module.regimes, f"Module {module.name} must declare at least one regime"
+
+    nav_module = catalog.get_module("nav")
+    assert "navigation" in nav_module.regimes
+
+
 @pytest.mark.parametrize(
     "module_name, expected_command",
     [
@@ -60,3 +75,15 @@ def test_catalog_topics_include_qos(repo_root: Path) -> None:
     imu_topic = imu_topics[0]
     assert imu_topic.qos.depth >= 1
     assert imu_topic.qos.reliability in {"reliable", "best_effort"}
+
+
+def test_catalog_topics_are_unique(repo_root: Path) -> None:
+    """Modules should not declare duplicate topics in their manifest."""
+
+    catalog = ModuleCatalog(repo_root / "modules")
+
+    for module in catalog.list_modules():
+        topic_names = [topic.topic for topic in module.topics]
+        assert len(topic_names) == len(set(topic_names)), (
+            f"Duplicate topics found in module {module.name}: {topic_names}"
+        )

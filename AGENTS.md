@@ -94,6 +94,10 @@ or conflicting package sources.
 - `pytest` is configured to ignore the `src/` symlink; place new tests under
   `packages/<pkg>/tests` and stub ROS interfaces when running in environments
   without ROS installed.
+- When editing `modules/*/module.toml`, ensure the `[pilot]` block declares a
+  `regimes` list and avoid duplicate `[[pilot.topics]]` or redundant
+  `link_packages` entries—Pilot’s catalog tests will now fail if either rule is
+  violated.
 - `py_trees_ros` is not published to PyPI; `tools/setup_env.sh` installs it
   from GitHub. Ensure network access is available the first time you source the
   environment on a new machine.

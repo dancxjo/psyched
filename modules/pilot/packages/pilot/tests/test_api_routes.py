@@ -123,7 +123,10 @@ def test_get_modules_returns_metadata(test_client):
     response = test_client.get("/api/modules")
     assert response.status_code == 200
     data = response.json()
-    assert any(entry["name"] == "pilot" for entry in data["modules"])
+    modules = data["modules"]
+    pilot_entry = next((entry for entry in modules if entry["name"] == "pilot"), None)
+    assert pilot_entry is not None
+    assert pilot_entry["regimes"], "Pilot module should declare regimes for grouping"
 
 
 def test_post_command_invokes_executor(test_client):

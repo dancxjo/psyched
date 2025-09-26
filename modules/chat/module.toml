@@ -4,6 +4,7 @@ description = "Conversational agent with Ollama backend"
 [pilot]
 display_name = "Chat"
 description = "Conversational agent powered by Ollama"
+regimes = ["conversation"]
 
 [[pilot.topics]]
 name = "/conversation"
@@ -51,10 +52,6 @@ optional = true
 description = "Psyched Chat Service"
 after = ["network-online.target"]
 wants = ["network-online.target"]
-packages = ["chat", "psyched_msgs"]
 restart_sec = 4
-[[actions]]
-type = "link_packages"
-packages = ["chat", "psyched_msgs"]
 launch_command = "${MODULE_DIR}/chat.launch.sh"
 shutdown_command = "${MODULE_DIR}/chat.shutdown.sh"
