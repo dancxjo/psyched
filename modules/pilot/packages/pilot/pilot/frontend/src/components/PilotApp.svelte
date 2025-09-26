@@ -219,6 +219,14 @@
           record.last = payload.data ?? payload;
           record.messages = [record.last, ...record.messages].slice(0, 50);
           setTopicRecord(key, record);
+          // Emit a global event for IMU messages so other UI controls can react.
+          try {
+            if (record.topic && record.topic.presentation === 'imu') {
+              window.dispatchEvent(new CustomEvent('pilot-imu', { detail: record.last }));
+            }
+          } catch (e) {
+            console.warn('Failed to dispatch pilot-imu event', e);
+          }
         } catch (error) {
           console.warn('Failed to parse topic payload', error);
         }

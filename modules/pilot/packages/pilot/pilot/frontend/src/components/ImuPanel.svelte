@@ -1,4 +1,7 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
+  // `data` can be passed in as a prop or provided via a global event
   export let data;
 
   function format(value, digits = 2) {
@@ -10,6 +13,22 @@
     angular: { x: '--', y: '--', z: '--' },
     orientation: { x: '--', y: '--', z: '--', w: '--' },
   };
+
+  // If a parent binds `data` it will be used. Additionally listen for a
+  // global CustomEvent('pilot-imu') so the panel updates when messages arrive
+  // over the websocket without requiring a rebuild of all components.
+  function handlePilotImu(e) {
+    // event.detail is expected to be the IMU payload
+    data = e?.detail ?? data;
+  }
+
+  onMount(() => {
+    window.addEventListener('pilot-imu', handlePilotImu);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('pilot-imu', handlePilotImu);
+  });
 
   $: summary = (() => {
     if (!data) return empty;

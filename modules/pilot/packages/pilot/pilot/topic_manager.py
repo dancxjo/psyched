@@ -26,13 +26,43 @@ except ImportError:  # pragma: no cover - rclpy unavailable during some tests
 
 try:
     from rosidl_runtime_py.utilities import get_message
-    from rosidl_runtime_py.convert import message_to_ordered_dict, convert_dict_to_ros_message
 except ImportError:  # pragma: no cover - not available in unit tests
     get_message = None  # type: ignore[assignment]
-    convert_dict_to_ros_message = None  # type: ignore[assignment]
 
-    def message_to_ordered_dict(message):  # type: ignore[override]
-        return getattr(message, "__dict__", {})
+try:  # pragma: no cover - optional dependency in unit tests
+    from rosidl_runtime_py.convert import message_to_ordereddict as _ros_message_to_ordereddict
+except ImportError:  # pragma: no cover - API renamed in some distros
+    try:
+        from rosidl_runtime_py.convert import message_to_ordered_dict as _ros_message_to_ordereddict  # type: ignore[attr-defined]
+    except ImportError:  # pragma: no cover - fallback when convert helpers unavailable
+        _ros_message_to_ordereddict = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency in unit tests
+    from rosidl_runtime_py.set_message import set_message_fields as _set_message_fields
+except ImportError:  # pragma: no cover - some distros expose older helpers
+    _set_message_fields = None  # type: ignore[assignment]
+
+
+def message_to_ordered_dict(message):  # type: ignore[override]
+    """Convert a ROS message into an ordered mapping for JSON serialization."""
+
+    if _ros_message_to_ordereddict is not None:
+        return _ros_message_to_ordereddict(message)
+    return getattr(message, "__dict__", {})
+
+
+def _dict_to_ros_message(msg_class, message_type: str, values: Mapping[str, Any]):
+    """Instantiate and populate a ROS message from a plain mapping."""
+
+    if _set_message_fields is None:
+        raise RuntimeError("rosidl_runtime_py is required for publishing")
+
+    message = msg_class()
+    try:
+        _set_message_fields(message, dict(values))
+    except Exception as exc:  # pragma: no cover - runtime validation
+        raise ValueError(f"Failed to populate {message_type} from payload: {exc}") from exc
+    return message
 
 
 from .qos import QosConfig
@@ -233,8 +263,6 @@ class TopicSessionManager:
         publisher = entry.get("publisher")
         if publisher is None:
             raise RuntimeError("Session is read-only")
-        if convert_dict_to_ros_message is None:
-            raise RuntimeError("rosidl_runtime_py is required for publishing")
         session = entry["session"]
-        ros_message = convert_dict_to_ros_message(session.message_type, dict(data))
+        ros_message = _dict_to_ros_message(entry["msg_class"], session.message_type, data)
         publisher.publish(ros_message)

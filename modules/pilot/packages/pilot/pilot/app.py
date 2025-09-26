@@ -138,29 +138,13 @@ class PilotApplication:
             try:
                 session = self.topic_manager.create_session(
                     topic=payload.topic,
-                try:
-                    session = self.topic_manager.create_session(
-                        topic=payload.topic,
-                        access=payload.access,
-                        qos=qos,
-                        module=module_name,
-                        message_type=message_type,
-                    )
-                except RuntimeError as exc:
-                    if 'rosidl_runtime_py' in str(exc):
-                        raise HTTPException(
-                            status_code=503,
-                            detail=(
-                                "rosidl_runtime_py is required for message introspection. "
-                                "Install ROS 2 Python message runtime or run with the workspace "
-                                "environment sourced (install/setup.bash)"
-                            ),
-                        )
-                    raise
-
-                return {"session": session.to_dict()}
-                # receive a helpful message instead of a 500 stack trace.
-                if 'rosidl_runtime_py' in str(exc):
+                    access=payload.access,
+                    qos=qos,
+                    module=module_name,
+                    message_type=message_type,
+                )
+            except RuntimeError as exc:
+                if "rosidl_runtime_py" in str(exc):
                     raise HTTPException(
                         status_code=503,
                         detail=(
@@ -182,11 +166,6 @@ class PilotApplication:
         async def pause_topic(session_id: str, payload: PauseRequest) -> Dict[str, Any]:
             session = self.topic_manager.set_paused(session_id, payload.paused)
             return {"session": session.to_dict()}
-
-        self.app.include_router(router)
-
-        if self.static_root and self.static_root.exists():
-            self.app.mount("/", StaticFiles(directory=str(self.static_root), html=True), name="static")
 
         @self.app.websocket("/ws/topics/{session_id}")
         async def websocket_topic(session_id: str, websocket: WebSocket) -> None:
@@ -230,6 +209,13 @@ class PilotApplication:
                     send_task.cancel()
                 if receive_task:
                     receive_task.cancel()
+
+        self.app.include_router(router)
+
+        if self.static_root and self.static_root.exists():
+            # Register static file mount after websocket routes so the WS handshake
+            # is not intercepted by the StaticFiles ASGI app (which only handles HTTP).
+            self.app.mount("/", StaticFiles(directory=str(self.static_root), html=True), name="static")
 
     # ------------------------------------------------------------------
     # Public helpers
