@@ -7,6 +7,8 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
+from .audio_utils import coerce_pcm_bytes
+
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - numpy is required for runtime but optional for tests
@@ -229,10 +231,7 @@ class TranscriberNode(Node):  # type: ignore[misc]
         return super().destroy_node()
 
     def _on_segment(self, msg: ByteMultiArray) -> None:  # pragma: no cover - requires ROS
-        try:
-            data = bytes(msg.data)
-        except Exception:
-            data = bytes(msg.data.tolist()) if hasattr(msg.data, 'tolist') else bytes(msg.data)
+        data = coerce_pcm_bytes(msg.data)
         if not data:
             return
         self._queue.put(data)
