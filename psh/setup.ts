@@ -5,15 +5,17 @@ import { join } from "@std/path";
 import {
   applyModuleActions,
   cleanupModuleContext,
+  loadHostModuleConfig,
   loadModuleSpec,
   prepareModuleContext,
+  type PrepareModuleContextOptions,
   repoDirFromModules,
 } from "./modules.ts";
 import {
+  isDockerInstalled,
+  isRos2Installed,
   runInstallDocker,
   runInstallRos2,
-  isRos2Installed,
-  isDockerInstalled,
 } from "./install.ts";
 
 type ModuleConfigTable = Record<string, Record<string, unknown>>;
@@ -40,14 +42,14 @@ async function readHostSpec(host: string): Promise<Record<string, unknown>> {
 
 async function runModuleSetup(
   moduleName: string,
-  config: Record<string, unknown> | null,
+  options?: PrepareModuleContextOptions,
 ): Promise<void> {
   const specInfo = await loadModuleSpec(moduleName);
   if (!specInfo) {
     console.warn(`No module specification found for '${moduleName}'.`);
     return;
   }
-  const ctx = await prepareModuleContext(moduleName, config);
+  const ctx = await prepareModuleContext(moduleName, options);
   console.log(`Running module actions: ${moduleName}`);
   try {
     await applyModuleActions(specInfo.spec.actions, ctx);
@@ -55,7 +57,6 @@ async function runModuleSetup(
     await cleanupModuleContext(ctx);
   }
 }
-
 
 function extractModuleList(spec: Record<string, unknown>): string[] {
   const modules = spec.modules;
@@ -110,10 +111,28 @@ async function applyHost(host: string): Promise<void> {
 
   const configs = extractModuleConfigs(spec);
   for (const moduleName of modules) {
-    // Symlink creation removed
-    const moduleConfig = configs[moduleName] ?? null;
+    const inlineConfig = configs[moduleName] ?? null;
+    const { path: yamlPath, data: yamlData } = await loadHostModuleConfig(
+      host,
+      moduleName,
+    );
+
+    let configData: Record<string, unknown> | null = yamlData ?? null;
+    let configPath: string | null = yamlPath;
+
+    if (!configPath && inlineConfig) {
+      configData = inlineConfig;
+    } else if (configPath && inlineConfig && Object.keys(inlineConfig).length) {
+      console.warn(
+        `[setup] host ${host} module_configs.${moduleName} is ignored in favour of YAML at ${configPath}.`,
+      );
+    }
+
     try {
-      await runModuleSetup(moduleName, moduleConfig);
+      await runModuleSetup(moduleName, {
+        configData,
+        configPath,
+      });
     } catch (err) {
       console.error(`Failed to setup module ${moduleName}:`, String(err));
     }

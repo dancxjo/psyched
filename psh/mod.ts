@@ -1,10 +1,10 @@
 import { join } from "@std/path";
 import {
-  loadModuleSpec,
-  repoDirFromModules,
-  prepareModuleContext,
   applyModuleActions,
   cleanupModuleContext,
+  loadModuleSpec,
+  prepareModuleContext,
+  repoDirFromModules,
 } from "./modules.ts";
 import { $, type DaxCommandBuilder, type DaxTemplateTag } from "./util.ts";
 
@@ -42,8 +42,14 @@ async function runProcess(
 }
 
 export function runModuleScript(module: string, action?: string): Promise<void>;
-export function runModuleScript(modules: string[], action?: string): Promise<void>;
-export async function runModuleScript(modulesOrModule: string | string[], action?: string) {
+export function runModuleScript(
+  modules: string[],
+  action?: string,
+): Promise<void>;
+export async function runModuleScript(
+  modulesOrModule: string | string[],
+  action?: string,
+) {
   // Allow calling with an array of modules (execute sequentially) or a single
   // module name. This mirrors the systemd helpers which accept an optional
   // string[] of units.
@@ -95,7 +101,9 @@ export async function runModuleScript(modulesOrModule: string | string[], action
         if (!entry.isDirectory) continue;
         // skip hidden entries
         if (entry.name.startsWith(".")) continue;
-        console.log(`[mod] Invoking ${action ?? "(default)"} for module: ${entry.name}`);
+        console.log(
+          `[mod] Invoking ${action ?? "(default)"} for module: ${entry.name}`,
+        );
         // await each module sequentially to avoid noisy parallel shell output
         // and to preserve ordering when linking packages into src/
         // eslint-disable-next-line no-await-in-loop
@@ -111,7 +119,7 @@ export async function runModuleScript(modulesOrModule: string | string[], action
   // Special-case: module setup (link packages, install deps, etc.)
   if (requested === "setup") {
     const spec = specInfo?.spec;
-    const ctx = await prepareModuleContext(module, null);
+    const ctx = await prepareModuleContext(module);
     try {
       await applyModuleActions(spec?.actions, ctx);
     } finally {
@@ -140,18 +148,32 @@ export async function runModuleScript(modulesOrModule: string | string[], action
       if (launchCommand) {
         // If the launch_command is a path to a script, run it directly
         if (launchCommand.startsWith("/")) {
-          console.log(`[mod] Running launch script for ${module}: ${launchCommand}`);
-          await runProcess(commandRunner`bash ${[launchCommand]}`, `${module} launch script`);
+          console.log(
+            `[mod] Running launch script for ${module}: ${launchCommand}`,
+          );
+          await runProcess(
+            commandRunner`bash ${[launchCommand]}`,
+            `${module} launch script`,
+          );
           return;
         } else if (launchCommand.startsWith("${MODULE_DIR}")) {
-          const absPath = join(moduleDir, launchCommand.replace("${MODULE_DIR}/", ""));
+          const absPath = join(
+            moduleDir,
+            launchCommand.replace("${MODULE_DIR}/", ""),
+          );
           console.log(`[mod] Running launch script for ${module}: ${absPath}`);
-          await runProcess(commandRunner`bash ${[absPath]}`, `${module} launch script`);
+          await runProcess(
+            commandRunner`bash ${[absPath]}`,
+            `${module} launch script`,
+          );
           return;
         } else {
           // Fallback: treat as shell command
           console.log(`[mod] Running launch command for ${module}`);
-          await runProcess(commandRunner`bash -lc ${launchCommand}`, `${module} launch command`);
+          await runProcess(
+            commandRunner`bash -lc ${launchCommand}`,
+            `${module} launch command`,
+          );
           return;
         }
       }
@@ -162,18 +184,34 @@ export async function runModuleScript(modulesOrModule: string | string[], action
       if (shutdownCommand) {
         // If the shutdown_command is a path to a script, run it directly
         if (shutdownCommand.startsWith("/")) {
-          console.log(`[mod] Running shutdown script for ${module}: ${shutdownCommand}`);
-          await runProcess(commandRunner`bash ${[shutdownCommand]}`, `${module} shutdown script`);
+          console.log(
+            `[mod] Running shutdown script for ${module}: ${shutdownCommand}`,
+          );
+          await runProcess(
+            commandRunner`bash ${[shutdownCommand]}`,
+            `${module} shutdown script`,
+          );
           return;
         } else if (shutdownCommand.startsWith("${MODULE_DIR}")) {
-          const absPath = join(moduleDir, shutdownCommand.replace("${MODULE_DIR}/", ""));
-          console.log(`[mod] Running shutdown script for ${module}: ${absPath}`);
-          await runProcess(commandRunner`bash ${[absPath]}`, `${module} shutdown script`);
+          const absPath = join(
+            moduleDir,
+            shutdownCommand.replace("${MODULE_DIR}/", ""),
+          );
+          console.log(
+            `[mod] Running shutdown script for ${module}: ${absPath}`,
+          );
+          await runProcess(
+            commandRunner`bash ${[absPath]}`,
+            `${module} shutdown script`,
+          );
           return;
         } else {
           // Fallback: treat as shell command
           console.log(`[mod] Running shutdown command for ${module}`);
-          await runProcess(commandRunner`bash -lc ${shutdownCommand}`, `${module} shutdown command`);
+          await runProcess(
+            commandRunner`bash -lc ${shutdownCommand}`,
+            `${module} shutdown command`,
+          );
           return;
         }
       }

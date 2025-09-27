@@ -1,5 +1,5 @@
 import { parse as parseToml } from "@std/toml";
-import { stringify as stringifyYaml } from "@std/yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
 import { dirname, fromFileUrl, join } from "@std/path";
 import { $, type DaxTemplateTag, runWithStreamingTee } from "./util.ts";
 import { colors } from "@cliffy/ansi/colors";
@@ -114,6 +114,7 @@ interface ModuleContext {
   srcDir: string;
   moduleConfig: Record<string, unknown> | null;
   moduleConfigPath: string | null;
+  moduleConfigOwned: boolean;
 }
 
 function resolvePath(base: string, rel?: string | null): string {
@@ -189,7 +190,9 @@ async function applyLinkPackages(
       }
 
       await Deno.symlink(srcPath, destPath);
-      console.log(`[module:${ctx.module}] Linked package ${pkg} -> ${destPath}`);
+      console.log(
+        `[module:${ctx.module}] Linked package ${pkg} -> ${destPath}`,
+      );
     } catch (err) {
       console.warn(
         `[module:${ctx.module}] Failed to link package ${pkg}: ${String(err)}`,
@@ -261,7 +264,8 @@ async function applyAptInstall(
       await Deno.stat("/usr/bin/apt-get");
     } catch (_err) {
       console.warn(
-        `[module:${ctx.module}] apt-get not available; skipping packages: ${action.packages.join(", ")
+        `[module:${ctx.module}] apt-get not available; skipping packages: ${
+          action.packages.join(", ")
         }`,
       );
       return;
@@ -272,14 +276,20 @@ async function applyAptInstall(
     // Stream apt output live while capturing it for later summary
     const upd = await runWithStreamingTee("sudo apt-get update");
     if (upd.code !== 0) {
-      console.error(colors.red(`[module:${ctx.module}] apt-get update failed (code ${upd.code})`));
+      console.error(
+        colors.red(
+          `[module:${ctx.module}] apt-get update failed (code ${upd.code})`,
+        ),
+      );
       if (upd.stderr) console.error(colors.red(upd.stderr));
     }
     summarizeCommandOutput(upd.stdout, `[module:${ctx.module}] apt-get update`);
   }
   if (action.packages.length === 0) return;
   console.log(colors.yellow(
-    `[module:${ctx.module}] Installing apt packages: ${action.packages.join(", ")}`,
+    `[module:${ctx.module}] Installing apt packages: ${
+      action.packages.join(", ")
+    }`,
   ));
   const pkgCmd = `sudo apt-get install -y ${action.packages.join(" ")}`;
   const result = await runWithStreamingTee(pkgCmd);
@@ -289,7 +299,10 @@ async function applyAptInstall(
     ));
     if (result.stderr) console.error(colors.red(result.stderr));
   }
-  summarizeCommandOutput(result.stdout, `[module:${ctx.module}] apt-get install`);
+  summarizeCommandOutput(
+    result.stdout,
+    `[module:${ctx.module}] apt-get install`,
+  );
 }
 
 function summarizeCommandOutput(text: string, label = "command") {
@@ -308,7 +321,9 @@ function summarizeCommandOutput(text: string, label = "command") {
     } else {
       console.log(colors.gray(`${label}: output (first ${head} lines):`));
       console.log(lines.slice(0, head).join("\n"));
-      console.log(colors.gray(`... (${lines.length - head - tail} lines omitted) ...`));
+      console.log(
+        colors.gray(`... (${lines.length - head - tail} lines omitted) ...`),
+      );
       console.log(colors.gray(`${label}: output (last ${tail} lines):`));
       console.log(lines.slice(-tail).join("\n"));
     }
@@ -329,7 +344,8 @@ async function applyPipInstall(
     const check = await $`${python} -c ${program}`.noThrow();
     if (check.code === 0) {
       console.log(
-        `[module:${ctx.module}] Python modules already installed: ${action.import_check.join(", ")
+        `[module:${ctx.module}] Python modules already installed: ${
+          action.import_check.join(", ")
         }`,
       );
       return;
@@ -343,8 +359,13 @@ async function applyPipInstall(
   const pkgList = action.packages.map(shellEscape).join(" ");
   const breakFlag = action.break_system ? "--break-system-packages" : "";
   const userFlag = action.user ? "--user" : "";
-  const baseCmd = `${python} -m pip install ${pkgList} ${breakFlag} ${userFlag}`.replace(/\s+/g, " ").trim();
-  console.log(`[module:${ctx.module}] Installing Python packages via ${python}: ${action.packages.join(", ")}`);
+  const baseCmd = `${python} -m pip install ${pkgList} ${breakFlag} ${userFlag}`
+    .replace(/\s+/g, " ").trim();
+  console.log(
+    `[module:${ctx.module}] Installing Python packages via ${python}: ${
+      action.packages.join(", ")
+    }`,
+  );
 
   let result = await runWithStreamingTee(baseCmd);
 
@@ -360,19 +381,31 @@ async function applyPipInstall(
   }
 
   if (result.code !== 0) {
-    console.warn(`[module:${ctx.module}] pip install exited with code ${result.code}`);
+    console.warn(
+      `[module:${ctx.module}] pip install exited with code ${result.code}`,
+    );
     if (result.stderr) console.error(result.stderr);
   }
 
   // If import_check was provided, verify the modules are now importable and
   // warn if they're still missing.
   if (action.import_check && action.import_check.length > 0) {
-    const program = action.import_check.map((mod) => `import ${mod}`).join("; ");
+    const program = action.import_check.map((mod) => `import ${mod}`).join(
+      "; ",
+    );
     const checkAfter = await $`${python} -c ${program}`.noThrow();
     if (checkAfter.code === 0) {
-      console.log(`[module:${ctx.module}] Python modules now available: ${action.import_check.join(", ")}`);
+      console.log(
+        `[module:${ctx.module}] Python modules now available: ${
+          action.import_check.join(", ")
+        }`,
+      );
     } else {
-      console.warn(`[module:${ctx.module}] After pip install, imports still failing: ${action.import_check.join(", ")}`);
+      console.warn(
+        `[module:${ctx.module}] After pip install, imports still failing: ${
+          action.import_check.join(", ")
+        }`,
+      );
     }
   }
 }
@@ -454,11 +487,16 @@ export async function applyModuleActions(
         break;
       default:
         console.warn(
-          `[module:${ctx.module}] Unknown action type: ${(action as ModuleActionBase).type
+          `[module:${ctx.module}] Unknown action type: ${
+            (action as ModuleActionBase).type
           }`,
         );
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function readToml(filePath: string): Promise<Record<string, unknown>> {
@@ -493,28 +531,146 @@ export async function loadModuleSpec(
   }
 }
 
+export interface ModuleConfigSource {
+  path: string | null;
+  data: Record<string, unknown> | null;
+}
+
+export interface PrepareModuleContextOptions {
+  configData?: Record<string, unknown> | null;
+  configPath?: string | null;
+}
+
+function configCandidatePaths(
+  repoDir: string,
+  host: string,
+  module: string,
+): string[] {
+  const configs: string[] = [];
+  const hostDir = join(repoDir, "hosts", host, "config");
+  configs.push(join(hostDir, `${module}.yaml`));
+  configs.push(join(hostDir, `${module}.yml`));
+  const sharedDir = join(repoDir, "config");
+  configs.push(join(sharedDir, `${module}.yaml`));
+  configs.push(join(sharedDir, `${module}.yml`));
+  return configs;
+}
+
+async function tryLoadYaml(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const stat = await Deno.stat(path);
+    if (!stat.isFile) return null;
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) return null;
+    throw err;
+  }
+  try {
+    const text = await Deno.readTextFile(path);
+    const parsed = parseYaml(text);
+    if (isRecord(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    console.warn(`[psh] Config ${path} is not a mapping; ignoring contents.`);
+    return null;
+  } catch (err) {
+    console.warn(`[psh] Failed to read config ${path}: ${String(err)}`);
+    return null;
+  }
+}
+
+export async function loadHostModuleConfig(
+  host: string,
+  module: string,
+): Promise<ModuleConfigSource> {
+  const repoDir = repoDirFromModules();
+  for (const candidate of configCandidatePaths(repoDir, host, module)) {
+    const loaded = await tryLoadYaml(candidate);
+    if (loaded === null) {
+      continue;
+    }
+    return {
+      path: candidate,
+      data: Object.keys(loaded).length > 0 ? loaded : null,
+    };
+  }
+  return { path: null, data: null };
+}
+
 export async function prepareModuleContext(
   module: string,
-  moduleConfig: Record<string, unknown> | null,
+  options?: PrepareModuleContextOptions,
 ): Promise<ModuleContext> {
   const repoDir = repoDirFromModules();
   const moduleDir = join(repoDir, "modules", module);
   const srcDir = join(repoDir, "src");
   await Deno.mkdir(srcDir, { recursive: true });
-  let moduleConfigPath: string | null = null;
-  if (moduleConfig && Object.keys(moduleConfig).length > 0) {
-    const yaml = stringifyYaml(moduleConfig as Record<string, unknown>);
-    moduleConfigPath = join(
-      Deno.makeTempDirSync({ prefix: `psh_${module}_` }),
-      "params.yaml",
-    );
-    await Deno.writeTextFile(moduleConfigPath, yaml);
+
+  let moduleConfig = options?.configData ?? null;
+  let moduleConfigPath = options?.configPath ?? null;
+  let moduleConfigOwned = false;
+
+  if (moduleConfigPath) {
+    try {
+      const stat = await Deno.stat(moduleConfigPath);
+      if (!stat.isFile) {
+        console.warn(
+          `[module:${module}] Config path ${moduleConfigPath} is not a file; ignoring.`,
+        );
+        moduleConfigPath = null;
+      }
+    } catch (err) {
+      if (err instanceof Deno.errors.NotFound) {
+        console.warn(
+          `[module:${module}] Config path ${moduleConfigPath} not found; ignoring.`,
+        );
+        moduleConfigPath = null;
+      } else {
+        throw err;
+      }
+    }
   }
-  return { module, repoDir, moduleDir, srcDir, moduleConfig, moduleConfigPath };
+
+  if (moduleConfigPath && !moduleConfig) {
+    try {
+      const text = await Deno.readTextFile(moduleConfigPath);
+      const parsed = parseYaml(text);
+      if (isRecord(parsed)) {
+        moduleConfig = parsed as Record<string, unknown>;
+      }
+    } catch (err) {
+      console.warn(
+        `[module:${module}] Failed to parse config ${moduleConfigPath}: ${
+          String(err)
+        }`,
+      );
+    }
+  }
+
+  if (
+    !moduleConfigPath && moduleConfig && Object.keys(moduleConfig).length > 0
+  ) {
+    const yaml = stringifyYaml(moduleConfig as Record<string, unknown>);
+    const tempDir = Deno.makeTempDirSync({ prefix: `psh_${module}_` });
+    moduleConfigPath = join(tempDir, "params.yaml");
+    await Deno.writeTextFile(moduleConfigPath, yaml);
+    moduleConfigOwned = true;
+  }
+
+  return {
+    module,
+    repoDir,
+    moduleDir,
+    srcDir,
+    moduleConfig,
+    moduleConfigPath,
+    moduleConfigOwned,
+  };
 }
 
 export async function cleanupModuleContext(ctx: ModuleContext): Promise<void> {
-  if (ctx.moduleConfigPath) {
+  if (ctx.moduleConfigOwned && ctx.moduleConfigPath) {
     try {
       const parent = dirname(ctx.moduleConfigPath);
       await Deno.remove(parent, { recursive: true });

@@ -25,7 +25,7 @@ workspace.
 - Prefer referencing shell helpers via the `script` field on `run` actions
   (e.g. `script = "scripts/install_dep.sh"`) and keep those scripts under the
   module directory with executable permissions so `psh` can resolve them.
-- `hosts/` – Host-specific configuration, symlinks, and generated systemd units.
+- `hosts/` – Host-specific configuration (TOML + ROS 2 YAML) and generated systemd units.
 - `tools/` – Provisioning helpers (ROS/Docker installers, env shims used by
   `psh`).
 - `src/` – Additional workspace packages pulled in during builds.
@@ -136,4 +136,4 @@ something the next agent should know.
 - See `nav/depth_projection.py` for depth-to-scan logic and tests.
 - See `nav/vision_prompt.py` for vision LLM prompt and annotation stub.
 - Depth-scan tests: `tests/test_depth_projection.py`, `tests/test_vision_prompt.py`.
-- Update host/module symlinks to configure RTAB-Map separately.
+- Keep nav-related host YAML configs in sync when configuring RTAB-Map separately.

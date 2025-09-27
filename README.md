@@ -35,15 +35,14 @@ The system uses custom message types defined in `psyched_msgs`:
 
 ### Host Configuration
 
-Modules are enabled per hostname using symlinks in `hosts/<hostname>/modules/`:
+Each host declares its active modules in `hosts/<hostname>.toml`, while
+configuration for those modules resides in ROS 2 YAML files under
+`hosts/<hostname>/config/`:
 ```
 hosts/
-├── cerebellum/           # Example host configuration
-│   ├── modules/         # Symlinks to enabled modules
-│   │   ├── pilot -> ../../modules/pilot
-│   │   ├── ear -> ../../modules/ear
-│   │   └── ...
-│   ├── config/          # Host-specific configuration
+├── cerebellum.toml      # Host definition (modules list, provisioning flags)
+├── cerebellum/          # Example host runtime directory
+│   ├── config/          # Module parameters in ROS 2 YAML format
 │   └── systemd/         # Generated systemd units
 ```
 
@@ -241,9 +240,9 @@ journalctl -u psyched-pilot.service -n 200 -f
 
 ### Configuration Management
 
-Host-specific settings can be configured in:
-- `hosts/<hostname>/config/` - Environment variables and settings
-- `hosts/<hostname>/modules/` - Enabled modules (symlinks)
+Host-specific settings live in:
+- `hosts/<hostname>.toml` - Declares enabled modules and provisioning flags
+- `hosts/<hostname>/config/` - ROS 2 YAML parameter files for each module
 
 ## Troubleshooting
 

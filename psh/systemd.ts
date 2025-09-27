@@ -3,6 +3,7 @@ import { parse as parseToml } from "@std/toml";
 import { stringify as stringifyYaml } from "@std/yaml";
 import { $ } from "./util.ts";
 import {
+  loadHostModuleConfig,
   loadModuleSpec,
   ModuleSystemdSpec,
   repoDirFromModules,
@@ -63,7 +64,9 @@ function buildUnitContent(
   const defaultLaunchRel = `modules/${moduleName}/${moduleName}.launch.sh`;
   const defaultShutdownRel = `modules/${moduleName}/${moduleName}.shutdown.sh`;
   const launchPath = launchCommand ? null : join(repoDir, defaultLaunchRel);
-  const shutdownPath = shutdownCommand ? null : join(repoDir, defaultShutdownRel);
+  const shutdownPath = shutdownCommand
+    ? null
+    : join(repoDir, defaultShutdownRel);
   const entrypoint = join(repoDir, "tools", "systemd_entrypoint.sh");
   const workingDir = spec.working_directory
     ? join(repoDir, spec.working_directory)
@@ -84,18 +87,26 @@ function buildUnitContent(
   // Expand ${MODULE_DIR} in user-provided commands to absolute module path
   let resolvedLaunchCommand: string | null = launchCommand;
   if (resolvedLaunchCommand) {
-    resolvedLaunchCommand = resolvedLaunchCommand.replace(/\$\{MODULE_DIR\}/g, moduleDir).replace(/\$MODULE_DIR/g, moduleDir);
+    resolvedLaunchCommand = resolvedLaunchCommand.replace(
+      /\$\{MODULE_DIR\}/g,
+      moduleDir,
+    ).replace(/\$MODULE_DIR/g, moduleDir);
   }
   let resolvedShutdownCommand: string | null = shutdownCommand;
   if (resolvedShutdownCommand) {
-    resolvedShutdownCommand = resolvedShutdownCommand.replace(/\$\{MODULE_DIR\}/g, moduleDir).replace(/\$MODULE_DIR/g, moduleDir);
+    resolvedShutdownCommand = resolvedShutdownCommand.replace(
+      /\$\{MODULE_DIR\}/g,
+      moduleDir,
+    ).replace(/\$MODULE_DIR/g, moduleDir);
   }
 
   // Helper to decide if a command is just a single script path we can pass directly
   function isSinglePath(cmd: string): boolean {
     const stripped = cmd.trim().replace(/^['"]|['"]$/g, "");
     // no whitespace and contains a slash (path-like) or starts with repo/module dir
-    return !/\s/.test(stripped) && (stripped.startsWith("/") || stripped.startsWith(moduleDir) || stripped.includes("/"));
+    return !/\s/.test(stripped) &&
+      (stripped.startsWith("/") || stripped.startsWith(moduleDir) ||
+        stripped.includes("/"));
   }
 
   // Compose ExecStart
@@ -105,7 +116,9 @@ function buildUnitContent(
       const p = resolvedLaunchCommand.trim().replace(/^['"]|['"]$/g, "");
       execStart = `${entrypoint} ${p}`;
     } else {
-      execStart = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedLaunchCommand))}`;
+      execStart = `${entrypoint} bash -lc ${
+        JSON.stringify(escapeForSystemd(resolvedLaunchCommand))
+      }`;
     }
   } else if (launchPath) {
     execStart = `${entrypoint} ${launchPath}`;
@@ -118,7 +131,9 @@ function buildUnitContent(
       const p = resolvedShutdownCommand.trim().replace(/^['"]|['"]$/g, "");
       execStop = `${entrypoint} ${p}`;
     } else {
-      execStop = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedShutdownCommand))}`;
+      execStop = `${entrypoint} bash -lc ${
+        JSON.stringify(escapeForSystemd(resolvedShutdownCommand))
+      }`;
     }
   } else if (shutdownPath) {
     execStop = `${entrypoint} ${shutdownPath}`;
@@ -172,19 +187,36 @@ async function ensureHostModuleConfig(
   module: string,
   config: Record<string, unknown> | undefined,
 ): Promise<string | null> {
-  const repoDir = repoDirFromModules();
-  const configDir = join(repoDir, "hosts", host, "config");
-  await Deno.mkdir(configDir, { recursive: true });
+  const { path } = await loadHostModuleConfig(host, module);
+  if (path) {
+    if (config && Object.keys(config).length) {
+      console.warn(
+        `[systemd] host ${host} module_configs.${module} ignored; using YAML at ${path}.`,
+      );
+    }
+    return path;
+  }
+
   if (config && Object.keys(config).length > 0) {
+    const repoDir = repoDirFromModules();
+    const configDir = join(repoDir, "hosts", host, "config");
+    await Deno.mkdir(configDir, { recursive: true });
     const configPath = join(configDir, `${module}.yaml`);
     const yaml = stringifyYaml(config);
     await Deno.writeTextFile(configPath, yaml);
+    console.warn(
+      `[systemd] Wrote ${configPath} from inline module_configs.${module}; migrate to YAML to silence this.`,
+    );
     return configPath;
   }
+
   return null;
 }
 
-async function generateUnits(host: string, unitsFilter?: string[]): Promise<void> {
+async function generateUnits(
+  host: string,
+  unitsFilter?: string[],
+): Promise<void> {
   const repoDir = repoDirFromModules();
   const hostSpec = await readHostSpec(host);
   const modulesList = ensureArray(hostSpec.modules);
@@ -196,7 +228,10 @@ async function generateUnits(host: string, unitsFilter?: string[]): Promise<void
   for (const moduleName of modulesList) {
     if (unitsFilter && unitsFilter.length > 0) {
       // unitsFilter contains module names or service names; normalize
-      const matches = unitsFilter.some((u) => u === moduleName || u === `psyched-${moduleName}` || u === `psyched-${moduleName}.service`);
+      const matches = unitsFilter.some((u) =>
+        u === moduleName || u === `psyched-${moduleName}` ||
+        u === `psyched-${moduleName}.service`
+      );
       if (!matches) continue;
     }
     const moduleSpecInfo = await loadModuleSpec(moduleName);
@@ -303,7 +338,10 @@ export async function systemdUninstall(): Promise<void> {
   await $`sudo systemctl daemon-reload`.noThrow();
 }
 
-async function resolveUnitsForHost(host: string, units?: string[]): Promise<string[]> {
+async function resolveUnitsForHost(
+  host: string,
+  units?: string[],
+): Promise<string[]> {
   const repoDir = repoDirFromModules();
   const unitsDir = join(repoDir, "hosts", host, "systemd");
   if (units && units.length > 0) {
