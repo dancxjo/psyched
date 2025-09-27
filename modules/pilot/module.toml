@@ -36,7 +36,7 @@ script = "scripts/install_ros_python_deps.sh"
 
 [[actions]]
 type = "pip_install"
-packages = ["fastapi", "uvicorn[standard]", "pydantic", "psutil"]
+packages = ["fastapi", "uvicorn[standard]", "pydantic", "psutil", "pyyaml"]
 import_check = ["fastapi"]
 break_system = true
 

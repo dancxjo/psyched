@@ -6,10 +6,12 @@ from typing import Any, Dict, Iterable, List
 
 import pytest
 from fastapi.testclient import TestClient
+import yaml
 
 from pilot.app import create_app
 from pilot.module_catalog import ModuleCatalog
 from pilot.topic_manager import TopicSession
+from pilot.voice_config import VoiceConfigStore
 
 
 class FakeTopicManager:
@@ -111,10 +113,31 @@ depth = 10
     catalog = ModuleCatalog(modules_dir)
     topic_manager = FakeTopicManager()
     executor = FakeCommandExecutor()
+    voice_config_dir = repo_root / "hosts" / "cerebellum" / "config"
+    voice_config_dir.mkdir(parents=True)
+    voice_config_path = voice_config_dir / "voice.yaml"
+    voice_config_path.write_text(
+        """
+enable_tts: false
+engine: espeak
+voice: en-US-TestVoice
+topic: /voice
+interrupt: /voice/interrupt
+resume: /voice/resume
+clear: /voice/clear
+"""
+    )
+    voice_store = VoiceConfigStore(voice_config_path)
 
-    app = create_app(catalog=catalog, topic_manager=topic_manager, command_executor=executor)
+    app = create_app(
+        catalog=catalog,
+        topic_manager=topic_manager,
+        command_executor=executor,
+        voice_config_store=voice_store,
+    )
     app.state._test_executor = executor
     app.state._test_topics = topic_manager
+    app.state._voice_config_path = voice_config_path
     client = TestClient(app)
     return client
 
@@ -147,3 +170,30 @@ def test_create_topic_session(test_client):
     body = response.json()
     assert body["session"]["access"] == "rw"
     assert topic_manager.created[-1]["topic"] == "/cmd_vel"
+
+
+def test_get_voice_config_returns_yaml_payload(test_client):
+    response = test_client.get("/api/voice/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["config"]["engine"] == "espeak"
+    assert data["config"]["voice"] == "en-US-TestVoice"
+
+
+def test_put_voice_config_persists_updates(test_client):
+    payload = {"engine": "ms-edge", "enable_tts": True, "voice": "en-US-AnaNeural"}
+    response = test_client.put("/api/voice/config", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["config"]["engine"] == "ms-edge"
+    voice_path = test_client.app.state._voice_config_path
+    file_data = yaml.safe_load(voice_path.read_text())
+    assert file_data["engine"] == "ms-edge"
+    assert file_data["voice"] == "en-US-AnaNeural"
+    assert file_data["enable_tts"] is True
+
+
+def test_put_voice_config_rejects_empty_updates(test_client):
+    response = test_client.put("/api/voice/config", json={})
+    assert response.status_code == 400
+    assert response.json()["detail"].lower().startswith("no updates")
