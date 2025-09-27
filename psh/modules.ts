@@ -96,7 +96,7 @@ type PipInstallHandler = (
 let aptInstallHandler: AptInstallHandler = applyAptInstall;
 let pipInstallHandler: PipInstallHandler = applyPipInstall;
 
-interface ModuleSystemdSpec {
+export interface ModuleSystemdSpec {
   description?: string;
   launch?: string;
   shutdown?: string;
@@ -551,7 +551,9 @@ export async function setupMultipleModules(modules: string[]): Promise<void> {
 
   const ensurePipAggregate = (action: PipInstallAction): PipAggregate => {
     const pythonKey = action.python ?? "";
-    const key = `${pythonKey}|${action.break_system ? 1 : 0}|${action.user ? 1 : 0}`;
+    const key = `${pythonKey}|${action.break_system ? 1 : 0}|${
+      action.user ? 1 : 0
+    }`;
     let aggregate = pipAggregates.get(key);
     if (!aggregate) {
       aggregate = {
@@ -572,7 +574,9 @@ export async function setupMultipleModules(modules: string[]): Promise<void> {
     for (const moduleName of ordered) {
       const specInfo = await loadModuleSpec(moduleName);
       if (!specInfo) {
-        console.warn(`[module:${moduleName}] Module specification not found; skipping.`);
+        console.warn(
+          `[module:${moduleName}] Module specification not found; skipping.`,
+        );
         continue;
       }
       const ctx = await prepareModuleContext(moduleName);

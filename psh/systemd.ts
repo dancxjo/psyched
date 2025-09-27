@@ -43,12 +43,57 @@ async function readHostSpec(host: string): Promise<HostSpec> {
   return parseToml(text) as HostSpec;
 }
 
-function buildUnitContent(
+function normalizeEnvKey(key: string): string {
+  return key.replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
+function stringifyEnvValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number" || typeof value === "bigint") {
+    return value.toString();
+  }
+  if (typeof value === "string") return value;
+  return null;
+}
+
+export function deriveModuleConfigEnv(
+  moduleName: string,
+  configData: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  if (!configData) return {};
+
+  const prefix = normalizeEnvKey(moduleName);
+  const env: Record<string, string> = {};
+
+  for (const [rawKey, rawValue] of Object.entries(configData)) {
+    const value = stringifyEnvValue(rawValue);
+    if (value === null) continue;
+    const envKey = normalizeEnvKey(rawKey);
+    if (!envKey) continue;
+    const scopedKey = prefix ? `${prefix}_${envKey}` : envKey;
+    env[scopedKey] = value;
+  }
+
+  if (moduleName === "voice") {
+    const voicesDir = stringifyEnvValue(configData["voices_dir"]);
+    if (voicesDir !== null) {
+      env["PIPER_VOICES_DIR"] = voicesDir;
+    }
+  }
+
+  return env;
+}
+
+export function buildUnitContent(
   moduleName: string,
   spec: ModuleSystemdSpec,
   repoDir: string,
   host: string,
   configPath: string | null,
+  configData: Record<string, unknown> | null,
 ): string {
   const description = spec.description ?? `Psyched ${moduleName} Service`;
   const after = spec.after?.length
@@ -145,6 +190,11 @@ function buildUnitContent(
   for (const [key, value] of envEntries) {
     envLines.push(`Environment=${key}=${value}`);
   }
+
+  const configEnv = deriveModuleConfigEnv(moduleName, configData);
+  for (const [key, value] of Object.entries(configEnv)) {
+    envLines.push(`Environment=${key}=${value}`);
+  }
   envLines.push(`Environment=HOST=${host}`);
   envLines.push(`Environment=PSH_MODULE_NAME=${moduleName}`);
   if (configPath) {
@@ -186,15 +236,15 @@ async function ensureHostModuleConfig(
   host: string,
   module: string,
   config: Record<string, unknown> | undefined,
-): Promise<string | null> {
-  const { path } = await loadHostModuleConfig(host, module);
+): Promise<{ path: string | null; data: Record<string, unknown> | null }> {
+  const { path, data } = await loadHostModuleConfig(host, module);
   if (path) {
     if (config && Object.keys(config).length) {
       console.warn(
         `[systemd] host ${host} module_configs.${module} ignored; using YAML at ${path}.`,
       );
     }
-    return path;
+    return { path, data };
   }
 
   if (config && Object.keys(config).length > 0) {
@@ -207,10 +257,10 @@ async function ensureHostModuleConfig(
     console.warn(
       `[systemd] Wrote ${configPath} from inline module_configs.${module}; migrate to YAML to silence this.`,
     );
-    return configPath;
+    return { path: configPath, data: config };
   }
 
-  return null;
+  return { path: null, data: null };
 }
 
 async function generateUnits(
@@ -242,7 +292,7 @@ async function generateUnits(
       continue;
     }
     const moduleConfig = (configs[moduleName] ?? {}) as Record<string, unknown>;
-    const configPath = await ensureHostModuleConfig(
+    const { path: configPath, data: configData } = await ensureHostModuleConfig(
       host,
       moduleName,
       moduleConfig,
@@ -253,6 +303,7 @@ async function generateUnits(
       repoDir,
       host,
       configPath,
+      configData,
     );
     const serviceName = `psyched-${moduleName}.service`;
     const unitPath = join(outputDir, serviceName);

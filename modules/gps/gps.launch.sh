@@ -1,12 +1,13 @@
 #!/bin/bash
 set -euo pipefail
-FRAME_ID_VAL="${GPS_FRAME_ID:-gps_link}"
-DEVICE_VAL="${GPS_DEVICE:-/dev/gps0}"
-PUBLISH_RATE_VAL="${GPS_PUBLISH_RATE:-5.0}"
-
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 export REPO_DIR
-exec ros2 launch ublox_gps ublox_gps.launch.py \
-  frame_id:="${FRAME_ID_VAL}" \
-  device:="${DEVICE_VAL}" \
-  publish_rate:="${PUBLISH_RATE_VAL}"
+HOST_SHORT="${HOST:-$(hostname -s)}"
+
+HOST_YAML="${REPO_DIR}/hosts/${HOST_SHORT}/config/gps.yaml"
+
+if [ -f "$HOST_YAML" ]; then
+  exec ros2 launch ublox_gps ublox_gps.launch.py --ros-args --params-file "$HOST_YAML"
+else
+  exec ros2 launch ublox_gps ublox_gps.launch.py
+fi
