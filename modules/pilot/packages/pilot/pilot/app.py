@@ -53,7 +53,40 @@ class CommandExecutor:
         if not psh_path.exists():  # pragma: no cover - should exist in deployed repo
             raise RuntimeError("psh toolchain not available")
         deno = "deno"
-        command_args = ["run", "-A", str(psh_path), scope, module, command, *args]
+        scope_normalized = scope.lower()
+        # Align invocation order with the CLI semantics implemented in psh/cli.ts.
+        # - `psh mod` expects `psh mod <action> <modules...>`
+        # - `psh sys` expects `psh sys <action> <units...>`
+        if scope_normalized == "mod":
+            command_args = [
+                "run",
+                "-A",
+                str(psh_path),
+                "mod",
+                command,
+                *( [module] if module else [] ),
+                *args,
+            ]
+        elif scope_normalized == "sys":
+            command_args = [
+                "run",
+                "-A",
+                str(psh_path),
+                "sys",
+                command,
+                *( [module] if module else [] ),
+                *args,
+            ]
+        else:
+            command_args = [
+                "run",
+                "-A",
+                str(psh_path),
+                scope,
+                *( [module] if module else [] ),
+                command,
+                *args,
+            ]
         process = await asyncio.create_subprocess_exec(
             deno,
             *command_args,
