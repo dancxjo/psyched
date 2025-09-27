@@ -1,6 +1,6 @@
 import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { buildRegimeGroups } from '../utils/regimes.js';
+// Regime grouping removed - modules are shown in the order returned by the API (host-defined)
 import { topicKey, topicIdentifier } from '../utils/topics.js';
 import './module-section.js';
 
@@ -12,7 +12,7 @@ const MAX_LOG_ENTRIES = 40;
 class PilotApp extends LitElement {
   static properties = {
     modules: { state: true },
-    regimeGroups: { state: true },
+    // regimeGroups removed
     loading: { state: true },
     errorMessage: { state: true },
     commandLog: { state: true },
@@ -23,7 +23,7 @@ class PilotApp extends LitElement {
   constructor() {
     super();
     this.modules = [];
-    this.regimeGroups = [];
+    // modules are presented in server-provided order
     this.loading = true;
     this.errorMessage = '';
     this.commandLog = [];
@@ -60,7 +60,6 @@ class PilotApp extends LitElement {
       }
       const payload = await response.json();
       this.modules = Array.isArray(payload.modules) ? payload.modules : [];
-      this.regimeGroups = buildRegimeGroups(this.modules);
       this.emitNavUpdate();
     } catch (error) {
       this.errorMessage = error?.message ?? String(error);
@@ -295,32 +294,18 @@ class PilotApp extends LitElement {
     });
   }
 
-  renderRegimeGroups() {
-    return this.regimeGroups.map(
-      (group) => html`
-        <section class="regime-group" id=${`regime-${group.regime}`}>
-          <header class="regime-header">
-            <h1>${group.label}</h1>
-            <span class="module-count">
-              ${group.modules.length} ${group.modules.length === 1 ? 'module' : 'modules'}
-            </span>
-          </header>
-          <div class="regime-modules">
-            ${group.modules.map(
-              (module) => html`
-                <pilot-module-section
-                  id=${`module-${module.name}`}
-                  .module=${module}
-                  .activeRecords=${this.activeTopics}
-                  @run-command=${(event) => this.runCommand(module.name, event.detail.scope, event.detail.command)}
-                  @start-topic=${(event) => this.startTopic(module.name, event.detail.topic)}
-                  @stop-topic=${(event) => this.stopTopic(module.name, event.detail.topic)}
-                  @pause-topic=${(event) => this.togglePause(module.name, event.detail.topic, event.detail.paused)}
-                ></pilot-module-section>
-              `,
-            )}
-          </div>
-        </section>
+  renderModules() {
+    return this.modules.map(
+      (module) => html`
+        <pilot-module-section
+          id=${`module-${module.name}`}
+          .module=${module}
+          .activeRecords=${this.activeTopics}
+          @run-command=${(event) => this.runCommand(module.name, event.detail.scope, event.detail.command)}
+          @start-topic=${(event) => this.startTopic(module.name, event.detail.topic)}
+          @stop-topic=${(event) => this.stopTopic(module.name, event.detail.topic)}
+          @pause-topic=${(event) => this.togglePause(module.name, event.detail.topic, event.detail.paused)}
+        ></pilot-module-section>
       `,
     );
   }
@@ -334,20 +319,20 @@ class PilotApp extends LitElement {
         <h2>Command Log</h2>
         <ul>
           ${this.commandLog.map(
-            (entry) => html`
+      (entry) => html`
               <li class=${entry.status}>
                 <span class="timestamp">${entry.timestamp}</span>
                 <span class="module">${entry.module}</span>
                 <span class="scope">${entry.scope}</span>
                 <span class="command">${entry.command}</span>
                 ${entry.status === 'error' && entry.error
-                  ? html`<span class="detail">${entry.error}</span>`
-                  : entry.result
-                    ? html`<span class="detail">${JSON.stringify(entry.result)}</span>`
-                    : nothing}
+          ? html`<span class="detail">${entry.error}</span>`
+          : entry.result
+            ? html`<span class="detail">${JSON.stringify(entry.result)}</span>`
+            : nothing}
               </li>
             `,
-          )}
+    )}
         </ul>
       </section>
     `;
@@ -362,7 +347,7 @@ class PilotApp extends LitElement {
     }
     return html`
       <div class="pilot-layout">
-        ${this.renderRegimeGroups()}
+        ${this.renderModules()}
       </div>
       ${this.renderCommandLog()}
       <footer class="status-bar">

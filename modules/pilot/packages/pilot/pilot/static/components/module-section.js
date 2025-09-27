@@ -1,6 +1,6 @@
 import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { formatRegimeName, normalizeRegimes } from '../utils/regimes.js';
+// regimes grouping removed
 import { topicKey, topicIdentifier } from '../utils/topics.js';
 import './topic-widget.js';
 
@@ -17,6 +17,7 @@ class PilotModuleSection extends LitElement {
     super();
     this.module = null;
     this.activeRecords = new Map();
+    this._topicObserver = null;
   }
 
   createRenderRoot() {
@@ -24,7 +25,7 @@ class PilotModuleSection extends LitElement {
   }
 
   get moduleRegimes() {
-    return normalizeRegimes(this.module?.regimes ?? []);
+    return [];
   }
 
   command(scope, command) {
@@ -38,6 +39,17 @@ class PilotModuleSection extends LitElement {
   }
 
   startTopic(topic) {
+    // Clear any manual-stop flag when a user explicitly starts a topic
+    try {
+      const id = encodeURIComponent(topicIdentifier(topic));
+      const el = this.querySelector(`.topic-card[data-topic="${id}"]`);
+      if (el) {
+        delete el.dataset.manualStopped;
+      }
+    } catch (_e) {
+      // ignore
+    }
+
     this.dispatchEvent(
       new CustomEvent('start-topic', {
         detail: { module: this.module?.name, topic },
@@ -48,6 +60,18 @@ class PilotModuleSection extends LitElement {
   }
 
   stopTopic(topic) {
+    // Mark this control as manually stopped so the auto-subscribe logic
+    // doesn't immediately reconnect when the user intentionally disconnects.
+    try {
+      const id = encodeURIComponent(topicIdentifier(topic));
+      const el = this.querySelector(`.topic-card[data-topic="${id}"]`);
+      if (el) {
+        el.dataset.manualStopped = 'true';
+      }
+    } catch (_e) {
+      // ignore
+    }
+
     this.dispatchEvent(
       new CustomEvent('stop-topic', {
         detail: { module: this.module?.name, topic },
@@ -73,14 +97,7 @@ class PilotModuleSection extends LitElement {
   }
 
   renderRegimeTags() {
-    if (!this.moduleRegimes.length) {
-      return nothing;
-    }
-    return html`
-      <ul class="regime-tags">
-        ${this.moduleRegimes.map((regime) => html`<li>${formatRegimeName(regime)}</li>`)}
-      </ul>
-    `;
+    return nothing;
   }
 
   renderCommands(scope, commands) {
@@ -90,10 +107,10 @@ class PilotModuleSection extends LitElement {
     return html`
       <div class="button-row">
         ${commands.map(
-          (name) => html`
+      (name) => html`
             <button type="button" @click=${() => this.command(scope, name)}>${name}</button>
           `,
-        )}
+    )}
       </div>
     `;
   }
@@ -102,7 +119,7 @@ class PilotModuleSection extends LitElement {
     const record = this.topicRecord(topic);
     const identifier = topicIdentifier(topic);
     return html`
-      <article class="topic-card">
+      <article class="topic-card" data-topic=${encodeURIComponent(identifier)}>
         <div class="topic-header">
           <div>
             <h4>${identifier}</h4>
@@ -110,18 +127,87 @@ class PilotModuleSection extends LitElement {
           </div>
           <div class="topic-actions">
             ${record
-              ? html`
+        ? html`
                   <button type="button" @click=${() => this.stopTopic(topic)}>Disconnect</button>
                   <button type="button" @click=${() => this.togglePause(topic, !record.paused)}>
                     ${record.paused ? 'Resume' : 'Pause'}
                   </button>
                 `
-              : html`<button type="button" @click=${() => this.startTopic(topic)}>Connect</button>`}
+        : html`<button type="button" @click=${() => this.startTopic(topic)}>Connect</button>`}
           </div>
         </div>
         <pilot-topic-widget .record=${record} .topic=${topic}></pilot-topic-widget>
       </article>
     `;
+  }
+
+  firstUpdated() {
+    // Create a gentle IntersectionObserver to auto-subscribe when a topic
+    // control is scrolled into view.
+    try {
+      if (this._topicObserver) return;
+      this._topicObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const el = entry.target;
+            const encoded = el?.dataset?.topic;
+            if (!encoded) continue;
+            const topicName = decodeURIComponent(encoded);
+            // Only act when the control is meaningfully visible.
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
+              // Find the topic object by its identifier.
+              const topicObj = (this.module?.topics || []).find((t) => topicIdentifier(t) === topicName);
+              if (!topicObj) continue;
+              const record = this.topicRecord(topicObj);
+              const manualStopped = el.dataset.manualStopped === 'true';
+              const access = topicObj.access || 'ro';
+              // Gentle policy: only auto-subscribe read-only topics, skip write-only.
+              if (!record && !manualStopped && access !== 'wo') {
+                this.startTopic(topicObj);
+                el.dataset.autoSubscribed = 'true';
+              }
+            }
+          }
+        },
+        { root: null, rootMargin: '0px 0px 200px 0px', threshold: [0, 0.25] },
+      );
+    } catch (_e) {
+      console.warn('Failed to create topic observer', _e);
+    }
+    // Observe any initially rendered topic cards.
+    this.observeTopics();
+  }
+
+  updated() {
+    // Re-attach observer to any newly rendered topic cards.
+    this.observeTopics();
+  }
+
+  observeTopics() {
+    if (!this._topicObserver) return;
+    try {
+      const cards = this.querySelectorAll('.topic-card');
+      for (const card of cards) {
+        if (card.__observed) continue;
+        this._topicObserver.observe(card);
+        card.__observed = true;
+      }
+    } catch (e) {
+      // swallow errors to avoid breaking rendering
+    }
+  }
+
+  disconnectedCallback() {
+    // Clean up the observer when the element is removed from the DOM.
+    try {
+      if (this._topicObserver) {
+        this._topicObserver.disconnect();
+        this._topicObserver = null;
+      }
+    } catch (e) {
+      // ignore
+    }
+    super.disconnectedCallback();
   }
 
   renderTopics() {
