@@ -21,7 +21,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'voice_node = voice.node:main',
+                'voice_node = voice.node:main',
+                'voice_volume = voice.volume_node:main',
         ],
     },
 )
