@@ -1,12 +1,12 @@
 enable_tts: false
 engine: piper
 model: en_US-john-medium
-voices_dir: '${HOME}/.local/piper/voices'
+voices_dir: "${HOME}/.local/piper/voices"
 model_url: >-
   https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx?download=true
 config_url: >-
   https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/john/medium/en_US-john-medium.onnx.json?download=true
-voice: '${HOME}/.local/piper/voices/en_US-john-medium.onnx'
+voice: "${HOME}/.local/piper/voices/en_US-john-medium.onnx"
 topic: /voice
 interrupt: /voice/interrupt
 resume: /voice/resume

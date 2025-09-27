@@ -652,6 +652,242 @@ body {
   color: var(--lcars-muted);
 }
 
+.gauge {
+  background: rgba(15, 17, 26, 0.4);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gauge.inactive {
+  color: var(--lcars-muted);
+  text-align: center;
+}
+
+.gauge-track {
+  position: relative;
+  height: 0.75rem;
+  background: rgba(88, 178, 220, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(248, 128, 60, 0.6), rgba(92, 209, 132, 0.6));
+  transition: width 0.2s ease;
+}
+
+.gauge-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.85rem;
+  color: var(--lcars-muted);
+}
+
+.audio-oscilloscope {
+  background: rgba(15, 17, 26, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(88, 178, 220, 0.2);
+}
+
+.audio-oscilloscope canvas {
+  width: 100%;
+  display: block;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.battery-panel {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+
+.battery-gauge {
+  position: relative;
+  height: 140px;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(15, 17, 26, 0.4), rgba(0, 0, 0, 0.6));
+  border: 1px solid rgba(88, 178, 220, 0.25);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.battery-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(92, 209, 132, 0.65), rgba(248, 128, 60, 0.65));
+  transition: width 0.3s ease;
+}
+
+.battery-percent {
+  position: relative;
+  z-index: 1;
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: var(--lcars-text);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.battery-metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.battery-metrics li {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.battery-metrics .label {
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  font-size: 0.75rem;
+  color: var(--lcars-muted);
+}
+
+.battery-feed {
+  background: rgba(15, 17, 26, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+  border: 1px dashed rgba(88, 178, 220, 0.25);
+}
+
+.battery-feed .feed-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  font-size: 0.75rem;
+  color: var(--lcars-muted);
+}
+
+.battery-feed .feed-value {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 1.1rem;
+}
+
+.battery-feed .feed-status {
+  font-size: 0.75rem;
+  color: rgba(248, 128, 60, 0.65);
+}
+
+.voice-transport {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.voice-transport button {
+  background: rgba(88, 178, 220, 0.2);
+  border: 1px solid rgba(88, 178, 220, 0.35);
+  color: var(--lcars-text);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+}
+
+.voice-transport button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.voice-volume-inline,
+.voice-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.voice-volume-inline label,
+.voice-volume label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08rem;
+  color: var(--lcars-muted);
+}
+
+.voice-volume-inline input,
+.voice-volume input {
+  flex: 1;
+}
+
+.voice-volume-inline .value,
+.voice-volume .volume-value {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.95rem;
+}
+
+.voice-control-bridge {
+  background: rgba(15, 17, 26, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  color: var(--lcars-muted);
+  font-size: 0.85rem;
+}
+
+.diagnostics-panel {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(88, 178, 220, 0.25);
+}
+
+.diagnostics-panel summary {
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  color: var(--lcars-accent-secondary);
+}
+
+.diagnostics-panel pre {
+  margin: 0.75rem 0 0;
+  max-height: 220px;
+  overflow: auto;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.8rem;
+}
+
+.event-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.event-log li {
+  background: rgba(15, 17, 26, 0.35);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.65rem;
+  border-left: 3px solid rgba(248, 128, 60, 0.4);
+}
+
 .status-bar {
   display: flex;
   justify-content: space-between;

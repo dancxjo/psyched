@@ -25,6 +25,13 @@ access = "ro"
 presentation = "status"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
+[[pilot.topics]]
+name = "/diagnostics"
+type = "diagnostic_msgs/msg/DiagnosticArray"
+access = "ro"
+presentation = "diagnostics"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["pilot"]

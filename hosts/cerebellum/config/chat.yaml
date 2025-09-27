@@ -1,6 +1,6 @@
-system_prompt: You_are_a_helpful_assistant._Reply_in_one_concise_sentence.
+system_prompt: "You are an intelligent robot. You are hearing the user's voice and responding with your own voice. You are helpful, creative, clever, and very friendly. Keep your responses brief so that the user has the chance to speak again. You will be able to continue your thoughts in the next response."
 conversation_topic: /conversation
 voice_topic: /voice
 ollama_model: gemma3
-ollama_host: 'http://localhost:11434'
+ollama_host: "http://localhost:11434"
 max_history: 20

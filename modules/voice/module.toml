@@ -10,15 +10,50 @@ regimes = ["audio"]
 name = "/voice"
 type = "std_msgs/msg/String"
 access = "rw"
-presentation = "text"
+presentation = "voice"
 qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
 
 [[pilot.topics]]
 name = "/voice/interrupt"
 type = "std_msgs/msg/Empty"
 access = "wo"
-presentation = "button"
+presentation = "voice-control"
 qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/resume"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "voice-control"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/clear"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "voice-control"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/volume"
+type = "std_msgs/msg/UInt8"
+access = "wo"
+presentation = "voice-volume"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice_done"
+type = "std_msgs/msg/Empty"
+access = "ro"
+presentation = "event-log"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice_interrupt"
+type = "std_msgs/msg/Empty"
+access = "ro"
+presentation = "event-log"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
 [[actions]]
 type = "link_packages"

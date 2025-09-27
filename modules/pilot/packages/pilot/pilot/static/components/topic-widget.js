@@ -5,7 +5,15 @@ import './imu-panel.js';
 import './voice-console.js';
 import './conversation-console.js';
 import './audio-waveform.js';
+import './audio-oscilloscope.js';
 import './transcription-panel.js';
+import './value-gauge.js';
+import './battery-panel.js';
+import './battery-feed.js';
+import './diagnostics-panel.js';
+import './event-log.js';
+import './voice-control-bridge.js';
+import './voice-volume.js';
 
 const MAX_PREVIEW = 1200;
 
@@ -109,8 +117,26 @@ class PilotTopicWidget extends LitElement {
     if (this.topic?.presentation === 'waveform') {
       return html`<pilot-audio-waveform .record=${this.record} .topic=${this.topic}></pilot-audio-waveform>`;
     }
+    if (this.topic?.presentation === 'oscilloscope') {
+      return html`<pilot-audio-oscilloscope .record=${this.record} .topic=${this.topic}></pilot-audio-oscilloscope>`;
+    }
     if (this.topic?.presentation === 'transcription') {
       return html`<pilot-transcription-panel .record=${this.record}></pilot-transcription-panel>`;
+    }
+    if (this.topic?.presentation === 'gauge') {
+      return html`<pilot-value-gauge .record=${this.record} .topic=${this.topic}></pilot-value-gauge>`;
+    }
+    if (this.topic?.presentation === 'battery-panel') {
+      return html`<pilot-battery-panel .record=${this.record} .topic=${this.topic}></pilot-battery-panel>`;
+    }
+    if (this.topic?.presentation === 'battery-feed') {
+      return html`<pilot-battery-feed .record=${this.record} .topic=${this.topic}></pilot-battery-feed>`;
+    }
+    if (this.topic?.presentation === 'diagnostics') {
+      return html`<pilot-diagnostics-panel .record=${this.record}></pilot-diagnostics-panel>`;
+    }
+    if (this.topic?.presentation === 'event-log') {
+      return html`<pilot-event-log .record=${this.record}></pilot-event-log>`;
     }
     if (this.topic?.presentation === 'diode') {
       // Expect boolean payloads or objects with a boolean `data` field.
@@ -129,6 +155,12 @@ class PilotTopicWidget extends LitElement {
     }
     if (this.topic?.presentation === 'voice' || this.topic?.topic === '/voice') {
       return html`<pilot-voice-console .record=${this.record}></pilot-voice-console>`;
+    }
+    if (this.topic?.presentation === 'voice-control') {
+      return html`<pilot-voice-control-bridge .record=${this.record} .topic=${this.topic}></pilot-voice-control-bridge>`;
+    }
+    if (this.topic?.presentation === 'voice-volume') {
+      return html`<pilot-voice-volume .record=${this.record}></pilot-voice-volume>`;
     }
     return html`<pre class="topic-payload">${this.display}</pre>`;
   }

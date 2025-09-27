@@ -1,5 +1,7 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
+import { subscribeVoiceControls, publishVoiceAction, setVoiceVolume } from '../utils/voice.js';
+
 /**
  * Simple text console for publishing std_msgs/String payloads to /voice.
  */
@@ -9,6 +11,8 @@ class PilotVoiceConsole extends LitElement {
     _input: { state: true },
     _isSending: { state: true },
     _lastSent: { state: true },
+    _controls: { state: true },
+    _volume: { state: true },
   };
 
   constructor() {
@@ -17,10 +21,33 @@ class PilotVoiceConsole extends LitElement {
     this._input = '';
     this._isSending = false;
     this._lastSent = null;
+    this._controls = {};
+    this._volume = 50;
+    this._unsubscribe = null;
   }
 
   createRenderRoot() {
     return this;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._unsubscribe = subscribeVoiceControls((snapshot) => {
+      this._controls = snapshot.actions ?? {};
+      const descriptor = snapshot.volume;
+      if (descriptor && Number.isFinite(descriptor.value)) {
+        this._volume = Math.max(0, Math.min(100, Math.round(descriptor.value)));
+      }
+      this.requestUpdate();
+    });
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (typeof this._unsubscribe === 'function') {
+      this._unsubscribe();
+    }
+    this._unsubscribe = null;
   }
 
   updateInput(value) {
@@ -56,6 +83,62 @@ class PilotVoiceConsole extends LitElement {
     }
   }
 
+  handleTransport(action) {
+    publishVoiceAction(action);
+  }
+
+  handleVolumeInput(event) {
+    const value = event.target?.valueAsNumber;
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    this._volume = Math.max(0, Math.min(100, Math.round(value)));
+    this.requestUpdate();
+  }
+
+  handleVolumeCommit(event) {
+    const value = event.target?.valueAsNumber;
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    setVoiceVolume(value);
+  }
+
+  renderTransportControls() {
+    const actions = this._controls;
+    const buttons = [
+      { action: 'interrupt', label: 'Pause' },
+      { action: 'resume', label: 'Resume' },
+      { action: 'clear', label: 'Clear' },
+    ];
+    return html`
+      <div class="voice-transport">
+        ${buttons.map(({ action, label }) => {
+          const available = actions?.[action]?.available;
+          return html`<button type="button" ?disabled=${!available} @click=${() => this.handleTransport(action)}>${label}</button>`;
+        })}
+      </div>
+    `;
+  }
+
+  renderVolumeControl() {
+    return html`
+      <div class="voice-volume-inline">
+        <label for="voice-volume-inline-slider">Volume</label>
+        <input
+          id="voice-volume-inline-slider"
+          type="range"
+          min="0"
+          max="100"
+          .value=${String(this._volume)}
+          @input=${(event) => this.handleVolumeInput(event)}
+          @change=${(event) => this.handleVolumeCommit(event)}
+        />
+        <span class="value">${this._volume}</span>
+      </div>
+    `;
+  }
+
   render() {
     const disabled = this._isSending || this.record?.state !== 'connected';
     return html`
@@ -76,6 +159,8 @@ class PilotVoiceConsole extends LitElement {
             ? html`<span class="voice-last">Last sent: ${this._lastSent}</span>`
             : html`<span class="voice-hint">Connected clients will synthesize the text.</span>`}
         </div>
+        ${this.renderTransportControls()}
+        ${this.renderVolumeControl()}
       </form>
     `;
   }
