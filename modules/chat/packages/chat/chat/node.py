@@ -260,14 +260,30 @@ class ChatNode(Node):
             self.get_logger().warning(
                 'voice_done payload did not match pending utterance; publishing spoken text anyway'
             )
-        out = MsgMessage()
-        out.role = 'assistant'
-        out.content = spoken
-        out.speaker = 'assistant'
-        out.confidence = 1.0
-        self.pub_conversation.publish(out)
-        # Also keep history consistent
-        self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
+        # Avoid duplicating assistant messages if another publisher (the voice node)
+        # already published the assistant turn with identical content. Check the
+        # most recent history item for a matching assistant entry. If present,
+        # do not republish but ensure history is consistent.
+        recent_match = False
+        if self.history:
+            last = self.history[-1]
+            if last.get('role') == 'assistant' and _normalize_voice_text(str(last.get('content', ''))) == _normalize_voice_text(spoken):
+                recent_match = True
+
+        if not recent_match:
+            out = MsgMessage()
+            out.role = 'assistant'
+            out.content = spoken
+            out.speaker = 'assistant'
+            out.confidence = 1.0
+            self.pub_conversation.publish(out)
+            # Also keep history consistent
+            self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
+        else:
+            # Ensure history contains this assistant turn (it should already), but
+            # if for some reason it wasn't appended, add it now.
+            if not self.history or self.history[-1].get('content') != spoken:
+                self.history.append({'role': 'assistant', 'content': spoken, 'speaker': 'assistant', 'confidence': 1.0})
         if len(self.history) > self.max_history:
             self.history = self.history[-self.max_history :]
 

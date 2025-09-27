@@ -45,6 +45,7 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from std_msgs.msg import Empty
 from std_msgs.msg import UInt32
+from psyched_msgs.msg import Message as MsgMessage
 
 class VoiceNode(Node):
                             """Speak queued messages via Piper TTS.
@@ -127,6 +128,16 @@ class VoiceNode(Node):
 
                                 # Publishers and subscribers
                                 self._pub_done = self.create_publisher(String, 'voice_done', 10)
+                                # Conversation publisher: publish assistant messages when spoken
+                                try:
+                                    self.declare_parameter('conversation_topic', '/conversation')
+                                    self.conversation_topic = self.get_parameter('conversation_topic').get_parameter_value().string_value
+                                except Exception:
+                                    self.conversation_topic = '/conversation'
+                                try:
+                                    self._pub_conversation = self.create_publisher(MsgMessage, self.conversation_topic, 10)
+                                except Exception:
+                                    self._pub_conversation = None
                                 self.autophony_pub = self.create_publisher(UInt32, '/audio/autophony_duration', 10)
                                 self.create_subscription(String, self.topic, self.enqueue, 10)
                                 # Back-compat legacy interrupt topic: treat as pause (do not clear queue)
@@ -436,6 +447,25 @@ class VoiceNode(Node):
                                     autophony_msg = UInt32()
                                     autophony_msg.data = 0
                                     self.autophony_pub.publish(autophony_msg)
+
+                                    # Publish assistant message to the conversation topic so other
+                                    # modules (chat/history) see what was actually spoken. This
+                                    # happens before signalling voice_done so subscribers can
+                                    # observe the assistant turn immediately.
+                                    try:
+                                        if getattr(self, '_pub_conversation', None) is not None:
+                                            out = MsgMessage()
+                                            out.role = 'assistant'
+                                            out.content = text
+                                            out.speaker = 'assistant'
+                                            out.confidence = 1.0
+                                            try:
+                                                self._pub_conversation.publish(out)
+                                            except Exception:
+                                                # Best-effort: ignore publish failures
+                                                pass
+                                    except Exception:
+                                        pass
 
                                     # Signal completion to upstream (e.g., chat service)
                                     try:
