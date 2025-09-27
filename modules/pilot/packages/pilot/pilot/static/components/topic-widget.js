@@ -4,6 +4,8 @@ import './joystick-control.js';
 import './imu-panel.js';
 import './voice-console.js';
 import './conversation-console.js';
+import './audio-waveform.js';
+import './transcription-panel.js';
 
 const MAX_PREVIEW = 1200;
 
@@ -103,6 +105,12 @@ class PilotTopicWidget extends LitElement {
   renderContent() {
     if (!this.record) {
       return html`<div class="inactive">Not subscribed</div>`;
+    }
+    if (this.topic?.presentation === 'waveform') {
+      return html`<pilot-audio-waveform .record=${this.record} .topic=${this.topic}></pilot-audio-waveform>`;
+    }
+    if (this.topic?.presentation === 'transcription') {
+      return html`<pilot-transcription-panel .record=${this.record}></pilot-transcription-panel>`;
     }
     if (this.topic?.presentation === 'diode') {
       // Expect boolean payloads or objects with a boolean `data` field.
