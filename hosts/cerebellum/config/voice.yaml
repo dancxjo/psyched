@@ -1,5 +1,5 @@
 enable_tts: false
-engine: espeak
+engine: piper
 model: en_US-john-medium
 voices_dir: '${HOME}/.local/piper/voices'
 model_url: >-

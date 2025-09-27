@@ -62,11 +62,34 @@ def coerce_pcm_bytes(payload: Any) -> bytes:
         except Exception as exc:  # pragma: no cover - defensive
             raise TypeError('Failed to convert payload via tolist()') from exc
 
-    if isinstance(payload, Sequence):
-        return bytes(int(item) & 0xFF for item in payload)
+    if isinstance(payload, Sequence) or isinstance(payload, Iterable):
+        # Fast-path: many callers pass a sequence of integers which bytes()
+        # can consume directly (e.g. list[int]). If the sequence contains
+        # bytes-like objects (for example b'\xd8' elements) bytes() will
+        # raise; in that case fall back to flattening each element into a
+        # contiguous bytearray.
+        try:
+            return bytes(payload)  # type: ignore[arg-type]
+        except Exception:
+            out = bytearray()
+            for item in payload:
+                # integer values are appended directly
+                if isinstance(item, int):
+                    out.append(item & 0xFF)
+                    continue
 
-    if isinstance(payload, Iterable):
-        return bytes(int(item) & 0xFF for item in list(payload))
+                # bytes-like objects: extend with their bytes
+                if isinstance(item, (bytes, bytearray, memoryview)):
+                    out.extend(bytes(item))
+                    continue
+
+                # fallback: try to coerce to int
+                try:
+                    out.append(int(item) & 0xFF)
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise TypeError(f'Unsupported item in payload sequence: {type(item)!r}') from exc
+
+            return bytes(out)
 
     raise TypeError(f'Unsupported audio payload type: {type(payload)!r}')
 

@@ -5,3 +5,5 @@ device: default
 rate: 16000
 channels: 1
 chunk: 2048
+language: en
+model: small

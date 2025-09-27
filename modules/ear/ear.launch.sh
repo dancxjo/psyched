@@ -30,14 +30,24 @@ ASR_BEAM_VAL=$(coerce_int "${EAR_BEAM_SIZE:-5}" 5)
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 export REPO_DIR
 
-exec ros2 launch ear ear.launch.py \
-  device_id:="${DEVICE_ID_VAL}" \
-  sample_rate:="${RATE_VAL}" \
-  channels:="${CHANNELS_VAL}" \
-  chunk_size:="${CHUNK_VAL}" \
-  silence_threshold:="${SILENCE_THRESHOLD_VAL}" \
-  model:="${MODEL_VAL}" \
-  device:="${ASR_DEVICE_VAL}" \
-  compute_type:="${ASR_COMPUTE_VAL}" \
-  language:="${ASR_LANGUAGE_VAL}" \
-  beam_size:="${ASR_BEAM_VAL}"
+args=(
+  ros2 launch ear ear.launch.py
+  device_id:="${DEVICE_ID_VAL}"
+  sample_rate:="${RATE_VAL}"
+  channels:="${CHANNELS_VAL}"
+  chunk_size:="${CHUNK_VAL}"
+  silence_threshold:="${SILENCE_THRESHOLD_VAL}"
+  model:="${MODEL_VAL}"
+  device:="${ASR_DEVICE_VAL}"
+  compute_type:="${ASR_COMPUTE_VAL}"
+)
+
+# Only add language argument when a value is present to avoid malformed
+# launch args like 'language:=' which ros2 launch rejects.
+if [[ -n "${ASR_LANGUAGE_VAL}" ]]; then
+  args+=(language:="${ASR_LANGUAGE_VAL}")
+fi
+
+args+=(beam_size:="${ASR_BEAM_VAL}")
+
+exec "${args[@]}"
