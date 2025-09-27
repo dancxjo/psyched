@@ -62,7 +62,11 @@ class VADNode(Node):
                 
                 # Publish the accumulated speech segment
                 audio_msg = ByteMultiArray()
-                audio_msg.data = list(self.speech_segment)
+                # `data` for std_msgs/ByteMultiArray must be a bytes-like object
+                # rosidl_generator_py expects a Python bytes for the underlying
+                # uint8[] field. Previously this was set to a list which caused
+                # an assertion failure in the C conversion layer.
+                audio_msg.data = bytes(self.speech_segment)
                 self.speech_audio_pub.publish(audio_msg)
                 
                 # Reset for next speech segment
