@@ -11,3 +11,4 @@ topic: /voice
 interrupt: /voice/interrupt
 resume: /voice/resume
 clear: /voice/clear
+channels: 1

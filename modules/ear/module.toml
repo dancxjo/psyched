@@ -27,6 +27,18 @@ access = "ro"
 presentation = "waveform"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
+[[pilot.topics]]
+name = "/audio/speech_segment"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/transcription"
+access = "ro"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
 [[actions]]
 type = "link_packages"
 packages = ["ear", "psyched_msgs"]
@@ -46,7 +58,12 @@ break_system = true
 
 [[actions]]
 type = "apt_install"
-packages = ["alsa-utils", "libasound2-dev", "portaudio19-dev", "python3-pyaudio"]
+packages = [
+    "alsa-utils",
+    "libasound2-dev",
+    "portaudio19-dev",
+    "python3-pyaudio",
+]
 update = true
 
 [systemd]
