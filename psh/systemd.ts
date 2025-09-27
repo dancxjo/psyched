@@ -43,57 +43,15 @@ async function readHostSpec(host: string): Promise<HostSpec> {
   return parseToml(text) as HostSpec;
 }
 
-function normalizeEnvKey(key: string): string {
-  return key.replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toUpperCase();
-}
 
-function stringifyEnvValue(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number" || typeof value === "bigint") {
-    return value.toString();
-  }
-  if (typeof value === "string") return value;
-  return null;
-}
-
-export function deriveModuleConfigEnv(
-  moduleName: string,
-  configData: Record<string, unknown> | null | undefined,
-): Record<string, string> {
-  if (!configData) return {};
-
-  const prefix = normalizeEnvKey(moduleName);
-  const env: Record<string, string> = {};
-
-  for (const [rawKey, rawValue] of Object.entries(configData)) {
-    const value = stringifyEnvValue(rawValue);
-    if (value === null) continue;
-    const envKey = normalizeEnvKey(rawKey);
-    if (!envKey) continue;
-    const scopedKey = prefix ? `${prefix}_${envKey}` : envKey;
-    env[scopedKey] = value;
-  }
-
-  if (moduleName === "voice") {
-    const voicesDir = stringifyEnvValue(configData["voices_dir"]);
-    if (voicesDir !== null) {
-      env["PIPER_VOICES_DIR"] = voicesDir;
-    }
-  }
-
-  return env;
-}
 
 export function buildUnitContent(
   moduleName: string,
   spec: ModuleSystemdSpec,
   repoDir: string,
   host: string,
-  configPath: string | null,
-  configData: Record<string, unknown> | null,
+  _configPath: string | null,
+  _configData: Record<string, unknown> | null,
 ): string {
   const description = spec.description ?? `Psyched ${moduleName} Service`;
   const after = spec.after?.length
@@ -161,9 +119,8 @@ export function buildUnitContent(
       const p = resolvedLaunchCommand.trim().replace(/^['"]|['"]$/g, "");
       execStart = `${entrypoint} ${p}`;
     } else {
-      execStart = `${entrypoint} bash -lc ${
-        JSON.stringify(escapeForSystemd(resolvedLaunchCommand))
-      }`;
+      execStart = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedLaunchCommand))
+        }`;
     }
   } else if (launchPath) {
     execStart = `${entrypoint} ${launchPath}`;
@@ -176,9 +133,8 @@ export function buildUnitContent(
       const p = resolvedShutdownCommand.trim().replace(/^['"]|['"]$/g, "");
       execStop = `${entrypoint} ${p}`;
     } else {
-      execStop = `${entrypoint} bash -lc ${
-        JSON.stringify(escapeForSystemd(resolvedShutdownCommand))
-      }`;
+      execStop = `${entrypoint} bash -lc ${JSON.stringify(escapeForSystemd(resolvedShutdownCommand))
+        }`;
     }
   } else if (shutdownPath) {
     execStop = `${entrypoint} ${shutdownPath}`;
@@ -191,15 +147,8 @@ export function buildUnitContent(
     envLines.push(`Environment=${key}=${value}`);
   }
 
-  const configEnv = deriveModuleConfigEnv(moduleName, configData);
-  for (const [key, value] of Object.entries(configEnv)) {
-    envLines.push(`Environment=${key}=${value}`);
-  }
   envLines.push(`Environment=HOST=${host}`);
   envLines.push(`Environment=PSH_MODULE_NAME=${moduleName}`);
-  if (configPath) {
-    envLines.push(`Environment=PSH_MODULE_CONFIG=${configPath}`);
-  }
 
   const serviceLines = [
     "[Service]",
