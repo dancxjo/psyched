@@ -87,8 +87,13 @@ def test_catalog_host_health_topic_matches_hostname(repo_root: Path) -> None:
     short_host = socket.gethostname().split(".")[0]
     expected = f"/hosts/health/{short_host}"
 
-    topics = [topic.topic for topic in pilot.topics]
-    assert expected in topics, f"Expected host health topic {expected}, found {topics}"
+    topics = {topic.topic: topic for topic in pilot.topics}
+    assert expected in topics, f"Expected host health topic {expected}, found {list(topics)}"
+
+    host_health_topic = topics[expected]
+    assert (
+        host_health_topic.type == "std_msgs/msg/String"
+    ), "Host health topic should advertise the std_msgs/String payload"
 
 
 def test_catalog_topics_are_unique(repo_root: Path) -> None:

@@ -164,9 +164,13 @@ class ModuleCatalog:
                     if not topic_name:
                         continue
                     normalized_name = topic_name.lstrip("/")
+                    type_name = str(topic_entry.get("type", "std_msgs/msg/String"))
                     if normalized_name in {"host/health", _legacy_host_health_topic()}:
                         topic_name = _HOST_HEALTH_TOPIC
-                    type_name = str(topic_entry.get("type", "std_msgs/msg/String"))
+                        # Host health metrics are published as JSON payloads in std_msgs/String.
+                        # Ensure manifests advertising the legacy HostHealth type still resolve
+                        # to the runtime message so websocket subscriptions succeed.
+                        type_name = "std_msgs/msg/String"
                     access = str(topic_entry.get("access", "ro"))
                     presentation = (
                         str(topic_entry.get("presentation")) if topic_entry.get("presentation") else None
