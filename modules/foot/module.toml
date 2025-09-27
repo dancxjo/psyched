@@ -33,6 +33,7 @@ branch = "fix-std-string"
 
 [[actions]]
 type = "apt_install"
+# TODO: Introduce variable substitution for ROS distro in module.toml files and replace 'kilted' with '${ROS_DISTRO}'
 packages = ["libboost-all-dev", "ros-kilted-diagnostic-updater"]
 update = true
 
