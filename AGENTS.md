@@ -63,6 +63,8 @@ workspace.
   `--allow-read --allow-write --allow-env`).
 - The container image may not ship with the Deno CLI. Install it locally before
   running `deno test` or other workspace scripts that depend on it.
+- Pilot backend tests rely on pip packages (`fastapi`, `httpx`, `uvicorn`).
+  Install them in the environment before running the pilot test suite locally.
 
 Important workflow note:
 
