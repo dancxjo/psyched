@@ -1,8 +1,5 @@
-"""Placeholder wifi Python package.
+"""Wi-Fi ROS helpers."""
 
-This package exists to satisfy setuptools `packages=["wifi", "wifi_setup"]`
-and to make the ROS 2 ament_python package structure complete for local
-development. Add actual runtime code here when implementing wifi behaviours.
-"""
+from .ap_manager import WifiAccessPointNode
 
-__all__ = []
+__all__ = ['WifiAccessPointNode']

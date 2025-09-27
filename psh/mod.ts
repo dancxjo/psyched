@@ -5,6 +5,7 @@ import {
   loadModuleSpec,
   prepareModuleContext,
   repoDirFromModules,
+  setupMultipleModules,
 } from "./modules.ts";
 import { $, type DaxCommandBuilder, type DaxTemplateTag } from "./util.ts";
 
@@ -41,6 +42,36 @@ async function runProcess(
   }
 }
 
+async function expandModuleList(modules: string[]): Promise<string[]> {
+  const repoDir = repoDirFromModules();
+  const moduleRoot = join(repoDir, "modules");
+  const seen = new Set<string>();
+  const expanded: string[] = [];
+  for (const name of modules) {
+    const trimmed = name?.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (trimmed === "*" || lower === "all") {
+      try {
+        for await (const entry of Deno.readDir(moduleRoot)) {
+          if (!entry.isDirectory) continue;
+          if (entry.name.startsWith(".")) continue;
+          if (seen.has(entry.name)) continue;
+          seen.add(entry.name);
+          expanded.push(entry.name);
+        }
+      } catch (err) {
+        console.error(`[mod] Failed to expand module wildcard '${trimmed}': ${err}`);
+      }
+      continue;
+    }
+    if (seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    expanded.push(trimmed);
+  }
+  return expanded;
+}
+
 export function runModuleScript(module: string, action?: string): Promise<void>;
 export function runModuleScript(
   modules: string[],
@@ -54,10 +85,16 @@ export async function runModuleScript(
   // module name. This mirrors the systemd helpers which accept an optional
   // string[] of units.
   if (Array.isArray(modulesOrModule)) {
-    const modules = modulesOrModule;
+    const modules = modulesOrModule.filter((value): value is string => Boolean(value));
     if (modules.length === 0) return;
+    const requested = action?.toLowerCase();
+    if (requested === "setup") {
+      const expanded = await expandModuleList(modules);
+      if (!expanded.length) return;
+      await setupMultipleModules(expanded);
+      return;
+    }
     for (const m of modules) {
-      if (!m) continue;
       // Ensure sequential invocation to preserve ordering and avoid noisy
       // parallel output.
       // eslint-disable-next-line no-await-in-loop

@@ -79,13 +79,13 @@ def test_catalog_topics_include_qos(repo_root: Path) -> None:
 
 
 def test_catalog_host_health_topic_matches_hostname(repo_root: Path) -> None:
-    """Pilot module should expose the resolved hosts/<hostname>/health path."""
+    """Pilot module should expose the resolved hosts/health/<hostname> path."""
 
     catalog = ModuleCatalog(repo_root / "modules")
     pilot = catalog.get_module("pilot")
 
     short_host = socket.gethostname().split(".")[0]
-    expected = f"/hosts/{short_host}/health"
+    expected = f"/hosts/health/{short_host}"
 
     topics = [topic.topic for topic in pilot.topics]
     assert expected in topics, f"Expected host health topic {expected}, found {topics}"

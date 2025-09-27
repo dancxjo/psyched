@@ -1,5 +1,5 @@
 name = "wifi"
-description = "User-space Wi-Fi tooling and ROS 2 status publisher"
+description = "Managed Wi-Fi access point with DHCP, mDNS, and optional internet sharing"
 
 [pilot]
 display_name = "Wi-Fi"
@@ -18,11 +18,15 @@ type = "link_packages"
 packages = ["wifi"]
 
 [[actions]]
-type = "ros_run"
-package = "wifi"
-executable = "wifi_setup"
-description = "Prime Wi-Fi status publisher"
-optional = true
+type = "pip_install"
+packages = ["zeroconf"]
+import_check = ["zeroconf"]
+break_system = true
+
+[[actions]]
+type = "apt_install"
+packages = ["hostapd", "dnsmasq", "iproute2", "iw", "iptables"]
+update = true
 
 [systemd]
 description = "Psyched Wi-Fi Access Point"

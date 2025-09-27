@@ -36,7 +36,13 @@ def _host_shortname() -> str:
     return hostname.split(".")[0]
 
 
-_HOST_HEALTH_TOPIC = f"/hosts/{_host_shortname()}/health"
+_HOST_HEALTH_TOPIC = f"/hosts/health/{_host_shortname()}"
+
+
+def _legacy_host_health_topic() -> str:
+    """Return the legacy topic path so manifests stay backward compatible."""
+
+    return f"hosts/{_host_shortname()}/health"
 
 
 def _extract_pilot_block(contents: str) -> str | None:
@@ -158,7 +164,7 @@ class ModuleCatalog:
                     if not topic_name:
                         continue
                     normalized_name = topic_name.lstrip("/")
-                    if normalized_name == "host/health":
+                    if normalized_name in {"host/health", _legacy_host_health_topic()}:
                         topic_name = _HOST_HEALTH_TOPIC
                     type_name = str(topic_entry.get("type", "std_msgs/msg/String"))
                     access = str(topic_entry.get("access", "ro"))

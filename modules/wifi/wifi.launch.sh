@@ -1,27 +1,59 @@
 #!/bin/bash
 set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-IFACE=${IFACE:-wlan0}
-AP_IP=${AP_IP:-192.168.50.1}
-HOSTNAME=$(hostname)
 
-sudo ip link set "$IFACE" down || true
-sudo ip addr flush dev "$IFACE" || true
-sudo ip addr add "$AP_IP/24" dev "$IFACE"
-sudo ip link set "$IFACE" up
-
-sudo cp dnsmasq.conf /etc/dnsmasq.conf
-sudo bash -c "echo 'address=/$HOSTNAME.local/$AP_IP' >> /etc/dnsmasq.conf"
-
-sudo cp avahi-daemon.conf /etc/avahi/avahi-daemon.conf
-sudo sed -i "s/^#*host-name=.*/host-name=$HOSTNAME/" /etc/avahi/avahi-daemon.conf
-
-sudo hostapd /etc/hostapd/hostapd.conf &
-sudo dnsmasq -C /etc/dnsmasq.conf &
-sudo avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf &
-(cd www && python3 -m http.server 80) &
-wait -n
+if [[ "${EUID}" -ne 0 ]]; then
+  exec sudo -E "$0" "$@"
+fi
 
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-export REPO_DIR
+MODULE_DIR="${MODULE_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+export REPO_DIR MODULE_DIR
+
+HOSTNAME_SHORT="$(hostname -s)"
+
+IFACE="${WIFI_INTERFACE:-wlan0}"
+SSID="${WIFI_SSID:-psyched-${HOSTNAME_SHORT}}"
+PASSPHRASE="${WIFI_PASSPHRASE:-}"
+AP_IP="${WIFI_AP_IP:-192.168.50.1/24}"
+DHCP_RANGE="${WIFI_DHCP_RANGE:-192.168.50.10,192.168.50.100}"
+DHCP_LEASE="${WIFI_DHCP_LEASE:-12h}"
+CHANNEL="${WIFI_CHANNEL:-6}"
+COUNTRY="${WIFI_COUNTRY_CODE:-US}"
+MDNS_NAME="${WIFI_MDNS_NAME:-${HOSTNAME_SHORT}}"
+HTTP_PORT="${WIFI_HTTP_PORT:-8080}"
+WS_PORT="${WIFI_WS_PORT:-8081}"
+ENABLE_NAT="${WIFI_ENABLE_NAT:-false}"
+INTERNET_IFACE="${WIFI_UPLINK_INTERFACE:-eth0}"
+STATE_DIR="${WIFI_STATE_DIR:-/run/psyched-wifi/${IFACE}}"
+
+ROS_ARGS=(
+  --ros-args
+  -p interface:="$IFACE"
+  -p ssid:="$SSID"
+  -p ap_ip:="$AP_IP"
+  -p dhcp_range:="$DHCP_RANGE"
+  -p dhcp_lease_time:="$DHCP_LEASE"
+  -p channel:=$CHANNEL
+  -p country_code:="$COUNTRY"
+  -p mdns_name:="$MDNS_NAME"
+  -p http_port:=$HTTP_PORT
+  -p websocket_port:=$WS_PORT
+  -p state_dir:="$STATE_DIR"
+)
+
+if [[ -n "$PASSPHRASE" ]]; then
+  ROS_ARGS+=(-p passphrase:="$PASSPHRASE")
+fi
+
+if [[ "${ENABLE_NAT,,}" == "true" ]]; then
+  ROS_ARGS+=(-p enable_nat:=true -p internet_interface:="$INTERNET_IFACE")
+else
+  ROS_ARGS+=(-p enable_nat:=false)
+fi
+
+echo "[wifi/launch] Starting Wi-Fi AP on ${IFACE} (SSID: ${SSID})"
+if [[ "${ENABLE_NAT,,}" == "true" ]]; then
+  echo "[wifi/launch] Internet sharing enabled via ${INTERNET_IFACE}"
+fi
+
+exec "$REPO_DIR/tools/with_ros_env.sh" ros2 run wifi wifi_ap_manager "${ROS_ARGS[@]}"

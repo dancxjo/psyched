@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish host health metrics periodically on /host/health.
+"""Publish host health metrics periodically on /hosts/health/<hostname>.
 
 Fields (JSON in std_msgs/String):
 - cpu_percent (float)
@@ -36,7 +36,7 @@ class HostHealthNode(Node):
                 short = socket.gethostname().split('.')[0]
             except Exception:
                 short = os.uname().nodename.split('.')[0] if hasattr(os, 'uname') else 'host'
-            self.topic = f'hosts/{short}/health'
+            self.topic = f'hosts/health/{short}'
         else:
             self.topic = topic_param
         self.period = self.get_parameter('period_sec').get_parameter_value().double_value or 2.0

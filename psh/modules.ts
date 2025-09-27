@@ -83,6 +83,19 @@ type ModuleAction =
   | RosRunAction
   | RunAction;
 
+type AptInstallHandler = (
+  action: AptInstallAction,
+  ctx: ModuleContext,
+) => Promise<void>;
+
+type PipInstallHandler = (
+  action: PipInstallAction,
+  ctx: ModuleContext,
+) => Promise<void>;
+
+let aptInstallHandler: AptInstallHandler = applyAptInstall;
+let pipInstallHandler: PipInstallHandler = applyPipInstall;
+
 interface ModuleSystemdSpec {
   description?: string;
   launch?: string;
@@ -474,10 +487,10 @@ export async function applyModuleActions(
         await applyGitClone(action as GitCloneAction, ctx);
         break;
       case "apt_install":
-        await applyAptInstall(action as AptInstallAction, ctx);
+        await aptInstallHandler(action as AptInstallAction, ctx);
         break;
       case "pip_install":
-        await applyPipInstall(action as PipInstallAction, ctx);
+        await pipInstallHandler(action as PipInstallAction, ctx);
         break;
       case "ros_run":
         await applyRosRun(action as RosRunAction, ctx);
@@ -493,6 +506,185 @@ export async function applyModuleActions(
         );
     }
   }
+}
+
+interface AggregatedModuleContext {
+  module: string;
+  ctx: ModuleContext;
+  spec: ModuleSpec;
+  actions: ModuleAction[];
+}
+
+interface PipAggregate {
+  python?: string;
+  breakSystem: boolean;
+  user: boolean;
+  packages: string[];
+  packageSet: Set<string>;
+  importChecks: string[];
+  importSet: Set<string>;
+}
+
+export async function setupMultipleModules(modules: string[]): Promise<void> {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const name of modules) {
+    const trimmed = name?.trim();
+    if (!trimmed) continue;
+    if (seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    ordered.push(trimmed);
+  }
+
+  if (!ordered.length) return;
+
+  const repoDir = repoDirFromModules();
+  const moduleRoot = join(repoDir, "modules");
+  const aggregateLabel = `multi:${ordered.join("+")}`;
+
+  const contexts: AggregatedModuleContext[] = [];
+  const aptPackages: string[] = [];
+  const aptSeen = new Set<string>();
+  let aptUpdate = false;
+
+  const pipAggregates = new Map<string, PipAggregate>();
+
+  const ensurePipAggregate = (action: PipInstallAction): PipAggregate => {
+    const pythonKey = action.python ?? "";
+    const key = `${pythonKey}|${action.break_system ? 1 : 0}|${action.user ? 1 : 0}`;
+    let aggregate = pipAggregates.get(key);
+    if (!aggregate) {
+      aggregate = {
+        python: action.python,
+        breakSystem: Boolean(action.break_system),
+        user: Boolean(action.user),
+        packages: [],
+        packageSet: new Set<string>(),
+        importChecks: [],
+        importSet: new Set<string>(),
+      };
+      pipAggregates.set(key, aggregate);
+    }
+    return aggregate;
+  };
+
+  try {
+    for (const moduleName of ordered) {
+      const specInfo = await loadModuleSpec(moduleName);
+      if (!specInfo) {
+        console.warn(`[module:${moduleName}] Module specification not found; skipping.`);
+        continue;
+      }
+      const ctx = await prepareModuleContext(moduleName);
+      contexts.push({
+        module: moduleName,
+        ctx,
+        spec: specInfo.spec,
+        actions: [],
+      });
+    }
+
+    if (!contexts.length) return;
+
+    for (const entry of contexts) {
+      const moduleActions = entry.spec.actions ?? [];
+      const remaining: ModuleAction[] = [];
+      for (const action of moduleActions) {
+        if (action.type === "apt_install") {
+          const aptAction = action as AptInstallAction;
+          aptUpdate ||= Boolean(aptAction.update);
+          for (const pkg of aptAction.packages ?? []) {
+            if (aptSeen.has(pkg)) continue;
+            aptSeen.add(pkg);
+            aptPackages.push(pkg);
+          }
+          continue;
+        }
+        if (action.type === "pip_install") {
+          const pipAction = action as PipInstallAction;
+          const aggregate = ensurePipAggregate(pipAction);
+          for (const pkg of pipAction.packages ?? []) {
+            if (aggregate.packageSet.has(pkg)) continue;
+            aggregate.packageSet.add(pkg);
+            aggregate.packages.push(pkg);
+          }
+          if (pipAction.import_check) {
+            for (const modName of pipAction.import_check) {
+              if (aggregate.importSet.has(modName)) continue;
+              aggregate.importSet.add(modName);
+              aggregate.importChecks.push(modName);
+            }
+          }
+          continue;
+        }
+        remaining.push(action);
+      }
+      entry.actions = remaining;
+    }
+
+    const aggregateCtx: ModuleContext = {
+      module: aggregateLabel,
+      repoDir,
+      moduleDir: moduleRoot,
+      srcDir: join(repoDir, "src"),
+      moduleConfig: null,
+      moduleConfigPath: null,
+      moduleConfigOwned: false,
+    };
+
+    if (aptPackages.length) {
+      await aptInstallHandler({
+        type: "apt_install",
+        packages: aptPackages,
+        update: aptUpdate,
+      }, aggregateCtx);
+    }
+
+    for (const aggregate of pipAggregates.values()) {
+      const pipAction: PipInstallAction = {
+        type: "pip_install",
+        packages: aggregate.packages,
+      };
+      if (aggregate.importChecks.length) {
+        pipAction.import_check = aggregate.importChecks;
+      }
+      if (aggregate.python !== undefined) {
+        pipAction.python = aggregate.python;
+      }
+      if (aggregate.breakSystem) {
+        pipAction.break_system = true;
+      }
+      if (aggregate.user) {
+        pipAction.user = true;
+      }
+      await pipInstallHandler(pipAction, aggregateCtx);
+    }
+
+    for (const entry of contexts) {
+      if (!entry.actions.length) continue;
+      await applyModuleActions(entry.actions, entry.ctx);
+    }
+  } finally {
+    for (const entry of contexts) {
+      await cleanupModuleContext(entry.ctx);
+    }
+  }
+}
+
+export function setAptInstallHandler(handler: AptInstallHandler): void {
+  aptInstallHandler = handler;
+}
+
+export function resetAptInstallHandler(): void {
+  aptInstallHandler = applyAptInstall;
+}
+
+export function setPipInstallHandler(handler: PipInstallHandler): void {
+  pipInstallHandler = handler;
+}
+
+export function resetPipInstallHandler(): void {
+  pipInstallHandler = applyPipInstall;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

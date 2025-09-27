@@ -27,7 +27,6 @@ setup(
         'console_scripts': [
             'pilot_backend = pilot.main:main',
             'host_health = pilot.host_health_node:main',
-            'pilot_ap = pilot.ap_node:main',
         ],
     },
 )

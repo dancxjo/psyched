@@ -9,6 +9,7 @@ regimes = ["system"]
 name = "/cmd_vel"
 type = "geometry_msgs/msg/Twist"
 presentation = "joystick"
+access = "rw"
 qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
 
 [[pilot.topics]]
@@ -35,19 +36,9 @@ script = "scripts/install_ros_python_deps.sh"
 
 [[actions]]
 type = "pip_install"
-packages = [
-    "fastapi",
-    "uvicorn[standard]",
-    "pydantic",
-    "psutil",
-]
+packages = ["fastapi", "uvicorn[standard]", "pydantic", "psutil"]
 import_check = ["fastapi"]
 break_system = true
-
-[[actions]]
-type = "apt_install"
-packages = ["hostapd", "dnsmasq", "iproute2", "iw"]
-update = true
 
 [systemd]
 description = "Psyched Pilot UI"

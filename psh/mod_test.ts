@@ -5,7 +5,13 @@ import {
   runModuleScript,
   setModCommandRunner,
 } from "./mod.ts";
-import { repoDirFromModules } from "./modules.ts";
+import {
+  repoDirFromModules,
+  resetAptInstallHandler,
+  resetPipInstallHandler,
+  setAptInstallHandler,
+  setPipInstallHandler,
+} from "./modules.ts";
 import { createDaxStub, type StubInvocation } from "./test_utils.ts";
 
 async function withTempModule(
@@ -74,15 +80,98 @@ Deno.test("runModuleScript falls back to systemd launch command", async () => {
         if (!captured) {
           throw new Error("Expected launch_command to be invoked");
         }
-        const repoDir = repoDirFromModules();
-        assertEquals(
-          captured.values[0],
-          join(repoDir, "tools", "systemd_entrypoint.sh"),
-        );
-        assertEquals(captured.values[1], ["bash", "-lc", "echo hi"]);
+        assertEquals(captured.parts[0], "bash -lc ");
+        assertEquals(captured.values[0], "echo hi");
       },
     );
   } finally {
     resetModCommandRunner();
   }
 });
+
+Deno.test(
+  "runModuleScript aggregates dependency installs across modules",
+  async () => {
+    const repoDir = repoDirFromModules();
+    const moduleRoot = join(repoDir, "modules");
+    const modA = join(moduleRoot, "aggregate_mod_a");
+    const modB = join(moduleRoot, "aggregate_mod_b");
+    await Deno.mkdir(modA, { recursive: true });
+    await Deno.mkdir(modB, { recursive: true });
+
+    await Deno.writeTextFile(
+      join(modA, "module.toml"),
+      `[[actions]]\n` +
+        `type = "apt_install"\n` +
+        `packages = ["curl", "htop"]\n` +
+        `update = true\n\n` +
+        `[[actions]]\n` +
+        `type = "pip_install"\n` +
+        `packages = ["fastapi", "psutil"]\n` +
+        `import_check = ["fastapi"]\n` +
+        `break_system = true\n`,
+    );
+
+    await Deno.writeTextFile(
+      join(modB, "module.toml"),
+      `[[actions]]\n` +
+        `type = "apt_install"\n` +
+        `packages = ["curl", "vim"]\n\n` +
+        `[[actions]]\n` +
+        `type = "pip_install"\n` +
+        `packages = ["psutil", "uvicorn"]\n` +
+        `import_check = ["uvicorn"]\n` +
+        `break_system = true\n`,
+    );
+
+    const aptCalls: Array<{ packages: string[]; update: boolean; module: string }> = [];
+    const pipCalls: Array<{
+      packages: string[];
+      import_check?: string[];
+      python?: string;
+      break_system?: boolean;
+      module: string;
+    }> = [];
+
+    setAptInstallHandler(async (action, ctx) => {
+      aptCalls.push({
+        packages: [...action.packages],
+        update: Boolean(action.update),
+        module: ctx.module,
+      });
+    });
+
+    setPipInstallHandler(async (action, ctx) => {
+      pipCalls.push({
+        packages: [...action.packages],
+        import_check: action.import_check ? [...action.import_check] : undefined,
+        python: action.python,
+        break_system: action.break_system,
+        module: ctx.module,
+      });
+    });
+
+    try {
+      await runModuleScript(["aggregate_mod_a", "aggregate_mod_b"], "setup");
+
+      assertEquals(aptCalls.length, 1);
+      assertEquals(aptCalls[0].packages, ["curl", "htop", "vim"]);
+      assertEquals(aptCalls[0].update, true);
+      assertEquals(aptCalls[0].module, "multi:aggregate_mod_a+aggregate_mod_b");
+
+      assertEquals(pipCalls.length, 1);
+      assertEquals(pipCalls[0].packages, ["fastapi", "psutil", "uvicorn"]);
+      assertEquals(pipCalls[0].import_check, ["fastapi", "uvicorn"]);
+      assertEquals(pipCalls[0].break_system, true);
+      assertEquals(
+        pipCalls[0].module,
+        "multi:aggregate_mod_a+aggregate_mod_b",
+      );
+    } finally {
+      resetAptInstallHandler();
+      resetPipInstallHandler();
+      await Deno.remove(modA, { recursive: true }).catch(() => undefined);
+      await Deno.remove(modB, { recursive: true }).catch(() => undefined);
+    }
+  },
+);
