@@ -33,7 +33,7 @@ branch = "fix-std-string"
 
 [[actions]]
 type = "apt_install"
-packages = ["libboost-all-dev"]
+packages = ["libboost-all-dev", "ros-kilted-diagnostic-updater"]
 update = true
 
 [systemd]
