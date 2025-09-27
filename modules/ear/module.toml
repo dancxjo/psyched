@@ -29,15 +29,10 @@ presentation = "waveform"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
-name = "/audio/speech_segment"
-type = "std_msgs/msg/ByteMultiArray"
-access = "ro"
-presentation = "waveform"
-qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
-
-[[pilot.topics]]
 name = "/audio/transcription"
+type = "psyched_msgs/msg/Transcript"
 access = "ro"
+presentation = "transcription"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[actions]]

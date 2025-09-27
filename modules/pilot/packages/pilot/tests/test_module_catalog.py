@@ -101,3 +101,17 @@ def test_catalog_topics_are_unique(repo_root: Path) -> None:
         assert len(topic_names) == len(set(topic_names)), (
             f"Duplicate topics found in module {module.name}: {topic_names}"
         )
+
+
+def test_ear_module_describes_transcription_topic(repo_root: Path) -> None:
+    """Ear manifest should surface transcription metadata for the pilot UI."""
+
+    catalog = ModuleCatalog(repo_root / "modules")
+    ear = catalog.get_module("ear")
+
+    transcripts = [topic for topic in ear.topics if topic.topic == "/audio/transcription"]
+    assert transcripts, "Ear module must describe the transcription topic"
+
+    transcript_topic = transcripts[0]
+    assert transcript_topic.type == "psyched_msgs/msg/Transcript"
+    assert transcript_topic.presentation == "transcription"
