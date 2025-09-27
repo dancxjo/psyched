@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+"""Voice activity detection node for the Ear module."""
+import time
+
+import audioop
 import rclpy
+import webrtcvad
 from rclpy.node import Node
 from std_msgs.msg import ByteMultiArray, UInt32
-import webrtcvad
-import audioop
-import time
+
+from .audio_utils import coerce_pcm_bytes
 
 class VADNode(Node):
     def __init__(self):
@@ -33,8 +37,11 @@ class VADNode(Node):
         self.get_logger().info("VAD node started.")
 
     def audio_callback(self, msg: ByteMultiArray):
+        """Process incoming audio frames and publish detected speech segments."""
+        raw_audio = coerce_pcm_bytes(msg.data)
+
         # The input is 44100 Hz, 16-bit, 1-channel. Resample to 16kHz for VAD.
-        resampled_audio, _ = audioop.ratecv(msg.data, 2, 1, 44100, self.target_sample_rate, None)
+        resampled_audio, _ = audioop.ratecv(raw_audio, 2, 1, 44100, self.target_sample_rate, None)
         self._buffer += resampled_audio
         
         while len(self._buffer) >= self.frame_size:
@@ -55,7 +62,7 @@ class VADNode(Node):
                 
                 # Publish the accumulated speech segment
                 audio_msg = ByteMultiArray()
-                audio_msg.data = self.speech_segment
+                audio_msg.data = list(self.speech_segment)
                 self.speech_audio_pub.publish(audio_msg)
                 
                 # Reset for next speech segment
