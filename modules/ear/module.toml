@@ -17,6 +17,7 @@ qos = { history = "keep_last", depth = 5, reliability = "best_effort", durabilit
 name = "/audio/speech_duration"
 type = "std_msgs/msg/UInt32"
 access = "ro"
+# presentation = "diode"
 presentation = "gauge"
 qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
 

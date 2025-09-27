@@ -20,6 +20,20 @@ access = "ro"
 presentation = "status"
 qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
 
+[[pilot.topics]]
+name = "/sensors/bumper"
+type = "std_msgs/msg/Bool"
+access = "ro"
+presentation = "diode"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/sensors/cliff"
+type = "std_msgs/msg/Bool"
+access = "ro"
+presentation = "diode"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
 [[actions]]
 type = "git_clone"
 repo = "https://github.com/autonomylab/create_robot.git"

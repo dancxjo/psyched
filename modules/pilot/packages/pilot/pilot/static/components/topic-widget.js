@@ -104,6 +104,12 @@ class PilotTopicWidget extends LitElement {
     if (!this.record) {
       return html`<div class="inactive">Not subscribed</div>`;
     }
+    if (this.topic?.presentation === 'diode') {
+      // Expect boolean payloads or objects with a boolean `data` field.
+      const val = (typeof this.record.last === 'boolean') ? this.record.last : (this.record.last?.data ?? false);
+      const cls = `diode ${val ? 'flashing' : 'off'}`;
+      return html`<div class="diode-container"><div class=${cls} title="${val ? 'Active' : 'Inactive'}"></div></div>`;
+    }
     if (this.topic?.presentation === 'joystick') {
       return html`<pilot-joystick-control .record=${this.record}></pilot-joystick-control>`;
     }

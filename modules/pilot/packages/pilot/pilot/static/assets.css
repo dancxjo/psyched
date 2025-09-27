@@ -509,6 +509,35 @@ body {
   color: var(--lcars-text);
 }
 
+/* Diode / indicator styles */
+.diode-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 0;
+}
+.diode {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(248,128,60,0.95), rgba(248,128,60,0.25));
+  box-shadow: 0 0 30px rgba(248,128,60,0.6), inset 0 0 12px rgba(255,220,180,0.25);
+  transition: transform 0.08s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.diode.off {
+  opacity: 0.25;
+  box-shadow: none;
+  background: radial-gradient(circle at 30% 30%, rgba(88,178,220,0.12), rgba(27,31,42,0.6));
+}
+.diode.flashing {
+  animation: diode-flash 1s infinite;
+}
+@keyframes diode-flash {
+  0% { transform: scale(1); box-shadow: 0 0 6px rgba(248,128,60,0.4), inset 0 0 6px rgba(255,220,180,0.15); }
+  50% { transform: scale(1.06); box-shadow: 0 0 40px rgba(248,128,60,0.9), inset 0 0 12px rgba(255,220,180,0.25); }
+  100% { transform: scale(1); box-shadow: 0 0 6px rgba(248,128,60,0.4), inset 0 0 6px rgba(255,220,180,0.15); }
+}
+
 .inactive {
   color: var(--lcars-muted);
   font-style: italic;
