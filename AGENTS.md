@@ -106,9 +106,10 @@ or conflicting package sources.
 - `py_trees_ros` is not published to PyPI; `tools/setup_env.sh` installs it
   from GitHub. Ensure network access is available the first time you source the
   environment on a new machine.
-- Two copies of `psyched_msgs` live under `modules/ear/packages/` and
-  `modules/chat/packages/`; keep their message definitions in sync when
-  updating shared types.
+- `psyched_msgs` manifests are shared between modules: `modules/chat/` is the
+  canonical source and `modules/ear/` symlinks to it, while `modules/gps/`
+  carries a standalone copy. Update all three when adding or modifying
+  messages.
 - The legacy Makefile has been removed; rely on `psh` commands and direct
   `colcon` invocations for setup/build/systemd tasks.
 - Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure

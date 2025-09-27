@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pytest
 
 from pilot.qos import QosConfig
-from pilot.topic_manager import TopicSession, TopicSessionManager
+from pilot.topic_manager import TopicSession, TopicSessionManager, _normalise_json_types
 
 
 @dataclass
@@ -86,3 +86,21 @@ def test_topic_manager_rejects_unknown_types():
 
     with pytest.raises(ValueError):
         manager.create_session(topic="/bad", access="ro", qos=None, module=None, message_type="unknown/msg/Foo")
+
+
+def test_normalise_json_types_replaces_invalid_numbers():
+    payload = {
+        "finite": 1.23,
+        "nan": float("nan"),
+        "inf": float("inf"),
+        "nested": [float("nan"), {"inner": float("-inf")}, "ok"],
+    }
+
+    result = _normalise_json_types(payload)
+
+    assert result["finite"] == 1.23
+    assert result["nan"] is None
+    assert result["inf"] is None
+    assert result["nested"][0] is None
+    assert result["nested"][1]["inner"] is None
+    assert result["nested"][2] == "ok"

@@ -177,8 +177,8 @@ def test_create_topic_session(test_client):
     assert topic_manager.created[-1]["topic"] == "/cmd_vel"
 
 
-def test_create_host_health_topic_uses_string_type(test_client):
-    """Host health subscriptions should resolve to std_msgs/String payloads."""
+def test_create_host_health_topic_uses_structured_message(test_client):
+    """Host health subscriptions should resolve to the HostHealth payload."""
 
     topic_manager: FakeTopicManager = test_client.app.state._test_topics
     catalog: ModuleCatalog = test_client.app.state._test_catalog
@@ -193,8 +193,8 @@ def test_create_host_health_topic_uses_string_type(test_client):
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["session"]["message_type"] == "std_msgs/msg/String"
-    assert topic_manager.created[-1]["message_type"] == "std_msgs/msg/String"
+    assert body["session"]["message_type"] == "psyched_msgs/msg/HostHealth"
+    assert topic_manager.created[-1]["message_type"] == "psyched_msgs/msg/HostHealth"
 
 
 def test_get_voice_config_returns_yaml_payload(test_client):

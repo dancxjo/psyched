@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping, Sequence
 
 try:
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
@@ -49,6 +50,19 @@ def message_to_ordered_dict(message):  # type: ignore[override]
     if _ros_message_to_ordereddict is not None:
         return _ros_message_to_ordereddict(message)
     return getattr(message, "__dict__", {})
+
+
+def _normalise_json_types(value: Any) -> Any:
+    """Recursively normalise ROS payloads so JSON transport remains standards-compliant."""
+
+    if isinstance(value, Mapping):
+        return {key: _normalise_json_types(inner) for key, inner in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_normalise_json_types(item) for item in value]
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+    return value
 
 
 def _dict_to_ros_message(msg_class, message_type: str, values: Mapping[str, Any]):
@@ -190,7 +204,7 @@ class TopicSessionManager:
 
         if access in {"ro", "rw"}:
             def _callback(message):
-                data = message_to_ordered_dict(message)
+                data = _normalise_json_types(message_to_ordered_dict(message))
                 if self._loop.is_closed():  # pragma: no cover - defensive
                     return
                 try:

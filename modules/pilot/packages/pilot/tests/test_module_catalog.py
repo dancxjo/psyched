@@ -92,8 +92,8 @@ def test_catalog_host_health_topic_matches_hostname(repo_root: Path) -> None:
 
     host_health_topic = topics[expected]
     assert (
-        host_health_topic.type == "std_msgs/msg/String"
-    ), "Host health topic should advertise the std_msgs/String payload"
+        host_health_topic.type == "psyched_msgs/msg/HostHealth"
+    ), "Host health topic should advertise the HostHealth payload"
 
 
 def test_catalog_topics_are_unique(repo_root: Path) -> None:

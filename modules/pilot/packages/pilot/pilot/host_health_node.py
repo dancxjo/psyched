@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
 """Publish host health metrics periodically on /hosts/health/<hostname>.
 
-Fields (JSON in std_msgs/String):
-- cpu_percent (float)
-- load_avg_1, load_avg_5, load_avg_15 (float)
-- mem_used_percent (float)
-- mem_total_mb, mem_used_mb (float)
-- temp_c (float, optional)
-- uptime_sec (float)
-- disk_used_percent_root (float)
+Metrics are reported using :class:`psyched_msgs.msg.HostHealth` so
+subscribers receive structured telemetry rather than JSON strings.
 """
-import json
 import os
 import time
 import socket
-from typing import Optional
+from typing import Dict, Optional
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String as StringMsg
+from psyched_msgs.msg import HostHealth
 
 try:
     import psutil  # type: ignore
@@ -40,7 +33,7 @@ class HostHealthNode(Node):
         else:
             self.topic = topic_param
         self.period = self.get_parameter('period_sec').get_parameter_value().double_value or 2.0
-        self.pub = self.create_publisher(StringMsg, self.topic, 10)
+        self.pub = self.create_publisher(HostHealth, self.topic, 10)
         self.timer = self.create_timer(self.period, self._tick)
         self.boot_time = psutil.boot_time() if psutil else time.time()
         self.get_logger().info(f'Host health publishing on /{self.topic} every {self.period}s')
@@ -73,30 +66,46 @@ class HostHealthNode(Node):
                 continue
         return None
 
+    @staticmethod
+    def _coerce(value: Optional[float]) -> float:
+        """Convert optional floats into finite ``float`` values.
+
+        Missing values are encoded as ``NaN`` so downstream consumers can
+        detect unavailable sensors while keeping a fixed-size message.
+        """
+
+        if value is None:
+            return float('nan')
+        try:
+            coerced = float(value)
+        except (TypeError, ValueError):
+            return float('nan')
+        return coerced
+
     def _tick(self):
         now = time.time()
-        data = {}
+        metrics: Dict[str, float | None] = {}
         try:
             if psutil:
-                data['cpu_percent'] = float(psutil.cpu_percent(interval=None))
+                metrics['cpu_percent'] = float(psutil.cpu_percent(interval=None))
                 la1, la5, la15 = os.getloadavg()
-                data['load_avg_1'] = float(la1)
-                data['load_avg_5'] = float(la5)
-                data['load_avg_15'] = float(la15)
+                metrics['load_avg_1'] = float(la1)
+                metrics['load_avg_5'] = float(la5)
+                metrics['load_avg_15'] = float(la15)
                 vm = psutil.virtual_memory()
-                data['mem_used_percent'] = float(vm.percent)
-                data['mem_total_mb'] = round(vm.total / (1024*1024), 1)
-                data['mem_used_mb'] = round((vm.total - vm.available) / (1024*1024), 1)
+                metrics['mem_used_percent'] = float(vm.percent)
+                metrics['mem_total_mb'] = round(vm.total / (1024*1024), 1)
+                metrics['mem_used_mb'] = round((vm.total - vm.available) / (1024*1024), 1)
                 disk = psutil.disk_usage('/')
-                data['disk_used_percent_root'] = float(disk.percent)
+                metrics['disk_used_percent_root'] = float(disk.percent)
                 temp = self._read_temp()
                 if temp is not None:
-                    data['temp_c'] = float(temp)
-                data['uptime_sec'] = float(now - self.boot_time)
+                    metrics['temp_c'] = float(temp)
+                metrics['uptime_sec'] = float(now - self.boot_time)
             else:
                 # Minimal fallback
                 la1, la5, la15 = os.getloadavg()
-                data.update({
+                metrics.update({
                     'cpu_percent': None,
                     'load_avg_1': float(la1),
                     'load_avg_5': float(la5),
@@ -111,9 +120,20 @@ class HostHealthNode(Node):
         except Exception as e:
             self.get_logger().warn(f'Error collecting host health: {e}')
         try:
-            msg = StringMsg()
-            msg.data = json.dumps(data)
-            self.pub.publish(msg)
+            message = HostHealth()
+            message.header.stamp = self.get_clock().now().to_msg()
+            message.header.frame_id = self.topic
+            message.cpu_percent = self._coerce(metrics.get('cpu_percent'))
+            message.load_avg_1 = self._coerce(metrics.get('load_avg_1'))
+            message.load_avg_5 = self._coerce(metrics.get('load_avg_5'))
+            message.load_avg_15 = self._coerce(metrics.get('load_avg_15'))
+            message.mem_used_percent = self._coerce(metrics.get('mem_used_percent'))
+            message.mem_total_mb = self._coerce(metrics.get('mem_total_mb'))
+            message.mem_used_mb = self._coerce(metrics.get('mem_used_mb'))
+            message.disk_used_percent_root = self._coerce(metrics.get('disk_used_percent_root'))
+            message.temp_c = self._coerce(metrics.get('temp_c'))
+            message.uptime_sec = self._coerce(metrics.get('uptime_sec'))
+            self.pub.publish(message)
         except Exception as e:
             self.get_logger().warn(f'Error publishing host health: {e}')
 
