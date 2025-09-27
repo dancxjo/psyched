@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from typing import Any, Dict, Iterable, List
 
 import pytest
@@ -102,10 +103,13 @@ description = "Test module"
 name = "/cmd_vel"
 type = "geometry_msgs/msg/Twist"
 access = "rw"
+qos = { history = "keep_last", depth = 10 }
 
-[pilot.topics.qos]
-history = "keep_last"
-depth = 10
+[[pilot.topics]]
+name = "/host/health"
+type = "psyched_msgs/msg/HostHealth"
+access = "ro"
+presentation = "status"
 
 """
     )
@@ -137,6 +141,7 @@ clear: /voice/clear
     )
     app.state._test_executor = executor
     app.state._test_topics = topic_manager
+    app.state._test_catalog = catalog
     app.state._voice_config_path = voice_config_path
     client = TestClient(app)
     return client
@@ -170,6 +175,26 @@ def test_create_topic_session(test_client):
     body = response.json()
     assert body["session"]["access"] == "rw"
     assert topic_manager.created[-1]["topic"] == "/cmd_vel"
+
+
+def test_create_host_health_topic_uses_string_type(test_client):
+    """Host health subscriptions should resolve to std_msgs/String payloads."""
+
+    topic_manager: FakeTopicManager = test_client.app.state._test_topics
+    catalog: ModuleCatalog = test_client.app.state._test_catalog
+    topics = {topic.topic: topic for topic in catalog.get_module("pilot").topics}
+    assert topics, "Pilot module topics should be discovered"
+    short_host = socket.gethostname().split(".")[0]
+    expected_topic = f"/hosts/health/{short_host}"
+    assert expected_topic in topics, f"Host health topic missing from catalog: {topics.keys()}"
+    payload = {"topic": f"/hosts/health/{short_host}", "access": "ro", "module": "pilot"}
+
+    response = test_client.post("/api/topics", json=payload)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["session"]["message_type"] == "std_msgs/msg/String"
+    assert topic_manager.created[-1]["message_type"] == "std_msgs/msg/String"
 
 
 def test_get_voice_config_returns_yaml_payload(test_client):
