@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import signal
 import threading
 from pathlib import Path
@@ -20,6 +21,7 @@ except ImportError as exc:  # pragma: no cover - runtime dependency
 from .app import CommandExecutor, create_app
 from .module_catalog import ModuleCatalog
 from .topic_manager import TopicSessionManager
+from .voice_config import VoiceConfigStore
 
 
 def find_repo_root(start: Path) -> Path:
@@ -48,6 +50,13 @@ def _default_static_root() -> Path:
     return Path(__file__).resolve().parent / "static"
 
 
+def _default_voice_config_path(repo_root: Path) -> Path:
+    host = os.environ.get("HOST")
+    if host:
+        return repo_root / "hosts" / host / "config" / "voice.yaml"
+    return repo_root / "config" / "voice.yaml"
+
+
 def _create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pilot backend server")
     parser.add_argument("--host", default="0.0.0.0", help="HTTP host to bind")
@@ -71,6 +80,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     repo_root = _default_repo_root()
     modules_root = args.modules_root or (repo_root / "modules")
     static_root = args.static_root or _default_static_root()
+    voice_config_store = VoiceConfigStore(_default_voice_config_path(repo_root))
 
     rclpy.init()
     node = rclpy.create_node("pilot_backend")
@@ -88,6 +98,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         topic_manager=topic_manager,
         command_executor=command_executor,
         static_root=static_root,
+        voice_config_store=voice_config_store,
     )
 
     def _spin_executor():

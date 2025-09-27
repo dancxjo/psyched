@@ -11,10 +11,11 @@ from typing import Any, Dict, Iterable, List, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .module_catalog import ModuleCatalog, ModuleInfo, ModuleTopic
 from .topic_manager import TopicSessionManager, TopicSession
+from .voice_config import VoiceConfigStore
 
 
 class CommandRequest(BaseModel):
@@ -39,6 +40,24 @@ class PauseRequest(BaseModel):
     """Request payload for toggling topic flow."""
 
     paused: bool = True
+
+
+class VoiceConfigUpdate(BaseModel):
+    """Payload for updating the voice module configuration."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enable_tts: bool | None = None
+    engine: str | None = None
+    voice: str | None = None
+    voices_dir: str | None = None
+    model: str | None = None
+    model_url: str | None = None
+    config_url: str | None = None
+    topic: str | None = None
+    interrupt: str | None = None
+    resume: str | None = None
+    clear: str | None = None
 
 
 class CommandExecutor:
@@ -78,11 +97,13 @@ class PilotApplication:
         topic_manager: TopicSessionManager,
         command_executor: CommandExecutor,
         static_root: Path | None = None,
+        voice_config_store: VoiceConfigStore | None = None,
     ) -> None:
         self.catalog = catalog
         self.topic_manager = topic_manager
         self.command_executor = command_executor
         self.static_root = static_root
+        self.voice_config_store = voice_config_store
         self.app = FastAPI(title="Psyched Pilot", version="2.0.0", lifespan=self._lifespan)
         self._configure_routes()
 
@@ -167,6 +188,24 @@ class PilotApplication:
             session = self.topic_manager.set_paused(session_id, payload.paused)
             return {"session": session.to_dict()}
 
+        if self.voice_config_store is not None:
+
+            @router.get("/voice/config")
+            async def get_voice_config() -> Dict[str, Any]:
+                config = self.voice_config_store.load()
+                return {"config": config}
+
+            @router.put("/voice/config")
+            async def update_voice_config(payload: VoiceConfigUpdate) -> Dict[str, Any]:
+                updates = payload.model_dump(exclude_none=True)
+                if not updates:
+                    raise HTTPException(status_code=400, detail="No updates provided")
+                try:
+                    config = self.voice_config_store.update(updates)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+                return {"config": config}
+
         @self.app.websocket("/ws/topics/{session_id}")
         async def websocket_topic(session_id: str, websocket: WebSocket) -> None:
             session = self.topic_manager.get_session(session_id)
@@ -247,6 +286,7 @@ def create_app(
     topic_manager: TopicSessionManager,
     command_executor: CommandExecutor,
     static_root: Path | None = None,
+    voice_config_store: VoiceConfigStore | None = None,
 ) -> FastAPI:
     """Factory used by tests and runtime entrypoints."""
 
@@ -255,5 +295,6 @@ def create_app(
         topic_manager=topic_manager,
         command_executor=command_executor,
         static_root=static_root,
+        voice_config_store=voice_config_store,
     )
     return application.build_app()
