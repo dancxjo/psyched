@@ -25,8 +25,14 @@ script = "scripts/patch_header.sh"
 optional = true
 
 [[actions]]
+type = "run"
+description = "Change the topic name to /imu/data_raw"
+script = "scripts/patch_topic.sh"
+optional = true
+
+[[actions]]
 type = "apt_install"
-packages = ["libi2c-dev", "i2c-tools"]
+packages = ["libi2c-dev", "i2c-tools", "ros2-kilted-imu-filter-madgwick"]
 update = true
 
 [systemd]
