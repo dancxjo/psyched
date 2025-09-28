@@ -17,7 +17,8 @@ VOICE_DEFAULTS = {
     "resume_topic": "/voice/resume",
     "clear_topic": "/voice/clear",
     "interrupt_topic": "/voice/interrupt",
-    "tts_ws_url": "ws://localhost:5002/tts",
+    # Default to the forebrain host where the TTS server runs on the forebrain machine
+    "tts_ws_url": "ws://forebrain.local:5002/tts",
     "tts_ws_speaker": "",
     "tts_ws_language": "",
     "tts_ws_open_timeout": "5.0",

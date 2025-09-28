@@ -126,8 +126,8 @@ class VoiceNode(Node):
         self._announce_startup_message()
         self._setup_ping_timer()
 
-    self.get_logger().info(f"Voice node listening on topic: {self.topic}")
-    self.get_logger().info(f"Using TTS engine: {self.engine}")
+        self.get_logger().info(f"Voice node listening on topic: {self.topic}")
+        self.get_logger().info(f"Using TTS engine: {self.engine}")
 
     # ------------------------------------------------------------------
     # Parameter helpers
