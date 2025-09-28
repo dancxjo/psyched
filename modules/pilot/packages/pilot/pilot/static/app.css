@@ -16,3 +16,45 @@
 .transcription-entry .confidence{background-color:rgba(74,222,128,.3);color:#14532d}
 .transcription-entry p{margin:0;font-size:.95rem;line-height:1.4;color:#0f172a;white-space:pre-wrap}
 .transcription-empty{font-style:italic;color:#475569}
+
+/* Fixed-bottom command log + status bar overrides
+	 Keeps the most recent commands visible and prevents
+	 the log from covering page content. */
+.command-log.svelte-zuyscs.svelte-zuyscs{
+	margin-top:0;
+	position:fixed;
+	left:1rem;
+	right:1rem;
+	bottom:3.75rem; /* sits above the fixed status bar */
+	max-height:36vh;
+	overflow-y:auto;
+	padding:.75rem 1rem;
+	border-radius:.5rem .5rem 0 0;
+	background-color:var(--pilot-surface,#fff);
+	box-shadow:0 -8px 24px rgba(2,6,23,.12);
+	z-index:50;
+}
+.command-log.svelte-zuyscs ul.svelte-zuyscs{list-style:none;padding:0;margin:0}
+
+/* Keep status bar pinned to the bottom */
+.status-bar.svelte-zuyscs.svelte-zuyscs{
+	display:flex;
+	flex-wrap:wrap;
+	gap:1rem;
+	justify-content:space-between;
+	padding:.75rem 1rem;
+	color:#334155;
+	border-top:1px solid rgba(148,163,184,.4);
+	margin-top:0;
+	position:fixed;
+	left:0;
+	right:0;
+	bottom:0;
+	background-color:var(--pilot-surface,#fff);
+	z-index:60;
+}
+
+/* Make room for the fixed elements so page content isn't obscured */
+.pilot-layout.svelte-zuyscs.svelte-zuyscs{
+	padding-bottom:calc(36vh + 4.5rem);
+}
