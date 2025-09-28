@@ -7,7 +7,7 @@ description = "Inertial measurement data from the MPU6050"
 regimes = ["perception"]
 
 [[pilot.topics]]
-name = "/imu"
+name = "/imu/data"
 type = "sensor_msgs/msg/Imu"
 access = "ro"
 presentation = "imu"
