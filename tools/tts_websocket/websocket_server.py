@@ -147,7 +147,20 @@ class TTSSynthesizer:
         from TTS.api import TTS as CoquiTTS  # Imported lazily to keep tests lightweight.
 
         _LOGGER.info("Loading Coqui model '%s' (CUDA=%s)", model_name, use_cuda)
-        tts = CoquiTTS(model_name=model_name, progress_bar=False, gpu=use_cuda)
+        try:
+            tts = CoquiTTS(model_name=model_name, progress_bar=False, gpu=use_cuda)
+        except KeyError as exc:  # pragma: no cover - model name mismatch at runtime
+            _LOGGER.warning(
+                "Requested model '%s' is not available in this TTS package: %s. Falling back to a safe default model.",
+                model_name,
+                exc,
+            )
+            # Fallback to a commonly-available English TTS model that does not
+            # require special license acceptance. This lets the websocket
+            # service start on systems where multilingual XTTS-v2 isn't present.
+            fallback = os.environ.get("TTS_FALLBACK_MODEL", "tts_models/en/ljspeech/tacotron2-DDC")
+            _LOGGER.info("Attempting fallback Coqui model '%s' (CUDA=%s)", fallback, use_cuda)
+            tts = CoquiTTS(model_name=fallback, progress_bar=False, gpu=use_cuda)
         return cls(tts)
 
     def synthesize(self, request: SynthesisRequest) -> np.ndarray:

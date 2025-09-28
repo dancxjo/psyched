@@ -1,4 +1,3 @@
-# Dockerfile for a low-latency Coqui TTS websocket streamer.
 FROM ghcr.io/coqui-ai/tts:latest
 
 # Use Coqui XTTS-v2 by default (requires CPML acceptance)
