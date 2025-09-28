@@ -29,6 +29,9 @@ workspace.
 - `tools/` – Provisioning helpers (ROS/Docker installers, env shims used by
   `psh`).
 - `src/` – Additional workspace packages pulled in during builds.
+- Rust-based ASR tiers (`asr-fast`, `asr-mid`, `asr-long`) and the shared
+  `asr-core` crate now live in a Cargo workspace at the repo root; run `cargo
+  test` after changes to those services so the Rust unit tests stay green.
 
 ## Working style expectations
 - Restate the task and outline a plan before modifying files.
