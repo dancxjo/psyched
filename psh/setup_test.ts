@@ -56,6 +56,7 @@ Deno.test("speech setup is skipped when models already prepared", async () => {
   const hostName = `psh-test-${crypto.randomUUID()}`;
   const hostFile = repoPath(`hosts/${hostName}.toml`);
   const sentinel = repoPath("setup/.speech_setup_complete");
+  const sentinelAlt = repoPath(".speech_setup_complete");
   const created: string[] = [];
   try {
     await Deno.writeTextFile(hostFile, "\"setup-speech\" = true\nmodules = []\n");
@@ -65,9 +66,9 @@ Deno.test("speech setup is skipped when models already prepared", async () => {
     let speechRuns = 0;
     const overrides: Partial<SetupDeps> = {
       isRos2Installed: async () => true,
-      runInstallRos2: async () => {},
+      runInstallRos2: async () => { },
       isDockerInstalled: async () => true,
-      runInstallDocker: async () => {},
+      runInstallDocker: async () => { },
       isSpeechSetupComplete: async () => {
         speechChecks++;
         return true;
@@ -82,6 +83,6 @@ Deno.test("speech setup is skipped when models already prepared", async () => {
     assertEquals(speechRuns, 0);
   } finally {
     cleanupFiles(created);
-    cleanupFiles([sentinel]);
+    cleanupFiles([sentinel, sentinelAlt]);
   }
 });
