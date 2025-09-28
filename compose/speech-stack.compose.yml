@@ -28,17 +28,15 @@ services:
     environment:
       FOREBRAIN_LLM__MODEL__PATH: "/data/gpt-oss-20b.gguf"
       FOREBRAIN_LLM__WEBSOCKET__BIND_ADDR: "0.0.0.0:8080"
+      NVIDIA_VISIBLE_DEVICES: all
     volumes:
       - type: bind
         source: ../forebrain-llm/models
         target: /data
         read_only: false
     # Backwards-compatible GPU access for older docker-compose validators:
-    # keep runtime for compatibility and expose common NVIDIA device nodes.
-    # If you have the nvidia-container-toolkit and a modern Docker, it will still work.
-    runtime: nvidia
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
+    # expose common NVIDIA device nodes. Modern Docker + nvidia-container-toolkit
+    # does not require a special 'nvidia' runtime and works with the /dev mounts.
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
