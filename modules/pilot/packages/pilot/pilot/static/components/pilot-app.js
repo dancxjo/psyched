@@ -318,12 +318,17 @@ class PilotApp extends LitElement {
     }
     return html`
 			<section class="command-log" id="command-log" ?data-collapsed=${this.logCollapsed}>
-				<div class="command-log-header">
-					<h2>Command Log</h2>
-					<button class="log-toggle" @click=${() => { this.logCollapsed = !this.logCollapsed; }} title="${this.logCollapsed ? 'Expand' : 'Collapse'} log">
-						${this.logCollapsed ? 'Expand' : 'Collapse'}
-					</button>
-				</div>
+        <div class="command-log-header">
+          <h2>Command Log</h2>
+          <button
+            class="log-toggle"
+            aria-pressed=${this.logCollapsed}
+            aria-label=${this.logCollapsed ? 'Expand command log' : 'Collapse command log'}
+            @click=${() => { this.logCollapsed = !this.logCollapsed; }}
+          >
+            ${this.logCollapsed ? html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+          </button>
+        </div>
 				${this.logCollapsed ? nothing : html`
 				<ul>
 					${this.commandLog.map(

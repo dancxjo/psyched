@@ -6,19 +6,20 @@
 	margin-bottom: 0.5rem;
 }
 .command-log .log-toggle {
-	background: rgba(88,178,220,0.15);
-	color: #1e293b;
+	background: transparent;
+	color: var(--lcars-text);
 	border: none;
-	border-radius: 999px;
-	padding: 0.25rem 1.1rem;
-	font-size: 0.95rem;
-	font-weight: 600;
+	width: 34px;
+	height: 34px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background 0.12s, transform 0.08s;
 }
-.command-log .log-toggle:hover {
-	background: rgba(88,178,220,0.28);
-}
+.command-log .log-toggle svg { display: block; }
+.command-log .log-toggle:hover { background: rgba(255,255,255,0.03); transform: translateY(-1px); }
 .command-log[data-collapsed], .command-log[data-collapsed="true"] {
 	max-height: 3.5rem !important;
 	overflow: hidden !important;
@@ -58,7 +59,8 @@
 	right:1rem;
 	bottom:3.75rem; /* sits above the fixed status bar */
 	max-height:36vh;
-	overflow-y:auto;
+	/* prevent internal vertical scroll; the page itself scrolls to show the log */
+	overflow-y: visible;
 	padding:.75rem 1rem;
 	border-radius:.5rem .5rem 0 0;
 	background-color:var(--pilot-surface,#fff);
