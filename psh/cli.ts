@@ -22,7 +22,14 @@ import { setupHosts, getHostModules } from "./setup.ts";
 import { colconBuild, colconInstall } from "./colcon.ts";
 
 import { downloadSpeechModels } from "./download_models.ts";
-import { testSpeechStack } from "./test_speech_stack.ts";
+import {
+  launchSpeechStack,
+  stopSpeechStack,
+  testSpeechStack,
+  type SpeechStackLaunchOptions,
+  type SpeechStackStopOptions,
+  type SpeechStackTestOptions,
+} from "./speech_stack.ts";
 
 export interface CliDeps {
   printSummaryTable(): Promise<void> | void;
@@ -47,6 +54,9 @@ export interface CliDeps {
   colconBuild(): Promise<void> | void;
   colconInstall(): Promise<void> | void;
   downloadSpeechModels(): Promise<void> | void;
+  launchSpeechStack(options?: SpeechStackLaunchOptions): Promise<void> | void;
+  stopSpeechStack(options?: SpeechStackStopOptions): Promise<void> | void;
+  testSpeechStack(options?: SpeechStackTestOptions): Promise<void> | void;
 }
 
 const defaultDeps: CliDeps = {
@@ -72,6 +82,9 @@ const defaultDeps: CliDeps = {
   colconBuild,
   colconInstall,
   downloadSpeechModels,
+  launchSpeechStack,
+  stopSpeechStack,
+  testSpeechStack,
 };
 
 
@@ -92,13 +105,31 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       await deps.printSummaryTable();
     });
 
-  cli.command("speech")
-    .description("Manage or test the docker compose speech stack (ASR, TTS, LLM)")
-    .command("test")
-    .description("Test the docker compose speech stack endpoints on this machine")
-    .action(async () => {
-      await testSpeechStack();
+  const speech = new Command()
+    .description("Manage or test the docker compose speech stack (ASR, TTS, LLM)");
+
+  speech.command("launch")
+    .description("Launch the docker compose speech stack")
+    .option("-b, --build [build:boolean]", "Rebuild images before starting containers", { default: false })
+    .action(async ({ build }: { build?: boolean }) => {
+      await deps.launchSpeechStack({ build: Boolean(build) });
     });
+
+  speech.command("down")
+    .description("Stop the docker compose speech stack")
+    .option("-v, --volumes [volumes:boolean]", "Remove named volumes when stopping", { default: false })
+    .action(async ({ volumes }: { volumes?: boolean }) => {
+      await deps.stopSpeechStack({ volumes: Boolean(volumes) });
+    });
+
+  speech.command("test")
+    .description("Launch (if needed) and exercise the speech stack services")
+    .option("-b, --build [build:boolean]", "Rebuild images before running the test suite", { default: false })
+    .action(async ({ build }: { build?: boolean }) => {
+      await deps.testSpeechStack({ build: Boolean(build) });
+    });
+
+  cli.command("speech", speech);
 
   cli.command("models")
     .description("Download required models and set up folders for compose/speech-stack.compose.yml")
@@ -146,6 +177,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     );
 
   cli.command("basics")
+    .alias("dep")
     .description("Install a system dependency (ros2 or docker). Called by `psh provision` automatically.")
     .arguments("<dep:string>")
     .action(async (_options: unknown, dep: string) => {
@@ -161,6 +193,16 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       throw new Error(`Unknown dependency: ${dep}`);
     });
 
+  const knownModuleActions = new Set([
+    "launch",
+    "setup",
+    "shutdown",
+    "start",
+    "stop",
+    "list",
+    "status",
+  ]);
+
   cli.command("module")
     .alias("mod")
     .alias("m")
@@ -169,6 +211,18 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .action(
       async (_options: unknown, action: string = 'list', ...modules: string[]) => {
         let moduleList = modules;
+        let verb = action;
+
+        if (
+          moduleList.length > 0 &&
+          knownModuleActions.has(moduleList[0]) &&
+          (!verb || !knownModuleActions.has(verb))
+        ) {
+          const [firstAction, ...rest] = moduleList;
+          moduleList = verb ? [verb, ...rest] : rest;
+          verb = firstAction;
+        }
+
         if (moduleList.length === 0) {
           // Prefer an explicit HOST env var if present (useful for tests and
           // scripted runs). Otherwise defer to getHostModules which will
@@ -176,7 +230,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
           const envHost = Deno.env.get("HOST");
           moduleList = envHost ? await getHostModules(envHost) : await getHostModules();
         }
-        await deps.runModuleScript(moduleList.length ? moduleList : "*", action);
+        await deps.runModuleScript(moduleList.length ? moduleList : "*", verb);
       },
     );
 
@@ -215,7 +269,10 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .action(async (_options: unknown, action?: string, ...units: string[]) => {
       const act = normalize(action, "gen");
       if (["*", "gen", "generate"].includes(act)) {
-        // generate now merges install (write + copy into systemd dir)
+        await deps.systemdGenerate(units.length ? units : undefined);
+        return;
+      }
+      if (["install", "in"].includes(act)) {
         await deps.systemdInstall(units.length ? units : undefined);
         return;
       }
