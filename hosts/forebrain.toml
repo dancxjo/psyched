@@ -1,5 +1,6 @@
 setup_ros2 = false
 setup_docker = true
+setup_cuda = true
 setup_speech = true
 modules = []
 

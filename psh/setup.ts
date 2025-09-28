@@ -12,8 +12,10 @@ import {
   repoDirFromModules,
 } from "./modules.ts";
 import {
+  isCudaInstalled,
   isDockerInstalled,
   isRos2Installed,
+  runInstallCuda,
   runInstallDocker,
   runInstallRos2,
 } from "./install.ts";
@@ -27,6 +29,8 @@ export interface SetupDeps {
   runInstallRos2(): Promise<void> | void;
   isDockerInstalled(): Promise<boolean> | boolean;
   runInstallDocker(): Promise<void> | void;
+  isCudaInstalled(): Promise<boolean> | boolean;
+  runInstallCuda(): Promise<void> | void;
   isSpeechSetupComplete(): Promise<boolean> | boolean;
   runSetupSpeech(): Promise<void> | void;
 }
@@ -36,6 +40,8 @@ const defaultSetupDeps: SetupDeps = {
   runInstallRos2,
   isDockerInstalled,
   runInstallDocker,
+  isCudaInstalled,
+  runInstallCuda,
   isSpeechSetupComplete,
   runSetupSpeech,
 };
@@ -124,6 +130,16 @@ async function applyHost(host: string, deps: SetupDeps): Promise<void> {
       console.log("Docker already detected on system — skipping installation.");
     } else {
       await deps.runInstallDocker();
+    }
+  }
+
+  const wantsCuda = hasFlag(spec, "setup_cuda", "setup-cuda");
+  if (wantsCuda) {
+    console.log("Host requests CUDA installation.");
+    if (await deps.isCudaInstalled()) {
+      console.log("CUDA toolkit already detected on system — skipping installation.");
+    } else {
+      await deps.runInstallCuda();
     }
   }
 
