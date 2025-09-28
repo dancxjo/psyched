@@ -8,7 +8,7 @@ import threading
 import subprocess
 import json
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Mapping
 
 import rclpy
 from rclpy.node import Node
@@ -77,6 +77,8 @@ class ChatNode(Node):
         self.declare_parameter('llm_ws_connect_timeout', 1.0)
         self.declare_parameter('llm_ws_response_timeout', 0.5)
         self.declare_parameter('llm_ws_retry_cooldown', 30.0)
+        self.declare_parameter('pilot_base_url', 'http://localhost:8080')
+        self.declare_parameter('pilot_text_cache_ttl', 5.0)
 
         # Resolve parameters
         self.system_prompt: str = self.get_parameter('system_prompt').get_parameter_value().string_value
@@ -98,6 +100,15 @@ class ChatNode(Node):
         self._llm_retry_cooldown = float(
             self.get_parameter('llm_ws_retry_cooldown').get_parameter_value().double_value or 30.0
         )
+        pilot_base = (
+            self.get_parameter('pilot_base_url').get_parameter_value().string_value.strip()
+        )
+        self._pilot_modules_url = pilot_base.rstrip('/') + '/api/modules' if pilot_base else ''
+        ttl_value = self.get_parameter('pilot_text_cache_ttl').get_parameter_value().double_value or 5.0
+        self._pilot_text_cache_ttl = max(1.0, float(ttl_value))
+        self._pilot_text_cache = ''
+        self._pilot_text_expiry = 0.0
+        self._pilot_text_warned = False
 
         # Publishers/subscribers
         self.pub_voice = self.create_publisher(String, self.voice_topic, 10)
@@ -120,6 +131,117 @@ class ChatNode(Node):
         self._ensure_ollama()
 
         self.get_logger().info(f"Chat node started. Model={self.model}, conversation={self.conversation_topic}, voice={self.voice_topic}")
+
+    # --- Pilot helpers ---
+    def _compose_system_message(self) -> str:
+        """Return the system prompt with a pilot text digest appended."""
+
+        parts: List[str] = []
+        base_prompt = str(self.system_prompt or '').strip()
+        if base_prompt:
+            parts.append(base_prompt)
+        pilot_summary = self._get_pilot_text()
+        if pilot_summary:
+            parts.append(pilot_summary.strip())
+        return '\n\n'.join(parts) if parts else ''
+
+    def _get_pilot_text(self) -> str:
+        """Fetch and cache a text-only summary of the pilot UI."""
+
+        if not self._pilot_modules_url or self._http is None:
+            return self._pilot_text_cache
+        now = time.monotonic()
+        if now < self._pilot_text_expiry:
+            return self._pilot_text_cache
+        try:
+            with self._http_lock:
+                response = self._http.get(self._pilot_modules_url, timeout=2.0)
+            if response.status_code != 200:
+                if not self._pilot_text_warned:
+                    self.get_logger().warning(
+                        f'Pilot summary unavailable ({response.status_code}) from {self._pilot_modules_url}'
+                    )
+                    self._pilot_text_warned = True
+                self._pilot_text_cache = ''
+            else:
+                payload = response.json()
+                self._pilot_text_cache = self._render_pilot_text(payload)
+                self._pilot_text_warned = False
+        except Exception as exc:  # pragma: no cover - network dependent
+            if not self._pilot_text_warned:
+                self.get_logger().warning(f'Failed to fetch pilot summary: {exc}')
+                self._pilot_text_warned = True
+            self._pilot_text_cache = ''
+        self._pilot_text_expiry = now + self._pilot_text_cache_ttl
+        return self._pilot_text_cache
+
+    def _render_pilot_text(self, payload: Any) -> str:
+        """Convert the pilot module payload into a readable text digest.
+
+        The digest mirrors the Pilot control surface layout so the language
+        model receives the same module ordering and context operators see in
+        the browser UI. Each module entry includes its description, regimes,
+        supported commands, and declared topics. For example, a payload with
+        a single Pilot module produces output resembling::
+
+            --- Pilot Control Surface (text-only digest) ---
+            Module: Pilot
+              Description: Teleoperation dashboard
+              Regimes: system
+              Module commands: setup, restart
+              Topics:
+                - /cmd_vel | geometry_msgs/msg/Twist | access=rw | view=joystick
+
+        """
+
+        header = '--- Pilot Control Surface (text-only digest) ---'
+        modules: List[Mapping[str, Any]] = []
+        if isinstance(payload, Mapping):
+            raw_modules = payload.get('modules')
+            if isinstance(raw_modules, list):
+                modules = [m for m in raw_modules if isinstance(m, Mapping)]
+
+        if not modules:
+            return header + '\nPilot status: unavailable.'
+
+        lines: List[str] = [header]
+        for module in modules:
+            name = str(module.get('display_name') or module.get('name') or 'Module').strip()
+            lines.append(f'Module: {name}')
+            description = str(module.get('description') or '').strip()
+            if description:
+                lines.append(f'  Description: {description}')
+            regimes = module.get('regimes')
+            if isinstance(regimes, list):
+                regimes_text = ', '.join(str(item).strip() for item in regimes if str(item).strip())
+                if regimes_text:
+                    lines.append(f'  Regimes: {regimes_text}')
+            commands = module.get('commands')
+            if isinstance(commands, Mapping):
+                mod_cmds = commands.get('mod')
+                if isinstance(mod_cmds, list) and mod_cmds:
+                    lines.append('  Module commands: ' + ', '.join(str(cmd).strip() for cmd in mod_cmds if str(cmd).strip()))
+                sys_cmds = commands.get('system')
+                if isinstance(sys_cmds, list) and sys_cmds:
+                    lines.append('  System commands: ' + ', '.join(str(cmd).strip() for cmd in sys_cmds if str(cmd).strip()))
+            topics = module.get('topics')
+            if isinstance(topics, list) and topics:
+                lines.append('  Topics:')
+                for topic in topics:
+                    if not isinstance(topic, Mapping):
+                        continue
+                    topic_name = str(topic.get('topic') or topic.get('name') or 'topic').strip() or 'topic'
+                    type_name = str(topic.get('type') or topic.get('message_type') or '').strip()
+                    access = str(topic.get('access') or 'ro').strip()
+                    presentation = str(topic.get('presentation') or '').strip()
+                    details = [topic_name]
+                    if type_name:
+                        details.append(type_name)
+                    details.append(f'access={access}')
+                    if presentation:
+                        details.append(f'view={presentation}')
+                    lines.append('    - ' + ' | '.join(details))
+        return '\n'.join(lines)
 
     # --- Ollama helpers ---
     def _load_http_client(self) -> ModuleType | None:
@@ -297,7 +419,8 @@ class ChatNode(Node):
             return
 
         # Build messages with system on top
-        messages: List[Dict[str, str]] = [{'role': 'system', 'content': self.system_prompt}]
+        system_message = self._compose_system_message()
+        messages: List[Dict[str, str]] = [{'role': 'system', 'content': system_message}]
         messages.extend(self.history)
 
         # Query model
