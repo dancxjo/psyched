@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  asr:
+    build:
+      context: ..
+      dockerfile: docker/asr-fast.Dockerfile
+    image: psyched-asr-fast:local
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+
+  tts:
+    build:
+      context: ..
+      dockerfile: docker/tts-websocket.Dockerfile
+    image: psyched-tts-websocket:local
+    restart: unless-stopped
+    environment:
+      TTS_MODEL: "tts_models/en/vctk/vits"
+    ports:
+      - "5002:5002"
+
+  llm:
+    build:
+      context: ..
+      dockerfile: docker/forebrain-llm.Dockerfile
+    image: psyched-forebrain-llm:local
+    restart: unless-stopped
+    environment:
+      FOREBRAIN_LLM__MODEL__PATH: "/data/model.gguf"
+      FOREBRAIN_LLM__WEBSOCKET__BIND_ADDR: "0.0.0.0:8080"
+    volumes:
+      - type: bind
+        source: ../forebrain-llm/models
+        target: /data
+        read_only: false
+    ports:
+      - "8080:8080"

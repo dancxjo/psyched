@@ -1,9 +1,15 @@
 """ROS 2 bridge that converts voiced audio segments into transcripts."""
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
 import math
+import os
 import queue
 import threading
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
@@ -27,6 +33,13 @@ except ImportError:  # pragma: no cover - unit tests stub out ROS.
     SingleThreadedExecutor = object  # type: ignore
     ByteMultiArray = object  # type: ignore
     Transcript = object  # type: ignore
+
+try:  # Optional websocket dependency for remote ASR.
+    from websockets.asyncio.client import connect as websocket_connect
+    from websockets.exceptions import ConnectionClosed
+except ImportError:  # pragma: no cover - dependency optional for tests.
+    websocket_connect = None  # type: ignore
+    ConnectionClosed = RuntimeError  # type: ignore
 
 
 def _logprob_to_confidence(logprob: float) -> float:
@@ -173,6 +186,215 @@ class TranscriptionWorker:
         self.on_result(text, float(confidence))
 
 
+class RemoteAsrBackend:
+    """Client for the websocket-based ASR microservice."""
+
+    def __init__(
+        self,
+        *,
+        uri: str,
+        language: Optional[str],
+        connect_timeout: float,
+        response_timeout: float,
+        logger=None,
+        connector=None,
+        monotonic: Callable[[], float] | None = None,
+    ) -> None:
+        if not uri:
+            raise ValueError('remote ASR URI must be non-empty')
+        if connector is None and websocket_connect is None:
+            raise RuntimeError('websockets dependency is not available')
+        self._uri = uri
+        self._language = language
+        self._connect_timeout = max(0.1, float(connect_timeout))
+        self._response_timeout = max(0.1, float(response_timeout))
+        self._logger = logger
+        self._connector = connector or websocket_connect
+        self._monotonic = monotonic or time.monotonic
+
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+        if not pcm_bytes:
+            return None
+        payload_b64 = base64.b64encode(pcm_bytes).decode('ascii')
+        stream_id = f'ear-{uuid.uuid4().hex}'
+        chunk_id = f'chunk-{uuid.uuid4().hex}'
+
+        try:
+            return asyncio.run(
+                self._transcribe_async(
+                    stream_id=stream_id,
+                    chunk_id=chunk_id,
+                    payload_b64=payload_b64,
+                    sample_rate=sample_rate,
+                )
+            )
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(f'remote ASR error: {exc}') from exc
+
+    async def _transcribe_async(
+        self,
+        *,
+        stream_id: str,
+        chunk_id: str,
+        payload_b64: str,
+        sample_rate: int,
+    ) -> Optional[Tuple[str, float]]:
+        connector = self._connector
+        if connector is None:
+            raise RuntimeError('websocket connector unavailable')
+
+        init_payload = {
+            'type': 'init',
+            'stream_id': stream_id,
+            'lang': self._language,
+            'content_type': f'audio/pcm; rate={sample_rate}',
+            'sample_rate': sample_rate,
+            'extras': {},
+        }
+        audio_payload = {
+            'type': 'audio',
+            'stream_id': stream_id,
+            'seq': 1,
+            'payload_b64': payload_b64,
+        }
+        commit_payload = {
+            'type': 'commit',
+            'stream_id': stream_id,
+            'chunk_id': chunk_id,
+        }
+
+        try:
+            async with connector(
+                self._uri,
+                open_timeout=self._connect_timeout,
+                close_timeout=self._connect_timeout,
+                ping_interval=None,
+                ping_timeout=self._response_timeout,
+                max_size=None,
+            ) as websocket:
+                await websocket.send(json.dumps(init_payload))
+                await websocket.send(json.dumps(audio_payload))
+                await websocket.send(json.dumps(commit_payload))
+
+                deadline = self._monotonic() + self._response_timeout
+                text: Optional[str] = None
+                confidence: Optional[float] = None
+
+                while True:
+                    remaining = deadline - self._monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        message = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        break
+                    except ConnectionClosed as exc:  # pragma: no cover - depends on runtime failures.
+                        raise RuntimeError(f'connection closed: {exc}') from exc
+
+                    if isinstance(message, bytes):
+                        continue
+                    try:
+                        payload = json.loads(message)
+                    except json.JSONDecodeError:
+                        continue
+                    msg_type = str(payload.get('type', '')).lower()
+                    if msg_type == 'error':
+                        raise RuntimeError(str(payload.get('message', 'remote asr error')))
+                    if msg_type == 'final':
+                        text = str(payload.get('text', '')).strip()
+                        conf = payload.get('confidence')
+                        confidence = float(conf) if conf is not None else confidence
+                        break
+                    if msg_type == 'partial' and not text:
+                        text = str(payload.get('text', '')).strip()
+                        conf = payload.get('avg_logprob')
+                        if conf is not None:
+                            try:
+                                confidence = float(conf)
+                            except Exception:
+                                confidence = confidence
+
+                if not text:
+                    return None
+                return text, float(confidence or 0.0)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(str(exc)) from exc
+
+
+class ChainedTranscriptionBackend:
+    """Backend that prefers a primary decoder but falls back when unavailable."""
+
+    def __init__(
+        self,
+        *,
+        primary,
+        fallback,
+        cooldown_seconds: float,
+        logger=None,
+        monotonic: Callable[[], float] | None = None,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self._cooldown = max(0.0, float(cooldown_seconds))
+        self._logger = logger
+        self._monotonic = monotonic or time.monotonic
+        self._next_retry = 0.0
+
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+        now = self._monotonic()
+        if self._primary is not None and now >= self._next_retry:
+            try:
+                return self._primary.transcribe(pcm_bytes, sample_rate)
+            except Exception as exc:
+                if self._logger:
+                    self._logger.warning(f'Remote ASR failed: {exc}. Falling back to onboard decoder.')
+                self._next_retry = now + self._cooldown
+
+        if self._fallback is None:
+            return None
+
+        try:
+            return self._fallback.transcribe(pcm_bytes, sample_rate)
+        except Exception as exc:
+            if self._logger:
+                self._logger.error(f'Fallback ASR failed: {exc}')
+            return None
+
+
+def initialise_remote_backend(
+    *,
+    uri: str,
+    language: Optional[str],
+    connect_timeout: float,
+    response_timeout: float,
+    logger=None,
+) -> Optional[RemoteAsrBackend]:
+    """Construct the remote backend when dependencies are available."""
+
+    if not uri:
+        return None
+    if websocket_connect is None:
+        if logger:
+            logger.warning('websockets package is not installed; remote ASR disabled')
+        return None
+    try:
+        return RemoteAsrBackend(
+            uri=uri,
+            language=language,
+            connect_timeout=connect_timeout,
+            response_timeout=response_timeout,
+            logger=logger,
+        )
+    except Exception as exc:
+        if logger:
+            logger.warning(f'Failed to initialise remote ASR backend: {exc}')
+        return None
+
+
 class TranscriberNode(Node):  # type: ignore[misc]
     """ROS 2 node that feeds VAD segments into an ASR backend."""
 
@@ -189,7 +411,13 @@ class TranscriberNode(Node):  # type: ignore[misc]
         self._language = self.declare_parameter('language', '').value or None
         self._beam_size = int(self.declare_parameter('beam_size', 5).value)
 
-        self._backend = backend or load_backend(
+        default_remote_ws = os.getenv('EAR_ASR_WS_URL', 'ws://localhost:8082/ws')
+        self._remote_ws_url = self.declare_parameter('remote_ws_url', default_remote_ws).value
+        self._remote_connect_timeout = float(self.declare_parameter('remote_connect_timeout', 0.6).value)
+        self._remote_response_timeout = float(self.declare_parameter('remote_response_timeout', 1.5).value)
+        self._remote_retry_cooldown = float(self.declare_parameter('remote_retry_cooldown', 15.0).value)
+
+        fallback_backend = backend or load_backend(
             self._model_name,
             self._device,
             self._compute_type,
@@ -197,6 +425,26 @@ class TranscriberNode(Node):  # type: ignore[misc]
             self._beam_size,
             logger=self.get_logger(),
         )
+        remote_backend: Optional[RemoteAsrBackend] = None
+        remote_uri = str(self._remote_ws_url or '').strip()
+        if backend is None and remote_uri:
+            remote_backend = initialise_remote_backend(
+                uri=remote_uri,
+                language=self._language,
+                connect_timeout=self._remote_connect_timeout,
+                response_timeout=self._remote_response_timeout,
+                logger=self.get_logger(),
+            )
+
+        if remote_backend:
+            self._backend = ChainedTranscriptionBackend(
+                primary=remote_backend,
+                fallback=fallback_backend,
+                cooldown_seconds=max(0.0, self._remote_retry_cooldown),
+                logger=self.get_logger(),
+            )
+        else:
+            self._backend = fallback_backend
 
         self.transcript_pub = self.create_publisher(Transcript, self._transcript_topic, 10)
         self._segment_sub = self.create_subscription(ByteMultiArray, self._segment_topic, self._on_segment, 10)
@@ -278,4 +526,6 @@ __all__ = [
     'load_backend',
     'FasterWhisperBackend',
     'WhisperBackend',
+    'RemoteAsrBackend',
+    'ChainedTranscriptionBackend',
 ]

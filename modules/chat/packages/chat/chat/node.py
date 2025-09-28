@@ -16,6 +16,8 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from psyched_msgs.msg import Message as MsgMessage, Transcript
 
+from .llm_client import ForebrainLLMClient, ForebrainUnavailable
+
 
 def _normalize_voice_text(text: str) -> str:
     """Collapse whitespace for reliable voice acknowledgement matching."""
@@ -59,6 +61,8 @@ class ChatNode(Node):
     def __init__(self) -> None:
         super().__init__('chat')
 
+        default_llm_url = os.getenv('FOREBRAIN_LLM_URL', 'ws://localhost:8080/chat')
+
         # Parameters (no environment fallback, only YAML or launch params)
         self.declare_parameter('system_prompt', 'You are a helpful assistant. Always answer in one concise sentence.')
         self.declare_parameter('conversation_topic', '/conversation')
@@ -67,6 +71,10 @@ class ChatNode(Node):
         self.declare_parameter('model', 'llama3.2')
         self.declare_parameter('ollama_host', 'http://localhost:11434')
         self.declare_parameter('max_history', 20)
+        self.declare_parameter('llm_ws_url', default_llm_url)
+        self.declare_parameter('llm_ws_connect_timeout', 1.0)
+        self.declare_parameter('llm_ws_response_timeout', 0.5)
+        self.declare_parameter('llm_ws_retry_cooldown', 30.0)
 
         # Resolve parameters
         self.system_prompt: str = self.get_parameter('system_prompt').get_parameter_value().string_value
@@ -76,6 +84,18 @@ class ChatNode(Node):
         self.model: str = self.get_parameter('model').get_parameter_value().string_value
         self.ollama_host: str = self.get_parameter('ollama_host').get_parameter_value().string_value.rstrip('/')
         self.max_history: int = int(self.get_parameter('max_history').get_parameter_value().integer_value or 20)
+        self._llm_ws_url: str = (
+            self.get_parameter('llm_ws_url').get_parameter_value().string_value.strip()
+        )
+        self._llm_connect_timeout = float(
+            self.get_parameter('llm_ws_connect_timeout').get_parameter_value().double_value or 1.0
+        )
+        self._llm_response_timeout = float(
+            self.get_parameter('llm_ws_response_timeout').get_parameter_value().double_value or 0.5
+        )
+        self._llm_retry_cooldown = float(
+            self.get_parameter('llm_ws_retry_cooldown').get_parameter_value().double_value or 30.0
+        )
 
         # Publishers/subscribers
         self.pub_voice = self.create_publisher(String, self.voice_topic, 10)
@@ -91,6 +111,8 @@ class ChatNode(Node):
         self._http_missing_warned = False
         self._http: ModuleType | None = self._load_http_client()
         self._http_lock = threading.Lock()
+        self._llm_client: ForebrainLLMClient | None = None
+        self._llm_retry_at = 0.0
 
         # Ensure Ollama service is reachable or try to start it
         self._ensure_ollama()
@@ -138,6 +160,49 @@ class ChatNode(Node):
             self.get_logger().warning('ollama binary not found in PATH. Install it and run `ollama serve`.')
         except Exception as e:
             self.get_logger().warning(f'Could not start ollama serve: {e}')
+
+    def _ensure_llm_client(self) -> None:
+        if not self._llm_ws_url:
+            self._llm_client = None
+            return
+        if self._llm_client is not None:
+            return
+        now = time.monotonic()
+        if now < self._llm_retry_at:
+            return
+        try:
+            self._llm_client = ForebrainLLMClient(
+                uri=self._llm_ws_url,
+                connect_timeout=self._llm_connect_timeout,
+                response_timeout=self._llm_response_timeout,
+                logger=self.get_logger(),
+            )
+            self._llm_retry_at = now
+        except ForebrainUnavailable as exc:
+            self._llm_client = None
+            self._llm_retry_at = now + max(1.0, self._llm_retry_cooldown)
+            self.get_logger().warning(f'LLM websocket unavailable: {exc}')
+        except Exception as exc:  # pragma: no cover - defensive logging
+            self._llm_client = None
+            self._llm_retry_at = now + max(1.0, self._llm_retry_cooldown)
+            self.get_logger().warning(f'Failed to initialise LLM websocket: {exc}')
+
+    def _generate_response(self, messages: List[Dict[str, str]]) -> str:
+        self._ensure_llm_client()
+        if self._llm_client is not None:
+            try:
+                reply = self._llm_client.generate(messages)
+                if reply:
+                    return reply
+            except ForebrainUnavailable as exc:
+                self.get_logger().warning(f'LLM websocket failed: {exc}; falling back to Ollama')
+                self._llm_client = None
+                self._llm_retry_at = time.monotonic() + max(1.0, self._llm_retry_cooldown)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self.get_logger().error(f'Unexpected LLM websocket error: {exc}')
+                self._llm_client = None
+                self._llm_retry_at = time.monotonic() + max(1.0, self._llm_retry_cooldown)
+        return self._ollama_chat(messages)
 
     def _check_ollama(self) -> bool:
         try:
@@ -234,7 +299,7 @@ class ChatNode(Node):
         messages.extend(self.history)
 
         # Query model
-        assistant_text = self._ollama_chat(messages)
+        assistant_text = self._generate_response(messages)
         if not assistant_text:
             self.get_logger().warning('Empty response from model')
             return
