@@ -140,6 +140,9 @@ or conflicting package sources.
 - Pilot frontend buttons now share the `.control-button` variants; reuse that
   class when introducing new controls and extend the frontend static test if
   you add new variants.
+- The speech stack Docker compose file lives in `compose/speech-stack.compose.yml`;
+  keep service ports and default endpoints in sync with module parameters when
+  adjusting remote ASR/TTS/LLM services.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.

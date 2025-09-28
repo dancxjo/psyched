@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 try:
     import edge_tts  # type: ignore
@@ -831,3 +831,30 @@ def build_tts_provider(
         return PiperProvider(logger=logger, config_getter=config_getter)
 
     raise ProviderUnavailable(f"unsupported TTS engine: {engine}")
+
+
+def build_provider_with_fallback(
+    *,
+    preferred: str,
+    fallbacks: Sequence[str],
+    logger,
+    config_getter_factory: Callable[[str], Callable[[], object]],
+    builder: Callable[..., BaseProvider] = build_tts_provider,
+) -> tuple[str, BaseProvider]:
+    """Attempt to build ``preferred`` provider, falling back when unavailable."""
+
+    attempts = []
+    for engine in [preferred, *fallbacks]:
+        try:
+            getter = config_getter_factory(engine)
+        except ProviderUnavailable as exc:
+            attempts.append((engine, str(exc)))
+            continue
+        try:
+            provider = builder(engine, logger=logger, config_getter=getter)
+            return engine, provider
+        except ProviderUnavailable as exc:
+            attempts.append((engine, str(exc)))
+
+    errors = "; ".join(f"{eng}: {err}" for eng, err in attempts if err) or "no providers available"
+    raise ProviderUnavailable(errors)

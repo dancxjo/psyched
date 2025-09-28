@@ -22,6 +22,7 @@ from .providers import (
     PiperConfig,
     ProviderUnavailable,
     WebsocketConfig,
+    build_provider_with_fallback,
     build_tts_provider,
 )
 from .utils import fetch_fortune_text
@@ -187,9 +188,29 @@ class VoiceNode(Node):
 
             if self._provider is None:
                 try:
-                    config_getter = self._make_config_getter(engine)
-                    self._provider = build_tts_provider(engine, logger=self.get_logger(), config_getter=config_getter)
-                    self._provider_engine = engine
+                    fallbacks: list[str] = []
+                    if engine in {"websocket", "ws"}:
+                        fallbacks.append("espeak")
+                    if fallbacks:
+                        selected_engine, provider = build_provider_with_fallback(
+                            preferred=engine,
+                            fallbacks=fallbacks,
+                            logger=self.get_logger(),
+                            config_getter_factory=self._make_config_getter,
+                        )
+                    else:
+                        selected_engine = engine
+                        config_getter = self._make_config_getter(engine)
+                        provider = build_tts_provider(engine, logger=self.get_logger(), config_getter=config_getter)
+                    if selected_engine != engine:
+                        self.get_logger().warning(
+                            "TTS provider '%s' unavailable; switching to '%s'",
+                            engine,
+                            selected_engine,
+                        )
+                        self.engine = selected_engine
+                    self._provider = provider
+                    self._provider_engine = selected_engine
                 except ProviderUnavailable as exc:
                     self.get_logger().error("TTS provider unavailable (%s): %s", engine, exc)
                     self._provider = None

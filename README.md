@@ -295,6 +295,38 @@ documented in [AGENTS.md](AGENTS.md).
 - Python: Follow ROS2 Python style guidelines
 - Documentation: Update module README.md files for changes
 
+## Speech service containers
+
+You can run the ASR, TTS, and LLM microservices independently of ROS via the
+compose file at `compose/speech-stack.compose.yml`:
+
+```bash
+cd compose
+docker compose -f speech-stack.compose.yml up --build
+```
+
+This launches three containers listening on the host network:
+
+| Service | Port | Environment variable | ROS parameter |
+|---------|------|----------------------|---------------|
+| ASR (`asr-fast`) | `ws://localhost:8082/ws` | `EAR_ASR_WS_URL` | `remote_ws_url` on the ear transcriber |
+| TTS (websocket) | `ws://localhost:5002/tts` | `VOICE_TTS_URL` | `tts_ws_url` on the voice node |
+| LLM (`forebrain-llm`) | `ws://localhost:8080/chat` | `FOREBRAIN_LLM_URL` | `llm_ws_url` on the chat node |
+
+The ROS nodes attempt the remote endpoints first and automatically fall back to
+their onboard implementations when the websocket is unavailable:
+
+* **Ear** – streams VAD segments to the ASR websocket and falls back to the
+  local `faster-whisper`/`whisper` decoder on failure.
+* **Voice** – prefers the websocket TTS provider, automatically switching to
+  `espeak-ng` when the remote engine cannot be reached.
+* **Chat** – streams completions from the Forebrain LLM service and reverts to
+  the local Ollama HTTP API when the websocket raises an error.
+
+Place GGUF models for the LLM under `forebrain-llm/models/` (mounted into the
+container at `/data`) and adjust `FOREBRAIN_LLM__MODEL__PATH` in the compose file
+if you use a different filename.
+
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.

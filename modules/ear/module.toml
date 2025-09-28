@@ -62,8 +62,8 @@ break_system = true
 
 [[actions]]
 type = "pip_install"
-packages = ["numpy", "faster-whisper"]
-import_check = ["numpy", "faster_whisper"]
+packages = ["numpy", "faster-whisper", "websockets>=11,<12"]
+import_check = ["numpy", "faster_whisper", "websockets"]
 break_system = true
 
 [[actions]]
