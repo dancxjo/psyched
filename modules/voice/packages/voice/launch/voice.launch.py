@@ -53,6 +53,16 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument(name, default_value=value)
         for name, value in VOICE_DEFAULTS.items()
     ]
+    arguments.append(
+        DeclareLaunchArgument(
+            "ping_enabled",
+            default_value=LaunchConfiguration("enable_ping"),
+            description="Alias for enable_ping used by host configs",
+        ),
+    )
+
+    voice_params = {name: LaunchConfiguration(name) for name in VOICE_DEFAULTS}
+    voice_params["enable_ping"] = LaunchConfiguration("ping_enabled")
 
     voice_node = Node(
         package="voice",
@@ -60,7 +70,7 @@ def generate_launch_description() -> LaunchDescription:
         name="voice",
         output="screen",
         parameters=[
-            {name: LaunchConfiguration(name) for name in VOICE_DEFAULTS}
+            voice_params
         ],
     )
 

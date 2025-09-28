@@ -43,6 +43,22 @@ def test_fetch_fortune_text_success(utils):
     assert calls["run"] == [("/usr/bin/fortune", "-s")]
 
 
+def test_fetch_fortune_text_strips_attribution(utils):
+    def fake_which(_cmd):
+        return "/usr/bin/fortune"
+
+    class FakeCompletedProcess:
+        def __init__(self):
+            self.stdout = "Seek the stars.\n    -- A Stargazer\n"
+
+    def fake_run(*_args, **_kwargs):
+        return FakeCompletedProcess()
+
+    text = utils.fetch_fortune_text(which=fake_which, run=fake_run)
+
+    assert text == "Seek the stars."
+
+
 def test_fetch_fortune_text_failure(utils):
     def fake_which(_cmd):
         return None

@@ -8,6 +8,20 @@ import subprocess
 from typing import Callable, Optional
 
 
+def _strip_fortune_attribution(text: str) -> str:
+    """Remove attribution lines (``-- Name``) and collapse whitespace."""
+
+    parts = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("--"):
+            continue
+        parts.append(stripped)
+    return " ".join(parts).strip()
+
+
 def fetch_fortune_text(
     *,
     which: Callable[[str], Optional[str]] = shutil.which,
@@ -46,4 +60,7 @@ def fetch_fortune_text(
         return None
     output = getattr(result, "stdout", "") or ""
     text = output.strip()
-    return text or None
+    if not text:
+        return None
+    cleaned = _strip_fortune_attribution(text)
+    return cleaned or None

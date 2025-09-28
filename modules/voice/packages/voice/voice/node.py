@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import random
 import queue
 import threading
 import time
@@ -29,6 +30,15 @@ from .utils import fetch_fortune_text
 
 DEFAULT_ENGINE = os.getenv("VOICE_ENGINE", "websocket")
 DEFAULT_WS_URL = os.getenv("VOICE_TTS_URL", "ws://localhost:5002/tts")
+
+FALLBACK_FORTUNES: tuple[str, ...] = (
+    "Stay curious.",
+    "Keep exploring.",
+    "Adventure awaits.",
+    "Wonder is contagious.",
+    "Hello from the void.",
+    "Dreams fuel journeys.",
+)
 
 
 class VoiceNode(Node):
@@ -166,12 +176,27 @@ class VoiceNode(Node):
 
     def _get_bool_param(self, name: str, default: bool = False) -> bool:
         try:
-            return bool(self.get_parameter(name).get_parameter_value().bool_value)
+            parameter = self.get_parameter(name)
         except Exception:
-            try:
-                return bool(self.get_parameter(name).value)
-            except Exception:
-                return default
+            return default
+
+        value = getattr(parameter, "value", default)
+        return self._coerce_bool(value, default)
+
+    @staticmethod
+    def _coerce_bool(value: object, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "off"}:
+                return False
+            return default
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
 
     # ------------------------------------------------------------------
     # Provider configuration
@@ -405,7 +430,9 @@ class VoiceNode(Node):
         self._ping_timer = self.create_timer(interval, self._send_fortune_ping)
 
     def _send_fortune_ping(self) -> None:
-        message = fetch_fortune_text() or "I am here."
+        message = fetch_fortune_text()
+        if not message:
+            message = random.choice(FALLBACK_FORTUNES)
         self._queue.put(message)
 
     def destroy_node(self) -> None:
