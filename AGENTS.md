@@ -131,6 +131,9 @@ or conflicting package sources.
 - Frontend assets now reside directly under `pilot/static`; update
   `modules/pilot/packages/pilot/tests/test_frontend_static.py` when reorganising
   those files so layout checks stay accurate.
+- Pilot frontend buttons now share the `.control-button` variants; reuse that
+  class when introducing new controls and extend the frontend static test if
+  you add new variants.
 
 Thanks for keeping Psyched healthy! Update this guide whenever you learn
 something the next agent should know.

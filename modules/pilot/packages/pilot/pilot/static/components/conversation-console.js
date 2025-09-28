@@ -136,7 +136,14 @@ class PilotConversationConsole extends LitElement {
               ?disabled=${disabled}
               @input=${(event) => this.handleSpeaker(event)}
             />
-            <button type="submit" ?disabled=${disabled || !this._input.trim()}>Send</button>
+            <button
+              type="submit"
+              class="control-button"
+              data-variant="accent"
+              ?disabled=${disabled || !this._input.trim()}
+            >
+              Send
+            </button>
           </div>
         </form>
       </div>

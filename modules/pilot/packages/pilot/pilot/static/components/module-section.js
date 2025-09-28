@@ -108,7 +108,14 @@ class PilotModuleSection extends LitElement {
       <div class="button-row">
         ${commands.map(
       (name) => html`
-            <button type="button" @click=${() => this.command(scope, name)}>${name}</button>
+            <button
+              type="button"
+              class="control-button"
+              data-variant="ghost"
+              @click=${() => this.command(scope, name)}
+            >
+              ${name}
+            </button>
           `,
     )}
       </div>
@@ -128,12 +135,31 @@ class PilotModuleSection extends LitElement {
           <div class="topic-actions">
             ${record
         ? html`
-                  <button type="button" @click=${() => this.stopTopic(topic)}>Disconnect</button>
-                  <button type="button" @click=${() => this.togglePause(topic, !record.paused)}>
+                  <button
+                    type="button"
+                    class="control-button"
+                    data-variant="critical"
+                    @click=${() => this.stopTopic(topic)}
+                  >
+                    Disconnect
+                  </button>
+                  <button
+                    type="button"
+                    class="control-button"
+                    data-variant=${record.paused ? 'accent' : 'ghost'}
+                    @click=${() => this.togglePause(topic, !record.paused)}
+                  >
                     ${record.paused ? 'Resume' : 'Pause'}
                   </button>
                 `
-        : html`<button type="button" @click=${() => this.startTopic(topic)}>Connect</button>`}
+        : html`<button
+                type="button"
+                class="control-button"
+                data-variant="accent"
+                @click=${() => this.startTopic(topic)}
+              >
+                Connect
+              </button>`}
           </div>
         </div>
         <pilot-topic-widget .record=${record} .topic=${topic}></pilot-topic-widget>

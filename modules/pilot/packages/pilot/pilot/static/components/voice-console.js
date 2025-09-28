@@ -107,15 +107,23 @@ class PilotVoiceConsole extends LitElement {
   renderTransportControls() {
     const actions = this._controls;
     const buttons = [
-      { action: 'interrupt', label: 'Pause' },
-      { action: 'resume', label: 'Resume' },
-      { action: 'clear', label: 'Clear' },
+      { action: 'interrupt', label: 'Pause', variant: 'ghost' },
+      { action: 'resume', label: 'Resume', variant: 'accent' },
+      { action: 'clear', label: 'Clear', variant: 'critical' },
     ];
     return html`
       <div class="voice-transport">
-        ${buttons.map(({ action, label }) => {
+        ${buttons.map(({ action, label, variant }) => {
           const available = actions?.[action]?.available;
-          return html`<button type="button" ?disabled=${!available} @click=${() => this.handleTransport(action)}>${label}</button>`;
+          return html`<button
+            type="button"
+            class="control-button"
+            data-variant=${variant}
+            ?disabled=${!available}
+            @click=${() => this.handleTransport(action)}
+          >
+            ${label}
+          </button>`;
         })}
       </div>
     `;
@@ -154,7 +162,14 @@ class PilotVoiceConsole extends LitElement {
           @keydown=${(event) => this.handleKeyDown(event)}
         ></textarea>
         <div class="voice-actions">
-          <button type="submit" ?disabled=${disabled || !this._input.trim()}>Send</button>
+          <button
+            type="submit"
+            class="control-button"
+            data-variant="accent"
+            ?disabled=${disabled || !this._input.trim()}
+          >
+            Send
+          </button>
           ${this._lastSent
             ? html`<span class="voice-last">Last sent: ${this._lastSent}</span>`
             : html`<span class="voice-hint">Connected clients will synthesize the text.</span>`}
