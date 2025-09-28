@@ -35,10 +35,12 @@ class PyAudioEarNode(Node):
         self.stream: Optional[pyaudio.Stream] = None
         self.running = False
         
-        # Silence detection (RMS-based)
-        self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
-        self.silence_start_time = time.time()
-        self.silence_ms = 0
+    # Silence detection (RMS-based)
+    self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
+    self.silence_start_time = time.time()
+    self.silence_ms = 0
+    # Autophony tracking (dummy, replace with real logic if available)
+    self.autophony_ms = 0
         
         # Start audio capture
         self.start_capture()
@@ -82,7 +84,9 @@ class PyAudioEarNode(Node):
         
         # Calculate RMS for silence detection
         rms = self.calculate_rms(in_data)
-        self.update_silence_detector(rms)
+        # Optionally update autophony_ms here if you have logic for it
+        # For now, assume self.autophony_ms is updated elsewhere or is 0
+        self.update_silence_detector(rms, self.autophony_ms)
         
         return (in_data, pyaudio.paContinue)
 
@@ -101,19 +105,17 @@ class PyAudioEarNode(Node):
         
         return rms
 
-    def update_silence_detector(self, rms: float) -> None:
-        """Update silence detection based on RMS value."""
+    def update_silence_detector(self, rms: float, autophony_ms: int = 0) -> None:
+        """Update silence detection based on RMS value and autophony_ms."""
         current_time = time.time()
-        
-        if rms > self.silence_threshold:
-            # Sound detected - reset silence timer
+        # Reset silence_ms if sound is detected or autophony_ms > 0
+        if rms > self.silence_threshold or autophony_ms > 0:
             self.silence_start_time = current_time
             self.silence_ms = 0
         else:
             # Silence detected - update silence duration
             silence_duration = current_time - self.silence_start_time
             self.silence_ms = int(silence_duration * 1000)  # Convert to milliseconds
-        
         # Publish silence duration
         silence_msg = UInt32()
         silence_msg.data = self.silence_ms
