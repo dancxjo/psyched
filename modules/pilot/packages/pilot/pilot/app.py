@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -16,8 +17,21 @@ from pydantic import BaseModel, Field, ConfigDict
 from .module_catalog import ModuleCatalog, ModuleInfo, ModuleTopic
 from .topic_manager import TopicSessionManager, TopicSession
 from .voice_config import VoiceConfigStore
-from pathlib import Path
 import tomllib
+
+
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Return *text* without ANSI escape sequences.
+
+    Examples:
+        >>> strip_ansi_codes("\x1b[31mFailure\x1b[0m")
+        'Failure'
+    """
+
+    return ANSI_ESCAPE_PATTERN.sub("", text)
 
 
 class CommandRequest(BaseModel):
@@ -76,7 +90,7 @@ class CommandExecutor:
         deno = "deno"
         scope_normalized = scope.lower()
         # Align invocation order with the CLI semantics implemented in psh/cli.ts.
-        # - `psh mod` expects `psh mod <action> <modules...>`
+        # - `psh mod` expects `psh mod <modules...> <action>`
         # - `psh sys` expects `psh sys <action> <units...>`
         if scope_normalized == "mod":
             command_args = [
@@ -84,8 +98,8 @@ class CommandExecutor:
                 "-A",
                 str(psh_path),
                 "mod",
-                command,
                 *( [module] if module else [] ),
+                command,
                 *args,
             ]
         elif scope_normalized == "sys":
@@ -115,10 +129,14 @@ class CommandExecutor:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate()
+        stdout_text = stdout.decode()
+        stderr_text = stderr.decode()
         return {
             "code": process.returncode,
-            "stdout": stdout.decode(),
-            "stderr": stderr.decode(),
+            "stdout": stdout_text,
+            "stderr": stderr_text,
+            "stdout_plain": strip_ansi_codes(stdout_text),
+            "stderr_plain": strip_ansi_codes(stderr_text),
         }
 
 

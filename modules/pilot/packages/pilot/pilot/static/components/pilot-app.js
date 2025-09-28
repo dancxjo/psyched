@@ -327,14 +327,31 @@ class PilotApp extends LitElement {
                 <span class="command">${entry.command}</span>
                 ${entry.status === 'error' && entry.error
           ? html`<span class="detail">${entry.error}</span>`
-          : entry.result
-            ? html`<span class="detail">${JSON.stringify(entry.result)}</span>`
-            : nothing}
+          : this.renderCommandResult(entry)}
               </li>
             `,
     )}
         </ul>
       </section>
+    `;
+  }
+
+  renderCommandResult(entry) {
+    const result = entry?.result;
+    if (!result) {
+      return nothing;
+    }
+
+    const hasCode = Number.isInteger(result.code);
+    const stdout = result.stdout_plain ?? result.stdout ?? '';
+    const stderr = result.stderr_plain ?? result.stderr ?? '';
+
+    return html`
+      <div class="detail result">
+        ${hasCode ? html`<div class="exit-code">Exit code: ${result.code}</div>` : nothing}
+        ${stdout ? html`<pre class="command-output stdout">${stdout}</pre>` : nothing}
+        ${stderr ? html`<pre class="command-output stderr">${stderr}</pre>` : nothing}
+      </div>
     `;
   }
 
