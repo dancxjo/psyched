@@ -34,8 +34,8 @@ def repo_root(tmp_path: Path) -> Path:
     return repo
 
 
-def test_mod_commands_pass_action_before_module(monkeypatch, repo_root: Path) -> None:
-    """`psh mod` expects the action first; ensure we respect that ordering."""
+def test_mod_commands_place_module_before_action(monkeypatch, repo_root: Path) -> None:
+    """`psh mod` expects modules before the action; ensure we mirror that."""
 
     captured: Dict[str, Any] = {}
 
@@ -58,8 +58,8 @@ def test_mod_commands_pass_action_before_module(monkeypatch, repo_root: Path) ->
         "-A",
         str(repo_root / "psh" / "main.ts"),
         "mod",
-        "setup",
         "ear",
+        "setup",
         "--flag",
     )
 

@@ -76,7 +76,7 @@ class CommandExecutor:
         deno = "deno"
         scope_normalized = scope.lower()
         # Align invocation order with the CLI semantics implemented in psh/cli.ts.
-        # - `psh mod` expects `psh mod <action> <modules...>`
+        # - `psh mod` expects `psh mod <modules...> <action>`
         # - `psh sys` expects `psh sys <action> <units...>`
         if scope_normalized == "mod":
             command_args = [
@@ -84,8 +84,8 @@ class CommandExecutor:
                 "-A",
                 str(psh_path),
                 "mod",
-                command,
                 *( [module] if module else [] ),
+                command,
                 *args,
             ]
         elif scope_normalized == "sys":
