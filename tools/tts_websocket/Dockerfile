@@ -2,11 +2,14 @@
 FROM ghcr.io/coqui-ai/tts:latest
 
 ENV PYTHONUNBUFFERED=1 \
-    TTS_MODEL="tts_models/en/vctk/vits" \
+    # Use Coqui XTTS-v2 by default (requires CPML acceptance)\
+    TTS_MODEL="tts_models/multilingual/multi-dataset/xtts_v2" \
     TTS_DEFAULT_SPEAKER="p330" \
     TTS_DEFAULT_LANGUAGE="en" \
     PCM_CHUNK_SAMPLES="4096" \
     TTS_USE_CUDA="true" \
+    # Setting COQUI_TOS_AGREED=1 indicates you accept the Coqui Public Model License (CPML)
+    COQUI_TOS_AGREED=1 \
     NVIDIA_VISIBLE_DEVICES=all
 
 # Install runtime dependencies for websocket streaming and local validation helpers.

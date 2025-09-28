@@ -134,7 +134,14 @@ class TTSSynthesizer:
     def from_env(cls) -> "TTSSynthesizer":
         """Initialise the synthesiser using environment configuration."""
 
-        model_name = os.environ.get("TTS_MODEL", "tts_models/en/vctk/vits")
+        # Default to XTTS-v2 (multi-lingual, voice cloning). This model requires
+        # acceptance of the Coqui Public Model License (CPML). To run automatically
+        # set the environment variable COQUI_TOS_AGREED=1 in your container/runtime.
+        model_name = os.environ.get("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2")
+        if os.environ.get("COQUI_TOS_AGREED", "0") not in {"1", "true", "yes", "on"}:
+            _LOGGER.warning(
+                "COQUI_TOS_AGREED is not set. Loading CPML-licensed models like XTTS-v2 will pause and require interactive acceptance unless COQUI_TOS_AGREED=1 is set."
+            )
         use_cuda = os.environ.get("TTS_USE_CUDA", "true").lower() in {"1", "true", "yes", "on"}
 
         from TTS.api import TTS as CoquiTTS  # Imported lazily to keep tests lightweight.
@@ -149,10 +156,23 @@ class TTSSynthesizer:
         kwargs = {}
         if request.speaker:
             kwargs["speaker"] = request.speaker
-        if request.language:
-            kwargs["language"] = request.language
 
-        wav = self.tts.tts(text=request.text, **kwargs)
+        language = request.language
+        if language:
+            kwargs["language"] = language
+
+        try:
+            wav = self.tts.tts(text=request.text, **kwargs)
+        except ValueError as exc:
+            if language and "Model is not multi-lingual" in str(exc):
+                _LOGGER.warning(
+                    "Model rejected language '%s'; retrying synthesis without language hint.",
+                    language,
+                )
+                kwargs.pop("language", None)
+                wav = self.tts.tts(text=request.text, **kwargs)
+            else:
+                raise
         audio = np.asarray(wav, dtype=np.float32).reshape(-1)
         return audio
 
