@@ -26,7 +26,7 @@ services:
     image: psyched-forebrain-llm:local
     restart: unless-stopped
     environment:
-      FOREBRAIN_LLM__MODEL__PATH: "/data/model.gguf"
+      FOREBRAIN_LLM__MODEL__PATH: "/data/gpt-oss-20b.gguf"
       FOREBRAIN_LLM__WEBSOCKET__BIND_ADDR: "0.0.0.0:8080"
     volumes:
       - type: bind
