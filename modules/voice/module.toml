@@ -79,9 +79,9 @@ update = false
 
 [[actions]]
 type = "pip_install"
-packages = ["pyttsx3"]
-import_check = ["pyttsx3"]
-break_system = true
+packages = ["websockets>=11,<12"]
+import_check = ["websockets"]
+break_system = false
 
 [systemd]
 description = "Psyched Voice"

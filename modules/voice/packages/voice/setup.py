@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name + '/launch', ['launch/voice.launch.py']),
     ],
     # espeak-ng is used for TTS; no Piper support.
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'websockets>=11,<12'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',

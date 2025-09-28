@@ -4,3 +4,4 @@
 [launch.arguments]
 
 ping_enabled = false
+tts_ws_url = "ws://cerebellum-tts:5002/tts"
