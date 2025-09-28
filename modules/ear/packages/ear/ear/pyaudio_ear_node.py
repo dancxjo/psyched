@@ -35,12 +35,12 @@ class PyAudioEarNode(Node):
         self.stream: Optional[pyaudio.Stream] = None
         self.running = False
         
-    # Silence detection (RMS-based)
-    self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
-    self.silence_start_time = time.time()
-    self.silence_ms = 0
-    # Autophony tracking (dummy, replace with real logic if available)
-    self.autophony_ms = 0
+        # Silence detection (RMS-based)
+        self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
+        self.silence_start_time = time.time()
+        self.silence_ms = 0
+        # Autophony tracking (dummy, replace with real logic if available)
+        self.autophony_ms = 0
         
         # Start audio capture
         self.start_capture()
