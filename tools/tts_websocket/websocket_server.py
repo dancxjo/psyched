@@ -241,7 +241,7 @@ async def main() -> None:
 
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
-    default_speaker = os.environ.get("TTS_DEFAULT_SPEAKER", "p233")
+    default_speaker = os.environ.get("TTS_DEFAULT_SPEAKER", "p330")
     default_language = os.environ.get("TTS_DEFAULT_LANGUAGE")
     chunk_samples = int(os.environ.get("PCM_CHUNK_SAMPLES", "4096"))
     host = os.environ.get("WEBSOCKET_HOST", "0.0.0.0")

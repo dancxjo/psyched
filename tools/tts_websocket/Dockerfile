@@ -3,7 +3,7 @@ FROM ghcr.io/coqui-ai/tts:latest
 
 ENV PYTHONUNBUFFERED=1 \
     TTS_MODEL="tts_models/en/vctk/vits" \
-    TTS_DEFAULT_SPEAKER="p233" \
+    TTS_DEFAULT_SPEAKER="p330" \
     TTS_DEFAULT_LANGUAGE="en" \
     PCM_CHUNK_SAMPLES="4096" \
     TTS_USE_CUDA="true" \

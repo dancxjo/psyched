@@ -22,19 +22,19 @@ from tools.tts_websocket.websocket_server import (
 def test_parse_client_message_accepts_json_payload_with_overrides():
     """JSON payloads should override the default speaker and language."""
     request = parse_client_message(
-        '{"text": "Hello", "speaker": "p240", "language": "en"}',
-        default_speaker="p233",
+        '{"text": "Hello", "speaker": "p330", "language": "en"}',
+        default_speaker="p330",
         default_language="en-us",
     )
 
-    assert request == SynthesisRequest(text="Hello", speaker="p240", language="en")
+    assert request == SynthesisRequest(text="Hello", speaker="p330", language="en")
 
 
 def test_parse_client_message_accepts_plain_text_and_uses_defaults():
     """Plain text messages should fall back to the default speaker."""
-    request = parse_client_message("Streaming is quick!", default_speaker="p233", default_language=None)
+    request = parse_client_message("Streaming is quick!", default_speaker="p330", default_language=None)
 
-    assert request == SynthesisRequest(text="Streaming is quick!", speaker="p233", language=None)
+    assert request == SynthesisRequest(text="Streaming is quick!", speaker="p330", language=None)
 
 
 @pytest.mark.parametrize(
@@ -75,11 +75,11 @@ def test_tts_synthesizer_wraps_tts_api_and_flattens_audio() -> None:
             return [0.0, 0.25, -0.25]
 
     wrapper = TTSSynthesizer(DummyTTS())
-    request = SynthesisRequest(text="Speed matters", speaker="p233", language="en")
+    request = SynthesisRequest(text="Speed matters", speaker="p330", language="en")
 
     audio = wrapper.synthesize(request)
 
     assert wrapper.sample_rate == 22050
     assert audio.dtype == np.float32
     assert audio.tolist() == [0.0, 0.25, -0.25]
-    assert wrapper.tts.arguments == ("Speed matters", "p233", "en")
+    assert wrapper.tts.arguments == ("Speed matters", "p330", "en")
