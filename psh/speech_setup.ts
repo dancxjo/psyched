@@ -41,7 +41,7 @@ export async function runSetupSpeech(): Promise<void> {
       const alt = repoPath(".speech_setup_complete");
       console.warn(
         `[psh] Expected '${parentDir}' to be a directory but found a file. ` +
-          `Writing speech sentinel to '${alt}' instead.`,
+        `Writing speech sentinel to '${alt}' instead.`,
       );
       await Deno.writeTextFile(alt, `${SPEECH_SETUP_VERSION}\n`);
     } else {
