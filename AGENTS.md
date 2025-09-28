@@ -1,158 +1,176 @@
 # Psyched – Agent Guide
 
-Use this handbook as your quick-start reference when contributing to the
-workspace.
+This handbook is your quick-start reference when contributing to the
+**psyched** workspace. It consolidates prior guides and reflects the
+current architecture.
 
-## Instruction precedence
-- System → developer → user → this guide → in-source comments. Resolve conflicts
-  in that order.
-- Before editing any file, check for a more specific `AGENTS.md` deeper in that
-  directory tree and obey its instructions for the covered files.
-- Update this guide whenever you uncover a workflow quirk, fragile script, or
-  best practice that future agents should remember.
+---
 
-## Repository orientation
-- `packages/` – (Legacy) top-level ROS 2 packages. New structure favors
-  module-local packages under `modules/<module>/packages/<pkg>`.
-- `modules/` – Module containers and metadata that provision and launch
-  packages for a given host. Each module should place its ROS2 package(s)
-  under `modules/<module>/packages/` so its `link_packages` action can symlink
-  them into the repository `src/` directory before building.
-- Module setup is now driven by `modules/<name>/module.toml`. Declare module
-  actions (package linking, apt/pip installs, shell commands) there so `psh
-  setup` can orchestrate work without bespoke shell scripts. When adding new
-  actions check `psh/modules.ts` for supported types.
-- Prefer referencing shell helpers via the `script` field on `run` actions
-  (e.g. `script = "scripts/install_dep.sh"`) and keep those scripts under the
-  module directory with executable permissions so `psh` can resolve them.
-- `hosts/` – Host-specific configuration (TOML + ROS 2 YAML) and generated systemd units.
-- `tools/` – Provisioning helpers (ROS/Docker installers, env shims used by
-  `psh`).
-- `src/` – Additional workspace packages pulled in during builds.
-- Rust-based ASR tiers (`asr-fast`, `asr-mid`, `asr-long`) and the shared
-  `asr-core` crate now live in a Cargo workspace at the repo root; run `cargo
-  test` after changes to those services so the Rust unit tests stay green.
+## Instruction Precedence
+- System → developer → user → this guide → in-source comments.
+- Before editing, check for a more specific `AGENTS.md` deeper in the tree.
+- Keep this guide updated whenever you discover workflow quirks, fragile scripts,
+  or best practices.
 
-## Working style expectations
-- Restate the task and outline a plan before modifying files.
-- Practice BDD/TDD: capture the expected behaviour (tests, specs, or
-  reproducible steps) before or alongside implementation.
-- Prefer additive commits locally, but keep the final pushed commit message
-  short and meaningful.
-- Keep dependencies cached when possible—reuse virtual environments, ROS
-  installs, or build artefacts rather than reinstalling from scratch.
-- Fix warnings as you go to avoid accruing cleanup debt.
+---
 
-## Coding & documentation standards
-- Favor clear, type-annotated Python that matches existing patterns in the
-  touched package.
-- Provide docstrings or inline commentary for non-obvious logic; include a short
-  usage example when introducing public APIs.
-- Avoid guarding imports with `try/except`. Handle optional dependencies at the
-  call site.
-- When you discover you skipped documentation earlier, add a reminder here so
-  the next agent anticipates it.
-- Local Python is 3.12; `pip install TTS` fails against upstream constraints.
-  When you need API references, inspect upstream sources directly instead of
-  trying to install the package in this environment.
+## Repository Orientation
+- `modules/` – Canonical home for all modules. Each module defines:
+  - `module.toml` (actions, dependencies, systemd entries).
+  - `packages/` (ROS 2 packages, colcon-built).
+  - `launch/*.launch.py` (ROS 2 launch files).
+- `hosts/` – Host-specific configuration.
+  - `config/<module>.toml` → overrides launch arguments.
+  - `systemd/*.service` → unit files managed by `psh systemd`.
+- `tools/` – Provisioning helpers (ROS/Docker installers, env shims).
+- `compose/` – Docker Compose stacks (e.g. `speech-stack.compose.yml`).
+- `src/` – Workspace symlinks created during builds (remove before provisioning).
+- `packages/` (legacy) – Only used for older packages; new work belongs in `modules/*/packages/`.
 
-## Testing & validation
-- Run the most relevant tests or builds for the files you touched. Prefer
-  targeted `pytest` or `colcon test` runs to full workspace builds unless
-  necessary.
-- Capture the commands you executed and report their outcomes in the final
-  summary. If you must skip a check, state why.
-- Smoke-test module commands when you modify them (e.g.
-  `deno run -A psh/main.ts mod <module> launch`).
-- Deno-based tests require local CA trust; run them with
-  `DENO_TLS_CA_STORE=system` and grant the needed permissions (e.g.
-  `--allow-read --allow-write --allow-env`).
-- The container image may not ship with the Deno CLI. Install it locally before
-  running `deno test` or other workspace scripts that depend on it.
-- Pilot backend tests rely on pip packages (`fastapi`, `httpx`, `uvicorn`).
-  Install them in the environment before running the pilot test suite locally.
+---
 
-Important workflow note:
+## System Architecture
 
-- Before running the host/module setup step, remove any existing `./src` so
-  module setup actions can recreate it deterministically by symlinking
-  module-local packages into `src/`:
+### Cerebellum (Motherbrain)
+- Hardware: Raspberry Pi 4/5 mounted on iRobot Create 1 base.
+- Runs ROS 2 Jazzy/Kilted.
+- Manages sensors/actuators and real-time loops.
+- Modules: `ear`, `voice`, `chat`, `pilot`, `foot`, `imu`, `eye`, `gps`, `wifi`, `will`.
 
+### Forebrain
+- Hardware: headless laptop with GPU, also mounted onboard.
+- Runs ASR/LLM/TTS containers (no ROS 2).
+- Invoked with `psh speech up`.
+- Offloads heavy compute from cerebellum.
+- Planned integration with **Neo4j** (graph memory) and **Qdrant** (vector memory).
+
+---
+
+## Working Style
+- Restate tasks and outline a plan before modifying files.
+- Use BDD/TDD where practical: capture expectations before implementing.
+- Additive commits; keep messages concise and meaningful.
+- Keep dependencies cached when possible.
+- Fix warnings as you go.
+
+---
+
+## Coding Standards
+- Python 3.12; type annotations preferred.
+- ROS 2 packages use `ament_python`.
+- Avoid `try/except` import guards; handle optional deps at call sites.
+- Add docstrings and usage examples for public APIs.
+- For Deno/TypeScript (`psh`), follow existing CLI patterns.
+
+---
+
+## Build & Launch
+
+### Provisioning
 ```bash
 rm -rf ./src
-psh provision <your-host>
-source tools/setup_env.sh
-colcon build --symlink-install --base-paths src
+psh provision cerebellum
+psh install
+psh systemd enable
+````
+
+### Running Core Stack
+
+```bash
+# On forebrain
+psh speech up   # ASR/TTS/LLM containers
+
+# On cerebellum
+psh launch ear
+psh launch voice
+psh launch chat
+psh launch pilot
 ```
 
-This ensures old or stale package copies don't cause colcon build duplicates
-or conflicting package sources.
+### Pilot UI
 
-## Git etiquette
-- Stay on the default branch unless explicitly instructed otherwise.
-- Do not amend existing commits; always add new ones.
-- Leave the tree clean before committing: format, lint, and ensure checks pass.
+Visit `http://<cerebellum-host>:8080`.
 
-## Documentation & reminders
-- Host module overrides now live in `hosts/<host>/config/<module>.toml` using `[launch.arguments]` keys; keep `tools/launch_args.py` in sync when adjusting the format.
-- Whenever you update top-level documentation (like this guide or `README.md`),
-  cross-check for outdated references between them and fix any inconsistencies.
-- Record newly discovered gotchas or workflow aids here using concise bullet
-  points.
-- `tools/with_ros_env.sh` sources the workspace environment before executing a
-  command. Use it (or mirror its behaviour) when scripting `colcon` or `ros2`
-  invocations so ROS 2 dependencies from apt are discoverable.
-- Speech provisioning leaves a sentinel file at `setup/.speech_setup_complete`.
+---
+
+## CLI Reference (`psh`)
+
+* `psh install` → system dependencies (apt, pip/uv).
+* `psh provision <host>` → apply host configs.
+* `psh models` → manage Ollama models.
+* `psh speech up|down` → manage Docker ASR/TTS/LLM stack.
+* `psh launch <module>` → run module launch file.
+* `psh systemd enable|disable` → manage units.
+* `psh build` → `colcon build` with symlink install.
+* `psh clean` → cleanup build artifacts/systemd leftovers.
+* `psh test` → run module/unit tests.
+
+---
+
+## Testing & Validation
+
+* Prefer targeted tests (`pytest`, `colcon test`) over full builds.
+* Module smoke tests:
+
+  ```bash
+  psh launch ear   # check transcription
+  psh launch voice # check TTS output
+  psh launch pilot # web UI health
+  ```
+* Deno tests: run with `DENO_TLS_CA_STORE=system` and explicit permissions.
+* Pilot backend tests require `fastapi`, `httpx`, `uvicorn`.
+
+---
+
+## Common Issues
+
+* **Network dependencies**:
+
+  * Ollama models (ollama.com) may fail behind firewall.
+  * Piper TTS models (huggingface.co) require access.
+  * ROS 2 installation may fail if GitHub API blocked.
+* **Hardware deps**:
+
+  * `alsa-utils`, `pyaudio`, `webrtcvad` for `ear`.
+  * `libusb-1.0-dev` for `eye`.
+  * Kinect and Create 1 hardware required for full bring-up.
+* **Workarounds**:
+
+  * Develop modules in isolation when offline.
+  * Use local symlink installs (`colcon build --symlink-install`) to avoid duplicate packages.
+  * `tools/with_ros_env.sh` sources ROS 2 before colcon/ros2 invocations.
+
+---
+
+## Git Etiquette
+
+* Stay on default branch unless told otherwise.
+* Don’t amend; add new commits.
+* Keep tree clean before commits: format, lint, ensure tests pass.
+
+---
+
+## Module Notes
+
+* `ear`: PyAudio microphone capture, VAD, Whisper transcription.
+* `voice`: espeak-ng or Coqui/Piper via WebSocket, with playback.
+* `chat`: connects transcription → Ollama LLM → voice.
+* `pilot`: LCARS-style web frontend + health reporter.
+* `nav`: depth-to-scan pipeline + AMCL, vision LLM prompts.
+* Others (`eye`, `foot`, `imu`, `gps`, `wifi`, `will`) follow similar structure.
+
+---
+
+## Status
+
+* ✅ ROS 2 stack runs on Pi (cerebellum).
+* ✅ GPU laptop (forebrain) runs heavy AI services.
+* ✅ `psh` orchestrates installs, builds, launches, and services.
+* 🔄 Graph + vector memory integration in progress.
+
+## Provisioning Notes
+* Speech provisioning leaves a sentinel file at `setup/.speech_setup_complete`.
   When adding new required models or steps bump the version written in
   `psh/speech_setup.ts` so hosts rerun the updated setup.
-- Keep the guide succinct and focused on actionable advice.
-- `pytest` is configured to ignore the `src/` symlink; place new tests under
-  `packages/<pkg>/tests` and stub ROS interfaces when running in environments
-  without ROS installed.
-- When editing `modules/*/module.toml`, ensure the `[pilot]` block declares a
-  `regimes` list and avoid duplicate `[[pilot.topics]]` or redundant
-  `link_packages` entries—Pilot’s catalog tests will now fail if either rule is
-  violated.
-- `py_trees_ros` is not published to PyPI; `tools/setup_env.sh` installs it
-  from GitHub. Ensure network access is available the first time you source the
-  environment on a new machine.
-- `psyched_msgs` manifests are shared between modules: `modules/chat/` is the
-  canonical source and `modules/ear/` symlinks to it, while `modules/gps/`
-  carries a standalone copy. Update all three when adding or modifying
-  messages.
-- The legacy Makefile has been removed; rely on `psh` commands and direct
-  `colcon` invocations for setup/build/systemd tasks.
-- Pilot UI systemd layout no longer renders a `#servicesPills` element; ensure
-  frontend updates don't depend on it before processing service data.
-- Pilot control cascade reads from DOM elements flagged with `data-source`
-  attributes; update the frontend tests if you adjust that markup.
-- Pilot frontend telemetry now flows through the Lit-based `<pilot-app>`
-  component in `modules/pilot/packages/pilot/pilot/static/components/pilot-app.js`;
-  update the Alpine interop events in `pilot/static/index.html` when renaming
-  sections.
-- Conversation topics render through `pilot-conversation-console`; adjust that
-  component alongside `topic-widget.js` when changing
-  `psyched_msgs/msg/Message` payloads or conversation workflows.
-- Topic websocket creation lives in
-  `pilot/static/components/pilot-app.js`; adjust
-  `test_api_routes.py` and `test_topic_manager.py` when changing connection or
-  QoS negotiation logic.
-- Frontend assets now reside directly under `pilot/static`; update
-  `modules/pilot/packages/pilot/tests/test_frontend_static.py` when reorganising
-  those files so layout checks stay accurate.
-- Pilot frontend buttons now share the `.control-button` variants; reuse that
-  class when introducing new controls and extend the frontend static test if
-  you add new variants.
-- The speech stack Docker compose file lives in `compose/speech-stack.compose.yml`;
-  keep service ports and default endpoints in sync with module parameters when
-  adjusting remote ASR/TTS/LLM services.
-
-Thanks for keeping Psyched healthy! Update this guide whenever you learn
-something the next agent should know.
-
-## Nav Module: Depth-to-LaserScan + Vision LLM
-- RTAB-Map is now a separate module/host; nav module uses AMCL + depth-to-scan pipeline.
-- See `nav/depth_projection.py` for depth-to-scan logic and tests.
-- See `nav/vision_prompt.py` for vision LLM prompt and annotation stub.
-- Depth-scan tests: `tests/test_depth_projection.py`, `tests/test_vision_prompt.py`.
-- Keep nav-related host YAML configs in sync when configuring RTAB-Map separately.
+* Use `psh models` to manage Ollama models; ensure required models are listed in
+  `psh/speech_setup.ts`.
