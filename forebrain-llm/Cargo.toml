@@ -1,0 +1,22 @@
+[package]
+name = "forebrain-llm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Forebrain WebSocket service for GPT-OSS models"
+authors = ["Psyched Agents"]
+
+[dependencies]
+anyhow = "1.0"
+axum = { version = "0.6", features = ["ws", "macros"] }
+futures = "0.3"
+llm = { version = "0.1.1", features = ["llama"] }
+rand = "0.8"
+parking_lot = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.32", features = ["macros", "rt-multi-thread", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tokio-stream = "0.1"
