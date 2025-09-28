@@ -64,7 +64,7 @@ class ChatNode(Node):
         self.declare_parameter('conversation_topic', '/conversation')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('transcript_topic', '/audio/transcription')
-        self.declare_parameter('model', 'gemma3')
+        self.declare_parameter('model', 'phi4')
         self.declare_parameter('ollama_host', 'http://localhost:11434')
         self.declare_parameter('max_history', 20)
 

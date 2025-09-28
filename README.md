@@ -156,7 +156,7 @@ hosts/
 - **Features**: Ollama integration, conversation history, voice coordination
 - **Topics**: `/conversation` (input/output), `/voice` (TTS output)
 - **Dependencies**: Ollama, requests library
-- **Models**: Supports various Ollama models (default: gemma3)
+- **Models**: Supports various Ollama models (default: phi4)
 
 ### Eye Module
 - **Purpose**: Computer vision and depth sensing
@@ -273,7 +273,7 @@ ros2 topic list
 
 ### Module-Specific Troubleshooting
 
-- **Chat**: Ensure Ollama is running and model is downloaded (`ollama pull gemma3`)
+- **Chat**: Ensure Ollama is running and model is downloaded (`ollama pull phi4`)
 - **Voice**: Check ALSA audio devices (`arecord -l`, `aplay -l`)
 - **Eye**: Verify Kinect USB connection and libfreenect installation
 - **Foot**: Check serial/USB connection to robot base
