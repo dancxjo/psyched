@@ -33,5 +33,16 @@ services:
         source: ../forebrain-llm/models
         target: /data
         read_only: false
+    # Backwards-compatible GPU access for older docker-compose validators:
+    # keep runtime for compatibility and expose common NVIDIA device nodes.
+    # If you have the nvidia-container-toolkit and a modern Docker, it will still work.
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
     ports:
       - "8080:8080"
