@@ -87,7 +87,7 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            path: PathBuf::from("models/llama3-8b-instruct.Q4_K_M.gguf"),
+            path: PathBuf::from("models/gpt-oss-20b-Q5_K_M.gguf"),
             system_prompt: Some("You are the forebrain assistant for GPT-OSS.".into()),
             temperature: 0.7,
             top_p: 0.9,
@@ -208,6 +208,15 @@ mod tests {
                 assert_eq!(cfg.websocket.bind_addr, "127.0.0.1:9000");
                 assert_eq!(cfg.websocket.heartbeat_interval, Duration::from_secs(5));
             },
+        );
+    }
+
+    #[test]
+    fn default_model_targets_gpt_oss_20b() {
+        let cfg = AppConfig::default();
+        assert_eq!(
+            cfg.model.path,
+            PathBuf::from("models/gpt-oss-20b-Q5_K_M.gguf")
         );
     }
 

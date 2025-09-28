@@ -27,10 +27,15 @@ else
 fi
 
 echo "[INFO] Downloading LLM model (GGUF) for forebrain-llm..."
-# Example: Download llama3-8b-instruct.Q4_K_M.gguf (adjust as needed)
-if [ ! -f "$LLM_MODEL_DIR/llama3-8b-instruct.Q4_K_M.gguf" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$LLM_MODEL_DIR/llama3-8b-instruct.Q4_K_M.gguf" \
-    "https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF/resolve/main/llama-3-8b-instruct.Q4_K_M.gguf"; then
+LLM_MODEL_NAME="gpt-oss-20b-Q5_K_M.gguf"
+LLM_MODEL_PATH="$LLM_MODEL_DIR/$LLM_MODEL_NAME"
+if [ ! -f "$LLM_MODEL_PATH" ]; then
+  HF_MODEL_URL="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$LLM_MODEL_NAME?download=1"
+  echo "[INFO] Fetching $LLM_MODEL_NAME from $HF_MODEL_URL"
+  if ! curl --fail --location --retry 5 --retry-delay 5 --continue-at - \
+    "${AUTH_HEADER[@]}" \
+    -o "$LLM_MODEL_PATH" \
+    "$HF_MODEL_URL"; then
     echo "[ERROR] Failed to download LLM model. If this model is gated on Hugging Face, export a token first:"
     echo "  export HUGGINGFACE_HUB_TOKEN=\"<your-token>\""
     echo "See https://huggingface.co/settings/tokens to create a token."

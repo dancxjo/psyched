@@ -30,7 +30,7 @@ services:
     image: psyched-forebrain-llm:local
     restart: unless-stopped
     environment:
-      FOREBRAIN_LLM__MODEL__PATH: "/data/llama3-8b-instruct.Q4_K_M.gguf"
+      FOREBRAIN_LLM__MODEL__PATH: "/data/gpt-oss-20b-Q5_K_M.gguf"
       FOREBRAIN_LLM__WEBSOCKET__BIND_ADDR: "0.0.0.0:8080"
       NVIDIA_VISIBLE_DEVICES: all
     volumes:
