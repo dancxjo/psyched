@@ -6,7 +6,12 @@ package_root = str(Path(__file__).resolve().parents[1])
 if package_root not in sys.path:
     sys.path.insert(0, package_root)
 
-from ear.transcriber_node import ChainedTranscriptionBackend, TranscriptionWorker
+import types
+from ear.transcriber_node import (
+    ChainedTranscriptionBackend,
+    TranscriptionWorker,
+    _load_websocket_dependencies,
+)
 
 
 class DummyBackend:
@@ -121,4 +126,54 @@ def test_chained_backend_skips_primary_during_cooldown():
     assert second == ("fallback", 0.5)
     assert primary.failures == 1, "primary should not be retried during cooldown"
     assert len(fallback.calls) == 2
+
+
+def test_load_websocket_dependencies_prefers_asyncio_namespace():
+    class DummyConnectionClosed(Exception):
+        """Sentinel exception used to emulate websockets' ConnectionClosed."""
+
+    modules = {
+        "websockets.asyncio.client": types.SimpleNamespace(connect="async-connect"),
+        "websockets.exceptions": types.SimpleNamespace(ConnectionClosed=DummyConnectionClosed),
+    }
+
+    def fake_import(name: str):
+        if name not in modules:
+            raise ImportError(name)
+        return modules[name]
+
+    connect, connection_closed = _load_websocket_dependencies(fake_import)
+
+    assert connect == "async-connect"
+    assert connection_closed is DummyConnectionClosed
+
+
+def test_load_websocket_dependencies_falls_back_to_client_module():
+    class DummyConnectionClosed(Exception):
+        """Sentinel exception used to emulate websockets' ConnectionClosed."""
+
+    modules = {
+        "websockets.client": types.SimpleNamespace(connect="client-connect"),
+        "websockets.exceptions": types.SimpleNamespace(ConnectionClosed=DummyConnectionClosed),
+    }
+
+    def fake_import(name: str):
+        if name not in modules:
+            raise ImportError(name)
+        return modules[name]
+
+    connect, connection_closed = _load_websocket_dependencies(fake_import)
+
+    assert connect == "client-connect"
+    assert connection_closed is DummyConnectionClosed
+
+
+def test_load_websocket_dependencies_handles_missing_modules():
+    def fake_import(name: str):  # pragma: no cover - invoked for completeness
+        raise ImportError(name)
+
+    connect, connection_closed = _load_websocket_dependencies(fake_import)
+
+    assert connect is None
+    assert connection_closed is RuntimeError
 

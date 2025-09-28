@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import base64
 import json
 import math
@@ -11,7 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Type
 
 from .audio_utils import coerce_pcm_bytes
 
@@ -34,12 +35,65 @@ except ImportError:  # pragma: no cover - unit tests stub out ROS.
     ByteMultiArray = object  # type: ignore
     Transcript = object  # type: ignore
 
-try:  # Optional websocket dependency for remote ASR.
-    from websockets.asyncio.client import connect as websocket_connect
-    from websockets.exceptions import ConnectionClosed
-except ImportError:  # pragma: no cover - dependency optional for tests.
-    websocket_connect = None  # type: ignore
-    ConnectionClosed = RuntimeError  # type: ignore
+def _load_websocket_dependencies(
+    import_module: Callable[[str], object] = importlib.import_module,
+) -> Tuple[Optional[Callable[..., object]], Type[BaseException]]:
+    """Resolve the websocket client entry points with broad version support.
+
+    Parameters
+    ----------
+    import_module:
+        Import callable, injectable to simplify unit testing.
+
+    Returns
+    -------
+    tuple
+        Pair containing the websocket ``connect`` coroutine (or ``None`` if the
+        dependency cannot be imported) and the ``ConnectionClosed`` exception
+        class to catch during reconnect loops.
+
+    Examples
+    --------
+    >>> connect, closed = _load_websocket_dependencies()
+    >>> connect is None or callable(connect)
+    True
+    """
+
+    candidates = [
+        ("websockets.asyncio.client", "connect"),
+        ("websockets.client", "connect"),
+        ("websockets", "connect"),
+    ]
+
+    connect: Optional[Callable[..., object]] = None
+    for module_name, attribute in candidates:
+        try:
+            module = import_module(module_name)
+        except ImportError:
+            continue
+        try:
+            candidate = getattr(module, attribute)
+        except AttributeError:
+            continue
+        if candidate is not None:
+            connect = candidate
+            break
+
+    if connect is None:
+        return None, RuntimeError
+
+    try:
+        exceptions_module = import_module("websockets.exceptions")
+        connection_closed: Type[BaseException] = getattr(
+            exceptions_module, "ConnectionClosed"
+        )
+    except (ImportError, AttributeError):
+        connection_closed = RuntimeError
+
+    return connect, connection_closed
+
+
+websocket_connect, ConnectionClosed = _load_websocket_dependencies()
 
 
 def _logprob_to_confidence(logprob: float) -> float:
