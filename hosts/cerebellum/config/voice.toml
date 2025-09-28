@@ -6,3 +6,28 @@
 ping_enabled = true
 # Use the forebrain host for websocket TTS (resolves on local network)
 tts_ws_url = "ws://forebrain.local:5002/tts"
+
+# TTS websocket defaults used by the voice node and the forebrain TTS service.
+# These keys map to the parameters declared by `src/voice/voice/node.py` and
+# to environment variables consumed by the Coqui websocket server. Tune them
+# to change the voice model, speaker, language, and streaming chunk size.
+# - `tts_ws_speaker` / `TTS_DEFAULT_SPEAKER` choose the voice (Coqui speaker id)
+# - `tts_ws_language` / `TTS_DEFAULT_LANGUAGE` optionally set language tag
+# - `tts_ws_chunk_samples` maps to the server's `PCM_CHUNK_SAMPLES` env var
+# - `TTS_MODEL` chooses the Coqui model name; `TTS_USE_CUDA` enables GPU
+
+# Select a different Coqui voice model and speaker for higher quality.
+tts_ws_speaker = "p330"
+tts_ws_language = "en"
+
+# Tune the synth model and runtime flags (these are forwarded to the
+# TTS websocket service environment when the speech stack is deployed).
+# Pick a model from https://coqui.ai/models (example shown below).
+TTS_MODEL = "tts_models/en/ljspeech/tacotron2-DDC"  # alternative higher-quality model
+TTS_USE_CUDA = "true"                            # set to "true" if GPU-enabled image is used
+
+# Smaller PCM chunk sizes reduce latency at the cost of more websocket frames.
+PCM_CHUNK_SAMPLES = 2048
+
+# Playback backend (voice node parameter) — common choices: ffplay, aplay
+playback_backend = "ffplay"
