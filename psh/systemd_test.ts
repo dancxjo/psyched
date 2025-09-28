@@ -10,7 +10,7 @@ Deno.test("buildUnitContent no longer injects config-derived environment variabl
     spec,
     "/repo",
     "test-host",
-    "/repo/hosts/test-host/config/voice.yaml",
+    "/repo/hosts/test-host/config/voice.toml",
     {
       engine: "piper",
       voices_dir: "/voices",

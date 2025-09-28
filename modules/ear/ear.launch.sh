@@ -4,10 +4,10 @@ REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 export REPO_DIR
 HOST_SHORT="${HOST:-$(hostname -s)}"
 
-HOST_YAML="${REPO_DIR}/hosts/${HOST_SHORT}/config/ear.yaml"
-
-if [ -f "$HOST_YAML" ]; then
-  export PSH_MODULE_CONFIG="$HOST_YAML"
+HOST_TOML="${REPO_DIR}/hosts/${HOST_SHORT}/config/ear.toml"
+EXTRA_ARGS=()
+if [ -f "$HOST_TOML" ]; then
+  mapfile -t EXTRA_ARGS < <(python3 "$REPO_DIR/tools/launch_args.py" "$HOST_TOML")
 fi
 
-exec ros2 launch ear ear.launch.py
+exec ros2 launch ear ear.launch.py "${EXTRA_ARGS[@]}"

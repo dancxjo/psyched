@@ -1,37 +1,49 @@
-#!/usr/bin/env python3
-"""Launch file for the pilot web interface node."""
-
-
+"""Launch configuration for the pilot web interface."""
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-import os
 
-def generate_launch_description():
-    params_file = os.environ.get('PSH_MODULE_CONFIG', None)
-    params = [params_file] if params_file else []
-    pilot_node = Node(
-        package='pilot',
-        executable='pilot_backend',
-        name='pilot_backend',
-        output='screen',
-        parameters=params
+
+def _declare_launch_arguments():
+    return [
+        DeclareLaunchArgument("web_host", default_value="0.0.0.0"),
+        DeclareLaunchArgument("web_port", default_value="8080"),
+        DeclareLaunchArgument("log_level", default_value="info"),
+        DeclareLaunchArgument("health_publish_topic", default_value="auto"),
+        DeclareLaunchArgument("health_period_sec", default_value="2.0"),
+    ]
+
+
+def generate_launch_description() -> LaunchDescription:
+    """Return the launch description for the pilot backend and health monitor."""
+
+    backend = Node(
+        package="pilot",
+        executable="pilot_backend",
+        name="pilot_backend",
+        output="screen",
+        arguments=[
+            "--host",
+            LaunchConfiguration("web_host"),
+            "--port",
+            LaunchConfiguration("web_port"),
+            "--log-level",
+            LaunchConfiguration("log_level"),
+        ],
     )
-    websocket_node = Node(
-        package='pilot',
-        executable='pilot_websocket_node',
-        name='pilot_websocket_node',
-        output='screen',
-        parameters=params
+
+    host_health = Node(
+        package="pilot",
+        executable="host_health",
+        name="host_health",
+        output="screen",
+        parameters=[
+            {
+                "publish_topic": LaunchConfiguration("health_publish_topic"),
+                "period_sec": LaunchConfiguration("health_period_sec"),
+            }
+        ],
     )
-    host_health_node = Node(
-        package='pilot',
-        executable='host_health',
-        name='host_health',
-        output='screen',
-        parameters=params
-    )
-    return LaunchDescription([
-        pilot_node,
-        websocket_node,
-        host_health_node,
-    ])
+
+    return LaunchDescription([*_declare_launch_arguments(), backend, host_health])

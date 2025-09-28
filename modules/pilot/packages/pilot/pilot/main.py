@@ -53,8 +53,8 @@ def _default_static_root() -> Path:
 def _default_voice_config_path(repo_root: Path) -> Path:
     host = os.environ.get("HOST")
     if host:
-        return repo_root / "hosts" / host / "config" / "voice.yaml"
-    return repo_root / "config" / "voice.yaml"
+        return repo_root / "hosts" / host / "config" / "voice.toml"
+    return repo_root / "config" / "voice.toml"
 
 
 def _create_argument_parser() -> argparse.ArgumentParser:

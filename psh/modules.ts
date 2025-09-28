@@ -1,5 +1,5 @@
 import { parse as parseToml } from "@std/toml";
-import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
+import { parse as parseYaml } from "@std/yaml";
 import { dirname, fromFileUrl, join } from "@std/path";
 import { $, type DaxTemplateTag, runWithStreamingTee } from "./util.ts";
 import { colors } from "@cliffy/ansi/colors";
@@ -694,6 +694,30 @@ export function resetPipInstallHandler(): void {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
+function stringifyTomlRecord(record: Record<string, unknown>): string {
+  return Object.entries(record)
+    .map(([key, value]) => `${key} = ${formatTomlValue(value)}`)
+    .join("\n");
+}
+
+function formatTomlValue(value: unknown): string {
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Unsupported numeric value for TOML: ${value}`);
+    }
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+  if (value === null || value === undefined) {
+    return '""';
+  }
+  throw new Error(`Unsupported value type for TOML: ${typeof value}`);
+}
 
 function readToml(filePath: string): Promise<Record<string, unknown>> {
   return Deno.readTextFile(filePath).then((text) =>
@@ -744,15 +768,17 @@ function configCandidatePaths(
 ): string[] {
   const configs: string[] = [];
   const hostDir = join(repoDir, "hosts", host, "config");
+  configs.push(join(hostDir, `${module}.toml`));
   configs.push(join(hostDir, `${module}.yaml`));
   configs.push(join(hostDir, `${module}.yml`));
   const sharedDir = join(repoDir, "config");
+  configs.push(join(sharedDir, `${module}.toml`));
   configs.push(join(sharedDir, `${module}.yaml`));
   configs.push(join(sharedDir, `${module}.yml`));
   return configs;
 }
 
-async function tryLoadYaml(
+async function tryLoadConfig(
   path: string,
 ): Promise<Record<string, unknown> | null> {
   try {
@@ -762,9 +788,18 @@ async function tryLoadYaml(
     if (err instanceof Deno.errors.NotFound) return null;
     throw err;
   }
+  const ext = path.split('.').pop()?.toLowerCase();
+  const parser: "toml" | "yaml" | null = ext === 'toml'
+    ? 'toml'
+    : ext === 'yaml' || ext === 'yml'
+    ? 'yaml'
+    : null;
+  if (!parser) {
+    return null;
+  }
   try {
     const text = await Deno.readTextFile(path);
-    const parsed = parseYaml(text);
+    const parsed = parser === 'toml' ? parseToml(text) : parseYaml(text);
     if (isRecord(parsed)) {
       return parsed as Record<string, unknown>;
     }
@@ -782,7 +817,7 @@ export async function loadHostModuleConfig(
 ): Promise<ModuleConfigSource> {
   const repoDir = repoDirFromModules();
   for (const candidate of configCandidatePaths(repoDir, host, module)) {
-    const loaded = await tryLoadYaml(candidate);
+    const loaded = await tryLoadConfig(candidate);
     if (loaded === null) {
       continue;
     }
@@ -829,28 +864,19 @@ export async function prepareModuleContext(
   }
 
   if (moduleConfigPath && !moduleConfig) {
-    try {
-      const text = await Deno.readTextFile(moduleConfigPath);
-      const parsed = parseYaml(text);
-      if (isRecord(parsed)) {
-        moduleConfig = parsed as Record<string, unknown>;
-      }
-    } catch (err) {
-      console.warn(
-        `[module:${module}] Failed to parse config ${moduleConfigPath}: ${
-          String(err)
-        }`,
-      );
+    const parsed = await tryLoadConfig(moduleConfigPath);
+    if (parsed) {
+      moduleConfig = parsed;
     }
   }
 
   if (
     !moduleConfigPath && moduleConfig && Object.keys(moduleConfig).length > 0
   ) {
-    const yaml = stringifyYaml(moduleConfig as Record<string, unknown>);
+    const toml = stringifyTomlRecord(moduleConfig as Record<string, unknown>);
     const tempDir = Deno.makeTempDirSync({ prefix: `psh_${module}_` });
-    moduleConfigPath = join(tempDir, "params.yaml");
-    await Deno.writeTextFile(moduleConfigPath, yaml);
+    moduleConfigPath = join(tempDir, "params.toml");
+    await Deno.writeTextFile(moduleConfigPath, toml);
     moduleConfigOwned = true;
   }
 

@@ -334,7 +334,7 @@ Record PASS/FAIL for each gate in a short developer message.
 2. Add/adjust presentation CSS in `modules/pilot/packages/pilot/pilot/static/style.css` (import `assets/lower-decks-padd.css` first).
 3. Refactor `joystick.js` presentation toggles to `data-*` attributes where appropriate.
 4. Run the smoke server and validate.
-5. If host-specific files are used, sync changes into `hosts/<host>/config/pilot.yaml` (or the relevant YAML file).
+5. If host-specific files are used, sync changes into `hosts/<host>/config/pilot.toml` (or the relevant YAML file).
 
 ---
 
