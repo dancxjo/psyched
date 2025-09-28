@@ -27,7 +27,7 @@ packages = ["ublox_gps", "psyched_msgs"]
 [[actions]]
 type = "apt_install"
 packages = ["gpsd", "gpsd-clients"]
-update = true
+update = false
 
 [[actions]]
 type = "run"

@@ -102,7 +102,7 @@ packages = [
     "ros-kilted-diagnostic-updater",
     "ros-kilted-xacro",
 ]
-update = true
+update = false
 
 [systemd]
 description = "Psyched Foot Motion"

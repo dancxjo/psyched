@@ -75,7 +75,7 @@ packages = [
     "fortunes",
     "fortunes-min",
 ]
-update = true
+update = false
 
 [[actions]]
 type = "pip_install"

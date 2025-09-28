@@ -55,16 +55,17 @@ def transcript_to_message(transcript: Transcript) -> Optional[MsgMessage]:
 
 
 class ChatNode(Node):
+
     def __init__(self) -> None:
         super().__init__('chat')
 
-        # Parameters
-        self.declare_parameter('system_prompt', os.environ.get('CHAT_SYSTEM_PROMPT', 'You are a helpful assistant. Always answer in one concise sentence.'))
+        # Parameters (no environment fallback, only YAML or launch params)
+        self.declare_parameter('system_prompt', 'You are a helpful assistant. Always answer in one concise sentence.')
         self.declare_parameter('conversation_topic', '/conversation')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('transcript_topic', '/audio/transcription')
-        self.declare_parameter('model', os.environ.get('CHAT_MODEL', 'gemma3'))
-        self.declare_parameter('ollama_host', os.environ.get('OLLAMA_HOST', 'http://localhost:11434'))
+        self.declare_parameter('model', 'gemma3')
+        self.declare_parameter('ollama_host', 'http://localhost:11434')
         self.declare_parameter('max_history', 20)
 
         # Resolve parameters

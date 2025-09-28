@@ -32,8 +32,8 @@ optional = true
 
 [[actions]]
 type = "apt_install"
-packages = ["libi2c-dev", "i2c-tools", "ros2-kilted-imu-filter-madgwick"]
-update = true
+packages = ["libi2c-dev", "i2c-tools", "ros-kilted-imu-filter-madgwick"]
+update = false
 
 [systemd]
 description = "Psyched IMU Sensor"

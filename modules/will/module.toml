@@ -27,7 +27,7 @@ packages = ["psyched_bt"]
 [[actions]]
 type = "apt_install"
 packages = ["python3-pip", "git"]
-update = true
+update = false
 
 [[actions]]
 type = "pip_install"

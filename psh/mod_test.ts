@@ -102,26 +102,26 @@ Deno.test(
     await Deno.writeTextFile(
       join(modA, "module.toml"),
       `[[actions]]\n` +
-        `type = "apt_install"\n` +
-        `packages = ["curl", "htop"]\n` +
-        `update = true\n\n` +
-        `[[actions]]\n` +
-        `type = "pip_install"\n` +
-        `packages = ["fastapi", "psutil"]\n` +
-        `import_check = ["fastapi"]\n` +
-        `break_system = true\n`,
+      `type = "apt_install"\n` +
+      `packages = ["curl", "htop"]\n` +
+      `update = false\n\n` +
+      `[[actions]]\n` +
+      `type = "pip_install"\n` +
+      `packages = ["fastapi", "psutil"]\n` +
+      `import_check = ["fastapi"]\n` +
+      `break_system = true\n`,
     );
 
     await Deno.writeTextFile(
       join(modB, "module.toml"),
       `[[actions]]\n` +
-        `type = "apt_install"\n` +
-        `packages = ["curl", "vim"]\n\n` +
-        `[[actions]]\n` +
-        `type = "pip_install"\n` +
-        `packages = ["psutil", "uvicorn"]\n` +
-        `import_check = ["uvicorn"]\n` +
-        `break_system = true\n`,
+      `type = "apt_install"\n` +
+      `packages = ["curl", "vim"]\n\n` +
+      `[[actions]]\n` +
+      `type = "pip_install"\n` +
+      `packages = ["psutil", "uvicorn"]\n` +
+      `import_check = ["uvicorn"]\n` +
+      `break_system = true\n`,
     );
 
     const aptCalls: Array<{ packages: string[]; update: boolean; module: string }> = [];
