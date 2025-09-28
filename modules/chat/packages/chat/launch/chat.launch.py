@@ -16,7 +16,7 @@ DEFAULT_ARGUMENTS = {
     "conversation_topic": "/conversation",
     "voice_topic": "/voice",
     "transcript_topic": "/audio/transcription",
-    "model": "phi4",
+    "model": "llama3.2",
     "ollama_host": "http://localhost:11434",
     "max_history": "20",
 }

@@ -10,6 +10,6 @@ setup_docker = true
 # Ordered list of modules to enable for this host. Each entry corresponds to
 # a directory under modules/ and its module.toml actions will be executed in
 # the same order.
-modules = ["foot", "voice", "imu", "ear", "chat", "pilot"]
+modules = ["foot", "imu", "pilot"]
 
 # Module configuration now lives under hosts/cerebellum/config/*.toml

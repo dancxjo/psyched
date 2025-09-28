@@ -3,3 +3,4 @@
 
 [launch.arguments]
 
+ping_enabled = false
