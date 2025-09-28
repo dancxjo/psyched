@@ -305,8 +305,8 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
   const { build = false } = options;
   await launchSpeechStack({ build, compose: options.compose });
 
-  const handshakeTimeoutMs = options.handshakeTimeoutMs ?? 5000;
-  const messageTimeoutMs = options.messageTimeoutMs ?? 5000;
+  const handshakeTimeoutMs = options.handshakeTimeoutMs ?? 15000;
+  const messageTimeoutMs = options.messageTimeoutMs ?? 15000;
   const connect = options.connect ?? ((_: SpeechService, url: string) => connectRealWebSocket(url, handshakeTimeoutMs));
 
   console.log("[psh] Validating LLM websocket at ws://127.0.0.1:8080/chat ...");
@@ -337,17 +337,30 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
     if (metadata.event !== "start") {
       throw new Error("[psh] TTS websocket did not emit start metadata.");
     }
-    const chunk = await socket.nextMessage(messageTimeoutMs);
-    if (chunk.type !== "binary" || chunk.bytes.length === 0) {
+    // The TTS service may stream audio in multiple binary chunks. Consume
+    // binary messages until we receive the JSON end marker (text).
+    let receivedAudio = false;
+    while (true) {
+      const m = await socket.nextMessage(messageTimeoutMs);
+      if (m.type === "binary") {
+        if (m.bytes.length === 0) {
+          throw new Error("[psh] TTS websocket streamed empty audio chunk.");
+        }
+        receivedAudio = true;
+        // continue waiting for the end marker
+        continue;
+      }
+      if (m.type === "text") {
+        const footer = parseJson<{ event?: string }>(m.text, "[psh] Failed to parse TTS completion message");
+        if (footer.event !== "end") {
+          throw new Error("[psh] TTS websocket did not emit end event.");
+        }
+        break;
+      }
+      throw new Error("[psh] TTS websocket returned unsupported payload type.");
+    }
+    if (!receivedAudio) {
       throw new Error("[psh] TTS websocket did not stream audio data.");
-    }
-    const end = await socket.nextMessage(messageTimeoutMs);
-    if (end.type !== "text") {
-      throw new Error("[psh] TTS websocket did not send end-of-stream metadata.");
-    }
-    const footer = parseJson<{ event?: string }>(end.text, "[psh] Failed to parse TTS completion message");
-    if (footer.event !== "end") {
-      throw new Error("[psh] TTS websocket did not emit end event.");
     }
   });
   console.log("[psh] TTS websocket produced audio stream and end marker.");

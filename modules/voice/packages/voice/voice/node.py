@@ -126,8 +126,8 @@ class VoiceNode(Node):
         self._announce_startup_message()
         self._setup_ping_timer()
 
-        self.get_logger().info("Voice node listening on topic: %s", self.topic)
-        self.get_logger().info("Using TTS engine: %s", self.engine)
+    self.get_logger().info(f"Voice node listening on topic: {self.topic}")
+    self.get_logger().info(f"Using TTS engine: {self.engine}")
 
     # ------------------------------------------------------------------
     # Parameter helpers
@@ -204,15 +204,13 @@ class VoiceNode(Node):
                         provider = build_tts_provider(engine, logger=self.get_logger(), config_getter=config_getter)
                     if selected_engine != engine:
                         self.get_logger().warning(
-                            "TTS provider '%s' unavailable; switching to '%s'",
-                            engine,
-                            selected_engine,
+                            f"TTS provider '{engine}' unavailable; switching to '{selected_engine}'",
                         )
                         self.engine = selected_engine
                     self._provider = provider
                     self._provider_engine = selected_engine
                 except ProviderUnavailable as exc:
-                    self.get_logger().error("TTS provider unavailable (%s): %s", engine, exc)
+                    self.get_logger().error(f"TTS provider unavailable ({engine}): {exc}")
                     self._provider = None
                     self._provider_engine = None
         return self._provider
@@ -307,7 +305,7 @@ class VoiceNode(Node):
                 cleared += 1
         except queue.Empty:
             pass
-        self.get_logger().info("Cleared %d queued utterance(s)", cleared)
+        self.get_logger().info(f"Cleared {cleared} queued utterance(s)")
 
     def _on_volume(self, msg: Float32) -> None:
         try:
@@ -318,7 +316,7 @@ class VoiceNode(Node):
         if abs(new_volume - self.volume) < 1e-3:
             return
         self.volume = new_volume
-        self.get_logger().info("Voice volume set to %.2f", self.volume)
+        self.get_logger().info(f"Voice volume set to {self.volume:.2f}")
 
     def _run_worker(self) -> None:
         while not self._stop_event.is_set():
@@ -349,10 +347,10 @@ class VoiceNode(Node):
             try:
                 success = provider.speak(text, volume=self.volume, on_duration=self._publish_autophony_ms)
             except ProviderUnavailable as exc:
-                self.get_logger().error("TTS synthesis failed: %s", exc)
+                self.get_logger().error(f"TTS synthesis failed: {exc}")
                 success = False
             except Exception as exc:
-                self.get_logger().exception("Unexpected TTS failure: %s", exc)
+                self.get_logger().exception(f"Unexpected TTS failure: {exc}")
                 success = False
 
             if not success:

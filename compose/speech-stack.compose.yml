@@ -16,6 +16,8 @@ services:
     restart: unless-stopped
     environment:
       TTS_MODEL: "tts_models/en/vctk/vits"
+      # Run on CPU by default; set to 'true' to try enabling CUDA (requires CUDA-enabled PyTorch in the image)
+      TTS_USE_CUDA: "false"
     ports:
       - "5002:5002"
 
