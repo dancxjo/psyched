@@ -29,6 +29,23 @@ export async function isDockerInstalled(): Promise<boolean> {
   return await existsInPath("docker");
 }
 
+/**
+ * Check whether the NVIDIA CUDA toolkit appears to be installed.
+ * We look for the common CLI utilities (nvidia-smi or nvcc) and the default
+ * toolkit directory at /usr/local/cuda.
+ */
+export async function isCudaInstalled(): Promise<boolean> {
+  if (await existsInPath("nvidia-smi")) return true;
+  if (await existsInPath("nvcc")) return true;
+  try {
+    const st = await Deno.stat("/usr/local/cuda");
+    if (st.isDirectory) return true;
+  } catch (_err) {
+    // directory missing is fine
+  }
+  return false;
+}
+
 async function existsInPath(name: string): Promise<boolean> {
   const pathEnv = Deno.env.get("PATH") || "";
   if (!pathEnv) return false;
@@ -88,6 +105,27 @@ export async function runInstallDocker(): Promise<void> {
     console.log(res.stderr);
   }
   summarizeTextOutput(res.stdout, "Docker installer output");
+}
+
+export async function runInstallCuda(): Promise<void> {
+  if (await isCudaInstalled()) {
+    console.log("CUDA toolkit appears to be installed already — skipping CUDA install.");
+    return;
+  }
+
+  const script = repoPath("../tools/install_cuda.sh");
+  console.log(colors.cyan(`Starting CUDA toolkit install: ${script}`));
+  const res = await runWithStreamingTee(`bash ${script}`);
+  if (res.code !== 0) {
+    console.error(colors.red(`CUDA installer failed (code ${res.code})`));
+    if (res.stderr) console.error(colors.red(res.stderr));
+    throw new Error(`CUDA installer failed (${res.code})`);
+  }
+  if (res.stderr && res.stderr.trim().length > 0) {
+    console.log(colors.yellow("CUDA installer produced stderr (see below):"));
+    console.log(res.stderr);
+  }
+  summarizeTextOutput(res.stdout, "CUDA installer output");
 }
 
 function summarizeTextOutput(text: string, label = "output") {

@@ -40,6 +40,7 @@ current architecture.
 ### Forebrain
 - Hardware: headless laptop with GPU, also mounted onboard.
 - Runs ASR/LLM/TTS containers (no ROS 2).
+- Provisioning installs Docker, CUDA toolkit, and speech assets.
 - Invoked with `psh speech up`.
 - Offloads heavy compute from cerebellum.
 - Planned integration with **Neo4j** (graph memory) and **Qdrant** (vector memory).

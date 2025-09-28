@@ -24,6 +24,8 @@ Deno.test("setupHosts triggers speech setup when requested", async () => {
     let speechRuns = 0;
     let rosRuns = 0;
     let dockerRuns = 0;
+    let cudaChecks = 0;
+    let cudaRuns = 0;
     const overrides: Partial<SetupDeps> = {
       isRos2Installed: async () => true,
       runInstallRos2: async () => {
@@ -32,6 +34,13 @@ Deno.test("setupHosts triggers speech setup when requested", async () => {
       isDockerInstalled: async () => true,
       runInstallDocker: async () => {
         dockerRuns++;
+      },
+      isCudaInstalled: async () => {
+        cudaChecks++;
+        return true;
+      },
+      runInstallCuda: async () => {
+        cudaRuns++;
       },
       isSpeechSetupComplete: async () => {
         speechChecks++;
@@ -47,6 +56,8 @@ Deno.test("setupHosts triggers speech setup when requested", async () => {
     assertEquals(speechRuns, 1);
     assertEquals(rosRuns, 0);
     assertEquals(dockerRuns, 0);
+    assertEquals(cudaChecks, 0);
+    assertEquals(cudaRuns, 0);
   } finally {
     cleanupFiles(created);
   }
@@ -64,11 +75,20 @@ Deno.test("speech setup is skipped when models already prepared", async () => {
 
     let speechChecks = 0;
     let speechRuns = 0;
+    let cudaChecks = 0;
+    let cudaRuns = 0;
     const overrides: Partial<SetupDeps> = {
       isRos2Installed: async () => true,
       runInstallRos2: async () => { },
       isDockerInstalled: async () => true,
       runInstallDocker: async () => { },
+      isCudaInstalled: async () => {
+        cudaChecks++;
+        return true;
+      },
+      runInstallCuda: async () => {
+        cudaRuns++;
+      },
       isSpeechSetupComplete: async () => {
         speechChecks++;
         return true;
@@ -81,8 +101,44 @@ Deno.test("speech setup is skipped when models already prepared", async () => {
     await setupHosts([hostName], overrides);
     assertEquals(speechChecks, 1);
     assertEquals(speechRuns, 0);
+    assertEquals(cudaChecks, 0);
+    assertEquals(cudaRuns, 0);
   } finally {
     cleanupFiles(created);
     cleanupFiles([sentinel, sentinelAlt]);
+  }
+});
+
+Deno.test("setupHosts installs CUDA toolkit when requested", async () => {
+  const hostName = `psh-test-${crypto.randomUUID()}`;
+  const hostFile = repoPath(`hosts/${hostName}.toml`);
+  const created: string[] = [];
+  try {
+    await Deno.writeTextFile(hostFile, "setup_cuda = true\nmodules = []\n");
+    created.push(hostFile);
+
+    let cudaChecks = 0;
+    let cudaRuns = 0;
+    const overrides: Partial<SetupDeps> = {
+      isRos2Installed: async () => true,
+      runInstallRos2: async () => { },
+      isDockerInstalled: async () => true,
+      runInstallDocker: async () => { },
+      isSpeechSetupComplete: async () => true,
+      runSetupSpeech: async () => { },
+      isCudaInstalled: async () => {
+        cudaChecks++;
+        return false;
+      },
+      runInstallCuda: async () => {
+        cudaRuns++;
+      },
+    };
+
+    await setupHosts([hostName], overrides);
+    assertEquals(cudaChecks, 1);
+    assertEquals(cudaRuns, 1);
+  } finally {
+    cleanupFiles(created);
   }
 });
