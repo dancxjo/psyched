@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional
 
 
 def _strip_fortune_attribution(text: str) -> str:
@@ -22,10 +23,37 @@ def _strip_fortune_attribution(text: str) -> str:
     return " ".join(parts).strip()
 
 
+KNOWN_FORTUNE_PATHS: tuple[str, ...] = (
+    "/usr/games/fortune",
+    "/usr/local/bin/fortune",
+    "/usr/bin/fortune",
+)
+
+
+def _iter_candidate_paths(
+    primary: Optional[str],
+    *,
+    candidates: Iterable[str] = KNOWN_FORTUNE_PATHS,
+) -> list[str]:
+    """Return ordered candidate paths starting with *primary* when provided."""
+
+    unique: list[str] = []
+    if primary:
+        unique.append(primary)
+    for path in candidates:
+        if not path:
+            continue
+        if path == primary:
+            continue
+        unique.append(path)
+    return unique
+
+
 def fetch_fortune_text(
     *,
     which: Callable[[str], Optional[str]] = shutil.which,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    path_exists: Callable[[str], bool] = os.path.exists,
 ) -> str | None:
     """Return a short fortune string if the ``fortune`` binary is available.
 
@@ -34,6 +62,8 @@ def fetch_fortune_text(
             :func:`shutil.which`.
         run: Callable used to execute the command. Defaults to
             :func:`subprocess.run`.
+        path_exists: Callable used to test candidate binary paths. Defaults to
+            :func:`os.path.exists`.
 
     Returns:
         A trimmed fortune string when available, otherwise ``None``.
@@ -49,9 +79,19 @@ def fetch_fortune_text(
         'Hello'
     """
     try:
-        fortune_path = which("fortune")
+        which_path = which("fortune")
     except Exception:
-        return None
+        which_path = None
+
+    fortune_path: Optional[str] = None
+    for candidate in _iter_candidate_paths(which_path):
+        try:
+            if path_exists(candidate):
+                fortune_path = candidate
+                break
+        except Exception:
+            continue
+
     if not fortune_path:
         return None
     try:
