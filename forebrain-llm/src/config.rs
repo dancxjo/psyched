@@ -87,7 +87,7 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            path: PathBuf::from("models/gpt-oss-20b.gguf"),
+            path: PathBuf::from("models/llama3-8b-instruct.Q4_K_M.gguf"),
             system_prompt: Some("You are the forebrain assistant for GPT-OSS.".into()),
             temperature: 0.7,
             top_p: 0.9,

@@ -15,7 +15,8 @@ output.wav
 launch_params_*
 
 # External workspace sources (symlink-populated)
-src/
+# only on the top-level workspace
+/src/
 # Allow Rust crate sources under the ASR workspace
 !asr-core/src/
 !asr-fast/src/
