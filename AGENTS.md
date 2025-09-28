@@ -49,6 +49,9 @@ workspace.
   call site.
 - When you discover you skipped documentation earlier, add a reminder here so
   the next agent anticipates it.
+- Local Python is 3.12; `pip install TTS` fails against upstream constraints.
+  When you need API references, inspect upstream sources directly instead of
+  trying to install the package in this environment.
 
 ## Testing & validation
 - Run the most relevant tests or builds for the files you touched. Prefer
