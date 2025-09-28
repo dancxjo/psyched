@@ -170,15 +170,47 @@ if "requests" not in sys.modules:
     fake_requests = types.ModuleType("requests")
 
     class _Response:
-        def __init__(self, payload: dict[str, object]) -> None:
-            self.status_code = 200
+        def __init__(self, payload: dict[str, object], status_code: int = 200) -> None:
+            self.status_code = status_code
             self._payload = payload
 
         def json(self) -> dict[str, object]:
             return self._payload
 
-    fake_requests.get = lambda *args, **kwargs: _Response({"models": []})
-    fake_requests.post = lambda *args, **kwargs: _Response({"message": {"content": "stub"}})
+    def _fake_get(url: str, *args, **kwargs):  # noqa: ANN001
+        if url.endswith("/api/modules"):
+            return _Response(
+                {
+                    "modules": [
+                        {
+                            "name": "pilot",
+                            "display_name": "Pilot",
+                            "description": "Teleoperation dashboard",
+                            "regimes": ["system"],
+                            "commands": {"mod": ["setup"], "system": ["start"]},
+                            "topics": [
+                                {
+                                    "topic": "/cmd_vel",
+                                    "type": "geometry_msgs/msg/Twist",
+                                    "access": "rw",
+                                    "presentation": "joystick",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            )
+        if url.endswith("/api/chat"):
+            return _Response({"choices": [{"message": {"content": "stub"}}]})
+        return _Response({"modules": []})
+
+    def _fake_post(url: str, *args, **kwargs):  # noqa: ANN001
+        if url.endswith("/api/chat"):
+            return _Response({"choices": [{"message": {"content": "stub"}}]})
+        return _Response({"message": {"content": "stub"}})
+
+    fake_requests.get = _fake_get
+    fake_requests.post = _fake_post
     sys.modules["requests"] = fake_requests
 
 
@@ -286,4 +318,32 @@ def test_chatnode_defaults_to_tinyllama_for_ollama_fallback() -> None:
     node = ChatNode()
 
     assert node.model == "tinyllama"
+
+
+def test_chatnode_appends_pilot_summary_to_system_prompt() -> None:
+    node = ChatNode()
+
+    captured: dict[str, list[dict[str, str]]] = {}
+
+    def _capture(messages: list[dict[str, str]]) -> str:
+        captured["messages"] = messages
+        return "Summary acknowledged."
+
+    node._generate_response = _capture  # type: ignore[assignment]
+
+    user = MsgMessage()
+    user.role = "user"
+    user.content = "Report."  # keep it short for clarity
+
+    node._publish_user_turn(user)
+    node.on_conversation(user)
+
+    system_messages = captured.get("messages") or []
+    assert system_messages, "Expected generate_response to be invoked"
+    system_entry = system_messages[0]
+    assert system_entry["role"] == "system"
+    content = system_entry["content"]
+    assert content.startswith("You are a helpful assistant"), content
+    assert "Pilot Control Surface" in content
+    assert "Teleoperation dashboard" in content
 

@@ -159,7 +159,9 @@ Visit `http://<cerebellum-host>:8080`.
 
 * `ear`: PyAudio microphone capture, VAD, Whisper transcription.
 * `voice`: espeak-ng or Coqui/Piper via WebSocket, with playback.
-* `chat`: connects transcription → Ollama LLM → voice.
+* `chat`: connects transcription → Ollama LLM → voice. Exposes a `pilot_base_url`
+  parameter that should point at the running Pilot backend so the chat system
+  prompt can include the text-only control surface summary.
 * `pilot`: LCARS-style web frontend + health reporter.
 * `nav`: depth-to-scan pipeline + AMCL, vision LLM prompts.
 * Others (`eye`, `foot`, `imu`, `gps`, `wifi`, `will`) follow similar structure.
