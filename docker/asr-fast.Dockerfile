@@ -1,13 +1,15 @@
-FROM rust:1.76 AS builder
+FROM rust:1.82 AS builder
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-COPY asr-core/Cargo.toml asr-core/Cargo.toml
-COPY asr-fast/Cargo.toml asr-fast/Cargo.toml
-RUN cargo fetch --locked
-
+COPY Cargo.toml ./
+# Copy package sources (not just manifests) so `cargo fetch` can validate
+# workspace members that require targets to be present.
 COPY asr-core asr-core
 COPY asr-fast asr-fast
+COPY asr-mid asr-mid
+COPY asr-long asr-long
+RUN cargo fetch
+
 RUN cargo build --release -p asr-fast
 
 FROM debian:bookworm-slim

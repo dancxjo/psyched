@@ -1,12 +1,12 @@
-FROM rust:1.76 AS builder
-WORKDIR /app
-
-COPY Cargo.toml Cargo.lock ./
-COPY forebrain-llm/Cargo.toml forebrain-llm/Cargo.toml
-RUN cargo fetch --locked
-
-COPY forebrain-llm forebrain-llm
-RUN cargo build --release -p forebrain-llm
+FROM rust:1.82 AS builder
+# Build forebrain-llm in isolation to avoid the workspace at repo root.
+WORKDIR /app/forebrain-llm
+COPY forebrain-llm ./
+# Some host-driven Cargo.lock files use lockfile version 4 which older cargo
+# in the Rust base image doesn't understand. Remove any upstream lockfile so
+# `cargo fetch` can proceed inside the container.
+RUN rm -f Cargo.lock && cargo fetch
+RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update \
