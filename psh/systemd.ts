@@ -470,7 +470,7 @@ export async function systemdDebug(units?: string[]): Promise<void> {
   }
   for (const u of resolved) {
     console.log(`\n[systemd] Status for ${u}:`);
-    await $`sudo systemctl status ${u}`.noThrow();
+    await $`sudo systemctl status ${u} --no-pager`.noThrow();
     console.log(`\n[systemd] Journal for ${u}:`);
     await $`sudo journalctl -u ${u} -n 200 -e --no-pager`.noThrow();
   }

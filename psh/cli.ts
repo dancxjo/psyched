@@ -299,7 +299,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
         await deps.systemdUninstall(units.length ? units : undefined);
         return;
       }
-      if (["debug", "dbg", "d"].includes(act)) {
+      if (["debug", "dbg", "d", "status"].includes(act)) {
         if (deps.systemdDebug) {
           await deps.systemdDebug(units.length ? units : undefined);
           return;
