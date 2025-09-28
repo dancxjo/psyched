@@ -21,6 +21,9 @@ import { setupHosts, getHostModules } from "./setup.ts";
 
 import { colconBuild, colconInstall } from "./colcon.ts";
 
+import { downloadSpeechModels } from "./download_models.ts";
+import { testSpeechStack } from "./test_speech_stack.ts";
+
 export interface CliDeps {
   printSummaryTable(): Promise<void> | void;
   installPsh(): Promise<void> | void;
@@ -43,6 +46,7 @@ export interface CliDeps {
   cleanWorkspace(): Promise<void> | void;
   colconBuild(): Promise<void> | void;
   colconInstall(): Promise<void> | void;
+  downloadSpeechModels(): Promise<void> | void;
 }
 
 const defaultDeps: CliDeps = {
@@ -67,13 +71,16 @@ const defaultDeps: CliDeps = {
   cleanWorkspace,
   colconBuild,
   colconInstall,
+  downloadSpeechModels,
 };
+
 
 function normalize(text: string | undefined, fallback: string): string {
   return (text ?? fallback).toLowerCase();
 }
 
 export function createCli(overrides: Partial<CliDeps> = {}): Command {
+
   const deps: CliDeps = { ...defaultDeps, ...overrides } as CliDeps;
 
   const cli = new Command()
@@ -83,6 +90,22 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .throwErrors()
     .action(async () => {
       await deps.printSummaryTable();
+    });
+
+  cli.command("speech")
+    .description("Manage or test the docker compose speech stack (ASR, TTS, LLM)")
+    .command("test")
+    .description("Test the docker compose speech stack endpoints on this machine")
+    .action(async () => {
+      await testSpeechStack();
+    });
+
+  cli.command("models")
+    .description("Download required models and set up folders for compose/speech-stack.compose.yml")
+    .command("download")
+    .description("Download all speech/LLM models needed for docker compose stack")
+    .action(async () => {
+      await deps.downloadSpeechModels();
     });
 
   cli.command("install")
