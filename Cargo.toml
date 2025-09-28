@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "asr-core",
+    "asr-fast",
+    "asr-mid",
+    "asr-long"
+]
+resolver = "2"

@@ -16,6 +16,11 @@ launch_params_*
 
 # External workspace sources (symlink-populated)
 src/
+# Allow Rust crate sources under the ASR workspace
+!asr-core/src/
+!asr-fast/src/
+!asr-mid/src/
+!asr-long/src/
 
 # Python cache
 __pycache__/
