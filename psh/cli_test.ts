@@ -50,6 +50,18 @@ function createStubDeps() {
     colconInstall() {
       record("colconInstall");
     },
+    downloadSpeechModels() {
+      record("downloadSpeechModels");
+    },
+    launchSpeechStack(options) {
+      record("launchSpeechStack", [options]);
+    },
+    stopSpeechStack(options) {
+      record("stopSpeechStack", [options]);
+    },
+    testSpeechStack(options) {
+      record("testSpeechStack", [options]);
+    },
   };
 
   return { calls, deps };
@@ -156,4 +168,28 @@ Deno.test("clean install route", async () => {
   const cli = createCli(deps);
   await cli.parse(["clean", "install"]);
   assertEquals(Object.keys(calls), ["uninstallPsh"]);
+});
+
+Deno.test("speech launch forwards build flag", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["speech", "launch", "--build=true"]);
+  assertEquals(Object.keys(calls), ["launchSpeechStack"]);
+  assertEquals(calls.launchSpeechStack, [{ build: true }]);
+});
+
+Deno.test("speech down forwards volumes flag", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["speech", "down", "--volumes=true"]);
+  assertEquals(Object.keys(calls), ["stopSpeechStack"]);
+  assertEquals(calls.stopSpeechStack, [{ volumes: true }]);
+});
+
+Deno.test("speech test forwards build flag", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["speech", "test", "--build=true"]);
+  assertEquals(Object.keys(calls), ["testSpeechStack"]);
+  assertEquals(calls.testSpeechStack, [{ build: true }]);
 });
