@@ -120,6 +120,7 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
 
   speech.command("launch")
     .description("Launch the docker compose speech stack")
+    .alias("up")
     .option("-b, --build [build:boolean]", "Rebuild images before starting containers", { default: false })
     .action(async ({ build }: { build?: boolean }) => {
       await deps.launchSpeechStack({ build: Boolean(build) });
@@ -140,6 +141,10 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     });
 
   cli.command("speech", speech);
+  // If `psh speech` is called with no args, run the launch action by default.
+  speech.action(async () => {
+    await deps.launchSpeechStack();
+  });
 
   cli.command("models")
     .description("Download required models and set up folders for compose/speech-stack.compose.yml")

@@ -1,6 +1,6 @@
 import { basename, dirname } from "@std/path";
 import { encodeBase64 } from "@std/encoding/base64";
-import { $, type DaxTemplateTag } from "./util.ts";
+import { $, type DaxTemplateTag, runWithStreamingTee } from "./util.ts";
 import { repoPath } from "./util.ts";
 
 export type SpeechService = "llm" | "tts" | "asr";
@@ -35,15 +35,52 @@ async function runCompose(
   args: string[],
   { compose }: { compose?: DaxTemplateTag },
 ): Promise<void> {
+  // Prefer the caller-supplied runner (for tests) or the default `$`.
   const runner = compose ?? $;
-  const command = runner`docker compose -f ${COMPOSE_FILE} ${args.join(" ")}`
-    .cwd(COMPOSE_DIR)
-    .stdout("inherit")
-    .stderr("inherit");
-  const result = await command.noThrow();
-  const code = result.code ?? 0;
-  if (code !== 0) {
-    throw new Error(`[psh] docker compose ${args[0]} failed (exit ${code}).`);
+
+  // Try multiple compose command variants to support different docker/podman installs.
+  const attempts = [
+    { cmd: `docker compose -f ${COMPOSE_FILE} ${args.join(" ")}`, label: "docker compose" },
+    { cmd: `docker-compose -f ${COMPOSE_FILE} ${args.join(" ")}`, label: "docker-compose" },
+  ];
+
+  // If a custom runner was provided (tests), use it directly and behave as before.
+  if (compose) {
+    const command = runner`docker compose -f ${COMPOSE_FILE} ${args.join(" ")}`
+      .cwd(COMPOSE_DIR)
+      .stdout("inherit")
+      .stderr("inherit");
+    const result = await command.noThrow();
+    const code = result.code ?? 0;
+    if (code !== 0) {
+      throw new Error(`[psh] docker compose ${args[0]} failed (exit ${code}).`);
+    }
+    return;
+  }
+
+  // Real invocation: iterate through attempt variants, capturing output for helpful errors.
+  let lastErr: { label: string; code: number; stdout: string; stderr: string } | null = null;
+  for (const attempt of attempts) {
+    console.log(`[psh] Trying ${attempt.label} ...`);
+    // Use the runWithStreamingTee helper so we capture stdout/stderr while still streaming.
+    const fullCmd = `cd ${COMPOSE_DIR} && ${attempt.cmd}`;
+    const result = await runWithStreamingTee(fullCmd, { label: `psh:${attempt.label}` });
+    if (result.code === 0) {
+      return;
+    }
+    lastErr = { label: attempt.label, code: result.code, stdout: result.stdout, stderr: result.stderr };
+    // If we detect that docker doesn't know the 'compose' subcommand, try the next variant.
+    if (attempt.label === "docker compose" && /unknown docker command|See 'docker --help'/.test(lastErr.stderr + lastErr.stdout)) {
+      // continue to next attempt
+      continue;
+    }
+    // For other failures also continue to next attempt to maximize chances of success.
+  }
+
+  // All attempts failed — produce a helpful error including the last captured output.
+  if (lastErr) {
+    const combined = `Last attempt: ${lastErr.label} (exit ${lastErr.code})\n--- stdout ---\n${lastErr.stdout}\n--- stderr ---\n${lastErr.stderr}`;
+    throw new Error(`[psh] docker compose failed. ${combined}`);
   }
 }
 
@@ -86,14 +123,15 @@ export async function stopSpeechStack(options: SpeechStackStopOptions = {}): Pro
 }
 
 class BrowserSpeechSocket implements SpeechWebSocket {
-  constructor(private readonly socket: WebSocket) {}
+  constructor(private readonly socket: WebSocket) { }
 
-  async send(data: string | Uint8Array): Promise<void> {
+  send(data: string | Uint8Array): Promise<void> {
     if (typeof data === "string") {
       this.socket.send(data);
     } else {
       this.socket.send(data);
     }
+    return Promise.resolve();
   }
 
   async nextMessage(
@@ -242,7 +280,7 @@ async function withServiceSocket(
   service: SpeechService,
   url: string,
   connect: (service: SpeechService, url: string) => Promise<SpeechWebSocket>,
-  messageTimeoutMs: number,
+  _messageTimeoutMs: number,
   handler: (socket: SpeechWebSocket) => Promise<void>,
 ): Promise<void> {
   const socket = await connect(service, url);
@@ -269,7 +307,7 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
 
   const handshakeTimeoutMs = options.handshakeTimeoutMs ?? 5000;
   const messageTimeoutMs = options.messageTimeoutMs ?? 5000;
-  const connect = options.connect ?? ((service: SpeechService, url: string) => connectRealWebSocket(url, handshakeTimeoutMs));
+  const connect = options.connect ?? ((_: SpeechService, url: string) => connectRealWebSocket(url, handshakeTimeoutMs));
 
   console.log("[psh] Validating LLM websocket at ws://127.0.0.1:8080/chat ...");
   await withServiceSocket("llm", "ws://127.0.0.1:8080/chat", connect, messageTimeoutMs, async (socket) => {
