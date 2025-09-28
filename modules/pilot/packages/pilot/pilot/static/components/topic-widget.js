@@ -203,14 +203,25 @@ class PilotTopicWidget extends LitElement {
       const temp = d.temp_c == null || Number.isNaN(d.temp_c) ? '--' : `${formatNumberShort(d.temp_c)} °C`;
       const uptime = formatUptime(d.uptime_sec);
 
+      const metrics = [
+        { label: 'CPU', value: cpu },
+        { label: 'Load (1/5/15)', value: `${load1} / ${load5} / ${load15}` },
+        { label: 'Memory', value: `${memPerc} — ${memUsed} / ${memTotal}` },
+        { label: 'Disk (root)', value: disk },
+        { label: 'Temp', value: temp },
+        { label: 'Uptime', value: uptime },
+      ];
+
       return html`
-        <div class="host-health">
-          <div class="row"><div class="label">CPU</div><div class="value">${cpu}</div></div>
-          <div class="row"><div class="label">Load (1/5/15)</div><div class="value">${load1} / ${load5} / ${load15}</div></div>
-          <div class="row"><div class="label">Memory</div><div class="value">${memPerc} — ${memUsed} / ${memTotal}</div></div>
-          <div class="row"><div class="label">Disk (root)</div><div class="value">${disk}</div></div>
-          <div class="row"><div class="label">Temp</div><div class="value">${temp}</div></div>
-          <div class="row"><div class="label">Uptime</div><div class="value">${uptime}</div></div>
+        <div class="control-surface metric-grid host-health" data-columns="auto">
+          ${metrics.map(
+            (metric) => html`
+              <div class="metric-card metric-card--inline">
+                <span class="metric-label">${metric.label}</span>
+                <span class="metric-value">${metric.value}</span>
+              </div>
+            `,
+          )}
         </div>
       `;
     }

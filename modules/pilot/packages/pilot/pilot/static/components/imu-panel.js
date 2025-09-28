@@ -72,33 +72,53 @@ class PilotImuPanel extends LitElement {
 
   render() {
     const summary = this.summary;
+    const sections = [
+      {
+        title: 'Linear Acceleration (m/s²)',
+        entries: [
+          { label: 'X', value: summary.acceleration.x },
+          { label: 'Y', value: summary.acceleration.y },
+          { label: 'Z', value: summary.acceleration.z },
+        ],
+      },
+      {
+        title: 'Angular Velocity (rad/s)',
+        entries: [
+          { label: 'X', value: summary.angular.x },
+          { label: 'Y', value: summary.angular.y },
+          { label: 'Z', value: summary.angular.z },
+        ],
+      },
+      {
+        title: 'Orientation (quaternion)',
+        entries: [
+          { label: 'X', value: summary.orientation.x },
+          { label: 'Y', value: summary.orientation.y },
+          { label: 'Z', value: summary.orientation.z },
+          { label: 'W', value: summary.orientation.w },
+        ],
+      },
+    ];
+
     return html`
-      <div class="imu-panel">
-        <div>
-          <h5>Linear Acceleration (m/s²)</h5>
-          <ul>
-            <li>X: ${summary.acceleration.x}</li>
-            <li>Y: ${summary.acceleration.y}</li>
-            <li>Z: ${summary.acceleration.z}</li>
-          </ul>
-        </div>
-        <div>
-          <h5>Angular Velocity (rad/s)</h5>
-          <ul>
-            <li>X: ${summary.angular.x}</li>
-            <li>Y: ${summary.angular.y}</li>
-            <li>Z: ${summary.angular.z}</li>
-          </ul>
-        </div>
-        <div>
-          <h5>Orientation (quaternion)</h5>
-          <ul>
-            <li>X: ${summary.orientation.x}</li>
-            <li>Y: ${summary.orientation.y}</li>
-            <li>Z: ${summary.orientation.z}</li>
-            <li>W: ${summary.orientation.w}</li>
-          </ul>
-        </div>
+      <div class="control-surface metric-grid imu-panel" data-columns="wide">
+        ${sections.map(
+          (section) => html`
+            <div class="metric-card">
+              <h5 class="metric-title">${section.title}</h5>
+              <ul class="metric-list">
+                ${section.entries.map(
+                  (entry) => html`
+                    <li class="metric-pair">
+                      <span class="metric-label">${entry.label}</span>
+                      <span class="metric-value">${entry.value}</span>
+                    </li>
+                  `,
+                )}
+              </ul>
+            </div>
+          `,
+        )}
       </div>
     `;
   }

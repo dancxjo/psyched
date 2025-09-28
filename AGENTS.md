@@ -91,6 +91,10 @@ psh launch pilot
 
 Visit `http://<cerebellum-host>:8080`.
 
+- When adding or updating Pilot controls, use the shared `.control-surface`,
+  `.metric-grid`, and `.metric-card` CSS helpers to keep styling consistent
+  across panels.
+
 ---
 
 ## CLI Reference (`psh`)
