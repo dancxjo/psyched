@@ -68,7 +68,9 @@ class ChatNode(Node):
         self.declare_parameter('conversation_topic', '/conversation')
         self.declare_parameter('voice_topic', '/voice')
         self.declare_parameter('transcript_topic', '/audio/transcription')
-        self.declare_parameter('model', 'llama3.2')
+        # Default to a tiny local Ollama model so the fallback stays responsive.
+        # The remote speech stack supplies the heavier GPT-OSS:20B model.
+        self.declare_parameter('model', 'tinyllama')
         self.declare_parameter('ollama_host', 'http://localhost:11434')
         self.declare_parameter('max_history', 20)
         self.declare_parameter('llm_ws_url', default_llm_url)

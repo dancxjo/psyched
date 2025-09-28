@@ -281,3 +281,9 @@ def test_chatnode_falls_back_to_ollama_when_llm_unreachable() -> None:
     assert node.pub_voice.messages[-1].data == "Rescued by Ollama."
     assert stub.calls == 1
 
+
+def test_chatnode_defaults_to_tinyllama_for_ollama_fallback() -> None:
+    node = ChatNode()
+
+    assert node.model == "tinyllama"
+

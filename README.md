@@ -273,7 +273,7 @@ ros2 topic list
 
 ### Module-Specific Troubleshooting
 
-- **Chat**: Ensure Ollama is running and model is downloaded (`ollama pull llama3.2`)
+- **Chat**: Ensure Ollama is running and the lightweight fallback model is available (`ollama pull tinyllama`)
 - **Voice**: Check ALSA audio devices (`arecord -l`, `aplay -l`)
 - **Eye**: Verify Kinect USB connection and libfreenect installation
 - **Foot**: Check serial/USB connection to robot base
@@ -324,8 +324,9 @@ their onboard implementations when the websocket is unavailable:
   the local Ollama HTTP API when the websocket raises an error.
 
 Place GGUF models for the LLM under `forebrain-llm/models/` (mounted into the
-container at `/data`) and adjust `FOREBRAIN_LLM__MODEL__PATH` in the compose file
-if you use a different filename.
+container at `/data`). The speech stack defaults to loading `gpt-oss-20b.gguf`;
+adjust `FOREBRAIN_LLM__MODEL__PATH` in the compose file if you use a different
+filename.
 
 ## License
 
