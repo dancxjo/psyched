@@ -9,7 +9,7 @@ VOICE_DEFAULTS = {
     "topic": "/voice",
     "engine": "websocket",
     "volume": "1.0",
-    "startup_greeting": "Hello, voice is online",
+    "startup_greeting": "Hi there! My name is Pete Knightykell.",
     "enable_ping": "true",
     "ping_interval_sec": "30",
     "conversation_topic": "/conversation",
