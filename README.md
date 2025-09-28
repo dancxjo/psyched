@@ -36,13 +36,13 @@ The system uses custom message types defined in `psyched_msgs`:
 ### Host Configuration
 
 Each host declares its active modules in `hosts/<hostname>.toml`, while
-configuration for those modules resides in ROS 2 YAML files under
+configuration for those modules resides in TOML files under
 `hosts/<hostname>/config/`:
 ```
 hosts/
 ├── cerebellum.toml      # Host definition (modules list, provisioning flags)
 ├── cerebellum/          # Example host runtime directory
-│   ├── config/          # Module parameters in ROS 2 YAML format
+│   ├── config/          # Module parameter overrides in TOML format
 │   └── systemd/         # Generated systemd units
 ```
 
@@ -242,7 +242,7 @@ journalctl -u psyched-pilot.service -n 200 -f
 
 Host-specific settings live in:
 - `hosts/<hostname>.toml` - Declares enabled modules and provisioning flags
-- `hosts/<hostname>/config/` - ROS 2 YAML parameter files for each module
+- `hosts/<hostname>/config/` - TOML parameter overrides for each module (`[launch.arguments]` table)
 
 ## Troubleshooting
 

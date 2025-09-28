@@ -88,6 +88,7 @@ or conflicting package sources.
 - Leave the tree clean before committing: format, lint, and ensure checks pass.
 
 ## Documentation & reminders
+- Host module overrides now live in `hosts/<host>/config/<module>.toml` using `[launch.arguments]` keys; keep `tools/launch_args.py` in sync when adjusting the format.
 - Whenever you update top-level documentation (like this guide or `README.md`),
   cross-check for outdated references between them and fix any inconsistencies.
 - Record newly discovered gotchas or workflow aids here using concise bullet

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import socket
+import textwrap
 from typing import Any, Dict, Iterable, List
 
 import pytest
 from fastapi.testclient import TestClient
-import yaml
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from pilot.app import create_app
 from pilot.module_catalog import ModuleCatalog
@@ -119,17 +123,20 @@ presentation = "status"
     executor = FakeCommandExecutor()
     voice_config_dir = repo_root / "hosts" / "cerebellum" / "config"
     voice_config_dir.mkdir(parents=True)
-    voice_config_path = voice_config_dir / "voice.yaml"
+    voice_config_path = voice_config_dir / "voice.toml"
     voice_config_path.write_text(
-        """
-enable_tts: false
-engine: espeak
-voice: en-US-TestVoice
-topic: /voice
-interrupt: /voice/interrupt
-resume: /voice/resume
-clear: /voice/clear
-"""
+        textwrap.dedent(
+            """
+            engine = "espeak"
+            voice = "en-US-TestVoice"
+            enable_tts = false
+            topic = "/voice"
+            interrupt = "/voice/interrupt"
+            resume = "/voice/resume"
+            clear = "/voice/clear"
+            """
+        ).strip()
+        + "\n"
     )
     voice_store = VoiceConfigStore(voice_config_path)
 
@@ -197,7 +204,7 @@ def test_create_host_health_topic_uses_structured_message(test_client):
     assert topic_manager.created[-1]["message_type"] == "psyched_msgs/msg/HostHealth"
 
 
-def test_get_voice_config_returns_yaml_payload(test_client):
+def test_get_voice_config_returns_payload(test_client):
     response = test_client.get("/api/voice/config")
     assert response.status_code == 200
     data = response.json()
@@ -212,7 +219,7 @@ def test_put_voice_config_persists_updates(test_client):
     body = response.json()
     assert body["config"]["engine"] == "ms-edge"
     voice_path = test_client.app.state._voice_config_path
-    file_data = yaml.safe_load(voice_path.read_text())
+    file_data = tomllib.loads(voice_path.read_text())
     assert file_data["engine"] == "ms-edge"
     assert file_data["voice"] == "en-US-AnaNeural"
     assert file_data["enable_tts"] is True

@@ -1,6 +1,5 @@
 import { join } from "@std/path";
 import { parse as parseToml } from "@std/toml";
-import { stringify as stringifyYaml } from "@std/yaml";
 import { $ } from "./util.ts";
 import {
   loadHostModuleConfig,
@@ -27,6 +26,31 @@ function escapeForSystemd(s: string): string {
   // In String.replace the replacement string treats "$" sequences specially
   // (e.g. "$$" -> "$"), so use "$$$$" to insert two literal dollars.
   return s.replace(/\$/g, "$$$$").replace(/%/g, "%%");
+}
+
+function stringifyTomlRecord(record: Record<string, unknown>): string {
+  return Object.entries(record)
+    .map(([key, value]) => `${key} = ${formatTomlValue(value)}`)
+    .join("\n");
+}
+
+function formatTomlValue(value: unknown): string {
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Unsupported numeric value for TOML: ${value}`);
+    }
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+  if (value === null || value === undefined) {
+    return '""';
+  }
+  throw new Error(`Unsupported value type for TOML: ${typeof value}`);
 }
 
 function ensureArray(value: unknown): string[] {
@@ -190,7 +214,7 @@ async function ensureHostModuleConfig(
   if (path) {
     if (config && Object.keys(config).length) {
       console.warn(
-        `[systemd] host ${host} module_configs.${module} ignored; using YAML at ${path}.`,
+        `[systemd] host ${host} module_configs.${module} ignored; using config at ${path}.`,
       );
     }
     return { path, data };
@@ -200,11 +224,11 @@ async function ensureHostModuleConfig(
     const repoDir = repoDirFromModules();
     const configDir = join(repoDir, "hosts", host, "config");
     await Deno.mkdir(configDir, { recursive: true });
-    const configPath = join(configDir, `${module}.yaml`);
-    const yaml = stringifyYaml(config);
-    await Deno.writeTextFile(configPath, yaml);
+    const configPath = join(configDir, `${module}.toml`);
+    const toml = stringifyTomlRecord(config as Record<string, unknown>);
+    await Deno.writeTextFile(configPath, toml);
     console.warn(
-      `[systemd] Wrote ${configPath} from inline module_configs.${module}; migrate to YAML to silence this.`,
+      `[systemd] Wrote ${configPath} from inline module_configs.${module}; migrate to TOML to silence this.`,
     );
     return { path: configPath, data: config };
   }

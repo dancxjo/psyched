@@ -1,0 +1,5 @@
+# Module configuration overrides for ear.
+# Provide [launch.arguments] entries keyed by launch argument name.
+
+[launch.arguments]
+

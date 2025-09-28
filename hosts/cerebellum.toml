@@ -12,4 +12,4 @@ setup_docker = true
 # the same order.
 modules = ["foot", "voice", "imu", "ear", "chat", "pilot"]
 
-# Module configuration now lives under hosts/cerebellum/config/*.yaml
+# Module configuration now lives under hosts/cerebellum/config/*.toml
