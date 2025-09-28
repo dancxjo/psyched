@@ -1,7 +1,8 @@
 import { repoPath, runWithStreamingTee } from "./util.ts";
 
 export async function downloadSpeechModels(): Promise<void> {
-    const script = repoPath("psh/scripts/download_speech_models.sh");
+    // TODO: This isn't reading the correct repo path
+    const script = repoPath("../tools/download_speech_models.sh");
     console.log(`[psh] Downloading speech models using ${script}`);
     const res = await runWithStreamingTee(`bash ${script}`);
     if (res.code !== 0) {

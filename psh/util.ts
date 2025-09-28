@@ -3,6 +3,7 @@
 
 // @ts-ignore runtime import via jsr
 import $ from "@david/dax";
+import { dirname, fromFileUrl, join } from "@std/path";
 
 /**
  * The Dax template tag type used throughout psh for shell commands.
@@ -22,8 +23,41 @@ export type DaxTemplateTag = typeof $;
 export type DaxCommandBuilder = ReturnType<typeof $>;
 
 export function repoPath(relative: string): string {
-  // Resolve a path relative to this file (psh/...). Example: '../tools/install_ros2.sh'
-  return decodeURIComponent(new URL(relative, import.meta.url).pathname);
+  // Resolve a path relative to the repository root in the common case where
+  // callers pass paths that start with ".." (e.g. "../tools/install_ros2.sh").
+  // If callers intentionally pass a path starting with "./" we keep that
+  // relative to the psh directory (this preserves psh-local references like
+  // "./main.ts"). Absolute paths are returned unchanged.
+
+  if (!relative) return "";
+
+  // Return absolute paths unchanged
+  if (relative.startsWith("/")) return relative;
+
+  const utilDir = dirname(fromFileUrl(import.meta.url)); // .../psyched/psh
+
+  // If the path starts with "./" resolve relative to the psh dir
+  if (relative.startsWith("./")) {
+    return join(utilDir, relative.slice(2));
+  }
+
+  // Handle one-or-more ".." path segments by walking up from utilDir
+  if (relative.startsWith("..")) {
+    let targetDir = utilDir;
+    // Consume leading ../ segments and move targetDir up for each
+    let rest = relative;
+    while (rest.startsWith("../")) {
+      targetDir = dirname(targetDir);
+      rest = rest.slice(3);
+    }
+    // If nothing remains (e.g. ".." or "../"), return the targetDir
+    if (!rest) return targetDir;
+    return join(targetDir, rest);
+  }
+
+  // Fallback: treat as relative to the repo root (parent of psh)
+  const repoRoot = dirname(utilDir);
+  return join(repoRoot, relative);
 }
 
 export { $ };
