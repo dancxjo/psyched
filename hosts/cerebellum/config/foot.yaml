@@ -1,1 +1,3 @@
-topic: /foot
+foot:
+  ros__parameters:
+    topic: /foot

@@ -1,9 +1,19 @@
-capture_device: 'hw:0,0'
-vad_aggressiveness: 3
-topic: /audio/pcm
-device: default
-rate: 16000
-channels: 1
-chunk: 2048
-language: en
-model: small
+ear:
+  ros__parameters:
+    capture_device: "hw:0,0"
+    topic: /audio/pcm
+    device: default
+    rate: 16000
+    channels: 1
+    chunk: 2048
+    silence_threshold: 500.0
+
+transcriber:
+  ros__parameters:
+    model: small
+    device: cpu
+    compute_type: int8
+    language: en
+    beam_size: 5
+
+vad_node: {}

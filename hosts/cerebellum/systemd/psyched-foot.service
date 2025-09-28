@@ -9,7 +9,6 @@ Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 Environment=PSH_MODULE_NAME=foot
-Environment=PSH_MODULE_CONFIG=/home/pete/psyched/hosts/cerebellum/config/foot.yaml
 ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/foot/foot.launch.sh
 ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/foot/foot.shutdown.sh
 Restart=on-failure

@@ -1,7 +1,19 @@
+import os
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+# If PSH_MODULE_CONFIG is provided, expose the path so launch can pass the
+# filename to node processes (Node.parameters can accept a params file path).
+PSH_CFG = os.environ.get('PSH_MODULE_CONFIG')
+PSH_FILE = None
+if PSH_CFG:
+    if not os.path.isabs(PSH_CFG):
+        PSH_CFG = os.path.abspath(PSH_CFG)
+    if os.path.exists(PSH_CFG):
+        PSH_FILE = PSH_CFG
 
 
 def generate_launch_description():
@@ -31,7 +43,9 @@ def generate_launch_description():
             package='ear',
             executable='ear_node',
             name='ear',
-            parameters=[{
+            parameters=([
+                PSH_FILE
+            ] if PSH_FILE else []) + [{
                 'device_id': device_id,
                 'sample_rate': sample_rate,
                 'channels': channels,
@@ -44,13 +58,18 @@ def generate_launch_description():
             package='ear',
             executable='vad_node',
             name='vad',
+            parameters=([
+                PSH_FILE
+            ] if PSH_FILE else []),
             output='screen',
         ),
         Node(
             package='ear',
             executable='transcriber_node',
             name='transcriber',
-            parameters=[{
+            parameters=([
+                PSH_FILE
+            ] if PSH_FILE else []) + [{
                 'segment_topic': '/audio/speech_segment',
                 'transcript_topic': '/audio/transcription',
                 'model': model,

@@ -73,6 +73,33 @@ function describeGeneric(data) {
   return text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}…` : text;
 }
 
+function formatPercent(v, digits = 1) {
+  if (v == null || Number.isNaN(v)) return '--';
+  if (!Number.isFinite(v)) return '--';
+  return `${v.toFixed(digits)}%`;
+}
+
+function formatNumberShort(v, digits = 1) {
+  if (v == null || Number.isNaN(v)) return '--';
+  if (!Number.isFinite(v)) return '--';
+  return v.toFixed(digits);
+}
+
+function formatUptime(sec) {
+  if (sec == null || Number.isNaN(sec) || !Number.isFinite(sec)) return '--';
+  sec = Math.floor(sec);
+  const days = Math.floor(sec / 86400);
+  sec -= days * 86400;
+  const hrs = Math.floor(sec / 3600);
+  sec -= hrs * 3600;
+  const mins = Math.floor(sec / 60);
+  const s = sec - mins * 60;
+  if (days > 0) return `${days}d ${hrs}h ${mins}m`;
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  if (mins > 0) return `${mins}m ${s}s`;
+  return `${s}s`;
+}
+
 /**
  * Renders a preview of topic data and contextual controls.
  */
@@ -161,6 +188,31 @@ class PilotTopicWidget extends LitElement {
     }
     if (this.topic?.presentation === 'voice-volume') {
       return html`<pilot-voice-volume .record=${this.record}></pilot-voice-volume>`;
+    }
+    // Render a pleasant host health panel for the HostHealth message type
+    if (this.topic?.type === 'psyched_msgs/msg/HostHealth' || (this.topic?.topic || '').startsWith('/hosts/health')) {
+      const d = this.record.last || {};
+      const cpu = formatPercent(d.cpu_percent);
+      const load1 = formatNumberShort(d.load_avg_1);
+      const load5 = formatNumberShort(d.load_avg_5);
+      const load15 = formatNumberShort(d.load_avg_15);
+      const memPerc = formatPercent(d.mem_used_percent);
+      const memUsed = d.mem_used_mb == null || Number.isNaN(d.mem_used_mb) ? '--' : `${formatNumberShort(d.mem_used_mb)} MB`;
+      const memTotal = d.mem_total_mb == null || Number.isNaN(d.mem_total_mb) ? '--' : `${formatNumberShort(d.mem_total_mb)} MB`;
+      const disk = formatPercent(d.disk_used_percent_root);
+      const temp = d.temp_c == null || Number.isNaN(d.temp_c) ? '--' : `${formatNumberShort(d.temp_c)} °C`;
+      const uptime = formatUptime(d.uptime_sec);
+
+      return html`
+        <div class="host-health">
+          <div class="row"><div class="label">CPU</div><div class="value">${cpu}</div></div>
+          <div class="row"><div class="label">Load (1/5/15)</div><div class="value">${load1} / ${load5} / ${load15}</div></div>
+          <div class="row"><div class="label">Memory</div><div class="value">${memPerc} — ${memUsed} / ${memTotal}</div></div>
+          <div class="row"><div class="label">Disk (root)</div><div class="value">${disk}</div></div>
+          <div class="row"><div class="label">Temp</div><div class="value">${temp}</div></div>
+          <div class="row"><div class="label">Uptime</div><div class="value">${uptime}</div></div>
+        </div>
+      `;
     }
     return html`<pre class="topic-payload">${this.display}</pre>`;
   }

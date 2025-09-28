@@ -1,7 +1,17 @@
+import os
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch_ros.actions import Node
+
+PSH_CFG = os.environ.get('PSH_MODULE_CONFIG')
+PSH_FILE = None
+if PSH_CFG:
+    if not os.path.isabs(PSH_CFG):
+        PSH_CFG = os.path.abspath(PSH_CFG)
+    if os.path.exists(PSH_CFG):
+        PSH_FILE = PSH_CFG
 
 
 def generate_launch_description():
@@ -18,6 +28,12 @@ def generate_launch_description():
     )
 
     use_cuda_arg = DeclareLaunchArgument('use_cuda', default_value='false')
+
+    # runtime / playback args
+    volume_arg = DeclareLaunchArgument('volume', default_value='1.0')
+    wav_out_dir_arg = DeclareLaunchArgument('wav_out_dir', default_value='')
+    aplay_arg = DeclareLaunchArgument('aplay', default_value='true')
+    normalize_audio_arg = DeclareLaunchArgument('normalize_audio', default_value='true')
 
     # espeak-ng args
     espeak_voice_arg = DeclareLaunchArgument(
@@ -60,13 +76,20 @@ def generate_launch_description():
     node = Node(
         package='voice',
         executable='voice_node',
-        name='voice_node',
+        name='voice',
         output='screen',
-        parameters=[{
+        parameters=([
+            PSH_FILE
+        ] if PSH_FILE else []) + [{
             'topic': LaunchConfiguration('topic'),
             'engine': LaunchConfiguration('engine'),
             'voice_path': LaunchConfiguration('voice_path'),
             'use_cuda': LaunchConfiguration('use_cuda'),
+            # runtime
+            'volume': LaunchConfiguration('volume'),
+            'wav_out_dir': LaunchConfiguration('wav_out_dir'),
+            'aplay': LaunchConfiguration('aplay'),
+            'normalize_audio': LaunchConfiguration('normalize_audio'),
             # espeak-ng
             'espeak_voice': LaunchConfiguration('espeak_voice'),
             'espeak_rate': LaunchConfiguration('espeak_rate'),
@@ -82,8 +105,10 @@ def generate_launch_description():
             'startup_greeting': LaunchConfiguration('startup_greeting'),
             'enable_ping': LaunchConfiguration('enable_ping'),
             'ping_interval_sec': LaunchConfiguration('ping_interval_sec'),
-        }],
-        arguments=['--model', LaunchConfiguration('model'), '--voices-dir', LaunchConfiguration('voices_dir')]
+            # piper model settings (also provide as params so node can read them)
+            'model': LaunchConfiguration('model'),
+            'voices_dir': LaunchConfiguration('voices_dir'),
+        }]
     )
 
     return LaunchDescription([
@@ -91,6 +116,11 @@ def generate_launch_description():
         engine_arg,
         voice_path_arg,
         use_cuda_arg,
+        # runtime / playback args
+        volume_arg,
+        wav_out_dir_arg,
+        aplay_arg,
+        normalize_audio_arg,
         espeak_voice_arg,
         espeak_rate_arg,
         espeak_pitch_arg,

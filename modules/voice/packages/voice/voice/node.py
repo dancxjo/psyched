@@ -90,9 +90,20 @@ class VoiceNode(Node):
                                 self.declare_parameter('clear_topic', '/voice/clear')
                                 self.declare_parameter('interrupt_topic', '/voice/interrupt')
 
-                                # No Piper model handling here — use espeak by default.
-                                self.model = None
-                                self.voices_dir = ''
+                                # Model/voices_dir can be provided via params or CLI; declare and read them
+                                self.declare_parameter('model', '')
+                                self.declare_parameter('voices_dir', '')
+                                try:
+                                    self.model = self.get_parameter('model').get_parameter_value().string_value or None
+                                except Exception:
+                                    self.model = None
+                                try:
+                                    self.voices_dir = self.get_parameter('voices_dir').get_parameter_value().string_value or ''
+                                except Exception:
+                                    self.voices_dir = ''
+                                # No Piper model handling here by default — espeak is fallback
+                                self.model_path = ''
+                                self.config_path = ''
                                 self.model_path = ''
                                 self.config_path = ''
                                 # Default sample rate used for any legacy pipelines
