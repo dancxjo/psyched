@@ -58,3 +58,4 @@ Thumbs.db
 target/
 
 models/
+.speech_setup_complete

@@ -30,7 +30,27 @@ export async function isSpeechSetupComplete(): Promise<boolean> {
 export async function runSetupSpeech(): Promise<void> {
   console.log("[psh] Preparing speech stack assets (models, directories).");
   await downloadSpeechModels();
-  await ensureDir(dirname(SPEECH_SENTINEL_PATH));
-  await Deno.writeTextFile(SPEECH_SENTINEL_PATH, `${SPEECH_SETUP_VERSION}\n`);
+  const parentDir = dirname(SPEECH_SENTINEL_PATH);
+  try {
+    // If something exists at the parent path and it's a file, ensureDir will
+    // fail. Detect that situation and fall back to writing the sentinel at
+    // the repository root to avoid crashing `psh setup` when the repo has a
+    // top-level file named `setup` (common on some installs).
+    const stat = await Deno.lstat(parentDir).catch(() => null);
+    if (stat && stat.isFile) {
+      const alt = repoPath(".speech_setup_complete");
+      console.warn(
+        `[psh] Expected '${parentDir}' to be a directory but found a file. ` +
+          `Writing speech sentinel to '${alt}' instead.`,
+      );
+      await Deno.writeTextFile(alt, `${SPEECH_SETUP_VERSION}\n`);
+    } else {
+      await ensureDir(parentDir);
+      await Deno.writeTextFile(SPEECH_SENTINEL_PATH, `${SPEECH_SETUP_VERSION}\n`);
+    }
+  } catch (err) {
+    // Re-throw unexpected errors so callers can surface them.
+    throw err;
+  }
   console.log("[psh] Speech stack assets ready.");
 }
