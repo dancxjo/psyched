@@ -2,15 +2,19 @@
 
 use forebrain_llm::{config::AppConfig, model::ModelManager, ws};
 use tracing::{error, info, warn};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(env_filter)
         .with_target(false)
+        .with_writer(std::io::stdout)
         .init();
 
-    let config = AppConfig::default();
+    let config = AppConfig::from_env();
     let model = ModelManager::empty();
 
     match model.load_model(&config.model).await {

@@ -144,6 +144,8 @@ Visit `http://<cerebellum-host>:8080`.
   * Develop modules in isolation when offline.
   * Use local symlink installs (`colcon build --symlink-install`) to avoid duplicate packages.
   * `tools/with_ros_env.sh` sources ROS 2 before colcon/ros2 invocations.
+  * Rust microservices such as `forebrain-llm` sit outside the root Cargo workspace; copy the crate to `/tmp` (or set
+    `CARGO_TARGET_DIR`) before running `cargo test` so the workspace manifest does not block the build.
 
 ---
 

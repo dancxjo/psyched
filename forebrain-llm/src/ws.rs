@@ -133,23 +133,33 @@ async fn process_client_message(
                 });
                 socket.send(WsMessage::Text(payload.to_string())).await.ok();
             }
-            "load_model" => {
-                state
-                    .model
-                    .load_model(&state.config.model)
-                    .await
-                    .map_err(|err| anyhow!(err.to_string()))?;
-                socket
-                    .send(WsMessage::Text(
-                        json!({
-                            "role": "system",
-                            "content": "model reloaded"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-            }
+            "load_model" => match state.model.load_model(&state.config.model).await {
+                Ok(_) => {
+                    socket
+                        .send(WsMessage::Text(
+                            json!({
+                                "role": "system",
+                                "content": "model reloaded"
+                            })
+                            .to_string(),
+                        ))
+                        .await
+                        .ok();
+                }
+                Err(err) => {
+                    warn!(error = %err, "model reload command failed");
+                    socket
+                        .send(WsMessage::Text(
+                            json!({
+                                "role": "system",
+                                "content": format!("model reload failed: {err}")
+                            })
+                            .to_string(),
+                        ))
+                        .await
+                        .ok();
+                }
+            },
             other => {
                 warn!(command = other, "unknown command");
             }
