@@ -154,6 +154,7 @@ class PilotApplication:
     # ------------------------------------------------------------------
     # Route configuration
     # ------------------------------------------------------------------
+
     def _configure_routes(self) -> None:
         router = APIRouter(prefix="/api")
 
@@ -173,7 +174,7 @@ class PilotApplication:
                 cur = cur.parent
             return None
 
-    def _enabled_modules_for_host() -> list[str] | None:
+        def _enabled_modules_for_host() -> list[str] | None:
             """Return a set of module names enabled for this host from hosts/<shortname>.toml.
 
             If the hosts file doesn't exist or does not declare `modules`, return None to
