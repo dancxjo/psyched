@@ -6,13 +6,14 @@ Fast, reliable, and simple.
 """
 import struct
 import threading
-import time
 from typing import Optional
 
 import pyaudio
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import ByteMultiArray, UInt32
+
+from .silence_tracker import SilenceTracker
 
 
 class PyAudioEarNode(Node):
@@ -37,8 +38,7 @@ class PyAudioEarNode(Node):
         
         # Silence detection (RMS-based)
         self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
-        self.silence_start_time = time.time()
-        self.silence_ms = 0
+        self.silence_tracker = SilenceTracker(self.silence_threshold)
         # Autophony tracking (dummy, replace with real logic if available)
         self.autophony_ms = 0
         
@@ -107,18 +107,10 @@ class PyAudioEarNode(Node):
 
     def update_silence_detector(self, rms: float, autophony_ms: int = 0) -> None:
         """Update silence detection based on RMS value and autophony_ms."""
-        current_time = time.time()
-        # Reset silence_ms if sound is detected or autophony_ms > 0
-        if rms > self.silence_threshold or autophony_ms > 0:
-            self.silence_start_time = current_time
-            self.silence_ms = 0
-        else:
-            # Silence detected - update silence duration
-            silence_duration = current_time - self.silence_start_time
-            self.silence_ms = int(silence_duration * 1000)  # Convert to milliseconds
+        silence_ms = self.silence_tracker.update(rms=rms, autophony_ms=autophony_ms)
         # Publish silence duration
         silence_msg = UInt32()
-        silence_msg.data = self.silence_ms
+        silence_msg.data = silence_ms
         self.silence_ms_pub.publish(silence_msg)
 
     def shutdown(self) -> None:
