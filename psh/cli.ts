@@ -30,6 +30,7 @@ import {
   type SpeechStackStopOptions,
   type SpeechStackTestOptions,
 } from "./speech_stack.ts";
+import { runSetupSpeech } from "./speech_setup.ts";
 
 export interface CliDeps {
   printSummaryTable(): Promise<void> | void;
@@ -54,6 +55,7 @@ export interface CliDeps {
   colconBuild(): Promise<void> | void;
   colconInstall(): Promise<void> | void;
   downloadSpeechModels(): Promise<void> | void;
+  runSetupSpeech(): Promise<void> | void;
   launchSpeechStack(options?: SpeechStackLaunchOptions): Promise<void> | void;
   stopSpeechStack(options?: SpeechStackStopOptions): Promise<void> | void;
   testSpeechStack(options?: SpeechStackTestOptions): Promise<void> | void;
@@ -82,6 +84,7 @@ const defaultDeps: CliDeps = {
   colconBuild,
   colconInstall,
   downloadSpeechModels,
+  runSetupSpeech,
   launchSpeechStack,
   stopSpeechStack,
   testSpeechStack,
@@ -103,6 +106,13 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .throwErrors()
     .action(async () => {
       await deps.printSummaryTable();
+    });
+
+  cli.command("help")
+    .description("Show the psh command summary")
+    .action(function () {
+      const parent = this.getParent?.() ?? this;
+      console.log(parent.getHelp());
     });
 
   const speech = new Command()
@@ -188,6 +198,10 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       }
       if (["docker", "d"].includes(normalized)) {
         await deps.runInstallDocker();
+        return;
+      }
+      if (["speech", "speech-stack", "models"].includes(normalized)) {
+        await deps.runSetupSpeech();
         return;
       }
       throw new Error(`Unknown dependency: ${dep}`);

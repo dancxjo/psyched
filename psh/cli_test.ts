@@ -53,6 +53,9 @@ function createStubDeps() {
     downloadSpeechModels() {
       record("downloadSpeechModels");
     },
+    runSetupSpeech() {
+      record("runSetupSpeech");
+    },
     launchSpeechStack(options) {
       record("launchSpeechStack", [options]);
     },
@@ -65,6 +68,39 @@ function createStubDeps() {
   };
 
   return { calls, deps };
+}
+
+async function captureOutput(fn: () => Promise<unknown>): Promise<string> {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const buffer: string[] = [];
+  console.log = (...args: unknown[]) => {
+    buffer.push(args.map((arg) => String(arg)).join(" "));
+  };
+  console.error = (...args: unknown[]) => {
+    buffer.push(args.map((arg) => String(arg)).join(" "));
+  };
+  console.warn = (...args: unknown[]) => {
+    buffer.push(args.map((arg) => String(arg)).join(" "));
+  };
+  let thrown: unknown;
+  try {
+    await fn();
+  } catch (err) {
+    thrown = err;
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    console.warn = originalWarn;
+  }
+  if (thrown) {
+    const message = thrown instanceof Error ? thrown.message : String(thrown);
+    if (!message.includes("Test case attempted to exit with exit code: 0")) {
+      throw thrown;
+    }
+  }
+  return buffer.join("\n");
 }
 
 Deno.test("default command prints summary", async () => {
@@ -100,6 +136,13 @@ Deno.test("dependency subcommand routes docker", async () => {
   const cli = createCli(deps);
   await cli.parse(["dep", "docker"]);
   assertEquals(Object.keys(calls), ["runInstallDocker"]);
+});
+
+Deno.test("dependency subcommand routes speech setup", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["dep", "speech"]);
+  assertEquals(Object.keys(calls), ["runSetupSpeech"]);
 });
 
 Deno.test("systemd generate is default", async () => {
@@ -192,4 +235,17 @@ Deno.test("speech test forwards build flag", async () => {
   await cli.parse(["speech", "test", "--build=true"]);
   assertEquals(Object.keys(calls), ["testSpeechStack"]);
   assertEquals(calls.testSpeechStack, [{ build: true }]);
+});
+
+Deno.test("help command output matches --help without invoking actions", async () => {
+  const { calls, deps } = createStubDeps();
+
+  const cliHelp = createCli(deps);
+  const helpOutput = await captureOutput(() => cliHelp.parse(["help"]));
+
+  const cliFlag = createCli(deps);
+  const flagOutput = await captureOutput(() => cliFlag.parse(["--help"]));
+
+  assertEquals(helpOutput, flagOutput);
+  assertEquals(Object.keys(calls).length, 0);
 });

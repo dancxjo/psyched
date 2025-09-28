@@ -1,5 +1,5 @@
 // --- Utility Imports & Helpers ---
-import { $ } from "./util.ts";
+import { $, hasFlag } from "./util.ts";
 import { parse as parseToml } from "@std/toml";
 import { join } from "@std/path";
 import {
@@ -17,6 +17,28 @@ import {
   runInstallDocker,
   runInstallRos2,
 } from "./install.ts";
+import {
+  isSpeechSetupComplete,
+  runSetupSpeech,
+} from "./speech_setup.ts";
+
+export interface SetupDeps {
+  isRos2Installed(): Promise<boolean> | boolean;
+  runInstallRos2(): Promise<void> | void;
+  isDockerInstalled(): Promise<boolean> | boolean;
+  runInstallDocker(): Promise<void> | void;
+  isSpeechSetupComplete(): Promise<boolean> | boolean;
+  runSetupSpeech(): Promise<void> | void;
+}
+
+const defaultSetupDeps: SetupDeps = {
+  isRos2Installed,
+  runInstallRos2,
+  isDockerInstalled,
+  runInstallDocker,
+  isSpeechSetupComplete,
+  runSetupSpeech,
+};
 
 type ModuleConfigTable = Record<string, Record<string, unknown>>;
 
@@ -82,24 +104,36 @@ function extractModuleConfigs(
   return configs;
 }
 
-async function applyHost(host: string): Promise<void> {
+async function applyHost(host: string, deps: SetupDeps): Promise<void> {
   const spec = await readHostSpec(host);
   console.log(`Applying host '${host}'`);
 
-  if (spec.setup_ros2) {
+  const wantsRos2 = hasFlag(spec, "setup_ros2", "setup-ros2");
+  if (wantsRos2) {
     console.log("Host requests ROS2 installation.");
-    if (await isRos2Installed()) {
+    if (await deps.isRos2Installed()) {
       console.log("ROS2 already detected on system — skipping installation.");
     } else {
-      await runInstallRos2();
+      await deps.runInstallRos2();
     }
   }
-  if (spec.setup_docker) {
+  const wantsDocker = hasFlag(spec, "setup_docker", "setup-docker");
+  if (wantsDocker) {
     console.log("Host requests Docker installation.");
-    if (await isDockerInstalled()) {
+    if (await deps.isDockerInstalled()) {
       console.log("Docker already detected on system — skipping installation.");
     } else {
-      await runInstallDocker();
+      await deps.runInstallDocker();
+    }
+  }
+
+  const wantsSpeech = hasFlag(spec, "setup_speech", "setup-speech");
+  if (wantsSpeech) {
+    console.log("Host requests speech stack asset setup.");
+    if (await deps.isSpeechSetupComplete()) {
+      console.log("Speech stack assets already detected — skipping setup.");
+    } else {
+      await deps.runSetupSpeech();
     }
   }
 
@@ -141,7 +175,11 @@ async function applyHost(host: string): Promise<void> {
   console.log("Host setup finished.");
 }
 
-export async function setupHosts(hosts: string[]): Promise<void> {
+export async function setupHosts(
+  hosts: string[],
+  overrides: Partial<SetupDeps> = {},
+): Promise<void> {
+  const deps: SetupDeps = { ...defaultSetupDeps, ...overrides } as SetupDeps;
   const targets = hosts.length ? hosts : [await determineHostName()];
   if (!targets[0]) {
     throw new Error(
@@ -149,7 +187,7 @@ export async function setupHosts(hosts: string[]): Promise<void> {
     );
   }
   for (const host of targets) {
-    await applyHost(host);
+    await applyHost(host, deps);
   }
 }
 

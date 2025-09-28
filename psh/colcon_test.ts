@@ -42,21 +42,20 @@ Deno.test("colcon build shells out via dax", async () => {
   assertColconInvocation(invocation);
 });
 
-Deno.test("colcon install shells out via dax", async () => {
-  let captured: StubInvocation | null = null;
-  const stub = createDaxStub((invocation) => {
-    captured = invocation;
-    return { code: 0 };
-  });
-  colconInstall();
-  const invocation = expectInvocation(
-    captured,
-    "Expected colcon install to invoke dax",
+Deno.test("colcon install explains skip", () => {
+  const messages: string[] = [];
+  const originalLog = console.log;
+  try {
+    console.log = (...args: unknown[]) => {
+      messages.push(args.map((arg) => String(arg)).join(" "));
+    };
+    colconInstall();
+  } finally {
+    console.log = originalLog;
+  }
+  assertEquals(messages.length > 0, true);
+  assertEquals(
+    messages[0],
+    "[psh] Skipping 'colcon install' (not supported); ensure 'colcon build' was run instead.",
   );
-  const args = invocation.values[1] as string[];
-  assertEquals(Array.isArray(args), true);
-  assertEquals(args.slice(0, 2), ["colcon", "install"]);
-  assertEquals(args[2], "--base-paths");
-  assertEquals(typeof args[3], "string");
-  assertColconInvocation(invocation);
 });

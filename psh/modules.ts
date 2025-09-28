@@ -596,7 +596,7 @@ export async function setupMultipleModules(modules: string[]): Promise<void> {
       for (const action of moduleActions) {
         if (action.type === "apt_install") {
           const aptAction = action as AptInstallAction;
-          aptUpdate ||= Boolean(aptAction.update);
+          aptUpdate = aptUpdate || aptAction.update !== false;
           for (const pkg of aptAction.packages ?? []) {
             if (aptSeen.has(pkg)) continue;
             aptSeen.add(pkg);
@@ -607,6 +607,8 @@ export async function setupMultipleModules(modules: string[]): Promise<void> {
         if (action.type === "pip_install") {
           const pipAction = action as PipInstallAction;
           const aggregate = ensurePipAggregate(pipAction);
+          aggregate.breakSystem ||= Boolean(pipAction.break_system);
+          aggregate.user ||= Boolean(pipAction.user);
           for (const pkg of pipAction.packages ?? []) {
             if (aggregate.packageSet.has(pkg)) continue;
             aggregate.packageSet.add(pkg);

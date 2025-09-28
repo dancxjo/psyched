@@ -104,3 +104,37 @@ export async function runWithStreamingTee(
   } catch { /* ignore */ }
   return { code: result.code ?? 0, stdout, stderr };
 }
+
+/**
+ * Coerce a TOML or CLI flag into a boolean value. Supports boolean,
+ * string, and numeric inputs.
+ */
+export function asBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Read a boolean flag from a record while tolerating alternate key spellings.
+ */
+export function hasFlag(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): boolean {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return asBoolean(record[key]);
+    }
+  }
+  return false;
+}
