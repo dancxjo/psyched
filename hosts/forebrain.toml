@@ -1,4 +1,5 @@
 setup_ros2 = false
 setup_docker = true
+setup_speech = false
 modules = []
 

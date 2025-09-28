@@ -1,18 +1,26 @@
 import { repoPath, runWithStreamingTee } from "./util.ts";
 
 export async function downloadSpeechModels(): Promise<void> {
-    // TODO: This isn't reading the correct repo path
-    const script = repoPath("../tools/download_speech_models.sh");
-    console.log(`[psh] Downloading speech models using ${script}`);
-    const res = await runWithStreamingTee(`bash ${script}`);
-    if (res.code !== 0) {
-        console.error(`[psh] Model download script failed (code ${res.code})`);
-        if (res.stderr) console.error(res.stderr);
-        throw new Error(`Model download script failed (${res.code})`);
+  const script = repoPath("tools/download_speech_models.sh");
+  try {
+    const stat = await Deno.stat(script);
+    if (!stat.isFile) {
+      throw new Error(`Expected ${script} to be a file.`);
     }
-    if (res.stderr && res.stderr.trim().length > 0) {
-        console.log("[psh] Model download script produced stderr (see below):");
-        console.log(res.stderr);
-    }
-    console.log("[psh] Model download complete.");
+  } catch (err) {
+    throw new Error(`Speech model setup script missing at ${script}: ${String(err)}`);
+  }
+
+  console.log(`[psh] Downloading speech models using ${script}`);
+  const res = await runWithStreamingTee(`bash ${script}`);
+  if (res.code !== 0) {
+    console.error(`[psh] Model download script failed (code ${res.code})`);
+    if (res.stderr) console.error(res.stderr);
+    throw new Error(`Model download script failed (${res.code})`);
+  }
+  if (res.stderr && res.stderr.trim().length > 0) {
+    console.log("[psh] Model download script produced stderr (see below):");
+    console.log(res.stderr);
+  }
+  console.log("[psh] Model download complete.");
 }

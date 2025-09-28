@@ -20,6 +20,7 @@ function buildTempContext(moduleName: string) {
     srcDir,
     moduleConfig: null,
     moduleConfigPath: null,
+    moduleConfigOwned: false,
   };
 }
 

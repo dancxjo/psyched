@@ -102,6 +102,9 @@ or conflicting package sources.
 - `tools/with_ros_env.sh` sources the workspace environment before executing a
   command. Use it (or mirror its behaviour) when scripting `colcon` or `ros2`
   invocations so ROS 2 dependencies from apt are discoverable.
+- Speech provisioning leaves a sentinel file at `setup/.speech_setup_complete`.
+  When adding new required models or steps bump the version written in
+  `psh/speech_setup.ts` so hosts rerun the updated setup.
 - Keep the guide succinct and focused on actionable advice.
 - `pytest` is configured to ignore the `src/` symlink; place new tests under
   `packages/<pkg>/tests` and stub ROS interfaces when running in environments

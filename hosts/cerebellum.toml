@@ -7,6 +7,9 @@ setup_ros2 = true
 # Install Docker on this host during `psh provision`?
 setup_docker = true
 
+# Download speech-stack assets (models, etc.) on this host?
+setup_speech = true
+
 # Ordered list of modules to enable for this host. Each entry corresponds to
 # a directory under modules/ and its module.toml actions will be executed in
 # the same order.
