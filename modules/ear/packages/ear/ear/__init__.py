@@ -7,6 +7,8 @@ __all__ = [
     'segmenter_node',
     'silence_node',
     'silence_tracker',
-    'transcriber_node',
+    'transcriber_short_node',
+    'transcriber_medium_node',
+    'transcriber_long_node',
     'vad_node',
 ]
