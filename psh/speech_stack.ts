@@ -69,12 +69,18 @@ async function runCompose(
       return;
     }
     lastErr = { label: attempt.label, code: result.code, stdout: result.stdout, stderr: result.stderr };
-    // If we detect that docker doesn't know the 'compose' subcommand, try the next variant.
-    if (attempt.label === "docker compose" && /unknown docker command|See 'docker --help'/.test(lastErr.stderr + lastErr.stdout)) {
-      // continue to next attempt
-      continue;
+    if (attempt.label === "docker compose") {
+      const output = lastErr.stderr + lastErr.stdout;
+      const missingCompose = /unknown docker command|See 'docker --help'/.test(output);
+      if (missingCompose) {
+        // continue to next attempt
+        continue;
+      }
+      const combined = `Last attempt: ${lastErr.label} (exit ${lastErr.code})\n--- stdout ---\n${lastErr.stdout}\n--- stderr ---\n${lastErr.stderr}`;
+      throw new Error(`[psh] docker compose failed. ${combined}`);
     }
-    // For other failures also continue to next attempt to maximize chances of success.
+    // Fall through so the next attempt (if any) can run; this only happens when the CLI
+    // variant above signalled that the compose plugin is unavailable.
   }
 
   // All attempts failed — produce a helpful error including the last captured output.

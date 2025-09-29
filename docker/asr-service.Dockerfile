@@ -1,6 +1,17 @@
 FROM rust:1.82 AS builder
 WORKDIR /app
 
+# Install system dependencies required to build native bindings (bindgen/libclang)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    clang \
+    libclang-dev \
+    llvm-dev \
+    pkg-config \
+    cmake \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY Cargo.toml ./
 COPY Cargo.lock ./
 # Copy the source tree required for the unified ASR service.
