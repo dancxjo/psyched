@@ -13,7 +13,7 @@ voices/
 output.wav
 
 launch_params_*
-
+models/*
 # External workspace sources (symlink-populated)
 # only on the top-level workspace
 /src/
@@ -59,3 +59,4 @@ models/
 !asr-service/models/
 !asr-service/models/.gitkeep
 .speech_setup_complete
+asr-fast/models/ggml-tiny.en.bin
