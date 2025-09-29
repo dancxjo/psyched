@@ -156,6 +156,15 @@ fn parse_duration_secs(key: &str) -> Option<Duration> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn default_model_targets_gpt_oss_20b() {
+        let cfg = AppConfig::default();
+        assert_eq!(
+            cfg.model.path,
+            PathBuf::from("models/gpt-oss-20b-Q5_K_M.gguf")
+        );
+    }
+
     use super::*;
     use parking_lot::{const_mutex, Mutex};
     use std::{env, path::PathBuf};
