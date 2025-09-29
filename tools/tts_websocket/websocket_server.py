@@ -19,7 +19,7 @@ With the server up, send text and record the stream::
     import websockets
 
     async def demo():
-        async with websockets.connect("ws://localhost:5002/tts") as ws:
+        async with websockets.connect("ws://forebrain.local:5002/tts") as ws:
             await ws.send(json.dumps({"text": "Streaming feels instant"}))
             meta = json.loads(await ws.recv())
             ffmpeg = subprocess.Popen(

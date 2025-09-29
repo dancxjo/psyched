@@ -311,7 +311,7 @@ When making changes, an agent should run the following lightweight checks:
 # from repository root
 cd modules/pilot/packages/pilot/pilot/static
 python3 -m http.server 8000
-# open http://localhost:8000/index.html in a browser
+# open http://forebrain.local:8000/index.html in a browser
 ```
 
 3. Console checks

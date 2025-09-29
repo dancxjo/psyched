@@ -29,7 +29,7 @@ from .providers import (
 from .utils import fetch_fortune_text
 
 DEFAULT_ENGINE = os.getenv("VOICE_ENGINE", "websocket")
-DEFAULT_WS_URL = os.getenv("VOICE_TTS_URL", "ws://localhost:5002/tts")
+DEFAULT_WS_URL = os.getenv("VOICE_TTS_URL", "ws://forebrain.local:5002/tts")
 
 FALLBACK_FORTUNES: tuple[str, ...] = (
     "Stay curious.",

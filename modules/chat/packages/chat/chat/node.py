@@ -61,7 +61,7 @@ class ChatNode(Node):
     def __init__(self) -> None:
         super().__init__('chat')
 
-        default_llm_url = os.getenv('FOREBRAIN_LLM_URL', 'ws://localhost:8080/chat')
+        default_llm_url = os.getenv('FOREBRAIN_LLM_URL', 'ws://forebrain.local:8080/chat')
 
         # Parameters (no environment fallback, only YAML or launch params)
         self.declare_parameter('system_prompt', 'You are a helpful assistant. Always answer in one concise sentence.')
@@ -71,13 +71,13 @@ class ChatNode(Node):
         # Default to a tiny local Ollama model so the fallback stays responsive.
         # The remote speech stack supplies the heavier GPT-OSS:20B model.
         self.declare_parameter('model', 'tinyllama')
-        self.declare_parameter('ollama_host', 'http://localhost:11434')
+        self.declare_parameter('ollama_host', 'http://forebrain.local:11434')
         self.declare_parameter('max_history', 20)
         self.declare_parameter('llm_ws_url', default_llm_url)
         self.declare_parameter('llm_ws_connect_timeout', 1.0)
         self.declare_parameter('llm_ws_response_timeout', 0.5)
         self.declare_parameter('llm_ws_retry_cooldown', 30.0)
-        self.declare_parameter('pilot_base_url', 'http://localhost:8080')
+        self.declare_parameter('pilot_base_url', 'http://forebrain.local:8080')
         self.declare_parameter('pilot_text_cache_ttl', 5.0)
 
         # Resolve parameters

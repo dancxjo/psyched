@@ -465,7 +465,7 @@ class TranscriberNode(Node):  # type: ignore[misc]
         self._language = self.declare_parameter('language', '').value or None
         self._beam_size = int(self.declare_parameter('beam_size', 5).value)
 
-        default_remote_ws = os.getenv('EAR_ASR_WS_URL', 'ws://localhost:8082/ws')
+        default_remote_ws = os.getenv('EAR_ASR_WS_URL', 'ws://forebrain.local:8082/ws')
         self._remote_ws_url = self.declare_parameter('remote_ws_url', default_remote_ws).value
         self._remote_connect_timeout = float(self.declare_parameter('remote_connect_timeout', 0.6).value)
         self._remote_response_timeout = float(self.declare_parameter('remote_response_timeout', 1.5).value)
