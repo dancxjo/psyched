@@ -5,8 +5,16 @@ services:
       dockerfile: docker/asr-fast.Dockerfile
     image: psyched-asr-fast:local
     restart: unless-stopped
+    environment:
+      ASR_MODEL_PATH: "/models/ggml-tiny.en.bin"
+      ASR_LANGUAGE: "en"
     ports:
       - "8082:8082"
+    volumes:
+      - type: bind
+        source: ../asr-fast/models
+        target: /models
+        read_only: true
 
   tts:
     build:

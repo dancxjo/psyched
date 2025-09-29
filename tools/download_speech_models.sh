@@ -102,4 +102,15 @@ else
   echo "[INFO] ASR model already present."
 fi
 
+GGML_MODEL_PATH="$ASR_MODEL_DIR/ggml-tiny.en.bin"
+if [ ! -f "$GGML_MODEL_PATH" ]; then
+  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$GGML_MODEL_PATH" \
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"; then
+    echo "[ERROR] Failed to download ggml ASR model."
+    exit 22
+  fi
+else
+  echo "[INFO] ggml ASR model already present."
+fi
+
 echo "[SUCCESS] All models downloaded and folders set up."

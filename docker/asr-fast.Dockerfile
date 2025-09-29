@@ -17,7 +17,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/asr-fast /usr/local/bin/asr-fast
+RUN mkdir -p /models
 
 EXPOSE 8082
-ENV LISTEN=0.0.0.0:8082
+ENV LISTEN=0.0.0.0:8082 \
+    ASR_MODEL_PATH=/models/ggml-tiny.en.bin \
+    ASR_LANGUAGE=en
 CMD ["asr-fast"]

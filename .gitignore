@@ -59,4 +59,6 @@ Thumbs.db
 target/
 
 models/
+!asr-fast/models/
+!asr-fast/models/.gitkeep
 .speech_setup_complete

@@ -146,6 +146,10 @@ Visit `http://<cerebellum-host>:8080`.
   * `tools/with_ros_env.sh` sources ROS 2 before colcon/ros2 invocations.
   * Rust microservices such as `forebrain-llm` sit outside the root Cargo workspace; copy the crate to `/tmp` (or set
     `CARGO_TARGET_DIR`) before running `cargo test` so the workspace manifest does not block the build.
+  * Remote ASR tiers may emit placeholder transcripts like `samples=<n> sum=<m>` when the fast/mid pipelines are misconfigured;
+    let the ear module fall back to onboard Whisper when that happens.
+  * The speech stack now loads whisper.cpp models from `asr-fast/models/` (e.g. `ggml-tiny.en.bin`). Run
+    `tools/download_speech_models.sh` and ensure the compose volume mounts that directory before bringing the stack up.
 
 ---
 
