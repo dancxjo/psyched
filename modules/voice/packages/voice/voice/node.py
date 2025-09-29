@@ -50,7 +50,7 @@ class VoiceNode(Node):
         self.declare_parameter("topic", "/voice")
         self.declare_parameter("engine", DEFAULT_ENGINE)
         self.declare_parameter("volume", 1.0)
-        self.declare_parameter("startup_greeting", "Hi there! My name is Pete Knightykell.")
+        self.declare_parameter("startup_greeting", "Hi there! My name is Pete Knighty-kell.")
         self.declare_parameter("enable_ping", True)
         self.declare_parameter("ping_interval_sec", 30)
         self.declare_parameter("conversation_topic", "/conversation")
