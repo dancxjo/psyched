@@ -2,7 +2,7 @@ FROM rust:1.82 AS builder
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends clang libclang-dev \
+    && apt-get install -y --no-install-recommends clang libclang-dev cmake build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml ./
