@@ -30,7 +30,9 @@ echo "[INFO] Downloading LLM model (GGUF) for forebrain-llm..."
 LLM_MODEL_NAME="gpt-oss-20b-Q5_K_M.gguf"
 LLM_MODEL_PATH="$LLM_MODEL_DIR/$LLM_MODEL_NAME"
 if [ ! -f "$LLM_MODEL_PATH" ]; then
-  HF_MODEL_URL="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$LLM_MODEL_NAME?download=1"
+  # Prefer the canonical resolve URL without the extra query param which can
+  # sometimes produce HTML wrappers or redirects depending on HF settings.
+  HF_MODEL_URL="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$LLM_MODEL_NAME"
   echo "[INFO] Fetching $LLM_MODEL_NAME from $HF_MODEL_URL"
   if ! curl --fail --location --retry 5 --retry-delay 5 --continue-at - \
     "${AUTH_HEADER[@]}" \
@@ -40,6 +42,36 @@ if [ ! -f "$LLM_MODEL_PATH" ]; then
     echo "  export HUGGINGFACE_HUB_TOKEN=\"<your-token>\""
     echo "See https://huggingface.co/settings/tokens to create a token."
     exit 22
+  fi
+
+  # Quick sanity-check: GGUF files start with ASCII 'GGUF' (bytes 47 47 55 46).
+  # Some common failure modes are: an HTML error page, a Git LFS pointer file,
+  # or an auth/login HTML response. Detect those and print a clear diagnostic.
+  check_magic() {
+    # Read first 4 bytes as hex (upper-case, no separator)
+    local magic
+    magic=$(hexdump -n4 -v -e '4/1 "%02X"' "$1" 2>/dev/null || true)
+    echo "$magic"
+  }
+
+  MAGIC_HEX=$(check_magic "$LLM_MODEL_PATH")
+  if [ -z "$MAGIC_HEX" ]; then
+    echo "[ERROR] Could not read header from $LLM_MODEL_PATH"
+    file "$LLM_MODEL_PATH" || true
+    exit 23
+  fi
+
+  # Expected: 47 47 55 46 -> 47475546. Some tools/platforms may show the bytes
+  # in little-endian order; treat the reversed sequence as a warning as well.
+  if [ "$MAGIC_HEX" != "47475546" ] && [ "$MAGIC_HEX" != "46554747" ]; then
+    echo "[ERROR] Downloaded file does not look like a GGUF model (magic=0x$MAGIC_HEX)"
+    echo "[ERROR] Common causes: you downloaded an HTML error page, a Git LFS pointer, or the file is incomplete."
+    echo "[ERROR] File type:"; file "$LLM_MODEL_PATH" || true
+    echo "[ERROR] First 200 bytes (for debugging):"; head -c 200 "$LLM_MODEL_PATH" | sed -n '1,200p' || true
+    echo "[HINT] If the file contains 'git-lfs' or 'version https://git-lfs.github.com', you need to pull LFS objects or download via the Hugging Face web UI with credentials."
+    echo "[HINT] If the file looks like HTML (starts with '<!doctype' or '<html'), export HUGGINGFACE_HUB_TOKEN and re-run this script, or use 'huggingface-cli login' locally."
+    echo "See https://huggingface.co/settings/tokens to create a token."
+    exit 24
   fi
 else
   echo "[INFO] LLM model already present."
