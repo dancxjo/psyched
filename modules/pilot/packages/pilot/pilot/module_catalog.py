@@ -77,8 +77,8 @@ class ModuleTopic:
 class ModuleCommands:
     """Command metadata for a module."""
 
-    mod: List[str] = field(default_factory=lambda: ["setup", "restart", "status", "logs"])
-    system: List[str] = field(default_factory=lambda: ["start", "stop", "restart", "status"])
+    mod: List[str] = field(default_factory=lambda: ["setup"])
+    system: List[str] = field(default_factory=lambda: ["generate", "enable", "disable", "start", "stop", "restart", "debug"])
 
 
 @dataclass(slots=True)
