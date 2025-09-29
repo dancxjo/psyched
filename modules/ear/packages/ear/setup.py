@@ -30,6 +30,7 @@ setup(
             'ear_node = ear.pyaudio_ear_node:main',
             'vad_node = ear.vad_node:main',
             'transcriber_node = ear.transcriber_node:main',
+            'speech_accumulator_node = ear.speech_accumulator_node:main',
         ],
     },
 )

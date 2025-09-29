@@ -5,12 +5,12 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use asr_core::errors::AsrError;
-use asr_core::messages::{ClientMessage, FinalHypothesis, ServerMessage, TranscriptSegment};
-use asr_core::pipeline::{
+use crate::core::errors::AsrError;
+use crate::core::messages::{ClientMessage, FinalHypothesis, ServerMessage, TranscriptSegment};
+use crate::core::pipeline::{
     decode_audio_payload, Pipeline as PipelineTrait, StreamConfig, StreamRegistry,
 };
-use asr_core::recognizer::SpeechRecognizer;
+use crate::core::recognizer::SpeechRecognizer;
 
 /// Configuration for the medium-latency pipeline.
 #[derive(Debug, Clone)]
@@ -236,8 +236,8 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asr_core::messages::{AudioPayload, CommitPayload, InitPayload};
-    use asr_core::recognizer::{RecognizedSegment, RecognizedTranscript, RecognizerError};
+    use crate::core::messages::{AudioPayload, CommitPayload, InitPayload};
+    use crate::core::recognizer::{RecognizedSegment, RecognizedTranscript, RecognizerError};
     use std::sync::Arc;
 
     #[derive(Default)]

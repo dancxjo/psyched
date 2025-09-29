@@ -1,8 +1,5 @@
 [workspace]
 members = [
-    "asr-core",
-    "asr-fast",
-    "asr-mid",
-    "asr-long"
+    "asr-service"
 ]
 resolver = "2"

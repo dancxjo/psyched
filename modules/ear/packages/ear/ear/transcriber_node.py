@@ -590,6 +590,11 @@ class RemoteAsrBackend:
                         segments_payload = payload.get('segments')
                         words_payload = payload.get('words')
                         break
+                    if msg_type == 'refine':
+                        text = str(payload.get('text', '')).strip()
+                        segments_payload = payload.get('segments')
+                        words_payload = payload.get('words')
+                        break
                     if msg_type == 'partial' and not text:
                         text = str(payload.get('text', '')).strip()
                         conf = payload.get('avg_logprob')
@@ -700,13 +705,28 @@ def initialise_remote_backend(
 
 
 class TranscriberNode(Node):  # type: ignore[misc]
-    """ROS 2 node that feeds VAD segments into an ASR backend."""
+    """ROS 2 node that fans audio buffers to the remote ASR tiers."""
 
     def __init__(self, backend: Optional[object] = None) -> None:  # pragma: no cover - requires ROS
         super().__init__('transcriber')
 
         self._segment_topic = self.declare_parameter('segment_topic', '/audio/speech_segment').value
+        self._segment_accum_topic = self.declare_parameter(
+            'segment_accumulating_topic', '/audio/speech_segment_accumulating'
+        ).value
+        self._speech_accum_topic = self.declare_parameter(
+            'speech_accumulating_topic', '/audio/speech_accumulating'
+        ).value
         self._transcript_topic = self.declare_parameter('transcript_topic', '/audio/transcription').value
+        self._transcript_short_topic = self.declare_parameter(
+            'transcript_short_topic', '/audio/transcript/short'
+        ).value
+        self._transcript_medium_topic = self.declare_parameter(
+            'transcript_medium_topic', '/audio/transcript/medium'
+        ).value
+        self._transcript_long_topic = self.declare_parameter(
+            'transcript_long_topic', '/audio/transcript/long'
+        ).value
         self._speaker_label = self.declare_parameter('speaker', 'user').value
         self._sample_rate = int(self.declare_parameter('segment_sample_rate', 16000).value)
         self._model_name = self.declare_parameter('model', 'base').value
@@ -715,101 +735,197 @@ class TranscriberNode(Node):  # type: ignore[misc]
         self._language = self.declare_parameter('language', '').value or None
         self._beam_size = int(self.declare_parameter('beam_size', 5).value)
 
-        default_remote_ws = os.getenv('EAR_ASR_WS_URL', 'ws://forebrain.local:8082/ws')
-        self._remote_ws_url = self.declare_parameter('remote_ws_url', default_remote_ws).value
+        default_fast_ws = os.getenv('EAR_ASR_FAST_WS_URL', 'ws://forebrain.local:8082/ws')
+        default_medium_ws = os.getenv('EAR_ASR_MEDIUM_WS_URL', 'ws://forebrain.local:8083/ws')
+        default_long_ws = os.getenv('EAR_ASR_LONG_WS_URL', 'ws://forebrain.local:8084/ws')
+        self._fast_ws_url = self.declare_parameter('fast_remote_ws_url', default_fast_ws).value
+        self._medium_ws_url = self.declare_parameter('medium_remote_ws_url', default_medium_ws).value
+        self._long_ws_url = self.declare_parameter('long_remote_ws_url', default_long_ws).value
         self._remote_connect_timeout = float(self.declare_parameter('remote_connect_timeout', 0.6).value)
         self._remote_response_timeout = float(self.declare_parameter('remote_response_timeout', 1.5).value)
-        self._remote_retry_cooldown = float(self.declare_parameter('remote_retry_cooldown', 15.0).value)
 
-        fallback_backend = backend or load_backend(
-            self._model_name,
-            self._device,
-            self._compute_type,
-            self._language,
-            self._beam_size,
+        self._fast_backend = initialise_remote_backend(
+            uri=str(self._fast_ws_url or '').strip(),
+            language=self._language,
+            connect_timeout=self._remote_connect_timeout,
+            response_timeout=self._remote_response_timeout,
             logger=self.get_logger(),
         )
-        remote_backend: Optional[RemoteAsrBackend] = None
-        remote_uri = str(self._remote_ws_url or '').strip()
-        if backend is None and remote_uri:
-            remote_backend = initialise_remote_backend(
-                uri=remote_uri,
-                language=self._language,
-                connect_timeout=self._remote_connect_timeout,
-                response_timeout=self._remote_response_timeout,
-                logger=self.get_logger(),
-            )
+        self._medium_backend = initialise_remote_backend(
+            uri=str(self._medium_ws_url or '').strip(),
+            language=self._language,
+            connect_timeout=self._remote_connect_timeout,
+            response_timeout=self._remote_response_timeout,
+            logger=self.get_logger(),
+        )
+        self._long_backend = initialise_remote_backend(
+            uri=str(self._long_ws_url or '').strip(),
+            language=self._language,
+            connect_timeout=self._remote_connect_timeout,
+            response_timeout=self._remote_response_timeout,
+            logger=self.get_logger(),
+        )
 
-        if remote_backend:
-            self._backend = ChainedTranscriptionBackend(
-                primary=remote_backend,
-                fallback=fallback_backend,
-                cooldown_seconds=max(0.0, self._remote_retry_cooldown),
-                logger=self.get_logger(),
-            )
-        else:
-            self._backend = fallback_backend
+        if backend is not None:
+            if self._medium_backend is None:
+                self._medium_backend = backend
+            if self._long_backend is None:
+                self._long_backend = backend
+            if self._fast_backend is None:
+                self._fast_backend = backend
 
         self.transcript_pub = self.create_publisher(Transcript, self._transcript_topic, 10)
-        self._segment_sub = self.create_subscription(ByteMultiArray, self._segment_topic, self._on_segment, 10)
+        self.transcript_short_pub = self.create_publisher(Transcript, self._transcript_short_topic, 10)
+        self.transcript_medium_pub = self.create_publisher(Transcript, self._transcript_medium_topic, 10)
+        self.transcript_long_pub = self.create_publisher(Transcript, self._transcript_long_topic, 10)
 
-        self._queue: 'queue.Queue[Optional[bytes]]' = queue.Queue()
         self._stop_evt = threading.Event()
-        self._worker = TranscriptionWorker(
-            backend=self._backend,
-            sample_rate=self._sample_rate,
-            speaker=str(self._speaker_label),
-            on_result=self._publish_transcript,
-            logger=self.get_logger(),
-        )
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
+        self._backend_warnings: dict[str, bool] = {'short': False, 'medium': False, 'long': False}
 
-        backend_name = self._backend.__class__.__name__ if self._backend else 'None'
+        self._short_queue: 'queue.Queue[Optional[bytes]]' = queue.Queue(maxsize=2)
+        self._medium_queue: 'queue.Queue[Optional[bytes]]' = queue.Queue()
+        self._long_queue: 'queue.Queue[Optional[bytes]]' = queue.Queue()
+
+        self._threads: list[threading.Thread] = []
+        self._threads.append(
+            threading.Thread(
+                target=self._worker_loop,
+                args=('short', self._fast_backend, self._short_queue, self._publish_short),
+                daemon=True,
+            )
+        )
+        self._threads.append(
+            threading.Thread(
+                target=self._worker_loop,
+                args=('medium', self._medium_backend, self._medium_queue, self._publish_medium),
+                daemon=True,
+            )
+        )
+        self._threads.append(
+            threading.Thread(
+                target=self._worker_loop,
+                args=('long', self._long_backend, self._long_queue, self._publish_long),
+                daemon=True,
+            )
+        )
+        for thread in self._threads:
+            thread.start()
+
+        self._segment_sub = self.create_subscription(
+            ByteMultiArray, self._segment_topic, self._on_segment, 10
+        )
+        self._segment_accum_sub = self.create_subscription(
+            ByteMultiArray, self._segment_accum_topic, self._on_segment_accumulating, 10
+        )
+        self._speech_accum_sub = self.create_subscription(
+            ByteMultiArray, self._speech_accum_topic, self._on_speech_accumulating, 10
+        )
+
         self.get_logger().info(
-            f'Transcriber ready: backend={backend_name} segments={self._segment_topic} transcripts={self._transcript_topic}'
+            f'Transcriber ready: short={bool(self._fast_backend)} medium={bool(self._medium_backend)} long={bool(self._long_backend)}'
         )
 
     def destroy_node(self) -> None:  # pragma: no cover - requires ROS
         self._stop_evt.set()
-        try:
-            self._queue.put_nowait(None)
-        except Exception:
-            pass
-        try:
-            self._thread.join(timeout=2.0)
-        except Exception:
-            pass
+        for q in (self._short_queue, self._medium_queue, self._long_queue):
+            try:
+                q.put_nowait(None)
+            except Exception:
+                pass
+        for thread in self._threads:
+            try:
+                thread.join(timeout=2.0)
+            except Exception:
+                pass
         return super().destroy_node()
 
-    def _on_segment(self, msg: ByteMultiArray) -> None:  # pragma: no cover - requires ROS
-        data = coerce_pcm_bytes(msg.data)
-        if not data:
-            return
-        self._queue.put(data)
-
-    def _loop(self) -> None:  # pragma: no cover - requires ROS
+    def _worker_loop(
+        self,
+        tier: str,
+        backend: Optional[object],
+        audio_queue: 'queue.Queue[Optional[bytes]]',
+        publisher: Callable[[TranscriptionResult], None],
+    ) -> None:
+        logger = self.get_logger()
         while not self._stop_evt.is_set():
             try:
-                item = self._queue.get(timeout=0.1)
+                item = audio_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
             if item is None:
-                self._queue.task_done()
                 break
+            if backend is None:
+                if not self._backend_warnings.get(tier, False):
+                    logger.warning('No ASR backend configured for %s tier; dropping audio', tier)
+                    self._backend_warnings[tier] = True
+                continue
             try:
-                self._worker.handle_segment(item)
-            finally:
-                self._queue.task_done()
+                result = backend.transcribe(item, self._sample_rate)  # type: ignore[attr-defined]
+            except Exception as exc:  # pragma: no cover - runtime behaviour
+                logger.warning('Backend %s raised error: %s', tier, exc)
+                continue
+            if not _result_is_usable(result):
+                continue
+            try:
+                publisher(result)  # type: ignore[arg-type]
+            except Exception as exc:  # pragma: no cover - runtime behaviour
+                logger.error('Failed to publish %s transcript: %s', tier, exc)
 
-    def _publish_transcript(self, result: TranscriptionResult) -> None:  # pragma: no cover - requires ROS
+    def _on_segment(self, msg: ByteMultiArray) -> None:  # pragma: no cover - requires ROS
+        pcm = coerce_pcm_bytes(msg.data)
+        if not pcm:
+            return
+        self._medium_queue.put(pcm)
+
+    def _on_segment_accumulating(self, msg: ByteMultiArray) -> None:  # pragma: no cover - requires ROS
+        pcm = coerce_pcm_bytes(msg.data)
+        if not pcm:
+            return
+        self._enqueue_latest(self._short_queue, pcm)
+
+    def _on_speech_accumulating(self, msg: ByteMultiArray) -> None:  # pragma: no cover - requires ROS
+        pcm = coerce_pcm_bytes(msg.data)
+        if not pcm:
+            return
+        self._long_queue.put(pcm)
+
+    def _enqueue_latest(self, queue_ref: 'queue.Queue[Optional[bytes]]', pcm: bytes) -> None:
+        try:
+            queue_ref.put_nowait(pcm)
+        except queue.Full:
+            try:
+                queue_ref.get_nowait()
+            except queue.Empty:
+                pass
+            queue_ref.put_nowait(pcm)
+
+    def _publish_short(self, result: TranscriptionResult) -> None:
+        msg = self._build_transcript(result, include_timing=False, include_words=False)
+        self.transcript_short_pub.publish(msg)
+
+    def _publish_medium(self, result: TranscriptionResult) -> None:
+        msg = self._build_transcript(result, include_timing=True, include_words=True)
+        self.transcript_medium_pub.publish(msg)
+        self.transcript_pub.publish(msg)
+
+    def _publish_long(self, result: TranscriptionResult) -> None:
+        msg = self._build_transcript(result, include_timing=True, include_words=True)
+        self.transcript_long_pub.publish(msg)
+
+    def _build_transcript(
+        self,
+        result: TranscriptionResult,
+        *,
+        include_timing: bool,
+        include_words: bool,
+    ) -> Transcript:
         msg = Transcript()
         msg.text = result.text
         segment_speaker = next((segment.speaker for segment in result.segments if segment.speaker), None)
         msg.speaker = segment_speaker or str(self._speaker_label)
         msg.confidence = float(result.confidence)
 
-        try:
+        if include_timing:
             msg.segments = []
             for segment in result.segments:
                 seg_msg = MsgTranscriptSegment()
@@ -818,10 +934,10 @@ class TranscriberNode(Node):  # type: ignore[misc]
                 seg_msg.text = segment.text
                 seg_msg.speaker = segment.speaker or str(self._speaker_label)
                 msg.segments.append(seg_msg)
-        except Exception:
+        else:
             msg.segments = []  # type: ignore[assignment]
 
-        try:
+        if include_words:
             msg.words = []
             for word in result.words:
                 word_msg = MsgTranscriptWord()
@@ -829,10 +945,9 @@ class TranscriberNode(Node):  # type: ignore[misc]
                 word_msg.end = float(word.end)
                 word_msg.text = word.text
                 msg.words.append(word_msg)
-        except Exception:
+        else:
             msg.words = []  # type: ignore[assignment]
-
-        self.transcript_pub.publish(msg)
+        return msg
 
 
 def main(args=None):  # pragma: no cover - requires ROS

@@ -1,20 +1,77 @@
 services:
-  asr:
+  asr_fast:
     build:
       context: ..
-      dockerfile: docker/asr-fast.Dockerfile
-    image: psyched-asr-fast:local
+      dockerfile: docker/asr-service.Dockerfile
+    image: psyched-asr-service:local
     restart: unless-stopped
     environment:
       ASR_MODEL_PATH: "/models/ggml-tiny.en.bin"
       ASR_LANGUAGE: "en"
+      ASR_QUALITY: "fast"
+      ASR_THREADS: "4"
+      NVIDIA_VISIBLE_DEVICES: "all"
     ports:
       - "8082:8082"
     volumes:
       - type: bind
-        source: ../asr-fast/models
+        source: ../asr-service/models
         target: /models
         read_only: true
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+
+  asr_medium:
+    build:
+      context: ..
+      dockerfile: docker/asr-service.Dockerfile
+    image: psyched-asr-service:local
+    restart: unless-stopped
+    environment:
+      ASR_MODEL_PATH: "/models/ggml-small.en.bin"
+      ASR_LANGUAGE: "en"
+      ASR_QUALITY: "medium"
+      ASR_THREADS: "6"
+      NVIDIA_VISIBLE_DEVICES: "all"
+    ports:
+      - "8083:8082"
+    volumes:
+      - type: bind
+        source: ../asr-service/models
+        target: /models
+        read_only: true
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+
+  asr_long:
+    build:
+      context: ..
+      dockerfile: docker/asr-service.Dockerfile
+    image: psyched-asr-service:local
+    restart: unless-stopped
+    environment:
+      ASR_MODEL_PATH: "/models/ggml-large-v3-q5_0.bin"
+      ASR_LANGUAGE: "en"
+      ASR_QUALITY: "long"
+      NVIDIA_VISIBLE_DEVICES: "all"
+    ports:
+      - "8084:8082"
+    volumes:
+      - type: bind
+        source: ../asr-service/models
+        target: /models
+        read_only: true
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
 
   tts:
     build:
@@ -24,9 +81,7 @@ services:
     restart: unless-stopped
     environment:
       TTS_MODEL: "tts_models/en/vctk/vits"
-      # Run on CPU by default; set to 'true' to try enabling CUDA (requires CUDA-enabled PyTorch in the image)
       TTS_USE_CUDA: "false"
-      # Directory inside the container with locally-provided TTS assets
       TTS_MODEL_DIR: "/models"
     ports:
       - "5002:5002"
@@ -51,9 +106,6 @@ services:
         source: ../forebrain-llm/models
         target: /data
         read_only: false
-    # Backwards-compatible GPU access for older docker-compose validators:
-    # expose common NVIDIA device nodes. Modern Docker + nvidia-container-toolkit
-    # does not require a special 'nvidia' runtime and works with the /dev mounts.
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl

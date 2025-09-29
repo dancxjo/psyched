@@ -1,20 +1,30 @@
-//! Core primitives for the ASR micro-stack services.
-//!
-//! This crate provides shared message definitions, audio utilities, and
-//! pipeline traits that the three ASR tiers reuse. Keeping the logic here makes
-//! it easier to add new tiers or swap decoders without duplicating protocol
-//! handling code.
+pub mod config;
 
-pub mod audio;
-pub mod errors;
-pub mod messages;
-pub mod pipeline;
-pub mod recognizer;
+pub mod core {
+    pub mod audio;
+    pub mod errors;
+    pub mod messages;
+    pub mod pipeline;
+    pub mod recognizer;
+}
+
+pub mod pipelines {
+    pub mod fast;
+    pub mod long;
+    pub mod medium;
+}
+
+pub mod server;
+
+pub use core::errors;
+pub use core::messages;
+pub use core::pipeline;
+pub use core::recognizer;
 
 #[cfg(test)]
 mod tests {
-    use super::audio::{decode_payload, AudioPayloadFormat};
-    use super::messages::{ClientMessage, InitPayload, ServerMessage, TranscriptSegment};
+    use crate::core::audio::{decode_payload, AudioPayloadFormat};
+    use crate::core::messages::{ClientMessage, InitPayload, ServerMessage, TranscriptSegment};
 
     fn sample_wav_base64() -> String {
         use base64::{engine::general_purpose, Engine as _};

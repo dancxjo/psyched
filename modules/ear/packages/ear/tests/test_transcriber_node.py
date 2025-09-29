@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import sys
 from typing import List
@@ -270,4 +271,95 @@ def test_load_websocket_dependencies_handles_missing_modules():
 
     assert connect is None
     assert connection_closed is RuntimeError
+
+
+def test_remote_backend_returns_refine_transcripts():
+    from ear.transcriber_node import RemoteAsrBackend
+
+    refine_payload = json.dumps(
+        {
+            "type": "refine",
+            "text": "refined speech",
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 1.0,
+                    "text": "refined",
+                    "speaker": "user",
+                    "words": [{"start": 0.0, "end": 0.5, "text": "refined"}],
+                },
+                {
+                    "start": 1.0,
+                    "end": 2.0,
+                    "text": "speech",
+                    "speaker": "user",
+                },
+            ],
+            "words": [
+                {"start": 1.0, "end": 1.6, "text": "speech"},
+            ],
+        }
+    )
+
+    class DummyWebSocket:
+        def __init__(self, responses):
+            self._responses = iter(responses)
+            self.sent_messages: List[str] = []
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def send(self, message: str):
+            self.sent_messages.append(message)
+
+        async def recv(self) -> str:
+            try:
+                return next(self._responses)
+            except StopIteration as exc:  # pragma: no cover - defensive; loop exits on refine
+                raise RuntimeError("no more responses") from exc
+
+    websocket = DummyWebSocket([refine_payload])
+
+    class DummyConnectorContext:
+        def __init__(self, socket: DummyWebSocket):
+            self._socket = socket
+
+        async def __aenter__(self) -> DummyWebSocket:
+            return self._socket
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def dummy_connector(uri: str, **_: object) -> DummyConnectorContext:
+        assert uri == "ws://example.test/ws"
+        return DummyConnectorContext(websocket)
+
+    def fake_monotonic() -> float:
+        fake_monotonic.current += 0.1
+        return fake_monotonic.current
+
+    fake_monotonic.current = 0.0
+
+    backend = RemoteAsrBackend(
+        uri="ws://example.test/ws",
+        language=None,
+        connect_timeout=0.5,
+        response_timeout=1.0,
+        logger=None,
+        connector=dummy_connector,
+        monotonic=fake_monotonic,
+    )
+
+    result = backend.transcribe(b"\x00\x01", 16000)
+
+    assert isinstance(result, TranscriptionResult)
+    assert result.text == "refined speech"
+    assert result.confidence == 0.0
+    assert [segment.text for segment in result.segments] == ["refined", "speech"]
+    assert result.segments[0].start == 0.0
+    assert result.segments[1].end == 2.0
+    assert [word.text for word in result.words] == ["refined", "speech"]
 

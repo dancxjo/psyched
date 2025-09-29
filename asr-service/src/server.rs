@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use asr_core::errors::AsrError;
-use asr_core::messages::{ClientMessage, ServerMessage};
-use asr_core::pipeline::Pipeline;
+use crate::core::errors::AsrError;
+use crate::core::messages::{ClientMessage, ServerMessage};
+use crate::core::pipeline::Pipeline;
+pub use crate::core::pipeline::Pipeline as PipelineTrait;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -11,39 +12,23 @@ use axum::Router;
 use futures::stream::StreamExt;
 use tracing::{error, info, warn};
 
-struct AppState<P: Pipeline> {
-    pipeline: Arc<P>,
+#[derive(Clone)]
+struct AppState {
+    pipeline: Arc<dyn Pipeline>,
 }
 
-impl<P: Pipeline> Clone for AppState<P> {
-    fn clone(&self) -> Self {
-        Self {
-            pipeline: Arc::clone(&self.pipeline),
-        }
-    }
-}
-
-pub fn router<P>(pipeline: Arc<P>) -> Router
-where
-    P: Pipeline + 'static,
-{
+pub fn router(pipeline: Arc<dyn Pipeline>) -> Router {
     let state = AppState { pipeline };
     Router::new()
-        .route("/ws", get(ws_handler::<P>))
+        .route("/ws", get(ws_handler))
         .with_state(state)
 }
 
-async fn ws_handler<P>(ws: WebSocketUpgrade, State(state): State<AppState<P>>) -> impl IntoResponse
-where
-    P: Pipeline + 'static,
-{
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| websocket_loop(socket, state.pipeline))
 }
 
-async fn websocket_loop<P>(mut socket: WebSocket, pipeline: Arc<P>)
-where
-    P: Pipeline + 'static,
-{
+async fn websocket_loop(mut socket: WebSocket, pipeline: Arc<dyn Pipeline>) {
     info!("websocket connected");
     while let Some(result) = socket.next().await {
         match result {
