@@ -3,15 +3,19 @@ import { extractNumeric } from './metrics.js';
 const subscribers = new Set();
 const metrics = new Map();
 
-const FRIENDLY_NAMES = {
-  '/battery/charge_ratio': 'Charge',
-  '/battery/capacity': 'Capacity',
-  '/battery/charge': 'Charge',
-  '/battery/charging_state': 'State',
-  '/battery/current': 'Current',
-  '/battery/temperature': 'Temperature',
-  '/battery/voltage': 'Voltage',
+const FRIENDLY_DETAILS = {
+  '/battery/charge_ratio': { label: 'Charge Level', unit: '%' },
+  '/battery/capacity': { label: 'Capacity', unit: 'mAh' },
+  '/battery/charge': { label: 'Charge (mAh)', unit: 'mAh' },
+  '/battery/charging_state': { label: 'State', unit: '' },
+  '/battery/current': { label: 'Current', unit: 'A' },
+  '/battery/temperature': { label: 'Temperature', unit: '°C' },
+  '/battery/voltage': { label: 'Voltage', unit: 'V' },
 };
+
+const FRIENDLY_NAMES = Object.fromEntries(
+  Object.entries(FRIENDLY_DETAILS).map(([topic, detail]) => [topic, detail.label]),
+);
 
 const CHARGING_STATE = {
   0: 'Not charging',
@@ -86,8 +90,21 @@ export function batteryLabel(topic) {
   return FRIENDLY_NAMES[key] ?? key.split('/').pop() ?? key;
 }
 
+export function batteryUnit(topic) {
+  const key = normalise(topic);
+  return FRIENDLY_DETAILS[key]?.unit ?? '';
+}
+
+export function chargingStateLabel(value) {
+  const source = value && typeof value === 'object' && 'numeric' in value ? value.numeric : value;
+  const numeric = extractNumeric(source, Number.NaN);
+  return Number.isFinite(numeric) ? CHARGING_STATE[numeric] ?? `State ${numeric}` : 'Unknown';
+}
+
 export default {
   updateBatteryMetric,
   subscribeBattery,
   batteryLabel,
+  batteryUnit,
+  chargingStateLabel,
 };

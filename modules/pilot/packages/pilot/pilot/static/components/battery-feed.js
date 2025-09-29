@@ -1,6 +1,6 @@
-import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { updateBatteryMetric, batteryLabel } from '../utils/battery.js';
+import { updateBatteryMetric, batteryLabel, batteryUnit, chargingStateLabel } from '../utils/battery.js';
 import { extractNumeric } from '../utils/metrics.js';
 
 /**
@@ -36,13 +36,31 @@ class PilotBatteryFeed extends LitElement {
   }
 
   render() {
-    const label = batteryLabel(this.topic?.topic ?? this.topic?.name ?? 'Battery metric');
-    const formatted = Number.isFinite(this._value) ? this._value.toFixed(2) : '—';
+    const topicName = this.topic?.topic ?? this.topic?.name ?? '';
+    const label = topicName ? batteryLabel(topicName) : 'Battery metric';
+    let valueText = '—';
+    let detail = nothing;
+
+    if (topicName === '/battery/charging_state') {
+      const numeric = extractNumeric(this.record?.last ?? this.record?.messages?.[0], Number.NaN);
+      const stateLabel = chargingStateLabel(numeric);
+      valueText = stateLabel;
+      if (Number.isFinite(numeric)) {
+        detail = html`<span class="feed-status">Code ${numeric}</span>`;
+      }
+    } else {
+      const unit = batteryUnit(topicName);
+      if (Number.isFinite(this._value)) {
+        const precise = Math.abs(this._value) >= 10 ? this._value.toFixed(1) : this._value.toFixed(2);
+        valueText = unit ? `${precise} ${unit}` : precise;
+      }
+    }
+
     return html`
       <div class="battery-feed" data-state=${this.record?.state ?? 'idle'}>
         <span class="feed-label">${label}</span>
-        <span class="feed-value">${formatted}</span>
-        <span class="feed-status">Linked to battery panel</span>
+        <span class="feed-value">${valueText}</span>
+        ${detail}
       </div>
     `;
   }
