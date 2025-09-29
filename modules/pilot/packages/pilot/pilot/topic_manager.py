@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
+import re
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Mapping, Sequence
+from typing import Any, Dict, Iterable, Mapping, MutableMapping, Sequence
 
 try:
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
@@ -63,6 +65,110 @@ def _normalise_json_types(value: Any) -> Any:
         if math.isnan(value) or math.isinf(value):
             return None
     return value
+
+
+_TRANSCRIPT_MESSAGE_TYPE = "psyched_msgs/msg/Transcript"
+_TIMING_PREFIX_PATTERN = re.compile(r"^\[[^\]]+\]\s*")
+
+
+def _normalise_transcript_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return a payload with human-friendly transcript text.
+
+    The ASR stack sometimes emits transcript strings that contain timing markers or
+    JSON-encoded segment metadata. Downstream widgets expect a plain text field, so
+    this helper normalises the "text" entry whilst preserving the original
+    structure. Segment lists take precedence because they already expose the
+    speaker-aligned snippets without timing prefixes. When only a string is
+    available we attempt to strip timing decorations and parse JSON fragments.
+
+    Examples:
+        >>> _normalise_transcript_payload({"text": "[0.0s -> 1.2s] Hello"})["text"]
+        'Hello'
+        >>> _normalise_transcript_payload({"text": '{"segments": [{"text": "Hi"}]}'})["text"]
+        'Hi'
+    """
+
+    if not isinstance(payload, Mapping):
+        return payload
+
+    segments = payload.get("segments")
+    text_from_segments = _segments_to_text(segments)
+
+    if text_from_segments:
+        return _replace_text(payload, text_from_segments)
+
+    text_field = payload.get("text")
+    cleaned_text = _coerce_transcript_text(text_field)
+
+    if cleaned_text is None:
+        return payload
+
+    return _replace_text(payload, cleaned_text)
+
+
+def _replace_text(payload: Mapping[str, Any], text: str) -> Mapping[str, Any]:
+    if isinstance(payload, MutableMapping):
+        payload = dict(payload)
+    else:
+        payload = dict(payload)
+    payload["text"] = text.strip()
+    return payload
+
+
+def _segments_to_text(segments: Any) -> str | None:
+    if not isinstance(segments, Sequence) or isinstance(segments, (str, bytes, bytearray)):
+        return None
+    pieces: list[str] = []
+    for segment in segments:
+        if not isinstance(segment, Mapping):
+            continue
+        raw = segment.get("text")
+        cleaned = _coerce_transcript_text(raw)
+        if cleaned:
+            pieces.append(cleaned)
+    if not pieces:
+        return None
+    return " ".join(piece for piece in pieces if piece).strip()
+
+
+def _coerce_transcript_text(value: Any) -> str | None:
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return ""
+        if text.startswith("{") or text.startswith("["):
+            parsed = _parse_transcript_json(text)
+            if parsed:
+                return parsed
+        lines = [line.strip() for line in text.replace("\r\n", "\n").split("\n")]
+        cleaned_lines = []
+        for line in lines:
+            if not line:
+                continue
+            cleaned_lines.append(_TIMING_PREFIX_PATTERN.sub("", line))
+        joined = " ".join(cleaned_lines).strip()
+        return joined or text
+    if isinstance(value, Mapping):
+        return _segments_to_text(value.get("segments")) or _coerce_transcript_text(value.get("text"))
+    return None
+
+
+def _parse_transcript_json(text: str) -> str | None:
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, Mapping):
+        segments_text = _segments_to_text(parsed.get("segments"))
+        if segments_text:
+            return segments_text
+        nested = parsed.get("text")
+        coerced = _coerce_transcript_text(nested)
+        if coerced is not None:
+            return coerced
+    if isinstance(parsed, Sequence):
+        return _segments_to_text(parsed)
+    return None
 
 
 def _dict_to_ros_message(msg_class, message_type: str, values: Mapping[str, Any]):
@@ -205,6 +311,8 @@ class TopicSessionManager:
         if access in {"ro", "rw"}:
             def _callback(message):
                 data = _normalise_json_types(message_to_ordered_dict(message))
+                if message_type == _TRANSCRIPT_MESSAGE_TYPE:
+                    data = _normalise_transcript_payload(data)
                 if self._loop.is_closed():  # pragma: no cover - defensive
                     return
                 try:

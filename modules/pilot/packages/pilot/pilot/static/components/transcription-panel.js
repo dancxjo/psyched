@@ -27,8 +27,63 @@ class PilotTranscriptionPanel extends LitElement {
     return [];
   }
 
+  _resolveText(entry) {
+    if (!entry) {
+      return '';
+    }
+    const segments = Array.isArray(entry.segments) ? entry.segments : null;
+    if (segments?.length) {
+      const pieces = segments
+        .map((segment) => (typeof segment?.text === 'string' ? segment.text.trim() : ''))
+        .filter((piece) => piece.length > 0);
+      if (pieces.length) {
+        return pieces.join(' ');
+      }
+    }
+    const text = entry.text;
+    if (typeof text === 'string') {
+      const trimmed = text.trim();
+      if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            const parts = parsed
+              .map((segment) => (typeof segment?.text === 'string' ? segment.text.trim() : ''))
+              .filter((piece) => piece.length > 0);
+            if (parts.length) {
+              return parts.join(' ');
+            }
+          } else if (parsed && typeof parsed === 'object') {
+            const nestedSegments = Array.isArray(parsed.segments) ? parsed.segments : [];
+            if (nestedSegments.length) {
+              const parts = nestedSegments
+                .map((segment) => (typeof segment?.text === 'string' ? segment.text.trim() : ''))
+                .filter((piece) => piece.length > 0);
+              if (parts.length) {
+                return parts.join(' ');
+              }
+            }
+            if (typeof parsed.text === 'string' && parsed.text.trim()) {
+              return parsed.text.trim();
+            }
+          }
+        } catch (error) {
+          // If parsing fails we fall back to the raw string below.
+        }
+      }
+      return trimmed;
+    }
+    if (typeof text === 'number') {
+      return String(text);
+    }
+    if (text && typeof text === 'object') {
+      return JSON.stringify(text);
+    }
+    return JSON.stringify(entry ?? {});
+  }
+
   _renderEntry(entry, index) {
-    const text = typeof entry?.text === 'string' ? entry.text : JSON.stringify(entry ?? {});
+    const text = this._resolveText(entry);
     const speaker = entry?.speaker ? String(entry.speaker) : 'unknown';
     const confidence = typeof entry?.confidence === 'number' ? entry.confidence : null;
 
