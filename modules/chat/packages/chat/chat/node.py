@@ -10,6 +10,31 @@ import json
 from types import ModuleType
 from typing import Any, Dict, List, Optional, Mapping
 
+
+def _normalise_ollama_host(raw_host: str) -> str:
+    """Return a canonical Ollama host string suitable for HTTP requests.
+
+    The fallback accepts configuration from ROS parameters or ``OLLAMA_HOST``.
+    Operators frequently export ``OLLAMA_HOST=forebrain.local:11434`` (without a
+    scheme or trailing slash). The chat node should tolerate those variants so
+    that failing back to Ollama Just Works™, even when the websocket LLM is
+    offline. Examples::
+
+        >>> _normalise_ollama_host('http://forebrain.local:11434/')
+        'http://forebrain.local:11434'
+        >>> _normalise_ollama_host('forebrain.local:11434')
+        'http://forebrain.local:11434'
+
+    An empty string disables the fallback and is preserved as-is.
+    """
+
+    host = (raw_host or "").strip()
+    if not host:
+        return ""
+    if not host.startswith(("http://", "https://")):
+        host = f"http://{host}"
+    return host.rstrip("/")
+
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -70,8 +95,13 @@ class ChatNode(Node):
         self.declare_parameter('transcript_topic', '/audio/transcription')
         # Default to a tiny local Ollama model so the fallback stays responsive.
         # The remote speech stack supplies the heavier GPT-OSS:20B model.
+        default_ollama_host = _normalise_ollama_host(
+            os.getenv('CHAT_OLLAMA_HOST', os.getenv('OLLAMA_HOST', 'http://forebrain.local:11434'))
+        )
+        if not default_ollama_host:
+            default_ollama_host = 'http://forebrain.local:11434'
         self.declare_parameter('model', 'tinyllama')
-        self.declare_parameter('ollama_host', 'http://forebrain.local:11434')
+        self.declare_parameter('ollama_host', default_ollama_host)
         self.declare_parameter('max_history', 20)
         self.declare_parameter('llm_ws_url', default_llm_url)
         self.declare_parameter('llm_ws_connect_timeout', 1.0)
@@ -86,7 +116,10 @@ class ChatNode(Node):
         self.voice_topic: str = self.get_parameter('voice_topic').get_parameter_value().string_value
         self.transcript_topic: str = self.get_parameter('transcript_topic').get_parameter_value().string_value
         self.model: str = self.get_parameter('model').get_parameter_value().string_value
-        self.ollama_host: str = self.get_parameter('ollama_host').get_parameter_value().string_value.rstrip('/')
+        resolved_ollama_host = self.get_parameter('ollama_host').get_parameter_value().string_value
+        self.ollama_host: str = _normalise_ollama_host(resolved_ollama_host)
+        if not self.ollama_host:
+            self.get_logger().warning('Ollama host not configured; fallback disabled.')
         self.max_history: int = int(self.get_parameter('max_history').get_parameter_value().integer_value or 20)
         self._llm_ws_url: str = (
             self.get_parameter('llm_ws_url').get_parameter_value().string_value.strip()
@@ -259,6 +292,8 @@ class ChatNode(Node):
         return None
 
     def _ensure_ollama(self) -> None:
+        if not self.ollama_host:
+            return
         if self._http is None:
             if not self._http_missing_warned:
                 self.get_logger().warning(
@@ -329,6 +364,8 @@ class ChatNode(Node):
         return self._ollama_chat(messages)
 
     def _check_ollama(self) -> bool:
+        if not self.ollama_host:
+            return False
         try:
             with self._http_lock:
                 r = self._http.get(self.ollama_host + '/api/tags', timeout=1)
@@ -337,6 +374,9 @@ class ChatNode(Node):
             return False
 
     def _ollama_chat(self, messages: List[Dict[str, str]]) -> str:
+        if not self.ollama_host:
+            self.get_logger().warning('Ollama host not configured; skipping fallback response')
+            return ''
         if self._http is None:
             if not self._http_missing_warned:
                 self.get_logger().warning(

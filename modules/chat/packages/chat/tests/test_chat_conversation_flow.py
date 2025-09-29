@@ -218,7 +218,7 @@ from psyched_msgs.msg import Message as MsgMessage  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
 from chat.llm_client import ForebrainUnavailable  # noqa: E402
-from chat.node import ChatNode  # noqa: E402
+from chat.node import ChatNode, _normalise_ollama_host  # noqa: E402
 
 
 def test_chatnode_adds_assistant_message_after_voice_done() -> None:
@@ -318,6 +318,25 @@ def test_chatnode_defaults_to_tinyllama_for_ollama_fallback() -> None:
     node = ChatNode()
 
     assert node.model == "tinyllama"
+
+
+def test_chatnode_honors_ollama_host_environment_variable() -> None:
+    original = os.environ.get("OLLAMA_HOST")
+    try:
+        os.environ["OLLAMA_HOST"] = "http://nearby-host:9999/"
+        node = ChatNode()
+        assert node.ollama_host == "http://nearby-host:9999"
+    finally:
+        if original is None:
+            os.environ.pop("OLLAMA_HOST", None)
+        else:
+            os.environ["OLLAMA_HOST"] = original
+
+
+def test_normalise_ollama_host_variants() -> None:
+    assert _normalise_ollama_host("forebrain.local:11434/") == "http://forebrain.local:11434"
+    assert _normalise_ollama_host("https://forebrain.local:11434/") == "https://forebrain.local:11434"
+    assert _normalise_ollama_host("") == ""
 
 
 def test_chatnode_appends_pilot_summary_to_system_prompt() -> None:
