@@ -8,6 +8,7 @@ import json
 import math
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -65,6 +66,31 @@ class TranscriptionResult:
     confidence: float
     segments: List[SegmentData]
     words: List[WordData]
+
+
+_PLACEHOLDER_TRANSCRIPT_RE = re.compile(r"^samples=\d+(?:\.\d+)?\s+sum=-?\d+(?:\.\d+)?$")
+
+
+def _looks_like_placeholder_transcript(text: str) -> bool:
+    """Return ``True`` when the recognised text matches known placeholder patterns."""
+
+    candidate = text.strip().lower()
+    if not candidate:
+        return False
+    return _PLACEHOLDER_TRANSCRIPT_RE.match(candidate) is not None
+
+
+def _result_is_usable(result: Optional[TranscriptionResult]) -> bool:
+    """Determine whether a transcription result contains meaningful text."""
+
+    if result is None:
+        return False
+    text = str(getattr(result, 'text', '') or '').strip()
+    if not text:
+        return False
+    if _looks_like_placeholder_transcript(text):
+        return False
+    return True
 
 
 def _coerce_float(value: object, default: float = 0.0) -> float:
@@ -612,16 +638,28 @@ class ChainedTranscriptionBackend:
 
     def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         now = self._monotonic()
+        primary_result: Optional[TranscriptionResult] = None
         if self._primary is not None and now >= self._next_retry:
             try:
-                return self._primary.transcribe(pcm_bytes, sample_rate)
+                candidate = self._primary.transcribe(pcm_bytes, sample_rate)
+                if _result_is_usable(candidate):
+                    return candidate
+                primary_result = candidate
+                self._next_retry = now + self._cooldown
+                if self._logger:
+                    reason = 'blank transcript' if candidate and not str(candidate.text or '').strip() else 'placeholder transcript'
+                    if candidate is None:
+                        reason = 'empty transcript'
+                    self._logger.warning(
+                        f'Remote ASR returned {reason}; falling back to onboard decoder.'
+                    )
             except Exception as exc:
                 if self._logger:
                     self._logger.warning(f'Remote ASR failed: {exc}. Falling back to onboard decoder.')
                 self._next_retry = now + self._cooldown
 
         if self._fallback is None:
-            return None
+            return primary_result
 
         try:
             return self._fallback.transcribe(pcm_bytes, sample_rate)

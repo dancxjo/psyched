@@ -185,6 +185,43 @@ def test_chained_backend_skips_primary_during_cooldown():
     assert len(fallback.calls) == 2
 
 
+def test_chained_backend_retries_fallback_when_primary_returns_placeholder():
+    primary = DummyBackend(
+        TranscriptionResult(text="samples=4 sum=6", confidence=0.3, segments=[], words=[])
+    )
+    fallback = DummyBackend(
+        TranscriptionResult(text="resolved text", confidence=0.8, segments=[], words=[])
+    )
+
+    fake_now = [42.0]
+
+    def fake_monotonic() -> float:
+        return fake_now[0]
+
+    backend = ChainedTranscriptionBackend(
+        primary=primary,
+        fallback=fallback,
+        cooldown_seconds=30.0,
+        logger=None,
+        monotonic=fake_monotonic,
+    )
+
+    first = backend.transcribe(b"pcm", 16000)
+
+    assert isinstance(first, TranscriptionResult)
+    assert first.text == "resolved text"
+    assert len(primary.calls) == 1
+    assert len(fallback.calls) == 1
+
+    fake_now[0] += 5.0
+    second = backend.transcribe(b"pcm-more", 16000)
+
+    assert isinstance(second, TranscriptionResult)
+    assert second.text == "resolved text"
+    assert len(primary.calls) == 1, "primary should be skipped while placeholder cooldown active"
+    assert len(fallback.calls) == 2
+
+
 def test_load_websocket_dependencies_prefers_asyncio_namespace():
     class DummyConnectionClosed(Exception):
         """Sentinel exception used to emulate websockets' ConnectionClosed."""

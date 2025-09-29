@@ -2,9 +2,11 @@ mod pipeline;
 mod server;
 
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use anyhow::Context;
+use asr_core::recognizer::{SpeechRecognizer, WhisperRecognizer};
 use pipeline::{MidPipeline, MidPipelineConfig};
 use tokio::net::TcpListener;
 use tracing::{info, Level};
@@ -13,7 +15,8 @@ use tracing::{info, Level};
 async fn main() -> anyhow::Result<()> {
     setup_tracing();
     let listen = listen_addr()?;
-    let pipeline = Arc::new(MidPipeline::new(MidPipelineConfig::default()));
+    let recognizer = build_recognizer()?;
+    let pipeline = Arc::new(MidPipeline::new(MidPipelineConfig::default(), recognizer));
     let app = server::router(pipeline);
     info!(%listen, "starting asr-mid websocket server");
     let listener = TcpListener::bind(listen)
@@ -46,4 +49,21 @@ fn listen_addr() -> anyhow::Result<SocketAddr> {
     listen
         .parse()
         .with_context(|| format!("invalid listen address '{listen}'"))
+}
+
+fn build_recognizer() -> anyhow::Result<Arc<dyn SpeechRecognizer>> {
+    let model_path =
+        std::env::var("ASR_MODEL_PATH").unwrap_or_else(|_| "/models/ggml-tiny.en.bin".to_string());
+    let language = std::env::var("ASR_LANGUAGE")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let threads = std::env::var("ASR_THREADS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .and_then(NonZeroUsize::new)
+        .or_else(|| std::thread::available_parallelism().ok())
+        .unwrap_or_else(|| NonZeroUsize::new(1).expect("non-zero threads"));
+    let recognizer = WhisperRecognizer::new(model_path, language, threads)?;
+    Ok(Arc::new(recognizer))
 }

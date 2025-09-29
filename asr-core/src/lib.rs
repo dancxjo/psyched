@@ -9,6 +9,7 @@ pub mod audio;
 pub mod errors;
 pub mod messages;
 pub mod pipeline;
+pub mod recognizer;
 
 #[cfg(test)]
 mod tests {

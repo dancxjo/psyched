@@ -99,8 +99,26 @@ Deno.test("testSpeechStack orchestrates compose and websocket checks", async () 
       { type: "text", text: JSON.stringify({ event: "end", num_samples: 4, duration_s: 0.00025 }) },
     ]),
     asr: new StubSocket([
-      { type: "text", text: JSON.stringify({ type: "partial", stream_id: "psh-test", text: "samples=4 sum=6" }) },
-      { type: "text", text: JSON.stringify({ type: "final", stream_id: "psh-test", text: "samples=4 sum=6", chunk_id: "chunk-1" }) },
+      {
+        type: "text",
+        text: JSON.stringify({
+          type: "partial",
+          stream_id: "psh-test",
+          text: "decoded 4",
+          segments: [{ t0: 0, t1: 0.25, text: "decoded 4" }],
+        }),
+      },
+      {
+        type: "text",
+        text: JSON.stringify({
+          type: "final",
+          stream_id: "psh-test",
+          text: "decoded 4",
+          chunk_id: "chunk-1",
+          segments: [{ t0: 0, t1: 0.25, text: "decoded 4" }],
+          confidence: 0.8,
+        }),
+      },
     ]),
   };
 
