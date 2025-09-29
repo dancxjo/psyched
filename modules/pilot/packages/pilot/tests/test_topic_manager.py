@@ -7,7 +7,12 @@ from dataclasses import dataclass
 import pytest
 
 from pilot.qos import QosConfig
-from pilot.topic_manager import TopicSession, TopicSessionManager, _normalise_json_types
+from pilot.topic_manager import (
+    TopicSession,
+    TopicSessionManager,
+    _normalise_json_types,
+    _normalise_transcript_payload,
+)
 
 
 @dataclass
@@ -104,3 +109,38 @@ def test_normalise_json_types_replaces_invalid_numbers():
     assert result["nested"][0] is None
     assert result["nested"][1]["inner"] is None
     assert result["nested"][2] == "ok"
+
+
+def test_transcript_normaliser_joins_segment_text():
+    payload = {
+        "text": "ignored",
+        "segments": [
+            {"text": "[0.0s -> 1.2s] Hello"},
+            {"text": "[1.2s -> 2.4s] world"},
+        ],
+    }
+
+    result = _normalise_transcript_payload(payload)
+
+    assert result["text"] == "Hello world"
+    assert payload["text"] == "ignored"
+
+
+def test_transcript_normaliser_parses_json_text():
+    payload = {
+        "text": '{"segments": [{"text": "Hi"}, {"text": "there"}]}'
+    }
+
+    result = _normalise_transcript_payload(payload)
+
+    assert result["text"] == "Hi there"
+
+
+def test_transcript_normaliser_strips_timing_lines():
+    payload = {
+        "text": "[00:00.000 -> 00:02.000] Greetings\n[00:02.000 -> 00:04.000] traveller"
+    }
+
+    result = _normalise_transcript_payload(payload)
+
+    assert result["text"] == "Greetings traveller"
