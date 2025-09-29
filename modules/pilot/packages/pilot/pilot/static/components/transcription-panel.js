@@ -161,17 +161,40 @@ class PilotTranscriptionPanel extends LitElement {
     return JSON.stringify(entry ?? {});
   }
 
+  _tierInfo() {
+    const topicName = this.record?.topic?.topic || this.record?.topic?.name || '';
+    if (!topicName) {
+      return null;
+    }
+    const parts = topicName.split('/').filter(Boolean);
+    if (!parts.length) {
+      return null;
+    }
+    const suffix = parts[parts.length - 1];
+    if (suffix === 'short') {
+      return { label: 'Short tier', description: 'Low-latency transcript from the fast model' };
+    }
+    if (suffix === 'medium' || suffix === 'transcription') {
+      return { label: 'Medium tier', description: 'Balanced transcript with timing metadata' };
+    }
+    if (suffix === 'long') {
+      return { label: 'Long tier', description: 'High-quality transcript over the accumulated context' };
+    }
+    return null;
+  }
+
   _renderEntry(entry, index) {
     const text = this._resolveText(entry);
     const speaker = entry?.speaker ? String(entry.speaker) : 'unknown';
     const confidence = typeof entry?.confidence === 'number' ? entry.confidence : null;
     const segments = Array.isArray(entry?.segments) ? entry.segments : [];
     const words = Array.isArray(entry?.words) ? entry.words : [];
+    const label = index + 1;
 
     return html`
       <li class="transcription-entry">
         <header>
-          <span class="badge index">#${index + 1}</span>
+          <span class="badge index">#${label}</span>
           <span class="badge speaker">${speaker}</span>
           ${confidence !== null
             ? html`<span class="badge confidence">${Math.round(confidence * 100)}%</span>`
@@ -192,10 +215,18 @@ class PilotTranscriptionPanel extends LitElement {
     if (!entries.length) {
       return html`<div class="transcription-empty">Awaiting transcripts…</div>`;
     }
+    const tier = this._tierInfo();
+    const ordered = entries.slice().reverse();
     return html`
       <div class="transcription-panel">
+        ${tier
+          ? html`<div class="panel-summary">
+              <span class="badge tier">${tier.label}</span>
+              ${tier.description ? html`<span class="tier-detail">${tier.description}</span>` : nothing}
+            </div>`
+          : nothing}
         <ol>
-          ${entries.map((entry, index) => this._renderEntry(entry, index))}
+          ${ordered.map((entry, index) => this._renderEntry(entry, index))}
         </ol>
       </div>
     `;
