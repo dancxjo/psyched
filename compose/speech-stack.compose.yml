@@ -20,8 +20,15 @@ services:
       COQUI_TOS_AGREED: "1"
       # Run on CPU by default; set to 'true' to try enabling CUDA (requires CUDA-enabled PyTorch in the image)
       TTS_USE_CUDA: "false"
+      # Directory inside the container with locally-provided TTS assets
+      TTS_MODEL_DIR: "/models"
     ports:
       - "5002:5002"
+    volumes:
+      - type: bind
+        source: ../tools/tts_websocket/models
+        target: /models
+        read_only: false
 
   llm:
     build:

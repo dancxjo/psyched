@@ -138,6 +138,32 @@ class TTSSynthesizer:
         # acceptance of the Coqui Public Model License (CPML). To run automatically
         # set the environment variable COQUI_TOS_AGREED=1 in your container/runtime.
         model_name = os.environ.get("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2")
+        # If the operator has mounted a local models directory into the
+        # container (e.g. via docker-compose), prefer a matching local model
+        # path to avoid pulling from the Coqui registry. The download scripts
+        # in this repo place TTS assets under tools/tts_websocket/models which
+        # is mounted as /models in the compose stack.
+        tts_model_dir = os.environ.get("TTS_MODEL_DIR")
+        if tts_model_dir:
+            try:
+                # Model name format examples:
+                #  - tts_models/multilingual/multi-dataset/xtts_v2
+                #  - tts_models/en/ljspeech/tacotron2-DDC
+                model_key = model_name.split("/")[-1]
+                candidate = os.path.join(tts_model_dir, model_key)
+                if os.path.exists(candidate):
+                    _LOGGER.info("Found local model directory for '%s' at '%s'", model_key, candidate)
+                    model_name = candidate
+                else:
+                    # also allow a file named like <model_key>.zip or .pth
+                    for ext in (".zip", ".pth", ""):
+                        candidate_file = os.path.join(tts_model_dir, model_key + ext)
+                        if os.path.exists(candidate_file):
+                            _LOGGER.info("Found local model file for '%s' at '%s'", model_key, candidate_file)
+                            model_name = candidate_file
+                            break
+            except Exception:  # pragma: no cover - defensive; fall back to registry name
+                _LOGGER.exception("Error while checking local TTS_MODEL_DIR; will try registry model name '%s'", model_name)
         if os.environ.get("COQUI_TOS_AGREED", "0") not in {"1", "true", "yes", "on"}:
             _LOGGER.warning(
                 "COQUI_TOS_AGREED is not set. Loading CPML-licensed models like XTTS-v2 will pause and require interactive acceptance unless COQUI_TOS_AGREED=1 is set."
