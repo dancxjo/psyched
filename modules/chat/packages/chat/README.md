@@ -10,7 +10,7 @@ The node always records the spoken payload, even if the acknowledgement text dif
 - `voice_topic` (default `/voice`)
 - `transcript_topic` (default `/audio/transcription`)
 - `model` (env `CHAT_MODEL`, default `llama3.2`)
-- `ollama_host` (env `OLLAMA_HOST`, default `http://forebrain.local:11434`)
+- `ollama_host` (env `CHAT_OLLAMA_HOST` or `OLLAMA_HOST`, default `http://forebrain.local:11434`)
 - `max_history` (int, default 20)
 
 ## Run
