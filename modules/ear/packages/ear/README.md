@@ -17,9 +17,15 @@ pipeline:
 - `segment_accumulator_node` – listens for completed segments and stitches them
   into a longer rolling context on `/audio/speech_accumulating` for the remote
   ASR tiers.
-- `transcriber_node` – batches `/audio/speech_segment` messages and invokes a
-  Whisper-compatible backend (prefers [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper)) to publish
-  recognized utterances on `/audio/transcription`.
+- `transcriber_short_node` – consumes the latest partial buffers on
+  `/audio/speech_segment_accumulating` and emits quick, timing-free transcripts
+  on `/audio/transcript/short`.
+- `transcriber_medium_node` – processes completed segments from
+  `/audio/speech_segment` and publishes detailed transcripts to both
+  `/audio/transcript/medium` and `/audio/transcription`.
+- `transcriber_long_node` – decodes the rolling context assembled on
+  `/audio/speech_accumulating` and emits archival transcripts on
+  `/audio/transcript/long`.
 
 ## Parameters
 
@@ -61,22 +67,35 @@ pipeline:
 - `max_segments` (int, default `8`): Hard limit on the number of segments to
   retain before resetting.
 
-### `transcriber_node`
-- `segment_topic` (string, default `/audio/speech_segment`): Source for voiced
-  audio.
-- `transcript_topic` (string, default `/audio/transcription`): Destination for
-  `psyched_msgs/msg/Transcript` outputs.
-- `speaker` (string, default `user`): Speaker label to annotate each
-  transcription.
-- `segment_sample_rate` (int, default `16000`): Sample rate of the incoming
-  segments.
-- `model` (string, default `base`): Whisper model variant to load.
-- `device` (string, default `cpu`): Execution device passed to the backend.
-- `compute_type` (string, default `int8`): Precision hint forwarded to
-  `faster-whisper`.
-- `language` (string, optional): Force a language code instead of automatic
-  detection.
-- `beam_size` (int, default `5`): Beam search width for decoding.
+### `transcriber_short_node`
+- `segment_accumulating_topic` (string, default
+  `/audio/speech_segment_accumulating`): Source for partial speech buffers.
+- `transcript_short_topic` (string, default `/audio/transcript/short`): Target
+  topic for the short-form transcript stream.
+- `fast_remote_ws_url` (string, default `ws://forebrain.local:8082/ws`): Fast
+  remote ASR service endpoint.
+- `speaker`, `segment_sample_rate`, `model`, `device`, `compute_type`,
+  `language`, `beam_size`, `remote_connect_timeout`, and
+  `remote_response_timeout`: Shared across all transcriber tiers.
+
+### `transcriber_medium_node`
+- `segment_topic` (string, default `/audio/speech_segment`): Completed segment
+  source.
+- `transcript_medium_topic` (string, default `/audio/transcript/medium`):
+  Primary medium-tier transcript topic.
+- `transcript_topic` (string, default `/audio/transcription`): Compatibility
+  topic that mirrors the medium-tier output for downstream consumers that still
+  expect a single stream.
+- `medium_remote_ws_url` (string, default `ws://forebrain.local:8083/ws`):
+  Medium-tier remote ASR endpoint.
+
+### `transcriber_long_node`
+- `speech_accumulating_topic` (string, default `/audio/speech_accumulating`):
+  Rolling context assembled by `segment_accumulator_node`.
+- `transcript_long_topic` (string, default `/audio/transcript/long`): Target for
+  the archival transcript stream.
+- `long_remote_ws_url` (string, default `ws://forebrain.local:8084/ws`):
+  Long-form remote ASR endpoint.
 
 ## Launch
 
@@ -89,15 +108,17 @@ ros2 launch ear ear.launch.py \
     silence_threshold:=500.0
 ```
 
-Add the transcriber to an existing launch description or run it manually:
+Add the transcribers to an existing launch description or run them manually:
 
 ```bash
-ros2 run ear transcriber_node --ros-args -p model:=small -p device:=cpu
+ros2 run ear transcriber_short_node --ros-args -p model:=small -p device:=cpu
+ros2 run ear transcriber_medium_node --ros-args -p model:=small -p device:=cpu
+ros2 run ear transcriber_long_node --ros-args -p model:=small -p device:=cpu
 ```
 
 ## Notes
 
-- The transcriber selects `faster-whisper` when available and falls back to the
+- Each transcriber selects `faster-whisper` when available and falls back to the
   reference `whisper` package. Install at least one of them to enable
   transcription.
 - All topics use little-endian PCM16 audio, matching the VAD output format.

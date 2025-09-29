@@ -35,6 +35,8 @@ TRANSCRIBER_DEFAULTS = {
     "transcriber_fast_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_medium_remote_ws_url": "ws://forebrain.local:8083/ws",
     "transcriber_long_remote_ws_url": "ws://forebrain.local:8084/ws",
+    "transcriber_remote_connect_timeout": "0.6",
+    "transcriber_remote_response_timeout": "1.5",
     "transcriber_speaker": "user",
     "transcriber_segment_sample_rate": "16000",
     "transcriber_model": "small",
@@ -147,34 +149,110 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    transcriber_node = Node(
+    transcriber_short = Node(
         package="ear",
-        executable="transcriber_node",
-        name="transcriber",
+        executable="transcriber_short_node",
+        name="transcriber_short",
         parameters=[
             {
-                "segment_topic": LaunchConfiguration("transcriber_segment_topic"),
                 "segment_accumulating_topic": LaunchConfiguration("transcriber_segment_accum_topic"),
-                "speech_accumulating_topic": LaunchConfiguration("transcriber_speech_accum_topic"),
-                "transcript_topic": LaunchConfiguration("transcriber_transcript_topic"),
                 "transcript_short_topic": LaunchConfiguration("transcriber_transcript_short_topic"),
-                "transcript_medium_topic": LaunchConfiguration("transcriber_transcript_medium_topic"),
-                "transcript_long_topic": LaunchConfiguration("transcriber_transcript_long_topic"),
                 "fast_remote_ws_url": LaunchConfiguration("transcriber_fast_remote_ws_url"),
-                "medium_remote_ws_url": LaunchConfiguration("transcriber_medium_remote_ws_url"),
-                "long_remote_ws_url": LaunchConfiguration("transcriber_long_remote_ws_url"),
                 "speaker": LaunchConfiguration("transcriber_speaker"),
-                "segment_sample_rate": LaunchConfiguration("transcriber_segment_sample_rate"),
+                "segment_sample_rate": ParameterValue(
+                    LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
+                ),
                 "model": LaunchConfiguration("transcriber_model"),
                 "device": LaunchConfiguration("transcriber_device"),
                 "compute_type": LaunchConfiguration("transcriber_compute_type"),
                 "language": LaunchConfiguration("transcriber_language"),
-                "beam_size": LaunchConfiguration("transcriber_beam_size"),
+                "beam_size": ParameterValue(
+                    LaunchConfiguration("transcriber_beam_size"), value_type=int
+                ),
+                "remote_connect_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_connect_timeout"), value_type=float
+                ),
+                "remote_response_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_response_timeout"), value_type=float
+                ),
+            }
+        ],
+        output="screen",
+    )
+
+    transcriber_medium = Node(
+        package="ear",
+        executable="transcriber_medium_node",
+        name="transcriber_medium",
+        parameters=[
+            {
+                "segment_topic": LaunchConfiguration("transcriber_segment_topic"),
+                "transcript_medium_topic": LaunchConfiguration("transcriber_transcript_medium_topic"),
+                "transcript_topic": LaunchConfiguration("transcriber_transcript_topic"),
+                "medium_remote_ws_url": LaunchConfiguration("transcriber_medium_remote_ws_url"),
+                "speaker": LaunchConfiguration("transcriber_speaker"),
+                "segment_sample_rate": ParameterValue(
+                    LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
+                ),
+                "model": LaunchConfiguration("transcriber_model"),
+                "device": LaunchConfiguration("transcriber_device"),
+                "compute_type": LaunchConfiguration("transcriber_compute_type"),
+                "language": LaunchConfiguration("transcriber_language"),
+                "beam_size": ParameterValue(
+                    LaunchConfiguration("transcriber_beam_size"), value_type=int
+                ),
+                "remote_connect_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_connect_timeout"), value_type=float
+                ),
+                "remote_response_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_response_timeout"), value_type=float
+                ),
+            }
+        ],
+        output="screen",
+    )
+
+    transcriber_long = Node(
+        package="ear",
+        executable="transcriber_long_node",
+        name="transcriber_long",
+        parameters=[
+            {
+                "speech_accumulating_topic": LaunchConfiguration("transcriber_speech_accum_topic"),
+                "transcript_long_topic": LaunchConfiguration("transcriber_transcript_long_topic"),
+                "long_remote_ws_url": LaunchConfiguration("transcriber_long_remote_ws_url"),
+                "speaker": LaunchConfiguration("transcriber_speaker"),
+                "segment_sample_rate": ParameterValue(
+                    LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
+                ),
+                "model": LaunchConfiguration("transcriber_model"),
+                "device": LaunchConfiguration("transcriber_device"),
+                "compute_type": LaunchConfiguration("transcriber_compute_type"),
+                "language": LaunchConfiguration("transcriber_language"),
+                "beam_size": ParameterValue(
+                    LaunchConfiguration("transcriber_beam_size"), value_type=int
+                ),
+                "remote_connect_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_connect_timeout"), value_type=float
+                ),
+                "remote_response_timeout": ParameterValue(
+                    LaunchConfiguration("transcriber_remote_response_timeout"), value_type=float
+                ),
             }
         ],
         output="screen",
     )
 
     return LaunchDescription(
-        args + [ear_node, silence_node, vad_node, segmenter_node, accumulator_node, transcriber_node]
+        args
+        + [
+            ear_node,
+            silence_node,
+            vad_node,
+            segmenter_node,
+            accumulator_node,
+            transcriber_short,
+            transcriber_medium,
+            transcriber_long,
+        ]
     )

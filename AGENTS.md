@@ -169,7 +169,10 @@ Visit `http://<cerebellum-host>:8080`.
 
 ## Module Notes
 
-* `ear`: PyAudio microphone capture, VAD, Whisper transcription.
+* `ear`: PyAudio microphone capture, VAD, Whisper transcription. Tiered
+  transcribers now live in `transcriber_*_node.py` and share helpers under
+  `transcription_*.py`; prefer extending those utilities instead of creating
+  bespoke threading logic.
 * `voice`: espeak-ng or Coqui/Piper via WebSocket, with playback.
 * `chat`: connects transcription → Ollama LLM → voice. Exposes a `pilot_base_url`
   parameter that should point at the running Pilot backend so the chat system
