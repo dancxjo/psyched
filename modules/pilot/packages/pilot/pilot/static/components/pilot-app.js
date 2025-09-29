@@ -318,10 +318,10 @@ class PilotApp extends LitElement {
     }
     return html`
 			<section class="command-log" id="command-log" ?data-collapsed=${this.logCollapsed}>
-        <div class="command-log-header">
+        <div class="command-log-header" style="display: flex; align-items: center; justify-content: space-between;">
           <h2>Command Log</h2>
           <button
-            class="log-toggle"
+            class="log-toggle control-button"
             aria-pressed=${this.logCollapsed}
             aria-label=${this.logCollapsed ? 'Expand command log' : 'Collapse command log'}
             @click=${() => { this.logCollapsed = !this.logCollapsed; }}
