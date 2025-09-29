@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """PyAudio-based microphone capture node.
 
-Captures raw PCM audio from microphone using PyAudio and publishes as ROS2 topics.
-Fast, reliable, and simple.
+Captures raw PCM audio from the configured device and publishes it verbatim on
+``/audio/raw``.  Silence monitoring now lives in :mod:`ear.silence_node`, keeping
+this node focused solely on the microphone interface.
 """
-import struct
-import threading
 from typing import Optional
 
 import pyaudio
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import ByteMultiArray, UInt32
-
-from .silence_tracker import SilenceTracker
+from std_msgs.msg import ByteMultiArray
 
 
 class PyAudioEarNode(Node):
@@ -27,26 +24,21 @@ class PyAudioEarNode(Node):
         self.chunk_size = self.declare_parameter('chunk_size', 1024).get_parameter_value().integer_value
         self.format = pyaudio.paInt16  # 16-bit PCM
         
-        # Publishers
+        # Publisher for raw PCM payloads
         self.audio_pub = self.create_publisher(ByteMultiArray, '/audio/raw', 10)
-        self.silence_ms_pub = self.create_publisher(UInt32, '/audio/silence_ms', 10)
         
         # Audio processing
         self.audio = pyaudio.PyAudio()
         self.stream: Optional[pyaudio.Stream] = None
         self.running = False
         
-        # Silence detection (RMS-based)
-        self.silence_threshold = self.declare_parameter('silence_threshold', 500.0).get_parameter_value().double_value
-        self.silence_tracker = SilenceTracker(self.silence_threshold)
-        # Autophony tracking (dummy, replace with real logic if available)
-        self.autophony_ms = 0
-        
         # Start audio capture
         self.start_capture()
-        
-        self.get_logger().info(f'PyAudio Ear started: device={self.device_id}, rate={self.sample_rate}Hz, '
-                              f'channels={self.channels}, chunk={self.chunk_size}, threshold={self.silence_threshold}')
+
+        self.get_logger().info(
+            f'PyAudio Ear started: device={self.device_id}, rate={self.sample_rate}Hz, '
+            f'channels={self.channels}, chunk={self.chunk_size}'
+        )
 
     def start_capture(self) -> None:
         """Start PyAudio stream."""
@@ -82,36 +74,7 @@ class PyAudioEarNode(Node):
         audio_msg.data = in_data  # in_data is already bytes
         self.audio_pub.publish(audio_msg)
         
-        # Calculate RMS for silence detection
-        rms = self.calculate_rms(in_data)
-        # Optionally update autophony_ms here if you have logic for it
-        # For now, assume self.autophony_ms is updated elsewhere or is 0
-        self.update_silence_detector(rms, self.autophony_ms)
-        
         return (in_data, pyaudio.paContinue)
-
-    def calculate_rms(self, audio_data: bytes) -> float:
-        """Calculate RMS (Root Mean Square) of audio data."""
-        # Convert bytes to 16-bit integers
-        samples = struct.unpack(f'<{len(audio_data)//2}h', audio_data)
-        
-        # Calculate RMS
-        if len(samples) == 0:
-            return 0.0
-        
-        sum_of_squares = sum(sample * sample for sample in samples)
-        mean_square = sum_of_squares / len(samples)
-        rms = mean_square ** 0.5
-        
-        return rms
-
-    def update_silence_detector(self, rms: float, autophony_ms: int = 0) -> None:
-        """Update silence detection based on RMS value and autophony_ms."""
-        silence_ms = self.silence_tracker.update(rms=rms, autophony_ms=autophony_ms)
-        # Publish silence duration
-        silence_msg = UInt32()
-        silence_msg.data = silence_ms
-        self.silence_ms_pub.publish(silence_msg)
 
     def shutdown(self) -> None:
         """Clean shutdown of audio stream."""
