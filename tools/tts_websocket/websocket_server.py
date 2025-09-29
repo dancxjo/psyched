@@ -134,10 +134,7 @@ class TTSSynthesizer:
     def from_env(cls) -> "TTSSynthesizer":
         """Initialise the synthesiser using environment configuration."""
 
-        # Default to XTTS-v2 (multi-lingual, voice cloning). This model requires
-        # acceptance of the Coqui Public Model License (CPML). To run automatically
-        # set the environment variable COQUI_TOS_AGREED=1 in your container/runtime.
-        model_name = os.environ.get("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2")
+        model_name = os.environ.get("TTS_MODEL", "tts_models/en/vctk/vits")
         # If the operator has mounted a local models directory into the
         # container (e.g. via docker-compose), prefer a matching local model
         # path to avoid pulling from the Coqui registry. The download scripts
@@ -164,10 +161,6 @@ class TTSSynthesizer:
                             break
             except Exception:  # pragma: no cover - defensive; fall back to registry name
                 _LOGGER.exception("Error while checking local TTS_MODEL_DIR; will try registry model name '%s'", model_name)
-        if os.environ.get("COQUI_TOS_AGREED", "0") not in {"1", "true", "yes", "on"}:
-            _LOGGER.warning(
-                "COQUI_TOS_AGREED is not set. Loading CPML-licensed models like XTTS-v2 will pause and require interactive acceptance unless COQUI_TOS_AGREED=1 is set."
-            )
         use_cuda = os.environ.get("TTS_USE_CUDA", "true").lower() in {"1", "true", "yes", "on"}
 
         from TTS.api import TTS as CoquiTTS  # Imported lazily to keep tests lightweight.
@@ -181,9 +174,9 @@ class TTSSynthesizer:
                 model_name,
                 exc,
             )
-            # Fallback to a commonly-available English TTS model that does not
-            # require special license acceptance. This lets the websocket
-            # service start on systems where multilingual XTTS-v2 isn't present.
+            # Fallback to a commonly-available English TTS model so the
+            # websocket service can still boot even if the configured model is
+            # missing from the local image or volume.
             fallback = os.environ.get("TTS_FALLBACK_MODEL", "tts_models/en/ljspeech/tacotron2-DDC")
             _LOGGER.info("Attempting fallback Coqui model '%s' (CUDA=%s)", fallback, use_cuda)
             tts = CoquiTTS(model_name=fallback, progress_bar=False, gpu=use_cuda)
@@ -196,22 +189,12 @@ class TTSSynthesizer:
         if request.speaker:
             kwargs["speaker"] = request.speaker
 
-        language = request.language
-        if language:
-            kwargs["language"] = language
+        # Intentionally avoid forwarding the language hint to the TTS backend.
+        # Single-language models such as our default VITS voice will raise when
+        # given a language override, so we keep the request value for logging but
+        # omit it from Coqui's invocation.
 
-        try:
-            wav = self.tts.tts(text=request.text, **kwargs)
-        except ValueError as exc:
-            if language and "Model is not multi-lingual" in str(exc):
-                _LOGGER.warning(
-                    "Model rejected language '%s'; retrying synthesis without language hint.",
-                    language,
-                )
-                kwargs.pop("language", None)
-                wav = self.tts.tts(text=request.text, **kwargs)
-            else:
-                raise
+        wav = self.tts.tts(text=request.text, **kwargs)
         audio = np.asarray(wav, dtype=np.float32).reshape(-1)
         return audio
 

@@ -15,9 +15,7 @@ services:
     image: psyched-tts-websocket:local
     restart: unless-stopped
     environment:
-      # Use XTTS-v2 as the default Coqui model (CPML acceptance required)
-      TTS_MODEL: "tts_models/multilingual/multi-dataset/xtts_v2"
-      COQUI_TOS_AGREED: "1"
+      TTS_MODEL: "tts_models/en/vctk/vits"
       # Run on CPU by default; set to 'true' to try enabling CUDA (requires CUDA-enabled PyTorch in the image)
       TTS_USE_CUDA: "false"
       # Directory inside the container with locally-provided TTS assets

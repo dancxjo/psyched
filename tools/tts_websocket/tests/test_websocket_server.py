@@ -82,4 +82,6 @@ def test_tts_synthesizer_wraps_tts_api_and_flattens_audio() -> None:
     assert wrapper.sample_rate == 22050
     assert audio.dtype == np.float32
     assert audio.tolist() == [0.0, 0.25, -0.25]
-    assert wrapper.tts.arguments == ("Speed matters", "p330", "en")
+    # We intentionally omit the language hint when calling the Coqui API so
+    # mono-lingual models keep working even if clients send a language.
+    assert wrapper.tts.arguments == ("Speed matters", "p330", None)
