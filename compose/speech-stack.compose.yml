@@ -6,7 +6,7 @@ services:
     image: psyched-asr-fast:local
     restart: unless-stopped
     ports:
-      FOREBRAIN_LLM__MODEL__PATH: "/data/gpt-oss-20b-Q5_K_M.gguf"
+      - "8082:8082"
 
   tts:
     build:

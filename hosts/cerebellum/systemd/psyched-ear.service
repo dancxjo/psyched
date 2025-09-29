@@ -9,6 +9,7 @@ Type=simple
 WorkingDirectory=/home/pete/psyched
 Environment=HOST=cerebellum
 Environment=PSH_MODULE_NAME=ear
+Environment=EAR_ASR_WS_URL=ws://forebrain.local:8082/ws
 ExecStart=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/ear/ear.launch.sh
 ExecStop=/home/pete/psyched/tools/systemd_entrypoint.sh /home/pete/psyched/modules/ear/ear.shutdown.sh
 Restart=on-failure
