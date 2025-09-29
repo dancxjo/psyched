@@ -14,6 +14,7 @@ import './diagnostics-panel.js';
 import './event-log.js';
 import './voice-control-bridge.js';
 import './voice-volume.js';
+import './topic-state.js';
 
 const MAX_PREVIEW = 1200;
 
@@ -231,11 +232,7 @@ class PilotTopicWidget extends LitElement {
   render() {
     return html`
       <div class="topic-widget">
-        <div class="topic-state">
-          <span class=${`state ${this.status}`}>${this.status}</span>
-          ${this.record?.paused ? html`<span class="paused">Paused</span>` : nothing}
-          ${this.record?.error ? html`<span class="error">${this.record.error}</span>` : nothing}
-        </div>
+        <pilot-topic-state .record=${this.record}></pilot-topic-state>
         ${this.renderContent()}
       </div>
     `;

@@ -1,6 +1,6 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { subscribeBattery, batteryLabel, updateBatteryMetric } from '../utils/battery.js';
+import { subscribeBattery, batteryLabel, batteryUnit, chargingStateLabel, updateBatteryMetric } from '../utils/battery.js';
 import { extractNumeric } from '../utils/metrics.js';
 
 function formatNumber(value, unit = '') {
@@ -68,35 +68,51 @@ class PilotBatteryPanel extends LitElement {
     return Math.max(0, Math.min(1, numeric)) * 100;
   }
 
-  renderMetric(topic, unit = '') {
-    const value = this._metrics[topic];
-    if (topic === '/battery/charging_state') {
-      const label = value?.label ?? 'Unknown';
-      return html`<li><span class="label">${batteryLabel(topic)}</span><span>${label}</span></li>`;
-    }
-    const numeric = extractNumeric(value, Number.NaN);
-    return html`<li>
-      <span class="label">${batteryLabel(topic)}</span>
-      <span>${formatNumber(numeric, unit)}</span>
-    </li>`;
-  }
-
   render() {
     const percent = Math.round(this.percent);
+    const charge = this._metrics['/battery/charge'];
+    const capacity = this._metrics['/battery/capacity'];
+    const state = this._metrics['/battery/charging_state'];
+    const stats = [
+      {
+        topic: '/battery/charging_state',
+        label: batteryLabel('/battery/charging_state'),
+        value: state?.label ?? chargingStateLabel(state),
+      },
+      {
+        topic: '/battery/charge',
+        label: batteryLabel('/battery/charge'),
+        value: formatNumber(extractNumeric(charge, Number.NaN), batteryUnit('/battery/charge')),
+      },
+      {
+        topic: '/battery/capacity',
+        label: batteryLabel('/battery/capacity'),
+        value: formatNumber(extractNumeric(capacity, Number.NaN), batteryUnit('/battery/capacity')),
+      },
+    ];
     return html`
       <div class="battery-panel" data-state=${this.record?.state ?? 'idle'}>
         <div class="battery-gauge">
           <div class="battery-fill" style=${`width: ${percent}%`}></div>
           <span class="battery-percent">${Number.isFinite(percent) ? `${percent}%` : '—'}</span>
         </div>
-        <ul class="battery-metrics">
-          ${this.renderMetric('/battery/voltage', 'V')}
-          ${this.renderMetric('/battery/current', 'A')}
-          ${this.renderMetric('/battery/charge', 'mAh')}
-          ${this.renderMetric('/battery/capacity', 'mAh')}
-          ${this.renderMetric('/battery/temperature', '°C')}
-          ${this.renderMetric('/battery/charging_state')}
-        </ul>
+        <div class="battery-overview">
+          <dl class="battery-stats">
+            ${stats
+              .filter((entry) => typeof entry.value === 'string' && entry.value.trim())
+              .map(
+                (entry) => html`
+                  <div class="battery-stat" data-topic=${entry.topic}>
+                    <dt>${entry.label}</dt>
+                    <dd>${entry.value}</dd>
+                  </div>
+                `,
+              )}
+          </dl>
+          <p class="battery-note">
+            Detailed telemetry now lives with each battery topic — expand them for per-sensor views.
+          </p>
+        </div>
       </div>
     `;
   }
