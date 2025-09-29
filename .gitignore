@@ -60,3 +60,4 @@ models/
 !asr-service/models/.gitkeep
 .speech_setup_complete
 asr-fast/models/ggml-tiny.en.bin
+asr-fast/models/tiny.en-ct2.zip
