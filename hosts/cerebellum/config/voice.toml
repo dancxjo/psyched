@@ -3,7 +3,7 @@
 
 [launch.arguments]
 
-ping_enabled = true
+ping_enabled = false
 # Use the forebrain host for websocket TTS (resolves on local network)
 tts_ws_url = "ws://forebrain.local:5002/tts"
 
