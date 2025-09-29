@@ -78,6 +78,14 @@ def transcript_to_message(transcript: Transcript) -> Optional[MsgMessage]:
         msg.confidence = float(getattr(transcript, 'confidence', 0.0) or 0.0)
     except Exception:
         msg.confidence = 0.0
+    try:
+        msg.segments = list(getattr(transcript, 'segments', []) or [])
+    except Exception:
+        msg.segments = []  # type: ignore[assignment]
+    try:
+        msg.words = list(getattr(transcript, 'words', []) or [])
+    except Exception:
+        msg.words = []  # type: ignore[assignment]
     return msg
 
 

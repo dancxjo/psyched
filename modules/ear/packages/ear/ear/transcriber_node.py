@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Type
+from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Type
 
 from .audio_utils import coerce_pcm_bytes
 
@@ -27,13 +27,163 @@ try:  # Optional ROS imports for runtime usage.
     from rclpy.node import Node
     from std_msgs.msg import ByteMultiArray
 
-    from psyched_msgs.msg import Transcript
+    from psyched_msgs.msg import Transcript, TranscriptSegment as MsgTranscriptSegment, TranscriptWord as MsgTranscriptWord
 except ImportError:  # pragma: no cover - unit tests stub out ROS.
     rclpy = None  # type: ignore
     Node = object  # type: ignore
     SingleThreadedExecutor = object  # type: ignore
     ByteMultiArray = object  # type: ignore
     Transcript = object  # type: ignore
+    MsgTranscriptSegment = object  # type: ignore
+    MsgTranscriptWord = object  # type: ignore
+
+
+@dataclass(frozen=True)
+class SegmentData:
+    """Lightweight representation of a transcript segment."""
+
+    start: float
+    end: float
+    text: str
+    speaker: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class WordData:
+    """Word-level timing metadata."""
+
+    start: float
+    end: float
+    text: str
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    """Bundle of recognised text and its alignment metadata."""
+
+    text: str
+    confidence: float
+    segments: List[SegmentData]
+    words: List[WordData]
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _word_from_mapping(word: Mapping[str, object], fallback_start: float, fallback_end: float) -> Optional[WordData]:
+    text_raw = word.get('text', word.get('word', ''))
+    text = str(text_raw or '').strip()
+    if not text:
+        return None
+    start = _coerce_float(word.get('start', word.get('t0')), fallback_start)
+    end = _coerce_float(word.get('end', word.get('t1')), start)
+    if end < start:
+        end = start
+    return WordData(start=start, end=end, text=text)
+
+
+def _words_from_sequence(words: object, fallback_start: float, fallback_end: float) -> List[WordData]:
+    if not isinstance(words, Sequence) or isinstance(words, (str, bytes, bytearray)):
+        return []
+    result: List[WordData] = []
+    last_end = fallback_start
+    for word in words:
+        if isinstance(word, Mapping):
+            candidate = _word_from_mapping(word, last_end, fallback_end)
+        else:
+            text = str(getattr(word, 'word', getattr(word, 'text', '')) or '').strip()
+            if not text:
+                continue
+            start = _coerce_float(getattr(word, 'start', getattr(word, 't0', last_end)), last_end)
+            end = _coerce_float(getattr(word, 'end', getattr(word, 't1', start)), start)
+            if end < start:
+                end = start
+            candidate = WordData(start=start, end=end, text=text)
+        if candidate is None:
+            continue
+        result.append(candidate)
+        last_end = max(last_end, candidate.end)
+    return result
+
+
+def _segments_and_words_from_payload(
+    raw_segments: object,
+    *,
+    default_speaker: Optional[str] = None,
+) -> Tuple[List[SegmentData], List[WordData]]:
+    if not isinstance(raw_segments, Sequence) or isinstance(raw_segments, (str, bytes, bytearray)):
+        return [], []
+
+    segments: List[SegmentData] = []
+    words: List[WordData] = []
+    for entry in raw_segments:
+        if isinstance(entry, Mapping):
+            text_raw = entry.get('text', '')
+            speaker_raw = entry.get('speaker', default_speaker)
+            start = _coerce_float(entry.get('start', entry.get('t0')), 0.0)
+            end = _coerce_float(entry.get('end', entry.get('t1')), start)
+            if end < start:
+                end = start
+            text = str(text_raw or '').strip()
+            speaker = str(speaker_raw) if speaker_raw else None
+            segments.append(SegmentData(start=start, end=end, text=text, speaker=speaker))
+            words.extend(_words_from_sequence(entry.get('words'), start, end))
+        else:
+            text = str(getattr(entry, 'text', '') or '').strip()
+            start = _coerce_float(getattr(entry, 'start', getattr(entry, 't0', 0.0)), 0.0)
+            end = _coerce_float(getattr(entry, 'end', getattr(entry, 't1', start)), start)
+            if end < start:
+                end = start
+            speaker_attr = getattr(entry, 'speaker', default_speaker)
+            speaker = str(speaker_attr) if speaker_attr else None
+            segments.append(SegmentData(start=start, end=end, text=text, speaker=speaker))
+            words.extend(_words_from_sequence(getattr(entry, 'words', []), start, end))
+    return segments, words
+
+
+def _coalesce_words(text: str, segments: Sequence[SegmentData], words: Sequence[WordData]) -> List[WordData]:
+    collected = [WordData(start=w.start, end=w.end, text=w.text) for w in words if w.text]
+    if collected:
+        return collected
+    return _approximate_words_from_segments(text, segments)
+
+
+def _approximate_words_from_segments(text: str, segments: Sequence[SegmentData]) -> List[WordData]:
+    words: List[WordData] = []
+    for segment in segments:
+        tokens = [token for token in segment.text.split() if token]
+        if not tokens:
+            continue
+        duration = max(0.0, segment.end - segment.start)
+        if duration <= 0.0:
+            cursor = segment.start
+            for token in tokens:
+                words.append(WordData(start=cursor, end=cursor, text=token))
+            continue
+        step = duration / max(1, len(tokens))
+        cursor = segment.start
+        for index, token in enumerate(tokens):
+            start = cursor
+            if index == len(tokens) - 1:
+                end = segment.end
+            else:
+                end = min(segment.end, cursor + step)
+            words.append(WordData(start=start, end=end, text=token))
+            cursor = end
+    if words:
+        return words
+    tokens = [token for token in text.split() if token]
+    cursor = 0.0
+    for token in tokens:
+        start = cursor
+        end = cursor + 0.4
+        words.append(WordData(start=start, end=end, text=token))
+        cursor = end
+    return words
 
 def _load_websocket_dependencies(
     import_module: Callable[[str], object] = importlib.import_module,
@@ -115,7 +265,7 @@ class FasterWhisperBackend:
         self._language = language or None
         self._beam_size = max(1, int(beam_size))
 
-    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         if np is None:
             raise RuntimeError('numpy is required for transcription')
         audio = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
@@ -127,13 +277,23 @@ class FasterWhisperBackend:
             audio,
             beam_size=self._beam_size,
             language=self._language,
+            word_timestamps=True,
         )
         texts = []
         confidences = []
+        segments_out: List[SegmentData] = []
+        words_out: List[WordData] = []
         for segment in segments:
             text = segment.text.strip()
             if text:
                 texts.append(text)
+            start = _coerce_float(getattr(segment, 'start', getattr(segment, 't0', 0.0)), 0.0)
+            end = _coerce_float(getattr(segment, 'end', getattr(segment, 't1', start)), start)
+            if end < start:
+                end = start
+            if text:
+                segments_out.append(SegmentData(start=start, end=end, text=text, speaker=None))
+            words_out.extend(_words_from_sequence(getattr(segment, 'words', []), start, end))
             if segment.avg_logprob is not None:
                 confidences.append(_logprob_to_confidence(segment.avg_logprob))
             elif segment.no_speech_prob is not None:
@@ -144,7 +304,14 @@ class FasterWhisperBackend:
             confidence = float(sum(confidences) / len(confidences))
         else:
             confidence = float(info.language_probability or 0.0)
-        return " ".join(texts).strip(), confidence
+        text_out = " ".join(texts).strip()
+        words_coalesced = _coalesce_words(text_out, segments_out, words_out)
+        return TranscriptionResult(
+            text=text_out,
+            confidence=confidence,
+            segments=segments_out,
+            words=words_coalesced,
+        )
 
 
 class WhisperBackend:
@@ -157,7 +324,7 @@ class WhisperBackend:
         self._language = language or None
         self._use_fp16 = device != 'cpu'
 
-    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         if np is None:
             raise RuntimeError('numpy is required for transcription')
         audio = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
@@ -165,7 +332,12 @@ class WhisperBackend:
             return None
         audio = audio / 32768.0
 
-        result = self._model.transcribe(audio, language=self._language, fp16=self._use_fp16)
+        result = self._model.transcribe(
+            audio,
+            language=self._language,
+            fp16=self._use_fp16,
+            word_timestamps=True,
+        )
         text = str(result.get('text', '')).strip()
         if not text:
             return None
@@ -174,7 +346,15 @@ class WhisperBackend:
             confidence = _logprob_to_confidence(float(avg_logprob))
         else:
             confidence = float(result.get('language_probability') or 0.0)
-        return text, confidence
+        segments_raw = result.get('segments')
+        segments_out, words_out = _segments_and_words_from_payload(segments_raw)
+        words_coalesced = _coalesce_words(text, segments_out, words_out)
+        return TranscriptionResult(
+            text=text,
+            confidence=confidence,
+            segments=segments_out,
+            words=words_coalesced,
+        )
 
 
 def load_backend(
@@ -215,7 +395,7 @@ class TranscriptionWorker:
     backend: Optional[object]
     sample_rate: int
     speaker: str
-    on_result: Callable[[str, float], None]
+    on_result: Callable[[TranscriptionResult], None]
     logger: Optional[object] = None
 
     def handle_segment(self, pcm_bytes: bytes) -> None:
@@ -231,13 +411,32 @@ class TranscriptionWorker:
             if self.logger:
                 self.logger.error(f'ASR backend raised an error: {exc}')
             return
-        if not result:
+        normalised = self._normalise_result(result)
+        if normalised is None:
             return
-        text, confidence = result
-        text = (text or '').strip()
-        if not text:
-            return
-        self.on_result(text, float(confidence))
+        self.on_result(normalised)
+
+    def _normalise_result(self, result: object) -> Optional[TranscriptionResult]:
+        if result is None:
+            return None
+        if isinstance(result, TranscriptionResult):
+            if not result.text.strip():
+                return None
+            return result
+        if isinstance(result, tuple) and len(result) >= 2:
+            text = str(result[0] or '').strip()
+            if not text:
+                return None
+            try:
+                confidence = float(result[1])
+            except Exception:
+                confidence = 0.0
+            segment = SegmentData(start=0.0, end=0.0, text=text, speaker=str(self.speaker))
+            words = _approximate_words_from_segments(text, [segment])
+            return TranscriptionResult(text=text, confidence=confidence, segments=[segment], words=words)
+        if self.logger:
+            self.logger.warning(f'Unexpected transcription result type: {type(result)!r}')
+        return None
 
 
 class RemoteAsrBackend:
@@ -266,7 +465,7 @@ class RemoteAsrBackend:
         self._connector = connector or websocket_connect
         self._monotonic = monotonic or time.monotonic
 
-    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         if not pcm_bytes:
             return None
         payload_b64 = base64.b64encode(pcm_bytes).decode('ascii')
@@ -294,7 +493,7 @@ class RemoteAsrBackend:
         chunk_id: str,
         payload_b64: str,
         sample_rate: int,
-    ) -> Optional[Tuple[str, float]]:
+    ) -> Optional[TranscriptionResult]:
         connector = self._connector
         if connector is None:
             raise RuntimeError('websocket connector unavailable')
@@ -335,6 +534,8 @@ class RemoteAsrBackend:
                 deadline = self._monotonic() + self._response_timeout
                 text: Optional[str] = None
                 confidence: Optional[float] = None
+                segments_payload: object = None
+                words_payload: object = None
 
                 while True:
                     remaining = deadline - self._monotonic()
@@ -360,6 +561,8 @@ class RemoteAsrBackend:
                         text = str(payload.get('text', '')).strip()
                         conf = payload.get('confidence')
                         confidence = float(conf) if conf is not None else confidence
+                        segments_payload = payload.get('segments')
+                        words_payload = payload.get('words')
                         break
                     if msg_type == 'partial' and not text:
                         text = str(payload.get('text', '')).strip()
@@ -372,7 +575,16 @@ class RemoteAsrBackend:
 
                 if not text:
                     return None
-                return text, float(confidence or 0.0)
+                segments_out, words_out = _segments_and_words_from_payload(segments_payload)
+                if words_payload:
+                    words_out.extend(_words_from_sequence(words_payload, 0.0, 0.0))
+                words_coalesced = _coalesce_words(text, segments_out, words_out)
+                return TranscriptionResult(
+                    text=text,
+                    confidence=float(confidence or 0.0),
+                    segments=segments_out,
+                    words=words_coalesced,
+                )
         except RuntimeError:
             raise
         except Exception as exc:
@@ -398,7 +610,7 @@ class ChainedTranscriptionBackend:
         self._monotonic = monotonic or time.monotonic
         self._next_retry = 0.0
 
-    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[Tuple[str, float]]:
+    def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         now = self._monotonic()
         if self._primary is not None and now >= self._next_retry:
             try:
@@ -552,11 +764,36 @@ class TranscriberNode(Node):  # type: ignore[misc]
             finally:
                 self._queue.task_done()
 
-    def _publish_transcript(self, text: str, confidence: float) -> None:  # pragma: no cover - requires ROS
+    def _publish_transcript(self, result: TranscriptionResult) -> None:  # pragma: no cover - requires ROS
         msg = Transcript()
-        msg.text = text
-        msg.speaker = str(self._speaker_label)
-        msg.confidence = float(confidence)
+        msg.text = result.text
+        segment_speaker = next((segment.speaker for segment in result.segments if segment.speaker), None)
+        msg.speaker = segment_speaker or str(self._speaker_label)
+        msg.confidence = float(result.confidence)
+
+        try:
+            msg.segments = []
+            for segment in result.segments:
+                seg_msg = MsgTranscriptSegment()
+                seg_msg.start = float(segment.start)
+                seg_msg.end = float(segment.end)
+                seg_msg.text = segment.text
+                seg_msg.speaker = segment.speaker or str(self._speaker_label)
+                msg.segments.append(seg_msg)
+        except Exception:
+            msg.segments = []  # type: ignore[assignment]
+
+        try:
+            msg.words = []
+            for word in result.words:
+                word_msg = MsgTranscriptWord()
+                word_msg.start = float(word.start)
+                word_msg.end = float(word.end)
+                word_msg.text = word.text
+                msg.words.append(word_msg)
+        except Exception:
+            msg.words = []  # type: ignore[assignment]
+
         self.transcript_pub.publish(msg)
 
 
@@ -577,6 +814,9 @@ def main(args=None):  # pragma: no cover - requires ROS
 __all__ = [
     'TranscriberNode',
     'TranscriptionWorker',
+    'TranscriptionResult',
+    'SegmentData',
+    'WordData',
     'load_backend',
     'FasterWhisperBackend',
     'WhisperBackend',

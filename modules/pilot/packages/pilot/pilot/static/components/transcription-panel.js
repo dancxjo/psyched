@@ -27,6 +27,85 @@ class PilotTranscriptionPanel extends LitElement {
     return [];
   }
 
+  _formatSeconds(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return '–';
+    }
+    return `${number.toFixed(2)}s`;
+  }
+
+  _renderSegments(segments) {
+    if (!Array.isArray(segments) || !segments.length) {
+      return nothing;
+    }
+    return html`
+      <table class="timing-table segments">
+        <caption>Segments</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col">Speaker</th>
+            <th scope="col">Text</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${segments.map((segment, index) => {
+            const start = this._formatSeconds(segment?.start);
+            const end = this._formatSeconds(segment?.end);
+            const speaker = segment?.speaker ? String(segment.speaker) : '—';
+            const text = typeof segment?.text === 'string' ? segment.text.trim() : '';
+            return html`
+              <tr>
+                <th scope="row">${index + 1}</th>
+                <td>${start}</td>
+                <td>${end}</td>
+                <td>${speaker}</td>
+                <td>${text}</td>
+              </tr>
+            `;
+          })}
+        </tbody>
+      </table>
+    `;
+  }
+
+  _renderWords(words) {
+    if (!Array.isArray(words) || !words.length) {
+      return nothing;
+    }
+    return html`
+      <table class="timing-table words">
+        <caption>Word timings</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col">Word</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${words.map((word, index) => {
+            const start = this._formatSeconds(word?.start);
+            const end = this._formatSeconds(word?.end);
+            const text = typeof word?.text === 'string' ? word.text : JSON.stringify(word ?? {});
+            return html`
+              <tr>
+                <th scope="row">${index + 1}</th>
+                <td>${start}</td>
+                <td>${end}</td>
+                <td>${text}</td>
+              </tr>
+            `;
+          })}
+        </tbody>
+      </table>
+    `;
+  }
+
   _resolveText(entry) {
     if (!entry) {
       return '';
@@ -86,6 +165,8 @@ class PilotTranscriptionPanel extends LitElement {
     const text = this._resolveText(entry);
     const speaker = entry?.speaker ? String(entry.speaker) : 'unknown';
     const confidence = typeof entry?.confidence === 'number' ? entry.confidence : null;
+    const segments = Array.isArray(entry?.segments) ? entry.segments : [];
+    const words = Array.isArray(entry?.words) ? entry.words : [];
 
     return html`
       <li class="transcription-entry">
@@ -97,6 +178,8 @@ class PilotTranscriptionPanel extends LitElement {
             : nothing}
         </header>
         <p>${text}</p>
+        ${this._renderSegments(segments)}
+        ${this._renderWords(words)}
       </li>
     `;
   }

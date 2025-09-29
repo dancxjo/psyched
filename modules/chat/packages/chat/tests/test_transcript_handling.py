@@ -11,9 +11,74 @@ if "rclpy" not in sys.modules:
     fake_node_mod = types.ModuleType("rclpy.node")
     fake_exec_mod = types.ModuleType("rclpy.executors")
 
+    class _FakeParameterValue:
+        def __init__(self, value: object) -> None:
+            self.string_value = str(value)
+            try:
+                self.integer_value = int(value)  # type: ignore[arg-type]
+            except Exception:
+                self.integer_value = 0
+            try:
+                self.double_value = float(value)  # type: ignore[arg-type]
+            except Exception:
+                self.double_value = 0.0
+            self.bool_value = bool(value)
+
+    class _FakeParameter:
+        def __init__(self, value: object) -> None:
+            self._value = value
+
+        def get_parameter_value(self) -> _FakeParameterValue:
+            return _FakeParameterValue(self._value)
+
+        @property
+        def value(self) -> object:
+            return self._value
+
+    class _FakePublisher:
+        def __init__(self, topic: str) -> None:
+            self.topic = topic
+            self.messages: list[object] = []
+
+        def publish(self, message: object) -> None:
+            self.messages.append(message)
+
+    class _FakeSubscription:
+        def __init__(self, topic: str, callback) -> None:  # noqa: ANN001
+            self.topic = topic
+            self.callback = callback
+
     class _Node:
         def __init__(self, *_args, **_kwargs) -> None:
-            pass
+            self._parameters: dict[str, _FakeParameter] = {}
+            self.publishers: list[_FakePublisher] = []
+            self.subscriptions: list[_FakeSubscription] = []
+            self._logger = types.SimpleNamespace(
+                info=lambda *_args, **_kwargs: None,
+                warning=lambda *_args, **_kwargs: None,
+                error=lambda *_args, **_kwargs: None,
+            )
+
+        def declare_parameter(self, name: str, default_value) -> _FakeParameter:  # noqa: ANN001
+            parameter = _FakeParameter(default_value)
+            self._parameters[name] = parameter
+            return parameter
+
+        def get_parameter(self, name: str) -> _FakeParameter:
+            return self._parameters[name]
+
+        def create_publisher(self, _msg_type, topic: str, _qos):  # noqa: ANN001
+            publisher = _FakePublisher(topic)
+            self.publishers.append(publisher)
+            return publisher
+
+        def create_subscription(self, _msg_type, topic: str, callback, _qos):  # noqa: ANN001
+            subscription = _FakeSubscription(topic, callback)
+            self.subscriptions.append(subscription)
+            return subscription
+
+        def get_logger(self):
+            return self._logger
 
     class _Executor:
         def __init__(self, *_args, **_kwargs) -> None:
@@ -57,12 +122,16 @@ if "psyched_msgs" not in sys.modules:
             self.content = ""
             self.speaker = ""
             self.confidence = 0.0
+            self.segments = []
+            self.words = []
 
     class _Transcript:
         def __init__(self) -> None:
             self.text = ""
             self.speaker = ""
             self.confidence = 0.0
+            self.segments = []
+            self.words = []
 
     fake_pkg_msg.Message = _Message
     fake_pkg_msg.Transcript = _Transcript
@@ -81,6 +150,11 @@ def test_transcript_to_message_includes_metadata():
     transcript.text = 'Hello robot'
     transcript.speaker = 'operator'
     transcript.confidence = 0.72
+    transcript.segments = [{'start': 0.0, 'end': 1.2, 'text': 'Hello robot', 'speaker': 'operator'}]
+    transcript.words = [
+        {'start': 0.0, 'end': 0.6, 'text': 'Hello'},
+        {'start': 0.6, 'end': 1.2, 'text': 'robot'},
+    ]
 
     msg = transcript_to_message(transcript)
 
@@ -89,6 +163,8 @@ def test_transcript_to_message_includes_metadata():
     assert msg.content == 'Hello robot'
     assert msg.speaker == 'operator'
     assert msg.confidence == pytest.approx(0.72)
+    assert msg.segments == transcript.segments
+    assert msg.words == transcript.words
 
 
 def test_transcript_to_message_requires_text():

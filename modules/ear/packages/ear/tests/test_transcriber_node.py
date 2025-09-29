@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-from typing import List, Tuple
+from typing import List
 
 package_root = str(Path(__file__).resolve().parents[1])
 if package_root not in sys.path:
@@ -9,13 +9,16 @@ if package_root not in sys.path:
 import types
 from ear.transcriber_node import (
     ChainedTranscriptionBackend,
+    SegmentData,
+    TranscriptionResult,
     TranscriptionWorker,
+    WordData,
     _load_websocket_dependencies,
 )
 
 
 class DummyBackend:
-    def __init__(self, response: Tuple[str, float]):
+    def __init__(self, response: TranscriptionResult | None):
         self.response = response
         self.calls: List[bytes] = []
 
@@ -25,7 +28,7 @@ class DummyBackend:
 
 
 class DummyFailingBackend(DummyBackend):
-    def __init__(self, response: Tuple[str, float]):
+    def __init__(self, response: TranscriptionResult | None):
         super().__init__(response)
         self.failures = 0
 
@@ -37,35 +40,59 @@ class DummyFailingBackend(DummyBackend):
 
 class DummyBackendNoText(DummyBackend):
     def __init__(self):
-        super().__init__(response=(" ", 0.0))
+        result = TranscriptionResult(
+            text=" ",
+            confidence=0.0,
+            segments=[],
+            words=[],
+        )
+        super().__init__(response=result)
 
 
 def test_transcriber_worker_emits_transcript():
-    backend = DummyBackend(("hello world", 0.8))
-    captured: List[Tuple[str, float]] = []
+    backend = DummyBackend(
+        TranscriptionResult(
+            text="hello world",
+            confidence=0.8,
+            segments=[SegmentData(start=0.0, end=1.0, text="hello world", speaker="user")],
+            words=[
+                WordData(start=0.0, end=0.5, text="hello"),
+                WordData(start=0.5, end=1.0, text="world"),
+            ],
+        )
+    )
+    captured: List[TranscriptionResult] = []
 
     worker = TranscriptionWorker(
         backend=backend,
         sample_rate=16000,
         speaker='user',
-        on_result=lambda text, conf: captured.append((text, conf)),
+        on_result=captured.append,
     )
 
     worker.handle_segment(b'\x00\x01')
 
     assert backend.calls, "Backend should receive audio bytes"
-    assert captured == [("hello world", 0.8)]
+    assert len(captured) == 1
+    result = captured[0]
+    assert result.text == "hello world"
+    assert result.confidence == 0.8
+    assert result.segments == [SegmentData(start=0.0, end=1.0, text="hello world", speaker="user")]
+    assert result.words == [
+        WordData(start=0.0, end=0.5, text="hello"),
+        WordData(start=0.5, end=1.0, text="world"),
+    ]
 
 
 def test_transcriber_worker_skips_blank_transcripts():
     backend = DummyBackendNoText()
-    captured: List[Tuple[str, float]] = []
+    captured: List[TranscriptionResult] = []
 
     worker = TranscriptionWorker(
         backend=backend,
         sample_rate=16000,
         speaker='user',
-        on_result=lambda text, conf: captured.append((text, conf)),
+        on_result=captured.append,
     )
 
     worker.handle_segment(b'\x00\x00')
@@ -74,34 +101,60 @@ def test_transcriber_worker_skips_blank_transcripts():
 
 
 def test_chained_backend_prefers_primary():
-    primary = DummyBackend(("primary", 0.9))
-    fallback = DummyBackend(("fallback", 0.5))
+    primary = DummyBackend(
+        TranscriptionResult(
+            text="primary",
+            confidence=0.9,
+            segments=[],
+            words=[],
+        )
+    )
+    fallback = DummyBackend(
+        TranscriptionResult(
+            text="fallback",
+            confidence=0.5,
+            segments=[],
+            words=[],
+        )
+    )
 
     backend = ChainedTranscriptionBackend(primary=primary, fallback=fallback, cooldown_seconds=1.0, logger=None)
 
     result = backend.transcribe(b"pcm", 16000)
 
-    assert result == ("primary", 0.9)
+    assert isinstance(result, TranscriptionResult)
+    assert result.text == "primary"
+    assert result.confidence == 0.9
     assert len(primary.calls) == 1
     assert not fallback.calls
 
 
 def test_chained_backend_falls_back_after_failure():
-    primary = DummyFailingBackend(("primary", 0.9))
-    fallback = DummyBackend(("fallback", 0.5))
+    primary = DummyFailingBackend(
+        TranscriptionResult(text="primary", confidence=0.9, segments=[], words=[])
+    )
+    fallback = DummyBackend(
+        TranscriptionResult(text="fallback", confidence=0.5, segments=[], words=[])
+    )
 
     backend = ChainedTranscriptionBackend(primary=primary, fallback=fallback, cooldown_seconds=10.0, logger=None)
 
     result = backend.transcribe(b"pcm", 16000)
 
-    assert result == ("fallback", 0.5)
+    assert isinstance(result, TranscriptionResult)
+    assert result.text == "fallback"
+    assert result.confidence == 0.5
     assert len(fallback.calls) == 1
     assert primary.failures == 1
 
 
 def test_chained_backend_skips_primary_during_cooldown():
-    primary = DummyFailingBackend(("primary", 0.9))
-    fallback = DummyBackend(("fallback", 0.5))
+    primary = DummyFailingBackend(
+        TranscriptionResult(text="primary", confidence=0.9, segments=[], words=[])
+    )
+    fallback = DummyBackend(
+        TranscriptionResult(text="fallback", confidence=0.5, segments=[], words=[])
+    )
 
     fake_now = [100.0]
 
@@ -117,13 +170,17 @@ def test_chained_backend_skips_primary_during_cooldown():
     )
 
     first = backend.transcribe(b"pcm", 16000)
-    assert first == ("fallback", 0.5)
+    assert isinstance(first, TranscriptionResult)
+    assert first.text == "fallback"
+    assert first.confidence == 0.5
     assert primary.failures == 1
 
     fake_now[0] += 5.0
     second = backend.transcribe(b"pcm2", 16000)
 
-    assert second == ("fallback", 0.5)
+    assert isinstance(second, TranscriptionResult)
+    assert second.text == "fallback"
+    assert second.confidence == 0.5
     assert primary.failures == 1, "primary should not be retried during cooldown"
     assert len(fallback.calls) == 2
 

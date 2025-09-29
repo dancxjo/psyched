@@ -12,6 +12,8 @@ find_package(std_msgs REQUIRED)
 set(msg_files
   "msg/HostHealth.msg"
   "msg/Message.msg"
+  "msg/TranscriptSegment.msg"
+  "msg/TranscriptWord.msg"
   "msg/Transcript.msg"
 )
 

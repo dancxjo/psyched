@@ -28,6 +28,85 @@ class PilotConversationConsole extends LitElement {
     return this;
   }
 
+  _formatSeconds(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return '–';
+    }
+    return `${number.toFixed(2)}s`;
+  }
+
+  _renderSegments(segments) {
+    if (!Array.isArray(segments) || !segments.length) {
+      return nothing;
+    }
+    return html`
+      <table class="timing-table segments">
+        <caption>Segments</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col">Speaker</th>
+            <th scope="col">Text</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${segments.map((segment, index) => {
+            const start = this._formatSeconds(segment?.start);
+            const end = this._formatSeconds(segment?.end);
+            const speaker = segment?.speaker ? String(segment.speaker) : '—';
+            const text = typeof segment?.text === 'string' ? segment.text.trim() : '';
+            return html`
+              <tr>
+                <th scope="row">${index + 1}</th>
+                <td>${start}</td>
+                <td>${end}</td>
+                <td>${speaker}</td>
+                <td>${text}</td>
+              </tr>
+            `;
+          })}
+        </tbody>
+      </table>
+    `;
+  }
+
+  _renderWords(words) {
+    if (!Array.isArray(words) || !words.length) {
+      return nothing;
+    }
+    return html`
+      <table class="timing-table words">
+        <caption>Word timings</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col">Word</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${words.map((word, index) => {
+            const start = this._formatSeconds(word?.start);
+            const end = this._formatSeconds(word?.end);
+            const text = typeof word?.text === 'string' ? word.text : JSON.stringify(word ?? {});
+            return html`
+              <tr>
+                <th scope="row">${index + 1}</th>
+                <td>${start}</td>
+                <td>${end}</td>
+                <td>${text}</td>
+              </tr>
+            `;
+          })}
+        </tbody>
+      </table>
+    `;
+  }
+
   get history() {
     const messages = Array.isArray(this.record?.messages) ? this.record.messages : [];
     return [...messages].reverse();
@@ -113,6 +192,8 @@ class PilotConversationConsole extends LitElement {
       const speaker = entry?.speaker ? String(entry.speaker) : '';
       const confidence = typeof entry?.confidence === 'number' ? entry.confidence : null;
       const content = typeof entry?.content === 'string' ? entry.content : JSON.stringify(entry?.content ?? '');
+      const segments = Array.isArray(entry?.segments) ? entry.segments : [];
+      const words = Array.isArray(entry?.words) ? entry.words : [];
       return html`
         <li class=${`conversation-entry ${role}`}>
           <header>
@@ -124,6 +205,8 @@ class PilotConversationConsole extends LitElement {
             <span class="badge index">#${index + 1}</span>
           </header>
           <pre>${content}</pre>
+          ${this._renderSegments(segments)}
+          ${this._renderWords(words)}
         </li>
       `;
     });

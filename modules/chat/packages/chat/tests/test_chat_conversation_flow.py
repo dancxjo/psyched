@@ -13,6 +13,10 @@ if str(package_root) not in sys.path:
 os.environ.setdefault("FOREBRAIN_LLM_URL", "")
 
 
+for module_name in ("rclpy", "rclpy.node", "rclpy.executors"):
+    sys.modules.pop(module_name, None)
+
+
 # ---------------------------------------------------------------------------
 # Stub ROS dependencies before importing the node under test
 # ---------------------------------------------------------------------------
@@ -154,12 +158,16 @@ if "psyched_msgs" not in sys.modules:
             self.content = ""
             self.speaker = ""
             self.confidence = 0.0
+            self.segments = []
+            self.words = []
 
     class _Transcript:
         def __init__(self) -> None:
             self.text = ""
             self.speaker = ""
             self.confidence = 0.0
+            self.segments = []
+            self.words = []
 
     fake_pkg_msg.Message = _Message
     fake_pkg_msg.Transcript = _Transcript

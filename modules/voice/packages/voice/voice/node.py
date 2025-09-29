@@ -403,6 +403,11 @@ class VoiceNode(Node):
         msg.speaker = "assistant"
         msg.confidence = 1.0
         try:
+            msg.segments = []  # type: ignore[assignment]
+            msg.words = []  # type: ignore[assignment]
+        except Exception:
+            pass
+        try:
             self._pub_conversation.publish(msg)
         except Exception:
             pass
