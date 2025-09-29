@@ -17,14 +17,62 @@ ASR_MODEL_DIR="${REPO_ROOT}/asr-service/models"
 mkdir -p "$LLM_MODEL_DIR" "$TTS_MODEL_DIR" "$ASR_MODEL_DIR"
 
 # Support Hugging Face token via environment variable.
-# It will look for, in order: HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_TOKEN
-HF_TOKEN="${HUGGINGFACE_HUB_TOKEN:-${HUGGINGFACE_TOKEN:-${HF_TOKEN:-}}}"
+# It will look for, in order: HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_HUB_TOKEN, HF_TOKEN
+HF_TOKEN="${HUGGINGFACE_HUB_TOKEN:-${HUGGINGFACE_TOKEN:-${HF_HUB_TOKEN:-${HF_TOKEN:-}}}}"
 if [ -n "$HF_TOKEN" ]; then
   # Bash array so we can expand into curl args conditionally
   AUTH_HEADER=( -H "Authorization: Bearer $HF_TOKEN" )
 else
   AUTH_HEADER=()
 fi
+
+# Small helper that wraps curl so we can capture HTTP status codes and
+# produce better diagnostics (especially for 401 Unauthorized responses).
+download() {
+  local url="$1"
+  local out="$2"
+  local retries="${3:-5}"
+  local retry_delay="${4:-5}"
+
+  mkdir -p "$(dirname "$out")"
+
+  # Use a temp file so partial downloads don't clobber an existing file.
+  local tmp="${out}.tmp"
+
+  # Run curl and capture HTTP status in a separate variable.
+  # -S shows error, -s hides progress, -L follows redirects, -w writes status code
+  local http_code
+  if ! http_code=$(curl -sS -w "%{http_code}" -L --retry "$retries" --retry-delay "$retry_delay" \
+      --continue-at - "${AUTH_HEADER[@]}" -o "$tmp" "$url"); then
+    echo "[ERROR] curl failed while fetching $url"
+    rm -f "$tmp" || true
+    return 22
+  fi
+
+  # Move tmp to final file only if we got a 2xx status code
+  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    mv "$tmp" "$out"
+    return 0
+  fi
+
+  # Helpful diagnostics for common failure modes
+  echo "[ERROR] Failed to download $url (HTTP $http_code)"
+  if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+    echo "[ERROR] The Hugging Face URL returned HTTP $http_code, which usually means the model requires authentication."
+    echo "[HINT] Export a Hugging Face token into one of these env vars and re-run:" \
+         "HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_HUB_TOKEN, or HF_TOKEN"
+    echo "  export HUGGINGFACE_HUB_TOKEN=\"<your-token>\""
+    echo "See https://huggingface.co/settings/tokens to create a token."
+    echo "If you prefer, log in locally with 'huggingface-cli login' and re-run this script."
+  else
+    # Dump a short snippet of the response body to help debugging (HTML error pages, LFS pointers)
+    echo "[INFO] Response body (first 400 bytes) for debugging:" || true
+    head -c 400 "$tmp" 2>/dev/null | sed -n '1,200p' || true
+  fi
+
+  rm -f "$tmp" || true
+  return 22
+}
 
 echo "[INFO] Downloading LLM model (GGUF) for forebrain-llm..."
 LLM_MODEL_NAME="gpt-oss-20b-Q5_K_M.gguf"
@@ -34,13 +82,8 @@ if [ ! -f "$LLM_MODEL_PATH" ]; then
   # sometimes produce HTML wrappers or redirects depending on HF settings.
   HF_MODEL_URL="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$LLM_MODEL_NAME"
   echo "[INFO] Fetching $LLM_MODEL_NAME from $HF_MODEL_URL"
-  if ! curl --fail --location --retry 5 --retry-delay 5 --continue-at - \
-    "${AUTH_HEADER[@]}" \
-    -o "$LLM_MODEL_PATH" \
-    "$HF_MODEL_URL"; then
-    echo "[ERROR] Failed to download LLM model. If this model is gated on Hugging Face, export a token first:"
-    echo "  export HUGGINGFACE_HUB_TOKEN=\"<your-token>\""
-    echo "See https://huggingface.co/settings/tokens to create a token."
+  if ! download "$HF_MODEL_URL" "$LLM_MODEL_PATH" 5 5; then
+    echo "[ERROR] Failed to download LLM model. See messages above for details and check your Hugging Face token/permissions."
     exit 22
   fi
 
@@ -80,9 +123,8 @@ fi
 echo "[INFO] Downloading TTS model for tts-websocket..."
 # Example: Download en_US-amy-medium.onnx (adjust as needed)
 if [ ! -f "$TTS_MODEL_DIR/en_US-amy-medium.onnx" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$TTS_MODEL_DIR/en_US-amy-medium.onnx" \
-    "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx"; then
-    echo "[ERROR] Failed to download TTS model. If this file requires auth, set a Hugging Face token as described above."
+  if ! download "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx" "$TTS_MODEL_DIR/en_US-amy-medium.onnx"; then
+    echo "[ERROR] Failed to download TTS model. See messages above for details."
     exit 22
   fi
 else
@@ -90,23 +132,15 @@ else
 fi
 
 echo "[INFO] Downloading ASR models for asr-service..."
-# Example: Download tiny.en-ct2 (adjust as needed)
-if [ ! -f "$ASR_MODEL_DIR/tiny.en-ct2.zip" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$ASR_MODEL_DIR/tiny.en-ct2.zip" \
-    "https://huggingface.co/openai/whisper/resolve/main/tiny.en-ct2.zip"; then
-    echo "[ERROR] Failed to download ASR model. If this file requires auth, set a Hugging Face token as described above."
-    exit 22
-  fi
-  unzip -o "$ASR_MODEL_DIR/tiny.en-ct2.zip" -d "$ASR_MODEL_DIR"
-else
-  echo "[INFO] ASR model already present."
-fi
+# The ggerganov/whisper.cpp repo provides ggml-converted Whisper models
+# (ggml-*.bin). We no longer attempt to download CT2 zip packages (tiny.en-ct2)
+# because those files are not present in that repo. The script downloads the
+# ggml binaries below (ggml-tiny.en.bin, ggml-small.en.bin, etc.).
 
 GGML_MODEL_PATH="$ASR_MODEL_DIR/ggml-tiny.en.bin"
 if [ ! -f "$GGML_MODEL_PATH" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$GGML_MODEL_PATH" \
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"; then
-    echo "[ERROR] Failed to download ggml ASR model."
+  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin" "$GGML_MODEL_PATH"; then
+    echo "[ERROR] Failed to download ggml ASR model. See messages above for details."
     exit 22
   fi
 else
@@ -115,9 +149,8 @@ fi
 
 SMALL_MODEL_PATH="$ASR_MODEL_DIR/ggml-small.en.bin"
 if [ ! -f "$SMALL_MODEL_PATH" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$SMALL_MODEL_PATH" \
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"; then
-    echo "[ERROR] Failed to download ggml small ASR model."
+  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin" "$SMALL_MODEL_PATH"; then
+    echo "[ERROR] Failed to download ggml small ASR model. See messages above for details."
     exit 22
   fi
 else
@@ -126,9 +159,8 @@ fi
 
 LARGE_MODEL_PATH="$ASR_MODEL_DIR/ggml-large-v3-q5_0.bin"
 if [ ! -f "$LARGE_MODEL_PATH" ]; then
-  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$LARGE_MODEL_PATH" \
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin"; then
-    echo "[ERROR] Failed to download ggml large ASR model."
+  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin" "$LARGE_MODEL_PATH"; then
+    echo "[ERROR] Failed to download ggml large ASR model. See messages above for details."
     exit 22
   fi
 else
