@@ -43,6 +43,41 @@ presentation = "waveform"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
+name = "/audio/speech_segment_accumulating"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_accumulating"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/transcript/short"
+type = "psyched_msgs/msg/Transcript"
+access = "ro"
+presentation = "transcription"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/transcript/medium"
+type = "psyched_msgs/msg/Transcript"
+access = "ro"
+presentation = "transcription"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/transcript/long"
+type = "psyched_msgs/msg/Transcript"
+access = "ro"
+presentation = "transcription"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
 name = "/audio/transcription"
 type = "psyched_msgs/msg/Transcript"
 access = "ro"

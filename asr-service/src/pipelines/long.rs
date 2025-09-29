@@ -4,12 +4,12 @@ use std::time::Duration;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use asr_core::errors::AsrError;
-use asr_core::messages::{
+use crate::core::errors::AsrError;
+use crate::core::messages::{
     ClientMessage, FinalTextPayload, RefinementMessage, RefinementNotes, ServerMessage,
     TranscriptSegment,
 };
-use asr_core::pipeline::{Pipeline as PipelineTrait, StreamConfig, StreamRegistry};
+use crate::core::pipeline::{Pipeline as PipelineTrait, StreamConfig, StreamRegistry};
 
 /// Configuration for the long-context refinement pipeline.
 #[derive(Debug, Clone)]
@@ -208,7 +208,7 @@ fn clean_phrase(phrase: &str, notes: &mut RefinementNotes, capitalise: bool) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asr_core::messages::{FinalTextPayload, InitPayload};
+    use crate::core::messages::{FinalTextPayload, InitPayload};
 
     fn init_message() -> ClientMessage {
         ClientMessage::Init(InitPayload {

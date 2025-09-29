@@ -5,12 +5,12 @@ use std::time::Duration;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use asr_core::errors::AsrError;
-use asr_core::messages::{ClientMessage, FinalHypothesis, ServerMessage, TranscriptSegment};
-use asr_core::pipeline::{
+use crate::core::errors::AsrError;
+use crate::core::messages::{ClientMessage, FinalHypothesis, ServerMessage, TranscriptSegment};
+use crate::core::pipeline::{
     decode_audio_payload, Pipeline as PipelineTrait, StreamConfig, StreamRegistry,
 };
-use asr_core::recognizer::SpeechRecognizer;
+use crate::core::recognizer::SpeechRecognizer;
 
 /// Configuration knobs for the fast tier pipeline.
 #[derive(Debug, Clone)]
@@ -242,8 +242,8 @@ impl RecognitionSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asr_core::messages::{AudioPayload, InitPayload};
-    use asr_core::recognizer::{RecognizedSegment, RecognizedTranscript, RecognizerError};
+    use crate::core::messages::{AudioPayload, InitPayload};
+    use crate::core::recognizer::{RecognizedSegment, RecognizedTranscript, RecognizerError};
     use std::sync::Arc;
 
     #[derive(Default)]
@@ -335,10 +335,12 @@ mod tests {
             .await
             .unwrap();
         let responses = pipeline
-            .handle(ClientMessage::Commit(asr_core::messages::CommitPayload {
-                stream_id: "demo".into(),
-                chunk_id: "chunk-1".into(),
-            }))
+            .handle(ClientMessage::Commit(
+                crate::core::messages::CommitPayload {
+                    stream_id: "demo".into(),
+                    chunk_id: "chunk-1".into(),
+                },
+            ))
             .await
             .unwrap();
         assert_eq!(responses.len(), 1);

@@ -18,10 +18,7 @@ launch_params_*
 # only on the top-level workspace
 /src/
 # Allow Rust crate sources under the ASR workspace
-!asr-core/src/
-!asr-fast/src/
-!asr-mid/src/
-!asr-long/src/
+!asr-service/src/
 
 # Python cache
 __pycache__/
@@ -59,6 +56,6 @@ Thumbs.db
 target/
 
 models/
-!asr-fast/models/
-!asr-fast/models/.gitkeep
+!asr-service/models/
+!asr-service/models/.gitkeep
 .speech_setup_complete

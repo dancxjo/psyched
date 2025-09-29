@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Directories
 LLM_MODEL_DIR="${REPO_ROOT}/forebrain-llm/models"
 TTS_MODEL_DIR="${REPO_ROOT}/tools/tts_websocket/models"
-ASR_MODEL_DIR="${REPO_ROOT}/asr-fast/models"
+ASR_MODEL_DIR="${REPO_ROOT}/asr-service/models"
 
 # Create directories if they do not exist
 mkdir -p "$LLM_MODEL_DIR" "$TTS_MODEL_DIR" "$ASR_MODEL_DIR"
@@ -89,7 +89,7 @@ else
   echo "[INFO] TTS model already present."
 fi
 
-echo "[INFO] Downloading ASR model for asr-fast..."
+echo "[INFO] Downloading ASR models for asr-service..."
 # Example: Download tiny.en-ct2 (adjust as needed)
 if [ ! -f "$ASR_MODEL_DIR/tiny.en-ct2.zip" ]; then
   if ! curl -fSL "${AUTH_HEADER[@]}" -o "$ASR_MODEL_DIR/tiny.en-ct2.zip" \
@@ -111,6 +111,28 @@ if [ ! -f "$GGML_MODEL_PATH" ]; then
   fi
 else
   echo "[INFO] ggml ASR model already present."
+fi
+
+SMALL_MODEL_PATH="$ASR_MODEL_DIR/ggml-small.en.bin"
+if [ ! -f "$SMALL_MODEL_PATH" ]; then
+  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$SMALL_MODEL_PATH" \
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"; then
+    echo "[ERROR] Failed to download ggml small ASR model."
+    exit 22
+  fi
+else
+  echo "[INFO] ggml small ASR model already present."
+fi
+
+LARGE_MODEL_PATH="$ASR_MODEL_DIR/ggml-large-v3-q5_0.bin"
+if [ ! -f "$LARGE_MODEL_PATH" ]; then
+  if ! curl -fSL "${AUTH_HEADER[@]}" -o "$LARGE_MODEL_PATH" \
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin"; then
+    echo "[ERROR] Failed to download ggml large ASR model."
+    exit 22
+  fi
+else
+  echo "[INFO] ggml large ASR model already present."
 fi
 
 echo "[SUCCESS] All models downloaded and folders set up."

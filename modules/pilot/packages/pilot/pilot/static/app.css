@@ -41,6 +41,10 @@
 .audio-waveform a:hover{text-decoration:underline}
 .audio-waveform .empty{font-style:italic;color:#475569}
 .transcription-panel{display:flex;flex-direction:column;gap:.75rem}
+.transcription-panel .panel-summary{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;font-size:.8rem;color:#1e3a8a;letter-spacing:.04em;text-transform:uppercase}
+.transcription-panel .panel-summary .badge{padding:.2rem .65rem;border-radius:9999px;background-color:rgba(191,219,254,.4);font-weight:600}
+.transcription-panel .badge.tier{background-color:rgba(59,130,246,.18);color:#1e40af}
+.transcription-panel .tier-detail{font-size:.75rem;color:#1d4ed8;font-weight:500;letter-spacing:.02em;text-transform:none}
 .transcription-panel ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem}
 .transcription-entry{padding:.75rem;border-radius:.75rem;background-color:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.2);display:flex;flex-direction:column;gap:.5rem}
 .transcription-entry header{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;font-size:.75rem;color:#1e3a8a;font-weight:600;text-transform:uppercase;letter-spacing:.05em}

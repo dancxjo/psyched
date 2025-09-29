@@ -33,8 +33,16 @@ class VADNode(Node):
         self.audio_sub = self.create_subscription(ByteMultiArray, '/audio/raw', self.audio_callback, 10)
         self.speech_duration_pub = self.create_publisher(UInt32, '/audio/speech_duration', 10)
         self.speech_audio_pub = self.create_publisher(ByteMultiArray, '/audio/speech_segment', 10)
+        self.speech_accum_pub = self.create_publisher(ByteMultiArray, '/audio/speech_segment_accumulating', 10)
 
         self.get_logger().info("VAD node started.")
+
+    def _publish_accumulating(self):
+        if not self.speech_segment:
+            return
+        msg = ByteMultiArray()
+        msg.data = bytes(self.speech_segment)
+        self.speech_accum_pub.publish(msg)
 
     def audio_callback(self, msg: ByteMultiArray):
         """Process incoming audio frames and publish detected speech segments."""

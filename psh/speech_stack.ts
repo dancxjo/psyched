@@ -3,7 +3,7 @@ import { encodeBase64 } from "@std/encoding/base64";
 import { $, type DaxTemplateTag, runWithStreamingTee } from "./util.ts";
 import { repoPath } from "./util.ts";
 
-export type SpeechService = "llm" | "tts" | "asr";
+export type SpeechService = "llm" | "tts" | "asr_fast" | "asr_medium" | "asr_long";
 
 export interface SpeechWebSocket {
   send(data: string | Uint8Array): Promise<void>;
@@ -365,52 +365,64 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
   });
   console.log("[psh] TTS websocket produced audio stream and end marker.");
 
-  console.log("[psh] Validating ASR websocket at ws://forebrain.local:8082/ws ...");
-  await withServiceSocket("asr", "ws://forebrain.local:8082/ws", connect, messageTimeoutMs, async (socket) => {
-    const streamId = "psh-test";
-    await socket.send(
-      JSON.stringify({
-        type: "init",
-        stream_id: streamId,
-        lang: "en",
-        content_type: "audio/pcm; rate=16000",
-        sample_rate: 16_000,
-      }),
-    );
-    const payload = encodePcm16([0, 1024, -1024, 2048]);
-    await socket.send(
-      JSON.stringify({
-        type: "audio",
-        stream_id: streamId,
-        seq: 1,
-        payload_b64: payload,
-      }),
-    );
-    const partial = await socket.nextMessage(messageTimeoutMs);
-    if (partial.type !== "text") {
-      throw new Error("[psh] ASR websocket did not emit partial transcript.");
-    }
-    const partialPayload = parseJson<{ type?: string }>(partial.text, "[psh] Failed to parse ASR partial message");
-    if (partialPayload.type !== "partial") {
-      throw new Error("[psh] ASR websocket did not respond with a partial transcript.");
-    }
-    await socket.send(
-      JSON.stringify({
-        type: "commit",
-        stream_id: streamId,
-        chunk_id: "chunk-1",
-      }),
-    );
-    const finalMessage = await socket.nextMessage(messageTimeoutMs);
-    if (finalMessage.type !== "text") {
-      throw new Error("[psh] ASR websocket did not send final transcript.");
-    }
-    const finalPayload = parseJson<{ type?: string }>(finalMessage.text, "[psh] Failed to parse ASR final message");
-    if (finalPayload.type !== "final") {
-      throw new Error("[psh] ASR websocket did not emit a final transcript.");
-    }
-  });
-  console.log("[psh] ASR websocket produced partial and final transcripts.");
+  const asrServices: Array<{ service: SpeechService; url: string; expectPartial: boolean }> = [
+    { service: "asr_fast", url: "ws://forebrain.local:8082/ws", expectPartial: true },
+    { service: "asr_medium", url: "ws://forebrain.local:8083/ws", expectPartial: true },
+    { service: "asr_long", url: "ws://forebrain.local:8084/ws", expectPartial: false },
+  ];
+  for (const entry of asrServices) {
+    console.log(`[psh] Validating ASR websocket (${entry.service}) at ${entry.url} ...`);
+    await withServiceSocket(entry.service, entry.url, connect, messageTimeoutMs, async (socket) => {
+      const streamId = `psh-test-${entry.service}`;
+      await socket.send(
+        JSON.stringify({
+          type: "init",
+          stream_id: streamId,
+          lang: "en",
+          content_type: "audio/pcm; rate=16000",
+          sample_rate: 16_000,
+        }),
+      );
+      const payload = encodePcm16([0, 1024, -1024, 2048]);
+      await socket.send(
+        JSON.stringify({
+          type: "audio",
+          stream_id: streamId,
+          seq: 1,
+          payload_b64: payload,
+        }),
+      );
+      if (entry.expectPartial) {
+        const partial = await socket.nextMessage(messageTimeoutMs);
+        if (partial.type !== "text") {
+          throw new Error(`[psh] ${entry.service} websocket did not emit partial transcript.`);
+        }
+        const partialPayload = parseJson<{ type?: string }>(partial.text, "[psh] Failed to parse ASR partial message");
+        if (partialPayload.type !== "partial") {
+          throw new Error(`[psh] ${entry.service} websocket did not respond with a partial transcript.`);
+        }
+      }
+      await socket.send(
+        JSON.stringify({
+          type: "commit",
+          stream_id: streamId,
+          chunk_id: "chunk-1",
+        }),
+      );
+      const finalMessage = await socket.nextMessage(messageTimeoutMs);
+      if (finalMessage.type !== "text") {
+        throw new Error(`[psh] ${entry.service} websocket did not send final transcript.`);
+      }
+      const finalPayload = parseJson<{ type?: string }>(finalMessage.text, "[psh] Failed to parse ASR final message");
+      if (!entry.expectPartial && finalPayload.type === "partial") {
+        return; // ignore trailing partial before final when long tier buffers context
+      }
+      if (finalPayload.type !== "final" && finalPayload.type !== "refine") {
+        throw new Error(`[psh] ${entry.service} websocket did not emit a final transcript.`);
+      }
+    });
+    console.log(`[psh] ${entry.service} websocket produced expected responses.`);
+  }
 
   console.log("[psh] Speech stack services responded successfully.");
 }

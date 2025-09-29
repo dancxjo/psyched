@@ -98,25 +98,59 @@ Deno.test("testSpeechStack orchestrates compose and websocket checks", async () 
       { type: "binary", bytes: new Uint8Array([1, 2, 3, 4]) },
       { type: "text", text: JSON.stringify({ event: "end", num_samples: 4, duration_s: 0.00025 }) },
     ]),
-    asr: new StubSocket([
+    asr_fast: new StubSocket([
       {
         type: "text",
         text: JSON.stringify({
           type: "partial",
-          stream_id: "psh-test",
-          text: "decoded 4",
-          segments: [{ t0: 0, t1: 0.25, text: "decoded 4" }],
+          stream_id: "psh-test-asr_fast",
+          text: "decoded fast",
+          segments: [{ t0: 0, t1: 0.25, text: "decoded fast" }],
         }),
       },
       {
         type: "text",
         text: JSON.stringify({
           type: "final",
-          stream_id: "psh-test",
-          text: "decoded 4",
+          stream_id: "psh-test-asr_fast",
+          text: "decoded fast",
           chunk_id: "chunk-1",
-          segments: [{ t0: 0, t1: 0.25, text: "decoded 4" }],
-          confidence: 0.8,
+          segments: [{ t0: 0, t1: 0.25, text: "decoded fast" }],
+          confidence: 0.7,
+        }),
+      },
+    ]),
+    asr_medium: new StubSocket([
+      {
+        type: "text",
+        text: JSON.stringify({
+          type: "partial",
+          stream_id: "psh-test-asr_medium",
+          text: "decoded medium",
+          segments: [{ t0: 0, t1: 0.25, text: "decoded medium" }],
+        }),
+      },
+      {
+        type: "text",
+        text: JSON.stringify({
+          type: "final",
+          stream_id: "psh-test-asr_medium",
+          text: "decoded medium",
+          chunk_id: "chunk-1",
+          segments: [{ t0: 0, t1: 0.25, text: "decoded medium" }],
+          confidence: 0.85,
+        }),
+      },
+    ]),
+    asr_long: new StubSocket([
+      {
+        type: "text",
+        text: JSON.stringify({
+          type: "refine",
+          window_sec: 120,
+          text: "decoded long",
+          segments: [{ start: 0, end: 0.25, text: "decoded long" }],
+          notes: { punctuation_enhanced: true },
         }),
       },
     ]),
@@ -149,15 +183,29 @@ Deno.test("testSpeechStack orchestrates compose and websocket checks", async () 
   assertEquals(llmMessages, [{ command: "stats" }]);
   const ttsMessages = decodeSentJSON(sockets.tts.sent);
   assertEquals(ttsMessages, [{ text: "Testing text-to-speech pipeline" }]);
-  const asrMessages = decodeSentJSON(sockets.asr.sent);
-  assertEquals(asrMessages.length, 3);
-  assertEquals((asrMessages[0] as Record<string, unknown>).type, "init");
-  assertEquals((asrMessages[1] as Record<string, unknown>).type, "audio");
-  assertEquals((asrMessages[2] as Record<string, unknown>).type, "commit");
+  const fastMessages = decodeSentJSON(sockets.asr_fast.sent);
+  assertEquals(fastMessages.length, 3);
+  assertEquals((fastMessages[0] as Record<string, unknown>).type, "init");
+  assertEquals((fastMessages[1] as Record<string, unknown>).type, "audio");
+  assertEquals((fastMessages[2] as Record<string, unknown>).type, "commit");
+
+  const mediumMessages = decodeSentJSON(sockets.asr_medium.sent);
+  assertEquals(mediumMessages.length, 3);
+  assertEquals((mediumMessages[0] as Record<string, unknown>).type, "init");
+  assertEquals((mediumMessages[1] as Record<string, unknown>).type, "audio");
+  assertEquals((mediumMessages[2] as Record<string, unknown>).type, "commit");
+
+  const longMessages = decodeSentJSON(sockets.asr_long.sent);
+  assertEquals(longMessages.length, 3);
+  assertEquals((longMessages[0] as Record<string, unknown>).type, "init");
+  assertEquals((longMessages[1] as Record<string, unknown>).type, "audio");
+  assertEquals((longMessages[2] as Record<string, unknown>).type, "commit");
 
   assertEquals(sockets.llm.closed, true);
   assertEquals(sockets.tts.closed, true);
-  assertEquals(sockets.asr.closed, true);
+  assertEquals(sockets.asr_fast.closed, true);
+  assertEquals(sockets.asr_medium.closed, true);
+  assertEquals(sockets.asr_long.closed, true);
 });
 
 Deno.test("testSpeechStack surfaces compose failures", async () => {

@@ -33,73 +33,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "asr-core"
+name = "asr-service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "base64 0.21.7",
+ "futures",
  "hound",
  "parking_lot",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
  "whisper-rs",
-]
-
-[[package]]
-name = "asr-fast"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "asr-core",
- "async-trait",
- "axum",
- "base64 0.21.7",
- "futures",
- "parking_lot",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "asr-long"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "asr-core",
- "async-trait",
- "axum",
- "base64 0.21.7",
- "futures",
- "parking_lot",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "asr-mid"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "asr-core",
- "async-trait",
- "axum",
- "base64 0.21.7",
- "futures",
- "parking_lot",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

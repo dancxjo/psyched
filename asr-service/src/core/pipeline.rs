@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use crate::audio::{decode_payload, AudioPayloadFormat};
-use crate::errors::{AsrError, AudioError};
-use crate::messages::{AudioPayload, ClientMessage, InitPayload, ServerMessage};
+use crate::core::audio::{decode_payload, AudioPayloadFormat};
+use crate::core::errors::{AsrError, AudioError};
+use crate::core::messages::{AudioPayload, ClientMessage, InitPayload, ServerMessage};
 
 /// Derived configuration for a websocket audio stream.
 #[derive(Debug, Clone)]
