@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 
 set(msg_files
   "msg/HostHealth.msg"
@@ -15,11 +16,12 @@ set(msg_files
   "msg/TranscriptSegment.msg"
   "msg/TranscriptWord.msg"
   "msg/Transcript.msg"
+  "msg/VadFrame.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
-  DEPENDENCIES std_msgs
+  DEPENDENCIES std_msgs builtin_interfaces
 )
 
 ament_export_dependencies(rosidl_default_runtime)

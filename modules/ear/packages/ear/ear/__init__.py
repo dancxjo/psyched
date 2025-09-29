@@ -3,6 +3,8 @@
 __all__ = [
     'audio_utils',
     'pyaudio_ear_node',
+    'segment_accumulator_node',
+    'segmenter_node',
     'silence_node',
     'silence_tracker',
     'transcriber_node',

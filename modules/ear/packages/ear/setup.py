@@ -29,6 +29,8 @@ setup(
         'console_scripts': [
             'ear_node = ear.pyaudio_ear_node:main',
             'silence_node = ear.silence_node:main',
+            'segmenter_node = ear.segmenter_node:main',
+            'segment_accumulator_node = ear.segment_accumulator_node:main',
             'vad_node = ear.vad_node:main',
             'transcriber_node = ear.transcriber_node:main',
             'speech_accumulator_node = ear.speech_accumulator_node:main',

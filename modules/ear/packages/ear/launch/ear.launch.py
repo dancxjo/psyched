@@ -17,6 +17,13 @@ SILENCE_DEFAULTS = {
     "silence_threshold": "500.0",
 }
 
+SEGMENTER_DEFAULTS = {
+    "segmenter_frame_topic": "/audio/vad_frames",
+    "segmenter_segment_topic": "/audio/speech_segment",
+    "segmenter_accum_topic": "/audio/speech_segment_accumulating",
+    "segmenter_duration_topic": "/audio/speech_duration",
+}
+
 TRANSCRIBER_DEFAULTS = {
     "transcriber_segment_topic": "/audio/speech_segment",
     "transcriber_segment_accum_topic": "/audio/speech_segment_accumulating",
@@ -58,6 +65,7 @@ def generate_launch_description() -> LaunchDescription:
     args = [
         *_declare_arguments(EAR_DEFAULTS),
         *_declare_arguments(SILENCE_DEFAULTS),
+        *_declare_arguments(SEGMENTER_DEFAULTS),
         *_declare_arguments(TRANSCRIBER_DEFAULTS),
         *_declare_arguments(ACCUMULATOR_DEFAULTS),
     ]
@@ -93,19 +101,47 @@ def generate_launch_description() -> LaunchDescription:
         package="ear",
         executable="vad_node",
         name="vad",
+        parameters=[
+            {
+                "frame_topic": ParameterValue(LaunchConfiguration("segmenter_frame_topic"), value_type=str),
+            }
+        ],
+        output="screen",
+    )
+
+    segmenter_node = Node(
+        package="ear",
+        executable="segmenter_node",
+        name="speech_segmenter",
+        parameters=[
+            {
+                "frame_topic": ParameterValue(LaunchConfiguration("segmenter_frame_topic"), value_type=str),
+                "segment_topic": ParameterValue(LaunchConfiguration("segmenter_segment_topic"), value_type=str),
+                "accumulating_topic": ParameterValue(LaunchConfiguration("segmenter_accum_topic"), value_type=str),
+                "duration_topic": ParameterValue(LaunchConfiguration("segmenter_duration_topic"), value_type=str),
+            }
+        ],
         output="screen",
     )
 
     accumulator_node = Node(
         package="ear",
-        executable="speech_accumulator_node",
-        name="speech_accumulator",
+        executable="segment_accumulator_node",
+        name="segment_accumulator",
         parameters=[
             {
-                "segment_topic": LaunchConfiguration("speech_accumulator_segment_topic"),
-                "accum_topic": LaunchConfiguration("speech_accumulator_accum_topic"),
-                "reset_timeout": LaunchConfiguration("speech_accumulator_reset_timeout"),
-                "max_segments": LaunchConfiguration("speech_accumulator_max_segments"),
+                "segment_topic": ParameterValue(
+                    LaunchConfiguration("speech_accumulator_segment_topic"), value_type=str
+                ),
+                "accum_topic": ParameterValue(
+                    LaunchConfiguration("speech_accumulator_accum_topic"), value_type=str
+                ),
+                "reset_timeout": ParameterValue(
+                    LaunchConfiguration("speech_accumulator_reset_timeout"), value_type=float
+                ),
+                "max_segments": ParameterValue(
+                    LaunchConfiguration("speech_accumulator_max_segments"), value_type=int
+                ),
             }
         ],
         output="screen",
@@ -139,4 +175,6 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    return LaunchDescription(args + [ear_node, silence_node, vad_node, accumulator_node, transcriber_node])
+    return LaunchDescription(
+        args + [ear_node, silence_node, vad_node, segmenter_node, accumulator_node, transcriber_node]
+    )

@@ -2,14 +2,21 @@
 
 PyAudio capture, WebRTC VAD, and streaming transcription for ROS 2.
 
-The ear package exposes four executables that form the audio intake pipeline:
+The ear package exposes a small set of executables that form the audio intake
+pipeline:
 
 - `ear_node` – streams raw PCM16 audio from a PyAudio device to `/audio/raw`.
 - `silence_node` – monitors `/audio/raw` and publishes a silence-duration gauge
   on `/audio/silence_ms`.
 - `vad_node` – resamples `/audio/raw` to 16 kHz, applies WebRTC VAD, and emits
-  voiced frames on `/audio/speech_segment` while tracking active speech
-  duration on `/audio/speech_duration`.
+  tagged frames on `/audio/vad_frames` using `psyched_msgs/msg/VadFrame`.
+- `segmenter_node` – subscribes to `/audio/vad_frames`, rebuilds contiguous
+  speech segments on `/audio/speech_segment`, and streams an in-progress buffer
+  on `/audio/speech_segment_accumulating` while maintaining the
+  `/audio/speech_duration` gauge.
+- `segment_accumulator_node` – listens for completed segments and stitches them
+  into a longer rolling context on `/audio/speech_accumulating` for the remote
+  ASR tiers.
 - `transcriber_node` – batches `/audio/speech_segment` messages and invokes a
   Whisper-compatible backend (prefers [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper)) to publish
   recognized utterances on `/audio/transcription`.
@@ -27,8 +34,32 @@ The ear package exposes four executables that form the audio intake pipeline:
   silence gauge.
 
 ### `vad_node`
-- No runtime parameters; consumes `/audio/raw` and emits `/audio/speech_segment`
-  at 16 kHz PCM16.
+- `vad_mode` (int, default `3`): WebRTC aggressiveness level (0–3).
+- `target_sample_rate` (int, default `16000`): Resampling rate used for VAD.
+- `frame_duration_ms` (int, default `30`): Frame length forwarded to the
+  segmenter.
+- `input_topic` (string, default `/audio/raw`): Source of raw PCM audio.
+- `frame_topic` (string, default `/audio/vad_frames`): Destination for tagged
+  `psyched_msgs/msg/VadFrame` messages.
+
+### `segmenter_node`
+- `frame_topic` (string, default `/audio/vad_frames`): VAD frame source.
+- `segment_topic` (string, default `/audio/speech_segment`): Completed segment
+  output.
+- `accumulating_topic` (string, default `/audio/speech_segment_accumulating`):
+  Rolling buffer output while speech is active.
+- `duration_topic` (string, default `/audio/speech_duration`): Speech duration
+  gauge.
+
+### `segment_accumulator_node`
+- `segment_topic` (string, default `/audio/speech_segment`): Upstream segment
+  source.
+- `accum_topic` (string, default `/audio/speech_accumulating`): Rolling context
+  output for long-form ASR.
+- `reset_timeout` (float, default `12.0`): Maximum silence between segments
+  before the buffer is cleared.
+- `max_segments` (int, default `8`): Hard limit on the number of segments to
+  retain before resetting.
 
 ### `transcriber_node`
 - `segment_topic` (string, default `/audio/speech_segment`): Source for voiced
