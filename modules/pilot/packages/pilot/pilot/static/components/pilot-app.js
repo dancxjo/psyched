@@ -319,7 +319,7 @@ class PilotApp extends LitElement {
     return html`
 			<section class="command-log" id="command-log" ?data-collapsed=${this.logCollapsed}>
         <div class="command-log-header" style="display: flex; align-items: center; justify-content: space-between;">
-          <h2>Command Log</h2>
+          <h2 style="display: inline-block;">Command Log</h2>
           <button
             class="log-toggle control-button"
             aria-pressed=${this.logCollapsed}
