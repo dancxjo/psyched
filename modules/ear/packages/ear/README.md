@@ -2,10 +2,11 @@
 
 PyAudio capture, WebRTC VAD, and streaming transcription for ROS 2.
 
-The ear package exposes three executables that form the audio intake pipeline:
+The ear package exposes four executables that form the audio intake pipeline:
 
-- `ear_node` – streams raw PCM16 audio from a PyAudio device to `/audio/raw` and
-  publishes a silence-duration gauge on `/audio/silence_ms`.
+- `ear_node` – streams raw PCM16 audio from a PyAudio device to `/audio/raw`.
+- `silence_node` – monitors `/audio/raw` and publishes a silence-duration gauge
+  on `/audio/silence_ms`.
 - `vad_node` – resamples `/audio/raw` to 16 kHz, applies WebRTC VAD, and emits
   voiced frames on `/audio/speech_segment` while tracking active speech
   duration on `/audio/speech_duration`.
@@ -20,6 +21,8 @@ The ear package exposes three executables that form the audio intake pipeline:
 - `sample_rate` (int, default `44100`): Capture rate in Hz.
 - `channels` (int, default `1`): Channel count.
 - `chunk_size` (int, default `1024`): Frames per callback.
+
+### `silence_node`
 - `silence_threshold` (float, default `500.0`): RMS threshold used to reset the
   silence gauge.
 
@@ -48,10 +51,10 @@ The ear package exposes three executables that form the audio intake pipeline:
 
 ```bash
 ros2 launch ear ear.launch.py \
-    device_id:=0 \
-    sample_rate:=44100 \
-    channels:=1 \
-    chunk_size:=1024 \
+    ear_device_id:=0 \
+    ear_sample_rate:=44100 \
+    ear_channels:=1 \
+    ear_chunk_size:=1024 \
     silence_threshold:=500.0
 ```
 

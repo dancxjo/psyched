@@ -3,14 +3,18 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 EAR_DEFAULTS = {
-    "ear_topic": "/audio/pcm",
-    "ear_device": "default",
-    "ear_rate": "16000",
+    "ear_device_id": "0",
+    "ear_sample_rate": "44100",
     "ear_channels": "1",
-    "ear_chunk": "2048",
+    "ear_chunk_size": "1024",
+}
+
+SILENCE_DEFAULTS = {
+    "silence_threshold": "500.0",
 }
 
 TRANSCRIBER_DEFAULTS = {
@@ -53,6 +57,7 @@ def generate_launch_description() -> LaunchDescription:
 
     args = [
         *_declare_arguments(EAR_DEFAULTS),
+        *_declare_arguments(SILENCE_DEFAULTS),
         *_declare_arguments(TRANSCRIBER_DEFAULTS),
         *_declare_arguments(ACCUMULATOR_DEFAULTS),
     ]
@@ -63,11 +68,22 @@ def generate_launch_description() -> LaunchDescription:
         name="ear",
         parameters=[
             {
-                "topic": LaunchConfiguration("ear_topic"),
-                "device": LaunchConfiguration("ear_device"),
-                "rate": LaunchConfiguration("ear_rate"),
-                "channels": LaunchConfiguration("ear_channels"),
-                "chunk": LaunchConfiguration("ear_chunk"),
+                "device_id": ParameterValue(LaunchConfiguration("ear_device_id"), value_type=int),
+                "sample_rate": ParameterValue(LaunchConfiguration("ear_sample_rate"), value_type=int),
+                "channels": ParameterValue(LaunchConfiguration("ear_channels"), value_type=int),
+                "chunk_size": ParameterValue(LaunchConfiguration("ear_chunk_size"), value_type=int),
+            }
+        ],
+        output="screen",
+    )
+
+    silence_node = Node(
+        package="ear",
+        executable="silence_node",
+        name="ear_silence",
+        parameters=[
+            {
+                "silence_threshold": ParameterValue(LaunchConfiguration("silence_threshold"), value_type=float),
             }
         ],
         output="screen",
@@ -123,4 +139,4 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    return LaunchDescription(args + [ear_node, vad_node, accumulator_node, transcriber_node])
+    return LaunchDescription(args + [ear_node, silence_node, vad_node, accumulator_node, transcriber_node])

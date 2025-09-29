@@ -53,6 +53,9 @@ current architecture.
 - Additive commits; keep messages concise and meaningful.
 - Keep dependencies cached when possible.
 - Fix warnings as you go.
+- When editing ROS launch files, wrap `LaunchConfiguration` values in
+  `ParameterValue` with the appropriate type so nodes receive correctly-typed
+  parameters instead of strings.
 
 ---
 

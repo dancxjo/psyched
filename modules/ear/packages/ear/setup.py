@@ -22,12 +22,13 @@ setup(
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',
-    description='PyAudio-based microphone capture with silence detection',
+    description='PyAudio-based microphone capture and silence monitoring nodes',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'ear_node = ear.pyaudio_ear_node:main',
+            'silence_node = ear.silence_node:main',
             'vad_node = ear.vad_node:main',
             'transcriber_node = ear.transcriber_node:main',
             'speech_accumulator_node = ear.speech_accumulator_node:main',
