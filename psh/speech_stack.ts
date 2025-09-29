@@ -309,8 +309,8 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
   const messageTimeoutMs = options.messageTimeoutMs ?? 15000;
   const connect = options.connect ?? ((_: SpeechService, url: string) => connectRealWebSocket(url, handshakeTimeoutMs));
 
-  console.log("[psh] Validating LLM websocket at ws://127.0.0.1:8080/chat ...");
-  await withServiceSocket("llm", "ws://127.0.0.1:8080/chat", connect, messageTimeoutMs, async (socket) => {
+  console.log("[psh] Validating LLM websocket at ws://forebrain.local:8080/chat ...");
+  await withServiceSocket("llm", "ws://forebrain.local:8080/chat", connect, messageTimeoutMs, async (socket) => {
     await socket.send(JSON.stringify({ command: "stats" }));
     const message = await socket.nextMessage(messageTimeoutMs);
     if (message.type !== "text") {
@@ -323,8 +323,8 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
   });
   console.log("[psh] LLM websocket responded with system stats.");
 
-  console.log("[psh] Validating TTS websocket at ws://127.0.0.1:5002/tts ...");
-  await withServiceSocket("tts", "ws://127.0.0.1:5002/tts", connect, messageTimeoutMs, async (socket) => {
+  console.log("[psh] Validating TTS websocket at ws://forebrain.local:5002/tts ...");
+  await withServiceSocket("tts", "ws://forebrain.local:5002/tts", connect, messageTimeoutMs, async (socket) => {
     await socket.send(JSON.stringify({ text: "Testing text-to-speech pipeline" }));
     const start = await socket.nextMessage(messageTimeoutMs);
     if (start.type !== "text") {
@@ -365,8 +365,8 @@ export async function testSpeechStack(options: SpeechStackTestOptions = {}): Pro
   });
   console.log("[psh] TTS websocket produced audio stream and end marker.");
 
-  console.log("[psh] Validating ASR websocket at ws://127.0.0.1:8082/ws ...");
-  await withServiceSocket("asr", "ws://127.0.0.1:8082/ws", connect, messageTimeoutMs, async (socket) => {
+  console.log("[psh] Validating ASR websocket at ws://forebrain.local:8082/ws ...");
+  await withServiceSocket("asr", "ws://forebrain.local:8082/ws", connect, messageTimeoutMs, async (socket) => {
     const streamId = "psh-test";
     await socket.send(
       JSON.stringify({

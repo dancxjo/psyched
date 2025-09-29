@@ -203,7 +203,7 @@ mod tests {
                 ("FOREBRAIN_LLM__MODEL__REPEAT_PENALTY", Some("1.05")),
                 (
                     "FOREBRAIN_LLM__WEBSOCKET__BIND_ADDR",
-                    Some("127.0.0.1:9000"),
+                    Some("forebrain.local:9000"),
                 ),
                 ("FOREBRAIN_LLM__WEBSOCKET__HEARTBEAT_INTERVAL", Some("5")),
             ],
@@ -214,7 +214,7 @@ mod tests {
                 assert!((cfg.model.temperature - 0.42).abs() < f32::EPSILON);
                 assert!((cfg.model.top_p - 0.75).abs() < f32::EPSILON);
                 assert!((cfg.model.repeat_penalty - 1.05).abs() < f32::EPSILON);
-                assert_eq!(cfg.websocket.bind_addr, "127.0.0.1:9000");
+                assert_eq!(cfg.websocket.bind_addr, "forebrain.local:9000");
                 assert_eq!(cfg.websocket.heartbeat_interval, Duration::from_secs(5));
             },
         );

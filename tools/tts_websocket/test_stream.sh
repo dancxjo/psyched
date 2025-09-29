@@ -40,7 +40,7 @@ import sys
 
 import websockets
 
-URI = "ws://127.0.0.1:5002/tts"
+URI = "ws://forebrain.local.local:5002/tts"
 
 async def wait_for_ready() -> None:
     for attempt in range(30):
@@ -67,7 +67,7 @@ import sys
 import websockets
 
 TEXT = sys.argv[1]
-URI = "ws://127.0.0.1:5002/tts"
+URI = "ws://forebrain.local.local:5002/tts"
 OUTPUT = "${TMP_OUTPUT}"
 
 async def run_demo() -> None:
