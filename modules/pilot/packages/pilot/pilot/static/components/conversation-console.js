@@ -80,6 +80,29 @@ class PilotConversationConsole extends LitElement {
     }
   }
 
+  updated(changedProperties) {
+    // If the conversation log was scrolled to (or very near) the bottom,
+    // keep it pinned to the bottom when new messages arrive. If the user
+    // has scrolled up, do not force-scroll.
+    try {
+      const container = this.querySelector('.conversation-log');
+      if (!container) return;
+      // distance from bottom in pixels
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      const NEAR_BOTTOM_PX = 40; // tolerance
+      const wasNearBottom = distanceFromBottom <= NEAR_BOTTOM_PX;
+      if (wasNearBottom) {
+        // Wait for layout to finish then jump to bottom
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        });
+      }
+    } catch (err) {
+      // keep silent on errors to avoid breaking the UI
+      // console.error(err);
+    }
+  }
+
   renderHistory() {
     const entries = this.history;
     if (!entries.length) {
@@ -96,8 +119,8 @@ class PilotConversationConsole extends LitElement {
             <span class="badge role">${role}</span>
             ${speaker ? html`<span class="badge speaker">${speaker}</span>` : nothing}
             ${confidence !== null
-              ? html`<span class="badge confidence">${Math.round(confidence * 100)}%</span>`
-              : nothing}
+          ? html`<span class="badge confidence">${Math.round(confidence * 100)}%</span>`
+          : nothing}
             <span class="badge index">#${index + 1}</span>
           </header>
           <pre>${content}</pre>
