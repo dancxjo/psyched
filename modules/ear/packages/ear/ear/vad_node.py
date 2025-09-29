@@ -1,102 +1,95 @@
 #!/usr/bin/env python3
-"""Voice activity detection node for the Ear module."""
-import time
+"""Voice activity detection node that emits VAD-tagged audio frames."""
+from __future__ import annotations
 
 import audioop
 import rclpy
 import webrtcvad
 from rclpy.node import Node
-from std_msgs.msg import ByteMultiArray, UInt32
+from std_msgs.msg import ByteMultiArray
+
+try:
+    from psyched_msgs.msg import VadFrame
+except ImportError:  # pragma: no cover - enables unit tests without generated interfaces
+    from dataclasses import dataclass
+    from typing import Any
+
+    @dataclass
+    class VadFrame:  # type: ignore[override]
+        stamp: Any = None
+        sample_rate: int = 0
+        frame_samples: int = 0
+        is_speech: bool = False
+        audio: bytes = b""
 
 from .audio_utils import coerce_pcm_bytes
 
+
 class VADNode(Node):
-    def __init__(self):
+    """ROS 2 node that tags incoming audio frames with VAD decisions."""
+
+    def __init__(self) -> None:
         super().__init__('vad_node')
-        
-        # VAD parameters
+
+        mode = int(self.declare_parameter('vad_mode', 3).value)
         self.vad = webrtcvad.Vad()
-        self.vad.set_mode(3)  # Aggressive mode
-        self.target_sample_rate = 16000
-        self.frame_duration = 30  # ms
-        self.frame_size = int(self.target_sample_rate * (self.frame_duration / 1000.0) * 2)
-        
-        # Audio buffer
+        self.vad.set_mode(max(0, min(3, mode)))
+
+        self.target_sample_rate = int(self.declare_parameter('target_sample_rate', 16000).value)
+        self.frame_duration_ms = int(self.declare_parameter('frame_duration_ms', 30).value)
+        self.frame_size = int(self.target_sample_rate * (self.frame_duration_ms / 1000.0) * 2)
+
+        self._input_topic = self.declare_parameter('input_topic', '/audio/raw').value
+        self._frame_topic = self.declare_parameter('frame_topic', '/audio/vad_frames').value
+
         self._buffer = b''
-        
-        # Speech tracking
-        self.speech_start_time = None
-        self.speech_duration = 0
-        self.speech_segment = b''
-        
-        # Subscribers and Publishers
-        self.audio_sub = self.create_subscription(ByteMultiArray, '/audio/raw', self.audio_callback, 10)
-        self.speech_duration_pub = self.create_publisher(UInt32, '/audio/speech_duration', 10)
-        self.speech_audio_pub = self.create_publisher(ByteMultiArray, '/audio/speech_segment', 10)
-        self.speech_accum_pub = self.create_publisher(ByteMultiArray, '/audio/speech_segment_accumulating', 10)
 
-        self.get_logger().info("VAD node started.")
+        self._subscription = self.create_subscription(ByteMultiArray, self._input_topic, self.audio_callback, 10)
+        self._publisher = self.create_publisher(VadFrame, self._frame_topic, 10)
 
-    def _publish_accumulating(self):
-        if not self.speech_segment:
-            return
-        msg = ByteMultiArray()
-        msg.data = bytes(self.speech_segment)
-        self.speech_accum_pub.publish(msg)
+        self.get_logger().info(
+            (
+                'VAD node started: input=%s target_rate=%dHz frame=%dms topic=%s'
+                % (self._input_topic, self.target_sample_rate, self.frame_duration_ms, self._frame_topic)
+            )
+        )
 
-    def audio_callback(self, msg: ByteMultiArray):
-        """Process incoming audio frames and publish detected speech segments."""
+    def audio_callback(self, msg: ByteMultiArray) -> None:
+        """Process incoming audio frames and publish per-frame VAD metadata."""
         raw_audio = coerce_pcm_bytes(msg.data)
+        if not raw_audio:
+            return
 
-        # The input is 44100 Hz, 16-bit, 1-channel. Resample to 16kHz for VAD.
         resampled_audio, _ = audioop.ratecv(raw_audio, 2, 1, 44100, self.target_sample_rate, None)
         self._buffer += resampled_audio
-        
+
         while len(self._buffer) >= self.frame_size:
-            frame = self._buffer[:self.frame_size]
-            self._buffer = self._buffer[self.frame_size:]
-            
-            is_speech = self.vad.is_speech(frame, self.target_sample_rate)
-            
-            current_time = time.time()
+            frame = self._buffer[: self.frame_size]
+            self._buffer = self._buffer[self.frame_size :]
 
-            if is_speech:
-                if self.speech_start_time is None:
-                    self.speech_start_time = current_time
-                self.speech_segment += frame
-            elif self.speech_start_time is not None:
-                # Speech has just ended
-                self.get_logger().info(f"Speech ended. Duration: {self.speech_duration}ms. Publishing segment.")
-                
-                # Publish the accumulated speech segment
-                audio_msg = ByteMultiArray()
-                # `data` for std_msgs/ByteMultiArray must be a bytes-like object
-                # rosidl_generator_py expects a Python bytes for the underlying
-                # uint8[] field. Previously this was set to a list which caused
-                # an assertion failure in the C conversion layer.
-                audio_msg.data = bytes(self.speech_segment)
-                self.speech_audio_pub.publish(audio_msg)
-                
-                # Reset for next speech segment
-                self.speech_start_time = None
-                self.speech_segment = b''
-                self.speech_duration = 0
+            is_speech = bool(self.vad.is_speech(frame, self.target_sample_rate))
 
-            if self.speech_start_time is not None:
-                # Update speech duration if speech is ongoing
-                self.speech_duration = int((current_time - self.speech_start_time) * 1000)
-            
-            # Publish the current speech duration (0 if no speech)
-            duration_msg = UInt32()
-            duration_msg.data = self.speech_duration
-            self.speech_duration_pub.publish(duration_msg)
+            message = VadFrame()
+            message.stamp = self.get_clock().now().to_msg()
+            message.sample_rate = self.target_sample_rate
+            message.frame_samples = len(frame) // 2
+            message.is_speech = is_speech
+            message.audio = bytes(frame)
 
-def main(args=None):
+            self._publisher.publish(message)
+
+
+def main(args=None) -> None:
     rclpy.init(args=args)
     node = VADNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
