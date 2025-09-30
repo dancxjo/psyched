@@ -247,7 +247,7 @@ def generate_launch_description() -> LaunchDescription:
         args
         + [
             ear_node,
-            # silence_node,
+            silence_node,
             # vad_node,
             # segmenter_node,
             # accumulator_node,
