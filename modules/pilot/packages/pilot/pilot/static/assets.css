@@ -1157,3 +1157,86 @@ body {
 .app-root, .lcars-main {
   padding-bottom: calc(36vh + 4.5rem);
 }
+
+/* Advanced mode toggle (no JS) ------------------------------------------------- */
+/* Hide the native checkbox visually but keep it available for :has()
+   Place the checkbox near the top so body:has(#advanced-mode:checked) works */
+#advanced-mode {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1rem;
+  height: 1rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The visible toggle button */
+.advanced-toggle {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(88, 178, 220, 0.18), rgba(17, 24, 36, 0.9));
+  color: var(--lcars-text);
+  border: 1px solid rgba(88, 178, 220, 0.35);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  cursor: pointer;
+  transition: transform 160ms ease, background 200ms ease, box-shadow 200ms ease;
+  font-weight: 700;
+}
+.advanced-toggle:hover { transform: translateY(-2px); }
+
+/* Toggle appearance when checked (advanced enabled) */
+body:has(#advanced-mode:checked) .advanced-toggle {
+  background: linear-gradient(180deg, rgba(92,209,132,0.75), rgba(40,94,130,0.95));
+  box-shadow: 0 10px 26px rgba(92,209,132,0.18);
+}
+
+/* Collapsed (default) state: hide command/topic header and optional IDs
+   Use max-height + opacity for a smooth transition. When advanced is ON, show them. */
+body:not(:has(#advanced-mode:checked)) .command-groups,
+body:not(:has(#advanced-mode:checked)) .command-set,
+body:not(:has(#advanced-mode:checked)) .command-set > h3,
+body:not(:has(#advanced-mode:checked)) .topic-header,
+body:not(:has(#advanced-mode:checked)) #command-group,
+body:not(:has(#advanced-mode:checked)) #topic-header,
+body:not(:has(#advanced-mode:checked)) #topic-status,
+body:not(:has(#advanced-mode:checked)) .topic-state {
+  opacity: 0;
+  max-height: 0 !important;
+  overflow: hidden;
+  transform: translateY(-6px);
+  transition: opacity 220ms cubic-bezier(.2,.9,.2,1), max-height 260ms ease, transform 220ms ease;
+  pointer-events: none;
+}
+
+/* When advanced mode is enabled, restore visibility */
+body:has(#advanced-mode:checked) .command-groups,
+body:has(#advanced-mode:checked) .command-set,
+body:has(#advanced-mode:checked) .command-set > h3,
+body:has(#advanced-mode:checked) .topic-header,
+body:has(#advanced-mode:checked) #command-group,
+body:has(#advanced-mode:checked) #topic-header,
+body:has(#advanced-mode:checked) #topic-status,
+body:has(#advanced-mode:checked) .topic-state {
+  opacity: 1;
+  max-height: 1200px;
+  transform: translateY(0);
+  transition: opacity 220ms cubic-bezier(.2,.9,.2,1), max-height 320ms ease, transform 220ms ease;
+  pointer-events: auto;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .advanced-toggle { transition: none; }
+  body:not(:has(#advanced-mode:checked)) .command-groups,
+  body:has(#advanced-mode:checked) .command-groups { transition: none; }
+}
+
