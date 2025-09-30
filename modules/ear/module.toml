@@ -99,8 +99,6 @@ type = "apt_install"
 packages = [
     "alsa-utils",
     "libasound2-dev",
-    "portaudio19-dev",
-    "python3-pyaudio",
 ]
 update = false
 

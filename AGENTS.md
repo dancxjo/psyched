@@ -143,7 +143,7 @@ Visit `http://<cerebellum-host>:8080`.
   * Development containers may not include the Deno runtime by default; install Deno locally to run `psh` CLI tests.
 * **Hardware deps**:
 
-  * `alsa-utils`, `pyaudio`, `webrtcvad` for `ear`.
+  * `alsa-utils` (for `arecord`), `webrtcvad`, `faster-whisper` for `ear`.
   * `libusb-1.0-dev` for `eye`.
   * Kinect and Create 1 hardware required for full bring-up.
 * **Workarounds**:
