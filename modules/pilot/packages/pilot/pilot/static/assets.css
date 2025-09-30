@@ -33,18 +33,6 @@ html, body {
   scroll-behavior: smooth;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 body {
   display: flex;
   min-height: 100vh;
@@ -345,118 +333,20 @@ body {
   gap: 0.75rem;
 }
 
-
 .topics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+  gap: 1.5rem;
 }
 
 .topic-card {
   background: var(--lcars-panel-alt);
   border-radius: 1rem;
-  padding: 1rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  overflow: hidden;
-  transition: padding 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
-}
-
-.topic-card.expanded {
   padding: 1.25rem;
-  gap: 1rem;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
-}
-
-.topic-card.collapsed {
-  padding: 0.75rem 1rem;
-}
-
-.topic-summary {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.topic-summary h4 {
-  margin: 0;
-  font-size: 1rem;
-  letter-spacing: 0.04rem;
-  text-transform: uppercase;
-}
-
-.topic-summary small {
-  color: var(--lcars-muted);
-  display: block;
-  font-size: 0.75rem;
-}
-
-.topic-summary pilot-topic-state {
-  margin-left: auto;
-}
-
-.summary-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.expand-toggle {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 999px;
-  border: 1px solid rgba(88, 178, 220, 0.4);
-  background: rgba(15, 17, 26, 0.55);
-  color: var(--lcars-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
-}
-
-.expand-toggle:hover,
-.expand-toggle:focus {
-  outline: none;
-  background: rgba(88, 178, 220, 0.25);
-  border-color: rgba(88, 178, 220, 0.65);
-}
-
-.expand-toggle .chevron {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.25s ease;
-}
-
-.topic-card.expanded .expand-toggle .chevron {
-  transform: rotate(45deg);
-}
-
-.topic-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-height: 1200px;
-  opacity: 1;
-  transform: translateY(0);
-  overflow: hidden;
-  transition: max-height 0.35s ease, opacity 0.35s ease, transform 0.35s ease;
-}
-
-.topic-card.expanded .topic-body {
-  margin-top: 0.5rem;
-}
-
-.topic-card.collapsed .topic-body {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-0.5rem);
-  pointer-events: none;
-  margin-top: 0;
+  min-height: 240px;
 }
 
 .topic-header {
@@ -465,17 +355,6 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-}
-
-.topic-card.expanded .topic-header {
-  flex-direction: row;
-  align-items: center;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-}
-
-.topic-card.expanded .topic-header > div:first-child {
-  flex: 1 1 220px;
 }
 
 .topic-header h4 {
@@ -1015,12 +894,11 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 
-
 .battery-panel {
   display: grid;
-  grid-template-columns: minmax(120px, 0.55fr) 1fr;
-  gap: 1.25rem;
-  align-items: stretch;
+  grid-template-columns: minmax(120px, 0.6fr) 1fr;
+  gap: 1rem;
+  align-items: center;
 }
 
 .battery-gauge {
@@ -1054,14 +932,8 @@ body {
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
-
-.battery-overview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.battery-stats {
+.battery-metrics {
+  list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
@@ -1069,33 +941,20 @@ body {
   gap: 0.75rem;
 }
 
-.battery-stat {
+.battery-metrics li {
   background: var(--control-surface-bg);
   border-radius: calc(var(--control-surface-radius) - 0.15rem);
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--control-surface-border);
-  box-shadow: var(--control-surface-shadow);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  border: 1px solid var(--control-surface-border);
+  box-shadow: var(--control-surface-shadow);
 }
 
-.battery-stat dt {
-  margin: 0;
-  font-size: 0.75rem;
-  letter-spacing: 0.08rem;
+.battery-metrics .label {
   text-transform: uppercase;
-  color: var(--lcars-muted);
-}
-
-.battery-stat dd {
-  margin: 0;
-  font-family: 'Source Code Pro', monospace;
-  font-size: 1.05rem;
-}
-
-.battery-note {
-  margin: 0;
+  letter-spacing: 0.08rem;
   font-size: 0.75rem;
   color: var(--lcars-muted);
 }
@@ -1124,7 +983,7 @@ body {
 
 .battery-feed .feed-status {
   font-size: 0.75rem;
-  color: var(--lcars-muted);
+  color: rgba(248, 128, 60, 0.65);
 }
 
 .voice-transport {
