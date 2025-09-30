@@ -26,7 +26,7 @@ packages = ["faces", "faces_msgs"]
 
 [[actions]]
 type = "pip_install"
-packages = ["opencv-python", "numpy"]
+packages = ["opencv-python", "numpy", "cv2"]
 import_check = ["cv2", "numpy"]
 break_system = true
 

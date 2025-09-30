@@ -99,8 +99,14 @@ type = "apt_install"
 packages = [
     "alsa-utils",
     "libasound2-dev",
+    "ros-kilted-rosidl-default-generators",
 ]
 update = false
+
+[[actions]]
+type = "git_clone"
+repo = "https://github.com/ros-perception/vision_opencv.git"
+dest = "vision_opencv"
 
 [systemd]
 description = "Psyched Ear Audio Capture"
