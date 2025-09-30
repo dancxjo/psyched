@@ -35,8 +35,8 @@ TRANSCRIBER_DEFAULTS = {
     "transcriber_fast_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_medium_remote_ws_url": "ws://forebrain.local:8083/ws",
     "transcriber_long_remote_ws_url": "ws://forebrain.local:8084/ws",
-    "transcriber_remote_connect_timeout": "3",
-    "transcriber_remote_response_timeout": "3",
+    "transcriber_remote_connect_timeout": "3000",
+    "transcriber_remote_response_timeout": "3000",
     "transcriber_speaker": "user",
     "transcriber_segment_sample_rate": "16000",
     "transcriber_model": "small",
@@ -49,7 +49,7 @@ TRANSCRIBER_DEFAULTS = {
 ACCUMULATOR_DEFAULTS = {
     "speech_accumulator_segment_topic": "/audio/speech_segment",
     "speech_accumulator_accum_topic": "/audio/speech_accumulating",
-    "speech_accumulator_reset_timeout": "12.0",
+    "speech_accumulator_reset_timeout": "12000",
     "speech_accumulator_max_segments": "8",
 }
 
@@ -252,7 +252,7 @@ def generate_launch_description() -> LaunchDescription:
             segmenter_node,
             accumulator_node,
             transcriber_short,
-            transcriber_medium,
-            transcriber_long,
+            # transcriber_medium,
+            # transcriber_long,
         ]
     )
