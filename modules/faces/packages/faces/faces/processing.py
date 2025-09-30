@@ -6,7 +6,60 @@ import math
 from typing import Iterable, List, Protocol
 
 import cv2
+import os
 import numpy as np
+
+
+def _default_haarcascade_path() -> str:
+    """Return a reasonable default path to OpenCV's haarcascade xml.
+
+    Tries multiple strategies to locate the file so code works across
+    different OpenCV packaging variations (some builds don't expose
+    ``cv2.data``).
+    """
+    filename = "haarcascade_frontalface_default.xml"
+
+    # 1) Preferred: cv2.data.haarcascades (most wheels expose this)
+    try:
+        haar_dir = getattr(cv2, "data", None)
+        if haar_dir is not None:
+            # cv2.data.haarcascades is typically a string path
+            haar_path = getattr(cv2.data, "haarcascades", None)
+            if isinstance(haar_path, str):
+                candidate = os.path.join(haar_path, filename) if not haar_path.endswith(filename) else haar_path
+            else:
+                # cv2.data may itself be a path-like string in some builds
+                if isinstance(haar_dir, str):
+                    candidate = os.path.join(haar_dir, filename)
+                else:
+                    candidate = ""
+            if candidate and os.path.exists(candidate):
+                return candidate
+    except Exception:
+        # Be defensive: any unexpected shape of cv2.data should not crash
+        pass
+
+    # 2) Check next to the cv2 module (many installations place a data/ dir
+    #    alongside the package file)
+    try:
+        cv2_dir = os.path.dirname(cv2.__file__)
+        alt = os.path.join(cv2_dir, "data", filename)
+        if os.path.exists(alt):
+            return alt
+    except Exception:
+        pass
+
+    # 3) Common system paths
+    for base in ("/usr/share/opencv4/haarcascades", "/usr/share/opencv/haarcascades", "/usr/local/share/opencv4/haarcascades", "/usr/local/share/opencv/haarcascades"):
+        candidate = os.path.join(base, filename)
+        if os.path.exists(candidate):
+            return candidate
+
+    raise ValueError(
+        "Could not locate 'haarcascade_frontalface_default.xml'. "
+        "Install OpenCV data files (e.g. 'apt install opencv-data' or the equivalent), "
+        "or pass an explicit 'cascade_path' to HaarCascadeDetector()."
+    )
 
 
 @dataclass(frozen=True)
@@ -55,7 +108,7 @@ class HaarCascadeDetector:
         min_neighbors: int = 5,
     ) -> None:
         if cascade_path is None:
-            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            cascade_path = _default_haarcascade_path()
 
         self._classifier = cv2.CascadeClassifier(cascade_path)
         if self._classifier.empty():  # pragma: no cover - defensive guard
