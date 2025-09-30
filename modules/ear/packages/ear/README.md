@@ -1,11 +1,12 @@
 # Ear
 
-PyAudio capture, WebRTC VAD, and streaming transcription for ROS 2.
+ALSA-based capture, WebRTC VAD, and streaming transcription for ROS 2.
 
 The ear package exposes a small set of executables that form the audio intake
 pipeline:
 
-- `ear_node` – streams raw PCM16 audio from a PyAudio device to `/audio/raw`.
+- `ear_node` – streams raw PCM16 audio from an ALSA device (via `arecord`) to
+  `/audio/raw`.
 - `silence_node` – monitors `/audio/raw` and publishes a silence-duration gauge
   on `/audio/silence_ms`.
 - `vad_node` – resamples `/audio/raw` to 16 kHz, applies WebRTC VAD, and emits
@@ -35,10 +36,16 @@ pipeline:
 ## Parameters
 
 ### `ear_node`
-- `device_id` (int, default `0`): PyAudio device index.
+- `device_id` (int, default `0`): ALSA card index. Converted to `hw:<id>,0`
+  when `alsa_device` is not provided.
+- `alsa_device` (string, default empty): Explicit ALSA device string passed to
+  `arecord` (for example `hw:1,0` or `plughw:2,0`). Takes precedence over
+  `device_id` when set.
 - `sample_rate` (int, default `44100`): Capture rate in Hz.
 - `channels` (int, default `1`): Channel count.
-- `chunk_size` (int, default `1024`): Frames per callback.
+- `chunk_size` (int, default `2048`): Bytes per message read from the
+  subprocess pipe.
+- `topic` (string, default `/audio/raw`): Destination for the raw PCM frames.
 
 ### `silence_node`
 - `silence_threshold` (float, default `500.0`): RMS threshold used to reset the
@@ -120,7 +127,7 @@ ros2 launch ear ear.launch.py \
     ear_device_id:=0 \
     ear_sample_rate:=44100 \
     ear_channels:=1 \
-    ear_chunk_size:=1024 \
+    ear_chunk_size:=2048 \
     silence_threshold:=500.0
 ```
 

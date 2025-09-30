@@ -13,7 +13,6 @@ setup(
     ],
     install_requires=[
         'setuptools',
-        'pyaudio',
         'webrtcvad',
         'numpy',
         'faster-whisper>=1.0.0',
@@ -22,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',
-    description='PyAudio-based microphone capture and silence monitoring nodes',
+    description='ALSA-based microphone capture and silence monitoring nodes',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
