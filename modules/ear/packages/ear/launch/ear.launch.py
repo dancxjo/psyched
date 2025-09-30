@@ -256,10 +256,10 @@ def generate_launch_description() -> LaunchDescription:
         + [
             ear_node,
             silence_node,
-            # vad_node,
-            # segmenter_node,
+            vad_node,
+            segmenter_node,
             # accumulator_node,
-            # transcriber_short,
+            transcriber_short,
             # transcriber_medium,
             # transcriber_long,
         ]
