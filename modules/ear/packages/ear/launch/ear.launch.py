@@ -27,6 +27,8 @@ SEGMENTER_DEFAULTS = {
     "segmenter_segment_topic": "/audio/speech_segment",
     "segmenter_accum_topic": "/audio/speech_segment_accumulating",
     "segmenter_duration_topic": "/audio/speech_duration",
+    "segmenter_silence_release_ms": "450.0",
+    "segmenter_max_segment_ms": "12000.0",
 }
 
 TRANSCRIBER_DEFAULTS = {
@@ -42,6 +44,9 @@ TRANSCRIBER_DEFAULTS = {
     "transcriber_fast_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_medium_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_long_remote_ws_url": "ws://forebrain.local:8082/ws",
+    "transcriber_fast_remote_audio_dump_dir": "log/remote_asr/fast",
+    "transcriber_medium_remote_audio_dump_dir": "log/remote_asr/medium",
+    "transcriber_long_remote_audio_dump_dir": "log/remote_asr/long",
     "transcriber_remote_connect_timeout": "3000",
     "transcriber_remote_response_timeout": "3000",
     "transcriber_speaker": "user",
@@ -131,6 +136,12 @@ def generate_launch_description() -> LaunchDescription:
                 "segment_topic": ParameterValue(LaunchConfiguration("segmenter_segment_topic"), value_type=str),
                 "accumulating_topic": ParameterValue(LaunchConfiguration("segmenter_accum_topic"), value_type=str),
                 "duration_topic": ParameterValue(LaunchConfiguration("segmenter_duration_topic"), value_type=str),
+                "silence_release_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_silence_release_ms"), value_type=float
+                ),
+                "max_segment_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_max_segment_ms"), value_type=float
+                ),
             }
         ],
         output="screen",
@@ -168,6 +179,7 @@ def generate_launch_description() -> LaunchDescription:
                 "segment_accumulating_topic": LaunchConfiguration("transcriber_segment_accum_topic"),
                 "transcript_short_topic": LaunchConfiguration("transcriber_transcript_short_topic"),
                 "fast_remote_ws_url": LaunchConfiguration("transcriber_fast_remote_ws_url"),
+                "fast_remote_audio_dump_dir": LaunchConfiguration("transcriber_fast_remote_audio_dump_dir"),
                 "speaker": LaunchConfiguration("transcriber_speaker"),
                 "segment_sample_rate": ParameterValue(
                     LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
@@ -200,6 +212,7 @@ def generate_launch_description() -> LaunchDescription:
                 "transcript_medium_topic": LaunchConfiguration("transcriber_transcript_medium_topic"),
                 "transcript_topic": LaunchConfiguration("transcriber_transcript_topic"),
                 "medium_remote_ws_url": LaunchConfiguration("transcriber_medium_remote_ws_url"),
+                "medium_remote_audio_dump_dir": LaunchConfiguration("transcriber_medium_remote_audio_dump_dir"),
                 "speaker": LaunchConfiguration("transcriber_speaker"),
                 "segment_sample_rate": ParameterValue(
                     LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
@@ -231,6 +244,7 @@ def generate_launch_description() -> LaunchDescription:
                 "speech_accumulating_topic": LaunchConfiguration("transcriber_speech_accum_topic"),
                 "transcript_long_topic": LaunchConfiguration("transcriber_transcript_long_topic"),
                 "long_remote_ws_url": LaunchConfiguration("transcriber_long_remote_ws_url"),
+                "long_remote_audio_dump_dir": LaunchConfiguration("transcriber_long_remote_audio_dump_dir"),
                 "speaker": LaunchConfiguration("transcriber_speaker"),
                 "segment_sample_rate": ParameterValue(
                     LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int

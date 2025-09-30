@@ -31,8 +31,7 @@ packages = ["voice"]
 
 [[actions]]
 type = "pip_install"
-packages = ["requests"]
-import_check = ["requests"]
+packages = ["requests", "langchain", "langchain-community"]
 break_system = true
 
 [[actions]]

@@ -41,7 +41,7 @@ class ShortTranscriberApp(BaseTranscriberApp):
             remote_trace_param="fast_remote_trace_debug",
             remote_trace_default=False,
             remote_audio_dir_param="fast_remote_audio_dump_dir",
-            remote_audio_dir_default="",
+            remote_audio_dir_default="log/remote_asr/fast",
         )
 
 
