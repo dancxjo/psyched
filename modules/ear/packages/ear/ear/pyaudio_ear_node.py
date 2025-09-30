@@ -126,10 +126,14 @@ class PyAudioEarNode(Node):  # type: ignore[misc]
         self._last_heartbeat = time.time()
         self._last_frames = 0
 
-        try:
-            self.create_timer(5.0, self._heartbeat)
-        except Exception:
-            pass
+        heartbeat_enabled = self.declare_parameter('heartbeat_logging', False)
+        heartbeat_value = getattr(heartbeat_enabled, 'value', False)
+        self._heartbeat_enabled = bool(heartbeat_value) if isinstance(heartbeat_value, bool) else str(heartbeat_value).lower() in {"1", "true", "yes", "on"}
+        if self._heartbeat_enabled:
+            try:
+                self.create_timer(5.0, self._heartbeat)
+            except Exception:
+                pass
 
         self.get_logger().info(
             f'Arecord Ear started: device={self._resolve_device()} '
@@ -257,6 +261,8 @@ class PyAudioEarNode(Node):  # type: ignore[misc]
     # ------------------------------------------------------------------
     # Diagnostics
     def _heartbeat(self) -> None:
+        if not getattr(self, '_heartbeat_enabled', False):
+            return
         now = time.time()
         elapsed = now - self._last_heartbeat
         frames = self._frames_published

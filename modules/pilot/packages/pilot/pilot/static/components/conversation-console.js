@@ -217,7 +217,7 @@ class PilotConversationConsole extends LitElement {
     return html`
       <div class="conversation-console">
         <div class="conversation-log">
-          <h3>Conversation</h3>
+          <h5 class="audio-oscilloscope">Conversation Log</h5>
           <ul>
             ${this.renderHistory()}
           </ul>
@@ -234,14 +234,18 @@ class PilotConversationConsole extends LitElement {
             @keydown=${(event) => this.handleKeyDown(event)}
           ></textarea>
           <div class="conversation-controls">
-            <input
-              type="text"
-              class="conversation-speaker"
-              placeholder="Speaker (default operator)"
-              .value=${this._speaker}
-              ?disabled=${disabled}
-              @input=${(event) => this.handleSpeaker(event)}
-            />
+            <div class="conversation-speaker-group">
+              <label for="conversation-speaker">Speaker</label>
+              <input
+                id="conversation-speaker"
+                type="text"
+                class="conversation-speaker"
+                placeholder="Default operator"
+                .value=${this._speaker}
+                ?disabled=${disabled}
+                @input=${(event) => this.handleSpeaker(event)}
+              />
+            </div>
             <button
               type="submit"
               class="control-button"

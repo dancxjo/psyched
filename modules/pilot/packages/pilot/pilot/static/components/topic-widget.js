@@ -306,7 +306,7 @@ class PilotTopicWidget extends LitElement {
           ${this.record?.paused ? html`<span class="paused">Paused</span>` : nothing}
           ${this.record?.error ? html`<span class="error">${this.record.error}</span>` : nothing}
         </div>
-        <h5 class="metric-title">${this.controlTitle}</h5>
+        <h5 class="metric-title audio-oscilloscope">${this.controlTitle}</h5>
         ${this.renderContent()}
       </div>
     `;

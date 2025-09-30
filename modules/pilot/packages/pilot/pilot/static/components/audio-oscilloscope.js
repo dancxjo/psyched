@@ -24,6 +24,8 @@ class PilotAudioOscilloscope extends LitElement {
     this.width = DEFAULT_WIDTH;
     this.height = DEFAULT_HEIGHT;
     this._samples = new Float32Array();
+    this._lastByteLength = 0;
+    this._decodeWarningIssued = false;
   }
 
   createRenderRoot() {
@@ -45,7 +47,26 @@ class PilotAudioOscilloscope extends LitElement {
 
   _extractSamples() {
     const payload = this.record?.last ?? this.record?.messages?.[0];
-    const bytes = bytesFromMessage(payload?.data ?? payload);
+    if (!payload) {
+      this._lastByteLength = 0;
+      return new Float32Array();
+    }
+
+    const candidate = payload?.data ?? payload?.bytes ?? payload;
+    const bytes = bytesFromMessage(candidate);
+
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
+      this._lastByteLength = 0;
+      if (!this._decodeWarningIssued) {
+        const summary = this._describePayload(payload, candidate);
+        console.warn('Audio oscilloscope: unable to decode PCM payload', summary);
+        this._decodeWarningIssued = true;
+      }
+      return new Float32Array();
+    }
+
+    this._lastByteLength = bytes.byteLength;
+    this._decodeWarningIssued = false;
     return pcm16ToFloat32(bytes);
   }
 
@@ -66,7 +87,22 @@ class PilotAudioOscilloscope extends LitElement {
     ctx.lineWidth = 2;
 
     const samples = this._samples;
-    if (!samples?.length) {
+    const sampleCount = samples?.length ?? 0;
+
+    this.dataset.sampleCount = String(sampleCount);
+    this.dataset.byteLength = String(this._lastByteLength ?? 0);
+
+    let peak = 0;
+    for (let i = 0; i < sampleCount; i += 1) {
+      const magnitude = Math.abs(samples[i]);
+      if (magnitude > peak) {
+        peak = magnitude;
+      }
+    }
+    this.dataset.peak = peak ? peak.toFixed(3) : '0';
+    this.dataset.state = sampleCount ? 'ready' : 'empty';
+
+    if (!sampleCount) {
       ctx.font = '14px sans-serif';
       ctx.fillStyle = '#999';
       ctx.fillText('Awaiting audio frames…', 12, height / 2);
@@ -74,7 +110,7 @@ class PilotAudioOscilloscope extends LitElement {
     }
 
     ctx.beginPath();
-    const step = samples.length / width;
+    const step = sampleCount / width;
     for (let x = 0; x < width; x += 1) {
       const index = Math.floor(x * step);
       const sample = samples[index] ?? 0;
@@ -86,6 +122,35 @@ class PilotAudioOscilloscope extends LitElement {
       }
     }
     ctx.stroke();
+  }
+
+  _describePayload(payload, candidate) {
+    const toSummary = (value) => {
+      if (value == null) {
+        return { type: String(value) };
+      }
+      if (Array.isArray(value)) {
+        return { type: 'Array', length: value.length };
+      }
+      if (value instanceof ArrayBuffer) {
+        return { type: 'ArrayBuffer', byteLength: value.byteLength };
+      }
+      if (ArrayBuffer.isView(value)) {
+        return { type: value.constructor?.name ?? 'TypedArray', length: value.length ?? value.byteLength };
+      }
+      if (typeof value === 'string') {
+        return { type: 'string', length: value.length };
+      }
+      if (typeof value === 'object') {
+        return { type: value.constructor?.name ?? 'Object', keys: Object.keys(value) };
+      }
+      return { type: typeof value };
+    };
+
+    return {
+      payload: toSummary(payload),
+      candidate: toSummary(candidate),
+    };
   }
 
   render() {

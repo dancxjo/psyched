@@ -39,6 +39,10 @@ class MediumTranscriberApp(BaseTranscriberApp):
             backend_override=backend,
             start_worker=start_worker,
             keep_latest=False,
+            remote_trace_param="medium_remote_trace_debug",
+            remote_trace_default=True,
+            remote_audio_dir_param="medium_remote_audio_dump_dir",
+            remote_audio_dir_default="log/remote_asr/medium",
         )
 
 

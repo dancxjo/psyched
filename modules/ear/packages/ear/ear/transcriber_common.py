@@ -40,6 +40,10 @@ class BaseTranscriberApp:
         backend_override: Optional[object] = None,
         start_worker: bool = True,
         keep_latest: bool = False,
+        remote_trace_param: Optional[str] = None,
+        remote_trace_default: bool = False,
+        remote_audio_dir_param: Optional[str] = None,
+        remote_audio_dir_default: Optional[str] = None,
     ) -> None:
         self._node = node
         self._logger = getattr(node, "get_logger", lambda: None)()
@@ -57,6 +61,16 @@ class BaseTranscriberApp:
         remote_default_value = os.getenv(remote_env_var, remote_default)
         remote_param_value = node.declare_parameter(remote_param, remote_default_value).value
         self._remote_url = str(remote_param_value or "").strip()
+
+        trace_param_name = remote_trace_param or f"{tier_name}_remote_trace_debug"
+        trace_default_value = bool(remote_trace_default)
+        trace_param_value = node.declare_parameter(trace_param_name, trace_default_value).value
+        self._remote_trace_debug = bool(trace_param_value) if isinstance(trace_param_value, bool) else str(trace_param_value).lower() in {"1", "true", "yes", "on"}
+
+        audio_dir_param_name = remote_audio_dir_param or f"{tier_name}_remote_audio_dump_dir"
+        audio_dir_default_value = remote_audio_dir_default or ""
+        audio_dir_param_value = node.declare_parameter(audio_dir_param_name, audio_dir_default_value).value
+        self._remote_audio_dump_dir = str(audio_dir_param_value or "").strip()
 
         self._input_topic = str(node.declare_parameter(input_topic_param, input_topic_default).value)
         self._publishers = []
@@ -100,6 +114,8 @@ class BaseTranscriberApp:
             connect_timeout=self._connect_timeout,
             response_timeout=self._response_timeout,
             logger=self._logger,
+            trace=self._remote_trace_debug,
+            dump_audio_dir=self._remote_audio_dump_dir or None,
         )
         if remote is not None:
             return remote

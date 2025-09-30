@@ -105,7 +105,7 @@ class PilotImuPanel extends LitElement {
         ${sections.map(
           (section) => html`
             <div class="metric-card">
-              <h5 class="metric-title">${section.title}</h5>
+              <h5 class="metric-title audio-oscilloscope">${section.title}</h5>
               <ul class="metric-list">
                 ${section.entries.map(
                   (entry) => html`

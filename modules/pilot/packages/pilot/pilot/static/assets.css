@@ -445,7 +445,7 @@ body {
   box-shadow: var(--control-surface-shadow);
 }
 
-.conversation-log h3 {
+.conversation-log h5 {
   margin: 0 0 0.5rem 0;
   font-size: 0.95rem;
   letter-spacing: 0.08rem;
@@ -617,8 +617,22 @@ body {
   align-items: center;
 }
 
-.conversation-speaker {
+.conversation-speaker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   flex: 1 1 200px;
+}
+
+.conversation-speaker-group label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  color: var(--lcars-muted);
+}
+
+.conversation-speaker {
+  flex: 1 1 auto;
   padding: 0.45rem 0.75rem;
   border-radius: 999px;
   border: 1px solid rgba(88, 178, 220, 0.3);
@@ -885,7 +899,7 @@ body {
   color: var(--lcars-muted);
 }
 
-.audio-oscilloscope {
+div.audio-oscilloscope {
   background: var(--control-surface-bg);
   border-radius: var(--control-surface-radius);
   padding: 0.5rem;
@@ -893,11 +907,19 @@ body {
   box-shadow: var(--control-surface-shadow);
 }
 
-.audio-oscilloscope canvas {
+div.audio-oscilloscope canvas {
   width: 100%;
   display: block;
   border-radius: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
+}
+
+h5.audio-oscilloscope {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  color: var(--metric-title-color);
 }
 
 .battery-panel {
@@ -975,7 +997,7 @@ body {
   box-shadow: var(--control-surface-shadow);
 }
 
-.battery-feed .feed-label {
+.battery-feed .label {
   text-transform: uppercase;
   letter-spacing: 0.08rem;
   font-size: 0.75rem;

@@ -398,7 +398,7 @@ def test_transcription_pipeline_processes_audio_synchronously():
     assert publisher.publishers[0].messages[0].text == "hello"
 
 
-def test_remote_backend_returns_refine_transcripts():
+def test_remote_backend_returns_refine_transcripts(tmp_path):
     refine_payload = json.dumps(
         {
             "type": "refine",
@@ -477,6 +477,7 @@ def test_remote_backend_returns_refine_transcripts():
         logger=None,
         connector=dummy_connector,
         monotonic=fake_monotonic,
+        dump_audio_dir=str(tmp_path),
     )
 
     result = backend.transcribe(b"\x00\x01", 16000)
@@ -507,6 +508,10 @@ def test_remote_backend_returns_refine_transcripts():
     assert result.segments[0].start == 0.0
     assert result.segments[1].end == 2.0
     assert [word.text for word in result.words] == ["refined", "speech"]
+
+    audio_files = list(tmp_path.glob("*.wav"))
+    assert audio_files, "audio chunk should be persisted for debugging"
+    assert audio_files[0].stat().st_size > 0
 
 
 def _build_dummy_result() -> TranscriptionResult:

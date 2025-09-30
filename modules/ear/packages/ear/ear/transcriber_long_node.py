@@ -38,6 +38,10 @@ class LongTranscriberApp(BaseTranscriberApp):
             backend_override=backend,
             start_worker=start_worker,
             keep_latest=False,
+            remote_trace_param="long_remote_trace_debug",
+            remote_trace_default=False,
+            remote_audio_dir_param="long_remote_audio_dump_dir",
+            remote_audio_dir_default="",
         )
 
 

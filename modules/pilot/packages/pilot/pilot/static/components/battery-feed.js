@@ -41,7 +41,7 @@ class PilotBatteryFeed extends LitElement {
     const status = statusParts.length ? statusParts.join(' • ') : 'Awaiting telemetry';
     return html`
       <div class="battery-feed" data-state=${this.record?.state ?? 'idle'}>
-        <span class="feed-label">${label}</span>
+        <span class="label feed-label">${label}</span>
         <span class="feed-value">${this.formattedValue}</span>
         <span class="feed-status">${status}</span>
       </div>

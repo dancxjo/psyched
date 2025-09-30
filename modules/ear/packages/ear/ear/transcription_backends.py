@@ -8,6 +8,9 @@ import json
 import math
 import time
 import uuid
+import wave
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Type
 
 from .transcription_types import (
@@ -248,6 +251,8 @@ class RemoteAsrBackend:
         logger=None,
         connector=None,
         monotonic: Callable[[], float] | None = None,
+        trace: bool = False,
+        dump_audio_dir: Optional[str] = None,
     ) -> None:
         if not uri:
             raise ValueError("remote ASR URI must be non-empty")
@@ -260,6 +265,28 @@ class RemoteAsrBackend:
         self._logger = logger
         self._connector = connector or websocket_connect
         self._monotonic = monotonic or time.monotonic
+        self._trace = bool(trace)
+        dump_path: Optional[Path]
+        if dump_audio_dir:
+            try:
+                dump_path = Path(dump_audio_dir).expanduser().resolve()
+                dump_path.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                dump_path = None
+                if self._logger:
+                    self._logger.warning(
+                        "Failed to prepare remote ASR dump directory %s: %s",
+                        dump_audio_dir,
+                        exc,
+                    )
+            else:
+                self._trace_log(
+                    "debug",
+                    f"Audio dumps enabled: {dump_path}",
+                )
+        else:
+            dump_path = None
+        self._dump_audio_dir = dump_path
 
     def transcribe(self, pcm_bytes: bytes, sample_rate: int) -> Optional[TranscriptionResult]:
         if not pcm_bytes:
@@ -267,6 +294,8 @@ class RemoteAsrBackend:
         payload_b64 = base64.b64encode(pcm_bytes).decode("ascii")
         stream_id = f"ear-{uuid.uuid4().hex}"
         chunk_id = f"chunk-{uuid.uuid4().hex}"
+
+        self._dump_audio_chunk(pcm_bytes, sample_rate, stream_id, chunk_id)
 
         try:
             return asyncio.run(
@@ -291,6 +320,10 @@ class RemoteAsrBackend:
         sample_rate: int,
     ) -> Optional[TranscriptionResult]:
         assert self._connector is not None
+        self._trace_log(
+            "info",
+            f"Connecting to {self._uri} (stream={stream_id}, chunk={chunk_id}, sample_rate={sample_rate})",
+        )
         async with self._connector(
             self._uri,
             open_timeout=self._connect_timeout,
@@ -306,7 +339,9 @@ class RemoteAsrBackend:
             }
             if self._language:
                 init_payload["lang"] = self._language
-            await websocket.send(json.dumps(init_payload))
+            init_serialised = json.dumps(init_payload)
+            await websocket.send(init_serialised)
+            self._trace_outbound(stream_id, "init", init_serialised)
 
             audio_payload = {
                 "type": "audio",
@@ -314,14 +349,22 @@ class RemoteAsrBackend:
                 "seq": 0,
                 "payload_b64": payload_b64,
             }
-            await websocket.send(json.dumps(audio_payload))
+            audio_serialised = json.dumps(audio_payload)
+            await websocket.send(audio_serialised)
+            self._trace_outbound(
+                stream_id,
+                "audio",
+                self._summarise_audio_payload(audio_payload),
+            )
 
             commit_payload = {
                 "type": "commit",
                 "stream_id": stream_id,
                 "chunk_id": chunk_id,
             }
-            await websocket.send(json.dumps(commit_payload))
+            commit_serialised = json.dumps(commit_payload)
+            await websocket.send(commit_serialised)
+            self._trace_outbound(stream_id, "commit", commit_serialised)
 
             partial_result: Optional[TranscriptionResult] = None
             final_result: Optional[TranscriptionResult] = None
@@ -352,6 +395,7 @@ class RemoteAsrBackend:
 
                 if not response_raw:
                     continue
+                self._trace_inbound(stream_id, response_raw)
                 try:
                     payload = json.loads(response_raw)
                 except json.JSONDecodeError as exc:
@@ -410,6 +454,67 @@ class RemoteAsrBackend:
             if result_is_usable(partial_result):
                 return partial_result
         return None
+
+    def _dump_audio_chunk(
+        self,
+        pcm_bytes: bytes,
+        sample_rate: int,
+        stream_id: str,
+        chunk_id: str,
+    ) -> None:
+        if self._dump_audio_dir is None:
+            return
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S_%fZ")
+        filename = f"{timestamp}_{stream_id}_{chunk_id}.wav"
+        target = self._dump_audio_dir / filename
+        try:
+            with wave.open(str(target), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(sample_rate)
+                handle.writeframes(pcm_bytes)
+            self._trace_log("info", f"Wrote remote ASR chunk to {target} ({len(pcm_bytes)} bytes)")
+        except Exception as exc:
+            if self._logger:
+                self._logger.warning("Failed to persist ASR audio chunk %s: %s", target, exc)
+
+    def _trace_log(self, level: str, message: str) -> None:
+        if not self._trace or self._logger is None:
+            return
+        log_method = getattr(self._logger, level, None)
+        if callable(log_method):
+            try:
+                log_method(message)
+            except Exception:
+                pass
+
+    def _trace_outbound(self, stream_id: str, label: str, payload: str) -> None:
+        if not self._trace or self._logger is None:
+            return
+        self._trace_log(
+            "info",
+            f"remote-asr[{stream_id}] -> {label}: {payload}",
+        )
+
+    def _trace_inbound(self, stream_id: str, payload: str) -> None:
+        if not self._trace or self._logger is None:
+            return
+        self._trace_log("info", f"remote-asr[{stream_id}] <- {payload}")
+
+    def _summarise_audio_payload(self, payload: Mapping[str, object]) -> str:
+        payload_b64 = payload.get("payload_b64", "")
+        if not isinstance(payload_b64, str):
+            return json.dumps(payload)
+        length = len(payload_b64)
+        preview = payload_b64[:64]
+        summary = {
+            key: value
+            for key, value in payload.items()
+            if key != "payload_b64"
+        }
+        summary["payload_b64_preview"] = preview
+        summary["payload_b64_length"] = length
+        return json.dumps(summary)
 
     def _result_from_payload(self, payload: Mapping[str, object]) -> TranscriptionResult:
         text = str(payload.get("text", "") or "").strip()
@@ -490,6 +595,8 @@ def initialise_remote_backend(
     connect_timeout: float,
     response_timeout: float,
     logger=None,
+    trace: bool = False,
+    dump_audio_dir: Optional[str] = None,
 ) -> Optional[RemoteAsrBackend]:
     """Construct the remote backend when dependencies are available."""
 
@@ -506,6 +613,8 @@ def initialise_remote_backend(
             connect_timeout=connect_timeout,
             response_timeout=response_timeout,
             logger=logger,
+            trace=trace,
+            dump_audio_dir=dump_audio_dir,
         )
     except Exception as exc:
         if logger:
