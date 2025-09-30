@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { stub } from "@std/testing/mock";
 import { type CliDeps, createCli } from "./cli.ts";
 
 function createStubDeps() {
@@ -70,6 +71,8 @@ function createStubDeps() {
   return { calls, deps };
 }
 
+const EXIT_SENTINEL = "psh_test_exit";
+
 async function captureOutput(fn: () => Promise<unknown>): Promise<string> {
   const originalLog = console.log;
   const originalError = console.error;
@@ -96,7 +99,10 @@ async function captureOutput(fn: () => Promise<unknown>): Promise<string> {
   }
   if (thrown) {
     const message = thrown instanceof Error ? thrown.message : String(thrown);
-    if (!message.includes("Test case attempted to exit with exit code: 0")) {
+    if (
+      !message.includes("Test case attempted to exit with exit code: 0") &&
+      message !== EXIT_SENTINEL
+    ) {
       throw thrown;
     }
   }
@@ -197,6 +203,25 @@ Deno.test("clean all triggers every cleaner", async () => {
     "uninstallPsh",
     "systemdUninstall",
   ]);
+});
+
+Deno.test("systemd warns when action and unit order is swapped", async () => {
+  const { deps } = createStubDeps();
+  const cli = createCli(deps);
+
+  const output = await captureOutput(async () => {
+    const exitStub = stub(Deno, "exit", () => {
+      throw new Error(EXIT_SENTINEL);
+    });
+    try {
+      await cli.parse(["systemd", "ear", "stop"]);
+    } finally {
+      exitStub.restore();
+    }
+  });
+
+  assertStringIncludes(output, "Unknown systemd action: ear");
+  assertStringIncludes(output, "Did you mean 'psh sys stop ear'?");
 });
 
 Deno.test("clean systemd route", async () => {

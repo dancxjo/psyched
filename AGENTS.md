@@ -137,6 +137,7 @@ Visit `http://<cerebellum-host>:8080`.
   * Ollama models (ollama.com) may fail behind firewall.
   * Piper TTS models (huggingface.co) require access.
   * ROS 2 installation may fail if GitHub API blocked.
+  * Development containers may not include the Deno runtime by default; install Deno locally to run `psh` CLI tests.
 * **Hardware deps**:
 
   * `alsa-utils`, `pyaudio`, `webrtcvad` for `ear`.

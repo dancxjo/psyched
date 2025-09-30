@@ -279,6 +279,40 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
 
 
   // Systemd command: dispatch action and optional units as arguments
+  const systemdActionAliases = {
+    generate: ["*", "gen", "generate"],
+    install: ["install", "in"],
+    uninstall: ["uninstall", "remove", "rm"],
+    debug: ["debug", "dbg", "d", "status"],
+    enable: ["enable", "en"],
+    disable: ["disable", "dis"],
+    start: ["start"],
+    stop: ["stop"],
+    reload: ["reload", "reload-daemon", "rd"],
+    restart: ["restart", "re"],
+  } as const;
+
+  type SystemdAction = keyof typeof systemdActionAliases;
+  const preferredActionAlias: Record<SystemdAction, string> = {
+    generate: "gen",
+    install: "install",
+    uninstall: "uninstall",
+    debug: "debug",
+    enable: "enable",
+    disable: "disable",
+    start: "start",
+    stop: "stop",
+    reload: "reload",
+    restart: "restart",
+  };
+
+  const aliasToCanonical = new Map<string, SystemdAction>();
+  for (const [canonical, aliases] of Object.entries(systemdActionAliases)) {
+    for (const alias of aliases) {
+      aliasToCanonical.set(alias.toLowerCase(), canonical as SystemdAction);
+    }
+  }
+
   const _sys = cli.command("systemd")
     .alias("sys")
     .alias("service")
@@ -286,69 +320,95 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
     .description("Manage systemd unit files (gen/install, debug, enable, disable, stop, start, reload, restart)")
     .arguments("[action:string] [...units:string]")
     .action(async (_options: unknown, action?: string, ...units: string[]) => {
-      const act = normalize(action, "gen");
-      if (["*", "gen", "generate"].includes(act)) {
-        await deps.systemdGenerate(units.length ? units : undefined);
+      const normalizedAction = normalize(action, "gen");
+      const canonicalAction = aliasToCanonical.get(normalizedAction);
+      const maybeUnits = units.length ? units : undefined;
+
+      if (!canonicalAction) {
+        const swapped = units.map((unit, index) => {
+          const canonical = aliasToCanonical.get(unit.toLowerCase());
+          return canonical ? { index, canonical, token: unit } : undefined;
+        }).find((candidate): candidate is { index: number; canonical: SystemdAction; token: string } => Boolean(candidate));
+
+        console.error(`[psh] Unknown systemd action: ${action}`);
+        if (swapped) {
+          const reorderedUnits = [
+            action,
+            ...units.slice(0, swapped.index),
+            ...units.slice(swapped.index + 1),
+          ].filter((value): value is string => Boolean(value));
+          const suggestion = [
+            "psh",
+            "sys",
+            swapped.token,
+            ...reorderedUnits,
+          ].join(" ");
+          console.error(`[psh] Did you mean '${suggestion}'?`);
+        } else {
+          const available = (Object.keys(systemdActionAliases) as SystemdAction[])
+            .map((key) => preferredActionAlias[key])
+            .join(", ");
+          console.error(`[psh] Available actions: ${available}`);
+        }
+        Deno.exit(1);
         return;
       }
-      if (["install", "in"].includes(act)) {
-        await deps.systemdInstall(units.length ? units : undefined);
-        return;
-      }
-      if (["uninstall", "remove", "rm"].includes(act)) {
-        await deps.systemdUninstall(units.length ? units : undefined);
-        return;
-      }
-      if (["debug", "dbg", "d", "status"].includes(act)) {
-        if (deps.systemdDebug) {
-          await deps.systemdDebug(units.length ? units : undefined);
+
+      switch (canonicalAction) {
+        case "generate":
+          await deps.systemdGenerate(maybeUnits);
           return;
-        }
-        throw new Error("systemdDebug not implemented");
-      }
-      if (["enable", "en"].includes(act)) {
-        if (deps.systemdEnable) {
-          await deps.systemdEnable(units.length ? units : undefined);
+        case "install":
+          await deps.systemdInstall(maybeUnits);
           return;
-        }
-        throw new Error("systemdEnable not implemented");
-      }
-      if (["disable", "dis"].includes(act)) {
-        if (deps.systemdDisable) {
-          await deps.systemdDisable(units.length ? units : undefined);
+        case "uninstall":
+          await deps.systemdUninstall(maybeUnits);
           return;
-        }
-        throw new Error("systemdDisable not implemented");
+        case "debug":
+          if (deps.systemdDebug) {
+            await deps.systemdDebug(maybeUnits);
+            return;
+          }
+          throw new Error("systemdDebug not implemented");
+        case "enable":
+          if (deps.systemdEnable) {
+            await deps.systemdEnable(maybeUnits);
+            return;
+          }
+          throw new Error("systemdEnable not implemented");
+        case "disable":
+          if (deps.systemdDisable) {
+            await deps.systemdDisable(maybeUnits);
+            return;
+          }
+          throw new Error("systemdDisable not implemented");
+        case "start":
+          if (deps.systemdStart) {
+            await deps.systemdStart(maybeUnits);
+            return;
+          }
+          throw new Error("systemdStart not implemented");
+        case "stop":
+          if (deps.systemdStop) {
+            await deps.systemdStop(maybeUnits);
+            return;
+          }
+          throw new Error("systemdStop not implemented");
+        case "reload":
+          if (deps.systemdReload) {
+            await deps.systemdReload(maybeUnits);
+            return;
+          }
+          throw new Error("systemdReload not implemented");
+        case "restart":
+          if (deps.systemdRestart) {
+            await deps.systemdRestart(maybeUnits);
+            return;
+          }
+          throw new Error("systemdRestart not implemented");
+        default:
+          throw new Error(`Unknown systemd action: ${canonicalAction}`);
       }
-      if (["start"].includes(act)) {
-        if (deps.systemdStart) {
-          await deps.systemdStart(units.length ? units : undefined);
-          return;
-        }
-        throw new Error("systemdStart not implemented");
-      }
-      if (["stop"].includes(act)) {
-        if (deps.systemdStop) {
-          await deps.systemdStop(units.length ? units : undefined);
-          return;
-        }
-        throw new Error("systemdStop not implemented");
-      }
-      if (["reload", "reload-daemon", "rd"].includes(act)) {
-        if (deps.systemdReload) {
-          await deps.systemdReload(units.length ? units : undefined);
-          return;
-        }
-        throw new Error("systemdReload not implemented");
-      }
-      if (["restart", "re"].includes(act)) {
-        if (deps.systemdRestart) {
-          await deps.systemdRestart(units.length ? units : undefined);
-          return;
-        }
-        throw new Error("systemdRestart not implemented");
-      }
-      throw new Error(`Unknown systemd action: ${action}`);
     });
 
   cli.command("environment")
