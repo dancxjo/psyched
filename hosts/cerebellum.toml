@@ -8,7 +8,7 @@ setup_ros2 = true
 setup_docker = true
 
 # Download speech-stack assets (models, etc.) on this host?
-setup_speech = true
+setup_speech = false
 
 # Ordered list of modules to enable for this host. Each entry corresponds to
 # a directory under modules/ and its module.toml actions will be executed in
