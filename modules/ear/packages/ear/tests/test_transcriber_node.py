@@ -1,3 +1,4 @@
+import base64
 import json
 import types
 from dataclasses import dataclass
@@ -443,7 +444,10 @@ def test_remote_backend_returns_refine_transcripts():
             except StopIteration as exc:  # pragma: no cover - defensive; loop exits on refine
                 raise RuntimeError("no more responses") from exc
 
-    websocket = DummyWebSocket([refine_payload])
+    websocket = DummyWebSocket([
+        json.dumps({"type": "stats", "rtf": 0.5, "queue_len": 1, "gpu": False}),
+        refine_payload,
+    ])
 
     class DummyConnectorContext:
         def __init__(self, socket: DummyWebSocket):
@@ -476,6 +480,25 @@ def test_remote_backend_returns_refine_transcripts():
     )
 
     result = backend.transcribe(b"\x00\x01", 16000)
+
+    assert len(websocket.sent_messages) == 3
+    init_message = json.loads(websocket.sent_messages[0])
+    audio_message = json.loads(websocket.sent_messages[1])
+    commit_message = json.loads(websocket.sent_messages[2])
+
+    assert init_message["type"] == "init"
+    assert init_message["stream_id"].startswith("ear-")
+    assert init_message["content_type"] == "audio/pcm; rate=16000"
+    assert init_message["sample_rate"] == 16000
+    assert init_message["extras"]["chunk_id"] == commit_message["chunk_id"]
+    assert audio_message == {
+        "type": "audio",
+        "stream_id": init_message["stream_id"],
+        "seq": 0,
+        "payload_b64": base64.b64encode(b"\x00\x01").decode("ascii"),
+    }
+    assert commit_message["type"] == "commit"
+    assert commit_message["stream_id"] == init_message["stream_id"]
 
     assert isinstance(result, TranscriptionResult)
     assert result.text == "refined speech"
@@ -541,5 +564,3 @@ def test_long_transcriber_routes_to_long_topic():
     long_pub = fake_node.publishers["/audio/transcript/long"]
     assert len(long_pub.messages) == 1
     assert long_pub.messages[0].text == "dummy"
-
-

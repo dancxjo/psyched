@@ -8,7 +8,7 @@ import json
 import math
 import time
 import uuid
-from typing import Callable, List, Optional, Sequence, Tuple, Type
+from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Type
 
 from .transcription_types import (
     SegmentData,
@@ -297,16 +297,34 @@ class RemoteAsrBackend:
             close_timeout=self._connect_timeout,
             max_size=5_000_000,
         ) as websocket:
-            request = {
-                "type": "decode",
+            init_payload = {
+                "type": "init",
                 "stream_id": stream_id,
-                "chunk_id": chunk_id,
-                "payload": payload_b64,
+                "content_type": f"audio/pcm; rate={sample_rate}",
                 "sample_rate": sample_rate,
+                "extras": {"chunk_id": chunk_id},
             }
             if self._language:
-                request["language"] = self._language
-            await websocket.send(json.dumps(request))
+                init_payload["lang"] = self._language
+            await websocket.send(json.dumps(init_payload))
+
+            audio_payload = {
+                "type": "audio",
+                "stream_id": stream_id,
+                "seq": 0,
+                "payload_b64": payload_b64,
+            }
+            await websocket.send(json.dumps(audio_payload))
+
+            commit_payload = {
+                "type": "commit",
+                "stream_id": stream_id,
+                "chunk_id": chunk_id,
+            }
+            await websocket.send(json.dumps(commit_payload))
+
+            partial_result: Optional[TranscriptionResult] = None
+            final_result: Optional[TranscriptionResult] = None
 
             deadline = self._monotonic() + self._response_timeout
             while True:
@@ -327,34 +345,77 @@ class RemoteAsrBackend:
                 except json.JSONDecodeError as exc:
                     raise RuntimeError(f"Invalid ASR response: {exc}") from exc
                 response_type = str(payload.get("type", "")).strip().lower()
-                if response_type not in {"partial", "refine", "error"}:
-                    if self._logger:
-                        self._logger.warning(
-                            "Unknown ASR response type %s", payload.get("type")
-                        )
+
+                # Extend the response window while the server keeps streaming updates.
+                deadline = self._monotonic() + self._response_timeout
+
+                if response_type == "stats":
                     continue
                 if response_type == "error":
                     message = payload.get("message", "remote ASR error")
                     raise RuntimeError(str(message))
-                text = str(payload.get("text", "")).strip()
-                confidence = float(payload.get("confidence") or 0.0)
-                segments_payload = payload.get("segments")
-                words_payload = payload.get("words")
-                segments_out, words_out = segments_and_words_from_payload(
-                    segments_payload
-                )
-                if words_payload:
-                    words_out.extend(words_from_sequence(words_payload, 0.0, 0.0))
-                words_coalesced = coalesce_words(text, segments_out, words_out)
-                result = TranscriptionResult(
-                    text=text,
-                    confidence=float(confidence or 0.0),
-                    segments=segments_out,
-                    words=words_coalesced,
-                )
-                if response_type == "refine" or result_is_usable(result):
-                    return result
+
+                result = self._result_from_payload(payload)
+
+                if response_type == "partial":
+                    avg_logprob = payload.get("avg_logprob")
+                    if avg_logprob is not None:
+                        confidence = _logprob_to_confidence(float(avg_logprob))
+                        result = TranscriptionResult(
+                            text=result.text,
+                            confidence=confidence,
+                            segments=result.segments,
+                            words=result.words,
+                        )
+                    partial_result = result if result_is_usable(result) else partial_result
+                    continue
+
+                if response_type == "final":
+                    confidence_raw = payload.get("confidence")
+                    if confidence_raw is not None:
+                        result = TranscriptionResult(
+                            text=result.text,
+                            confidence=float(confidence_raw or 0.0),
+                            segments=result.segments,
+                            words=result.words,
+                        )
+                    if result_is_usable(result):
+                        final_result = result
+                        break
+                    continue
+
+                if response_type == "refine":
+                    if result_is_usable(result):
+                        return result
+                    continue
+
+                if self._logger:
+                    self._logger.warning(
+                        f"Unknown ASR response type {payload.get('type')}"
+                    )
+
+            if result_is_usable(final_result):
+                return final_result
+            if result_is_usable(partial_result):
+                return partial_result
         return None
+
+    def _result_from_payload(self, payload: Mapping[str, object]) -> TranscriptionResult:
+        text = str(payload.get("text", "") or "").strip()
+        segments_payload = payload.get("segments")
+        words_payload = payload.get("words")
+        segments_out, words_out = segments_and_words_from_payload(segments_payload)
+        if words_payload:
+            words_out.extend(words_from_sequence(words_payload, 0.0, 0.0))
+        words_coalesced = coalesce_words(text, segments_out, words_out)
+        confidence_raw = payload.get("confidence")
+        confidence = float(confidence_raw or 0.0) if confidence_raw is not None else 0.0
+        return TranscriptionResult(
+            text=text,
+            confidence=confidence,
+            segments=segments_out,
+            words=words_coalesced,
+        )
 
 
 class ChainedTranscriptionBackend:

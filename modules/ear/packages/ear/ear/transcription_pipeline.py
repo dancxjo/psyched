@@ -134,7 +134,7 @@ class TranscriptionPipeline:
                     pass
                 self._queue.put_nowait(pcm_bytes)
             elif self._logger:
-                self._logger.warning("Dropping %s audio: queue full", self._tier)
+                self._logger.warning(f"Dropping {self._tier} audio: queue full")
 
     def stop(self) -> None:
         if self._use_thread:
@@ -160,7 +160,7 @@ class TranscriptionPipeline:
         if self._backend is None:
             if not self._warned_backend_missing and self._logger:
                 self._logger.warning(
-                    "No ASR backend configured for %s tier; dropping audio", self._tier
+                    f"No ASR backend configured for {self._tier} tier; dropping audio"
                 )
             self._warned_backend_missing = True
             return
@@ -168,7 +168,9 @@ class TranscriptionPipeline:
             result = self._backend.transcribe(pcm_bytes, self._sample_rate)  # type: ignore[attr-defined]
         except Exception as exc:
             if self._logger:
-                self._logger.warning("Backend %s raised error: %s", self._tier, exc)
+                self._logger.warning(
+                    f"Backend {self._tier} raised error: {exc}"
+                )
             return
         if not result_is_usable(result):
             return
