@@ -47,10 +47,9 @@ class FaceDetectorNode(Node):
 
         self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
 
+        # pragma: no cover - logging only
         self.get_logger().info(
-            "Face detector initialised with camera_topic=%s faces_topic=%s",  # pragma: no cover - logging only
-            self._camera_topic,
-            self._faces_topic,
+            f"Face detector initialised with camera_topic={self._camera_topic} faces_topic={self._faces_topic}"
         )
 
     def _get_param(self, name: str, default: object) -> object:
