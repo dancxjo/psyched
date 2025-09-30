@@ -330,12 +330,24 @@ class RemoteAsrBackend:
             while True:
                 timeout = deadline - self._monotonic()
                 if timeout <= 0.0:
+                    if result_is_usable(final_result):
+                        return final_result
+                    if result_is_usable(partial_result):
+                        return partial_result
                     raise RuntimeError("Timed out waiting for ASR response")
                 try:
                     response_raw = await asyncio.wait_for(websocket.recv(), timeout=timeout)
                 except asyncio.TimeoutError as exc:
+                    if result_is_usable(final_result):
+                        return final_result
+                    if result_is_usable(partial_result):
+                        return partial_result
                     raise RuntimeError("Timed out waiting for ASR response") from exc
                 except ConnectionClosed as exc:  # pragma: no cover - runtime only
+                    if result_is_usable(final_result):
+                        return final_result
+                    if result_is_usable(partial_result):
+                        return partial_result
                     raise RuntimeError(f"ASR connection closed: {exc}") from exc
 
                 if not response_raw:
@@ -381,7 +393,6 @@ class RemoteAsrBackend:
                         )
                     if result_is_usable(result):
                         final_result = result
-                        break
                     continue
 
                 if response_type == "refine":

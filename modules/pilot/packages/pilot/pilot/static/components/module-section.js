@@ -254,9 +254,11 @@ class PilotModuleSection extends LitElement {
     return html`
       <section class="module-section" id=${`module-${this.module.name}`}>
         <header class="module-header">
-          <h2>${this.module.display_name || this.module.name}</h2>
-          ${this.module.description ? html`<p>${this.module.description}</p>` : nothing}
-          ${this.renderRegimeTags()}
+          <div>
+            <h2>${this.module.display_name || this.module.name}</h2>
+            ${this.module.description ? html`<p>${this.module.description}</p>` : nothing}
+            ${this.renderRegimeTags()}
+          </div>
           <div class="command-groups">
             <div class="command-set">
               <h3>Module Commands</h3>

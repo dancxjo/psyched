@@ -253,6 +253,12 @@ body {
   color: var(--lcars-muted);
 }
 
+.module-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
 .command-groups {
   display: flex;
   flex-wrap: wrap;
