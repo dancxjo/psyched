@@ -9,7 +9,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    kinect_rgb = LaunchConfiguration('kinect_rgb_topic', default='/camera/color/image_raw')
+    kinect_rgb = LaunchConfiguration('kinect_rgb_topic', default='/image_raw')
     kinect_depth = LaunchConfiguration('kinect_depth_topic', default='/camera/depth/image_raw')
     kinect_frame = LaunchConfiguration('camera_frame', default='camera_link')
 

@@ -42,8 +42,8 @@ Package layout
 
 Usage notes
 -----------
-- Kinect topics default to `/camera/color/image_raw` and
-  `/camera/depth/image_raw`; override them via launch arguments as needed.
+- Kinect topics default to `/image_raw` (RGB) and `/camera/depth/image_raw`;
+  override them via launch arguments as needed.
 - A static transform from `base_link` to the camera frame is published at
   `(0, 0, 0.3)`; edit the launch file if your sensor is mounted differently.
 - RTAB-Map support lives in its own module.  Launch an external SLAM node if

@@ -7,7 +7,7 @@ description = "RGB-D perception from the Kinect"
 regimes = ["perception"]
 
 [[pilot.topics]]
-name = "/camera/color/image_raw"
+name = "/image_raw"
 type = "sensor_msgs/msg/Image"
 access = "ro"
 presentation = "image"
