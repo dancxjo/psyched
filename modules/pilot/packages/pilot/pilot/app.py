@@ -267,23 +267,13 @@ class PilotApplication:
                 module_topic = _find_topic(self.catalog, payload.topic, module_name)
                 if module_topic is None:
                     raise HTTPException(status_code=404, detail="Unknown topic")
-                    message_type = module_topic.type
-                    # If the client provided a partial qos mapping, merge it with the
-                    # module-declared defaults so we don't accidentally fall back to
-                    # the global defaults (which use reliable) for missing fields.
-                    module_qos = module_topic.qos.asdict()
-                    if qos is None:
-                        qos = module_qos
-                    else:
-                        merged = dict(module_qos)
-                        try:
-                            # payload.qos should be a plain mapping coming from the UI
-                            merged.update(qos)
-                        except Exception:
-                            # If qos isn't a mapping for some reason, fall back to module defaults
-                            qos = module_qos
-                        else:
-                            qos = merged
+
+                # Use the module-declared message type and merge any partial qos
+                # provided by the client with the module defaults so important
+                # fields like `reliability` aren't lost.
+                message_type = module_topic.type
+                module_qos = module_topic.qos.asdict()
+                qos = _merge_qos(module_qos, qos)
             try:
                 session = self.topic_manager.create_session(
                     topic=payload.topic,
