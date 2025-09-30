@@ -6,6 +6,7 @@
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: 0.5rem;
+	overflow: hidden;
 }
 .command-log .log-toggle {
 	background: transparent;

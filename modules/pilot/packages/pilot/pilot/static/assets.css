@@ -440,7 +440,7 @@ body {
   border-radius: var(--control-surface-radius);
   padding: var(--control-surface-padding);
   max-height: 260px;
-  overflow-y: auto;
+  overflow-y: hidden;
   border: 1px solid var(--control-surface-border);
   box-shadow: var(--control-surface-shadow);
 }
