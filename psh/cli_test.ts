@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { stub } from "@std/testing/mock";
 import { type CliDeps, createCli } from "./cli.ts";
 
@@ -27,14 +27,35 @@ function createStubDeps() {
     runInstallDocker() {
       record("runInstallDocker");
     },
-    systemdGenerate() {
-      record("systemdGenerate");
+    systemdGenerate(units?: string[]) {
+      record("systemdGenerate", [units]);
     },
-    systemdInstall() {
-      record("systemdInstall");
+    systemdInstall(units?: string[]) {
+      record("systemdInstall", [units]);
     },
-    systemdUninstall() {
-      record("systemdUninstall");
+    systemdUninstall(units?: string[]) {
+      record("systemdUninstall", [units]);
+    },
+    systemdDebug(units?: string[]) {
+      record("systemdDebug", [units]);
+    },
+    systemdEnable(units?: string[]) {
+      record("systemdEnable", [units]);
+    },
+    systemdDisable(units?: string[]) {
+      record("systemdDisable", [units]);
+    },
+    systemdStart(units?: string[]) {
+      record("systemdStart", [units]);
+    },
+    systemdStop(units?: string[]) {
+      record("systemdStop", [units]);
+    },
+    systemdReload(units?: string[]) {
+      record("systemdReload", [units]);
+    },
+    systemdRestart(units?: string[]) {
+      record("systemdRestart", [units]);
     },
     printEnvSource() {
       record("printEnvSource");
@@ -172,6 +193,22 @@ Deno.test("systemd uninstall subcommand", async () => {
   assertEquals(Object.keys(calls), ["systemdUninstall"]);
 });
 
+Deno.test("module command routes systemd install", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["mod", "install", "pilot"]);
+  assertEquals(Object.keys(calls), ["systemdInstall"]);
+  assertEquals(calls.systemdInstall, [["pilot"]]);
+});
+
+Deno.test("module command reorders service verbs", async () => {
+  const { calls, deps } = createStubDeps();
+  const cli = createCli(deps);
+  await cli.parse(["mod", "pilot", "enable"]);
+  assertEquals(Object.keys(calls), ["systemdEnable"]);
+  assertEquals(calls.systemdEnable, [["pilot"]]);
+});
+
 Deno.test("env command prints shell snippet", async () => {
   const { calls, deps } = createStubDeps();
   const cli = createCli(deps);
@@ -205,23 +242,12 @@ Deno.test("clean all triggers every cleaner", async () => {
   ]);
 });
 
-Deno.test("systemd warns when action and unit order is swapped", async () => {
-  const { deps } = createStubDeps();
+Deno.test("systemd alias reorders swapped arguments", async () => {
+  const { calls, deps } = createStubDeps();
   const cli = createCli(deps);
-
-  const output = await captureOutput(async () => {
-    const exitStub = stub(Deno, "exit", () => {
-      throw new Error(EXIT_SENTINEL);
-    });
-    try {
-      await cli.parse(["systemd", "ear", "stop"]);
-    } finally {
-      exitStub.restore();
-    }
-  });
-
-  assertStringIncludes(output, "Unknown systemd action: ear");
-  assertStringIncludes(output, "Did you mean 'psh sys stop ear'?");
+  await cli.parse(["systemd", "ear", "stop"]);
+  assertEquals(Object.keys(calls), ["systemdStop"]);
+  assertEquals(calls.systemdStop, [["ear"]]);
 });
 
 Deno.test("clean systemd route", async () => {

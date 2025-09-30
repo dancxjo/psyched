@@ -99,6 +99,136 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
 
   const deps: CliDeps = { ...defaultDeps, ...overrides } as CliDeps;
 
+  function isKnownAction(token: string | undefined): boolean {
+    if (!token) return false;
+    return allActionTokens.has(token.toLowerCase());
+  }
+
+  async function dispatchModuleOrService(
+    defaultAction: string,
+    actionArg: string | undefined,
+    targetsArg: string[],
+    opts: { preferSystemd: boolean },
+  ): Promise<void> {
+    let verb = actionArg;
+    let targets = [...targetsArg];
+
+    if (
+      targets.length > 0 &&
+      isKnownAction(targets[0]) &&
+      (!verb || !isKnownAction(verb))
+    ) {
+      const [firstAction, ...rest] = targets;
+      targets = verb ? [verb, ...rest] : rest;
+      verb = firstAction;
+    }
+
+    const finalVerb = (verb ?? defaultAction);
+    const normalizedVerb = finalVerb.toLowerCase();
+    const canonicalAction = aliasToCanonical.get(normalizedVerb);
+
+    if (canonicalAction) {
+      const maybeUnits = targets.length ? targets : undefined;
+      switch (canonicalAction) {
+        case "generate":
+          await deps.systemdGenerate(maybeUnits);
+          return;
+        case "install":
+          await deps.systemdInstall(maybeUnits);
+          return;
+        case "uninstall":
+          await deps.systemdUninstall(maybeUnits);
+          return;
+        case "debug":
+          if (deps.systemdDebug) {
+            await deps.systemdDebug(maybeUnits);
+            return;
+          }
+          throw new Error("systemdDebug not implemented");
+        case "enable":
+          if (deps.systemdEnable) {
+            await deps.systemdEnable(maybeUnits);
+            return;
+          }
+          throw new Error("systemdEnable not implemented");
+        case "disable":
+          if (deps.systemdDisable) {
+            await deps.systemdDisable(maybeUnits);
+            return;
+          }
+          throw new Error("systemdDisable not implemented");
+        case "start":
+          if (deps.systemdStart) {
+            await deps.systemdStart(maybeUnits);
+            return;
+          }
+          throw new Error("systemdStart not implemented");
+        case "stop":
+          if (deps.systemdStop) {
+            await deps.systemdStop(maybeUnits);
+            return;
+          }
+          throw new Error("systemdStop not implemented");
+        case "reload":
+          if (deps.systemdReload) {
+            await deps.systemdReload(maybeUnits);
+            return;
+          }
+          throw new Error("systemdReload not implemented");
+        case "restart":
+          if (deps.systemdRestart) {
+            await deps.systemdRestart(maybeUnits);
+            return;
+          }
+          throw new Error("systemdRestart not implemented");
+        default:
+          throw new Error(`Unknown systemd action: ${canonicalAction}`);
+      }
+    }
+
+    if (opts.preferSystemd) {
+      const attempted = finalVerb;
+      console.error(`[psh] Unknown systemd action: ${attempted}`);
+      const swapped = targets
+        .map((unit, index) => {
+          const canonical = aliasToCanonical.get(unit.toLowerCase());
+          return canonical
+            ? { index, canonical, token: unit }
+            : undefined;
+        })
+        .find((candidate): candidate is { index: number; canonical: SystemdAction; token: string } => Boolean(candidate));
+
+      if (swapped) {
+        const reorderedUnits = [
+          attempted,
+          ...targets.slice(0, swapped.index),
+          ...targets.slice(swapped.index + 1),
+        ].filter((value): value is string => Boolean(value));
+        const suggestion = [
+          "psh",
+          "systemd",
+          swapped.token,
+          ...reorderedUnits,
+        ].join(" ");
+        console.error(`[psh] Did you mean '${suggestion}'?`);
+      } else {
+        const available = (Object.keys(systemdActionAliases) as SystemdAction[])
+          .map((key) => preferredActionAlias[key])
+          .join(", ");
+        console.error(`[psh] Available actions: ${available}`);
+      }
+      Deno.exit(1);
+      return;
+    }
+
+    let moduleList = targets;
+    if (moduleList.length === 0) {
+      const envHost = Deno.env.get("HOST");
+      moduleList = envHost ? await getHostModules(envHost) : await getHostModules();
+    }
+    await deps.runModuleScript(moduleList.length ? moduleList : "*", finalVerb);
+  }
+
   const cli = new Command()
     .name("psh")
     .description("Psyched shell, a CLI for managing ROS2 workspaces and modules and for provisioning hosts in a robot")
@@ -212,46 +342,77 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
       throw new Error(`Unknown dependency: ${dep}`);
     });
 
-  const knownModuleActions = new Set([
-    "launch",
-    "setup",
-    "shutdown",
-    "start",
-    "stop",
-    "list",
-    "status",
-  ]);
+const knownModuleActions = new Set([
+  "launch",
+  "setup",
+  "shutdown",
+  "start",
+  "stop",
+  "list",
+  "status",
+]);
+
+const systemdActionAliases = {
+  generate: ["*", "gen", "generate"],
+  install: ["install", "in"],
+  uninstall: ["uninstall", "remove", "rm"],
+  debug: ["debug", "dbg", "d", "status"],
+  enable: ["enable", "en"],
+  disable: ["disable", "dis"],
+  start: ["start"],
+  stop: ["stop"],
+  reload: ["reload", "reload-daemon", "rd"],
+  restart: ["restart", "re"],
+} as const;
+
+type SystemdAction = keyof typeof systemdActionAliases;
+
+const preferredActionAlias: Record<SystemdAction, string> = {
+  generate: "gen",
+  install: "install",
+  uninstall: "uninstall",
+  debug: "debug",
+  enable: "enable",
+  disable: "disable",
+  start: "start",
+  stop: "stop",
+  reload: "reload",
+  restart: "restart",
+};
+
+const aliasToCanonical = new Map<string, SystemdAction>();
+for (const [canonical, aliases] of Object.entries(systemdActionAliases)) {
+  for (const alias of aliases) {
+    aliasToCanonical.set(alias.toLowerCase(), canonical as SystemdAction);
+  }
+}
+
+const allActionTokens = new Set<string>();
+for (const action of knownModuleActions) {
+  allActionTokens.add(action.toLowerCase());
+}
+for (const alias of aliasToCanonical.keys()) {
+  allActionTokens.add(alias.toLowerCase());
+}
 
   cli.command("module")
     .alias("mod")
     .alias("m")
-    .description("Setup, launch, or shutdown modules")
-    .arguments("[action:string] [...modules:string]")
-    .action(
-      async (_options: unknown, action: string = 'list', ...modules: string[]) => {
-        let moduleList = modules;
-        let verb = action;
+    .description("Manage modules (setup, launch, shutdown) and related systemd services")
+    .arguments("[action:string] [...targets:string]")
+    .action(async (_options: unknown, action: string | undefined, ...targets: string[]) => {
+      await dispatchModuleOrService("list", action, targets, { preferSystemd: false });
+    });
 
-        if (
-          moduleList.length > 0 &&
-          knownModuleActions.has(moduleList[0]) &&
-          (!verb || !knownModuleActions.has(verb))
-        ) {
-          const [firstAction, ...rest] = moduleList;
-          moduleList = verb ? [verb, ...rest] : rest;
-          verb = firstAction;
-        }
-
-        if (moduleList.length === 0) {
-          // Prefer an explicit HOST env var if present (useful for tests and
-          // scripted runs). Otherwise defer to getHostModules which will
-          // determine the current hostname and read the host TOML.
-          const envHost = Deno.env.get("HOST");
-          moduleList = envHost ? await getHostModules(envHost) : await getHostModules();
-        }
-        await deps.runModuleScript(moduleList.length ? moduleList : "*", verb);
-      },
-    );
+  cli.command("systemd")
+    .alias("sys")
+    .alias("service")
+    .alias("srv")
+    .description("Alias of 'psh module' for service management; defaults to 'gen'")
+    .arguments("[action:string] [...targets:string]")
+    .action(async (_options: unknown, action: string | undefined, ...targets: string[]) => {
+      await dispatchModuleOrService("gen", action, targets, { preferSystemd: true });
+    });
 
 
   cli.command("build")
@@ -273,141 +434,6 @@ export function createCli(overrides: Partial<CliDeps> = {}): Command {
           Deno.exit(125);
         }
         throw err;
-      }
-    });
-
-
-
-  // Systemd command: dispatch action and optional units as arguments
-  const systemdActionAliases = {
-    generate: ["*", "gen", "generate"],
-    install: ["install", "in"],
-    uninstall: ["uninstall", "remove", "rm"],
-    debug: ["debug", "dbg", "d", "status"],
-    enable: ["enable", "en"],
-    disable: ["disable", "dis"],
-    start: ["start"],
-    stop: ["stop"],
-    reload: ["reload", "reload-daemon", "rd"],
-    restart: ["restart", "re"],
-  } as const;
-
-  type SystemdAction = keyof typeof systemdActionAliases;
-  const preferredActionAlias: Record<SystemdAction, string> = {
-    generate: "gen",
-    install: "install",
-    uninstall: "uninstall",
-    debug: "debug",
-    enable: "enable",
-    disable: "disable",
-    start: "start",
-    stop: "stop",
-    reload: "reload",
-    restart: "restart",
-  };
-
-  const aliasToCanonical = new Map<string, SystemdAction>();
-  for (const [canonical, aliases] of Object.entries(systemdActionAliases)) {
-    for (const alias of aliases) {
-      aliasToCanonical.set(alias.toLowerCase(), canonical as SystemdAction);
-    }
-  }
-
-  const _sys = cli.command("systemd")
-    .alias("sys")
-    .alias("service")
-    .alias("srv")
-    .description("Manage systemd unit files (gen/install, debug, enable, disable, stop, start, reload, restart)")
-    .arguments("[action:string] [...units:string]")
-    .action(async (_options: unknown, action?: string, ...units: string[]) => {
-      const normalizedAction = normalize(action, "gen");
-      const canonicalAction = aliasToCanonical.get(normalizedAction);
-      const maybeUnits = units.length ? units : undefined;
-
-      if (!canonicalAction) {
-        const swapped = units.map((unit, index) => {
-          const canonical = aliasToCanonical.get(unit.toLowerCase());
-          return canonical ? { index, canonical, token: unit } : undefined;
-        }).find((candidate): candidate is { index: number; canonical: SystemdAction; token: string } => Boolean(candidate));
-
-        console.error(`[psh] Unknown systemd action: ${action}`);
-        if (swapped) {
-          const reorderedUnits = [
-            action,
-            ...units.slice(0, swapped.index),
-            ...units.slice(swapped.index + 1),
-          ].filter((value): value is string => Boolean(value));
-          const suggestion = [
-            "psh",
-            "sys",
-            swapped.token,
-            ...reorderedUnits,
-          ].join(" ");
-          console.error(`[psh] Did you mean '${suggestion}'?`);
-        } else {
-          const available = (Object.keys(systemdActionAliases) as SystemdAction[])
-            .map((key) => preferredActionAlias[key])
-            .join(", ");
-          console.error(`[psh] Available actions: ${available}`);
-        }
-        Deno.exit(1);
-        return;
-      }
-
-      switch (canonicalAction) {
-        case "generate":
-          await deps.systemdGenerate(maybeUnits);
-          return;
-        case "install":
-          await deps.systemdInstall(maybeUnits);
-          return;
-        case "uninstall":
-          await deps.systemdUninstall(maybeUnits);
-          return;
-        case "debug":
-          if (deps.systemdDebug) {
-            await deps.systemdDebug(maybeUnits);
-            return;
-          }
-          throw new Error("systemdDebug not implemented");
-        case "enable":
-          if (deps.systemdEnable) {
-            await deps.systemdEnable(maybeUnits);
-            return;
-          }
-          throw new Error("systemdEnable not implemented");
-        case "disable":
-          if (deps.systemdDisable) {
-            await deps.systemdDisable(maybeUnits);
-            return;
-          }
-          throw new Error("systemdDisable not implemented");
-        case "start":
-          if (deps.systemdStart) {
-            await deps.systemdStart(maybeUnits);
-            return;
-          }
-          throw new Error("systemdStart not implemented");
-        case "stop":
-          if (deps.systemdStop) {
-            await deps.systemdStop(maybeUnits);
-            return;
-          }
-          throw new Error("systemdStop not implemented");
-        case "reload":
-          if (deps.systemdReload) {
-            await deps.systemdReload(maybeUnits);
-            return;
-          }
-          throw new Error("systemdReload not implemented");
-        case "restart":
-          if (deps.systemdRestart) {
-            await deps.systemdRestart(maybeUnits);
-            return;
-          }
-          throw new Error("systemdRestart not implemented");
-        default:
-          throw new Error(`Unknown systemd action: ${canonicalAction}`);
       }
     });
 
