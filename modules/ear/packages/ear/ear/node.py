@@ -15,6 +15,7 @@ import os
 import subprocess
 import threading
 import time
+from contextlib import suppress
 from typing import Optional
 
 import rclpy
@@ -98,15 +99,27 @@ class EarNode(Node):
 
     def destroy_node(self):
         self._stop_evt.set()
-        if self._proc and self._proc.poll() is None:
-            try:
-                self._proc.terminate()
-            except Exception:
-                pass
-        try:
-            self._thread.join(timeout=3)
-        except Exception:
-            pass
+
+        proc = self._proc
+        self._proc = None
+
+        if proc is not None:
+            with suppress(Exception):
+                if proc.poll() is None:
+                    proc.terminate()
+            with suppress(Exception):
+                if proc.stdout:
+                    proc.stdout.close()
+            if proc.poll() is None:
+                with suppress(Exception):
+                    proc.wait(timeout=2)
+            if proc.poll() is None:
+                with suppress(Exception):
+                    proc.kill()
+
+        if self._thread.is_alive():
+            with suppress(Exception):
+                self._thread.join(timeout=3)
         return super().destroy_node()
 
     def _spawn_arecord(self) -> Optional[subprocess.Popen]:
@@ -141,10 +154,14 @@ class EarNode(Node):
                     backoff = min(backoff * 2, 5.0)
                     continue
                 backoff = 0.5
+                if self._stop_evt.is_set():
+                    break
 
             assert self._proc.stdout is not None
             try:
                 data = self._proc.stdout.read(self.chunk)
+                if self._stop_evt.is_set():
+                    break
                 if not data:
                     # EOF or device issue; restart
                     self.get_logger().warning('arecord produced no data; restarting...')
@@ -167,6 +184,14 @@ class EarNode(Node):
                     pass
                 self._proc = None
                 time.sleep(0.5)
+
+        # Ensure the subprocess is not left hanging when the loop exits
+        if self._proc and self._proc.poll() is None:
+            with suppress(Exception):
+                self._proc.terminate()
+            with suppress(Exception):
+                self._proc.kill()
+        self._proc = None
 
     def _publish_info(self) -> None:
         if not self._info_enabled or self._info_pub is None or self._info_msg_type is None:

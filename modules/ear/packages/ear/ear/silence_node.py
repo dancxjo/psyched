@@ -121,10 +121,20 @@ class SilenceNode(Node):  # type: ignore[misc]
         factory = tracker_factory or (lambda threshold: SilenceTracker(threshold))
         self._tracker = factory(self._silence_threshold)
 
-        self._publisher = self.create_publisher(UInt32, '/audio/silence_ms', best_effort_qos())
-        self._subscription = self.create_subscription(ByteMultiArray, '/audio/raw', self._on_audio, sensor_data_qos())
+        self._input_topic = str(self.declare_parameter('input_topic', '/audio/raw').value)
 
-        self.get_logger().info(f'Silence monitor ready: threshold={self._silence_threshold:.1f}')
+        self._publisher = self.create_publisher(UInt32, '/audio/silence_ms', best_effort_qos())
+        self._subscription = self.create_subscription(
+            ByteMultiArray,
+            self._input_topic,
+            self._on_audio,
+            sensor_data_qos(),
+        )
+
+        self.get_logger().info(
+            'Silence monitor ready: threshold=%.1f input=%s'
+            % (self._silence_threshold, self._input_topic)
+        )
 
     def _on_audio(self, msg: ByteMultiArray) -> None:
         """Handle inbound raw audio payloads."""

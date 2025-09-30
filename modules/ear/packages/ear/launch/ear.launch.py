@@ -15,6 +15,11 @@ EAR_DEFAULTS = {
 
 SILENCE_DEFAULTS = {
     "silence_threshold": "500.0",
+    "silence_input_topic": "/audio/raw",
+}
+
+VAD_DEFAULTS = {
+    "vad_input_topic": "/audio/raw",
 }
 
 SEGMENTER_DEFAULTS = {
@@ -67,6 +72,7 @@ def generate_launch_description() -> LaunchDescription:
     args = [
         *_declare_arguments(EAR_DEFAULTS),
         *_declare_arguments(SILENCE_DEFAULTS),
+        *_declare_arguments(VAD_DEFAULTS),
         *_declare_arguments(SEGMENTER_DEFAULTS),
         *_declare_arguments(TRANSCRIBER_DEFAULTS),
         *_declare_arguments(ACCUMULATOR_DEFAULTS),
@@ -94,6 +100,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             {
                 "silence_threshold": ParameterValue(LaunchConfiguration("silence_threshold"), value_type=float),
+                "input_topic": ParameterValue(LaunchConfiguration("silence_input_topic"), value_type=str),
             }
         ],
         output="screen",
@@ -105,6 +112,7 @@ def generate_launch_description() -> LaunchDescription:
         name="vad",
         parameters=[
             {
+                "input_topic": ParameterValue(LaunchConfiguration("vad_input_topic"), value_type=str),
                 "frame_topic": ParameterValue(LaunchConfiguration("segmenter_frame_topic"), value_type=str),
             }
         ],
