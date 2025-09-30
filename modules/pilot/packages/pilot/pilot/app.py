@@ -408,6 +408,24 @@ def _find_topic(catalog: ModuleCatalog, topic_name: str, module_name: str | None
     return None
 
 
+def _merge_qos(module_qos: dict, provided_qos: dict | None) -> dict:
+    """Merge a module-declared qos dict with a possibly partial provided mapping.
+
+    The provided mapping takes precedence, but missing keys fall back to the
+    module defaults. This prevents accidental omission of fields like
+    `reliability` which can cause incompatible QoS between publisher and
+    subscriber.
+    """
+    if not provided_qos:
+        return dict(module_qos)
+    merged = dict(module_qos)
+    try:
+        merged.update(provided_qos)
+    except Exception:
+        return dict(module_qos)
+    return merged
+
+
 def create_app(
     *,
     catalog: ModuleCatalog,

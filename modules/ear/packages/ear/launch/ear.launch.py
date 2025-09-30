@@ -258,9 +258,9 @@ def generate_launch_description() -> LaunchDescription:
             silence_node,
             vad_node,
             segmenter_node,
-            # accumulator_node,
+            accumulator_node,
             transcriber_short,
-            # transcriber_medium,
+            transcriber_medium,
             # transcriber_long,
         ]
     )
