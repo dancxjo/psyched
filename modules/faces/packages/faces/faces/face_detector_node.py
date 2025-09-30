@@ -51,6 +51,8 @@ class FaceDetectorNode(Node):
         self.get_logger().info(
             f"Face detector initialised with camera_topic={self._camera_topic} faces_topic={self._faces_topic}"
         )
+        # Extra visibility: node is watching for frames
+        self.get_logger().info("Keeping an eye out for faces...")
 
     def _get_param(self, name: str, default: object) -> object:
         value = self.get_parameter(name).value
@@ -61,23 +63,46 @@ class FaceDetectorNode(Node):
         return value
 
     def _handle_image(self, msg: Image) -> None:
+        # Log that we've received a frame and include some basic header info
+        try:
+            stamp = msg.header.stamp
+            stamp_str = f"{stamp.sec}.{stamp.nanosec:09d}"
+        except Exception:
+            stamp_str = "unknown"
+        self.get_logger().info(f"_handle_image called: header.stamp={stamp_str} width={msg.width} height={msg.height}")
+
         image = self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         faces = self._processor.process(image)
         if not faces:
+            self.get_logger().info("No faces detected in current frame")
             return
+
+        self.get_logger().info(f"Detected {len(faces)} face(s) in current frame")
 
         detections_msg = build_face_detections_msg(msg.header, faces, bridge=self._bridge)
         self._detections_pub.publish(detections_msg)
+        self.get_logger().info(f"Published FaceDetections to {self._faces_topic} (faces={len(faces)})")
 
         signature = self._derive_signature(faces[0].embedding)
         now = time.monotonic()
-        if signature != self._last_signature or (now - self._last_trigger_time) > self._trigger_cooldown:
+        decision = None
+        if signature != self._last_signature:
+            decision = "new_signature"
+        elif (now - self._last_trigger_time) > self._trigger_cooldown:
+            decision = "cooldown_elapsed"
+        else:
+            decision = "duplicate_within_cooldown"
+
+        if decision in ("new_signature", "cooldown_elapsed"):
             payload = {"name": "Stranger", "signature": signature}
             trigger_msg = String()
             trigger_msg.data = json.dumps(payload)
             self._trigger_pub.publish(trigger_msg)
+            self.get_logger().info(f"Published trigger ({decision}) -> {self._face_detected_topic}: {payload}")
             self._last_signature = signature
             self._last_trigger_time = now
+        else:
+            self.get_logger().info(f"Skipping trigger publish ({decision}) for signature {signature}")
 
     @staticmethod
     def _derive_signature(embedding: np.ndarray) -> str:
