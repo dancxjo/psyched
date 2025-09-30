@@ -26,7 +26,7 @@ class PyAudioEarNode(Node):
         self.device_id = self.declare_parameter('device_id', 0).get_parameter_value().integer_value
         self.sample_rate = self.declare_parameter('sample_rate', 44100).get_parameter_value().integer_value
         self.channels = self.declare_parameter('channels', 1).get_parameter_value().integer_value
-    self.chunk_size = self.declare_parameter('chunk_size', 2048).get_parameter_value().integer_value
+        self.chunk_size = self.declare_parameter('chunk_size', 2048).get_parameter_value().integer_value
         self.format = pyaudio.paInt16  # 16-bit PCM
         
         # Publisher for raw PCM payloads

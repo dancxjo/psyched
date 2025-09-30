@@ -68,6 +68,7 @@ def _normalise_json_types(value: Any) -> Any:
 
 
 _TRANSCRIPT_MESSAGE_TYPE = "psyched_msgs/msg/Transcript"
+_BYTE_MULTI_ARRAY_MESSAGE_TYPE = "std_msgs/msg/ByteMultiArray"
 _TIMING_PREFIX_PATTERN = re.compile(r"^\[[^\]]+\]\s*")
 
 
@@ -169,6 +170,28 @@ def _parse_transcript_json(text: str) -> str | None:
     if isinstance(parsed, Sequence):
         return _segments_to_text(parsed)
     return None
+
+
+def _byte_multi_array_payload(message):  # noqa: ANN001
+    """Return a JSON-friendly representation of ByteMultiArray messages."""
+
+    mapping = message_to_ordered_dict(message)
+    payload = getattr(message, "data", None)
+
+    converted: list[int] | None = None
+    if isinstance(payload, (bytes, bytearray, memoryview)):
+        converted = [int(b) & 0xFF for b in payload]
+    elif isinstance(payload, Sequence) and not isinstance(payload, (str, bytes, bytearray, memoryview)):
+        try:
+            converted = [int(b) & 0xFF for b in payload]
+        except Exception:  # pragma: no cover - guard unusual Sequence types
+            converted = None
+
+    if converted is not None:
+        mapping = dict(mapping)
+        mapping["data"] = converted
+
+    return _normalise_json_types(mapping)
 
 
 def _dict_to_ros_message(msg_class, message_type: str, values: Mapping[str, Any]):
@@ -310,9 +333,12 @@ class TopicSessionManager:
 
         if access in {"ro", "rw"}:
             def _callback(message):
-                data = _normalise_json_types(message_to_ordered_dict(message))
-                if message_type == _TRANSCRIPT_MESSAGE_TYPE:
-                    data = _normalise_transcript_payload(data)
+                if message_type == _BYTE_MULTI_ARRAY_MESSAGE_TYPE:
+                    data = _byte_multi_array_payload(message)
+                else:
+                    data = _normalise_json_types(message_to_ordered_dict(message))
+                    if message_type == _TRANSCRIPT_MESSAGE_TYPE:
+                        data = _normalise_transcript_payload(data)
                 if self._loop.is_closed():  # pragma: no cover - defensive
                     return
                 try:
