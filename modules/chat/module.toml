@@ -47,12 +47,6 @@ description = "Enable Ollama service when available"
 script = "scripts/enable_ollama_service.sh"
 optional = true
 
-# [[actions]]
-# type = "run"
-# description = "Ensure configured Ollama model is present"
-# script = "scripts/ensure_ollama_model.sh"
-# optional = true
-
 [systemd]
 description = "Psyched Chat Service"
 after = ["network-online.target"]
