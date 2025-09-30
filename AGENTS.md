@@ -98,9 +98,6 @@ Visit `http://<cerebellum-host>:8080`.
 - When adding or updating Pilot controls, use the shared `.control-surface`,
   `.metric-grid`, and `.metric-card` CSS helpers to keep styling consistent
   across panels.
-  - Collapse topic cards with the existing summary pattern and reuse the
-    `<pilot-topic-state>` element for status pills so controls stay compact and
-    visually consistent.
 
 ---
 

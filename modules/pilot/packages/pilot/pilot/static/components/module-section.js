@@ -3,7 +3,6 @@ import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?
 // regimes grouping removed
 import { topicKey, topicIdentifier } from '../utils/topics.js';
 import './topic-widget.js';
-import './topic-state.js';
 
 /**
  * Presents a single module card, including command buttons and topic widgets.
@@ -12,7 +11,6 @@ class PilotModuleSection extends LitElement {
   static properties = {
     module: { type: Object },
     activeRecords: { type: Object },
-    expandedTopics: { state: true },
   };
 
   constructor() {
@@ -20,7 +18,6 @@ class PilotModuleSection extends LitElement {
     this.module = null;
     this.activeRecords = new Map();
     this._topicObserver = null;
-    this.expandedTopics = new Set();
   }
 
   createRenderRoot() {
@@ -94,21 +91,6 @@ class PilotModuleSection extends LitElement {
     );
   }
 
-  setTopicExpanded(identifier, expanded) {
-    const next = new Set(this.expandedTopics ?? []);
-    if (expanded) {
-      next.add(identifier);
-    } else {
-      next.delete(identifier);
-    }
-    this.expandedTopics = next;
-  }
-
-  toggleTopicExpansion(identifier) {
-    const expanded = this.expandedTopics?.has(identifier) ?? false;
-    this.setTopicExpanded(identifier, !expanded);
-  }
-
   topicRecord(topic) {
     const records = this.activeRecords instanceof Map ? this.activeRecords : new Map(Object.entries(this.activeRecords || {}));
     return records.get(topicKey(this.module?.name, topic));
@@ -143,65 +125,44 @@ class PilotModuleSection extends LitElement {
   renderTopic(topic) {
     const record = this.topicRecord(topic);
     const identifier = topicIdentifier(topic);
-    const expanded = this.expandedTopics?.has(identifier) ?? false;
-    const state = record?.state ?? 'idle';
     return html`
-      <article class=${`topic-card ${expanded ? 'expanded' : 'collapsed'}`} data-topic=${encodeURIComponent(identifier)}>
-        <div class="topic-summary">
-          <button
-            type="button"
-            class="expand-toggle"
-            @click=${() => this.toggleTopicExpansion(identifier)}
-            aria-expanded=${expanded ? 'true' : 'false'}
-            aria-controls=${`topic-body-${encodeURIComponent(identifier)}`}
-          >
-            <span class="chevron" aria-hidden="true"></span>
-            <span class="sr-only">${expanded ? 'Collapse' : 'Expand'} ${identifier}</span>
-          </button>
-          <div class="summary-details">
+      <article class="topic-card" data-topic=${encodeURIComponent(identifier)}>
+        <div class="topic-header">
+          <div>
             <h4>${identifier}</h4>
             <small>${topic.type}</small>
           </div>
-          <pilot-topic-state .record=${record}></pilot-topic-state>
-        </div>
-        <div class="topic-body" id=${`topic-body-${encodeURIComponent(identifier)}`} data-state=${state}>
-          <div class="topic-header">
-            <div>
-              <h4>${identifier}</h4>
-              <small>${topic.type}</small>
-            </div>
-            <div class="topic-actions">
-              ${record
+          <div class="topic-actions">
+            ${record
         ? html`
-                    <button
-                      type="button"
-                      class="control-button"
-                      data-variant="critical"
-                      @click=${() => this.stopTopic(topic)}
-                    >
-                      Disconnect
-                    </button>
-                    <button
-                      type="button"
-                      class="control-button"
-                      data-variant=${record.paused ? 'accent' : 'ghost'}
-                      @click=${() => this.togglePause(topic, !record.paused)}
-                    >
-                      ${record.paused ? 'Resume' : 'Pause'}
-                    </button>
-                  `
+                  <button
+                    type="button"
+                    class="control-button"
+                    data-variant="critical"
+                    @click=${() => this.stopTopic(topic)}
+                  >
+                    Disconnect
+                  </button>
+                  <button
+                    type="button"
+                    class="control-button"
+                    data-variant=${record.paused ? 'accent' : 'ghost'}
+                    @click=${() => this.togglePause(topic, !record.paused)}
+                  >
+                    ${record.paused ? 'Resume' : 'Pause'}
+                  </button>
+                `
         : html`<button
-                  type="button"
-                  class="control-button"
-                  data-variant="accent"
-                  @click=${() => this.startTopic(topic)}
-                >
-                  Connect
-                </button>`}
-            </div>
+                type="button"
+                class="control-button"
+                data-variant="accent"
+                @click=${() => this.startTopic(topic)}
+              >
+                Connect
+              </button>`}
           </div>
-          <pilot-topic-widget .record=${record} .topic=${topic}></pilot-topic-widget>
         </div>
+        <pilot-topic-widget .record=${record} .topic=${topic}></pilot-topic-widget>
       </article>
     `;
   }
@@ -243,14 +204,7 @@ class PilotModuleSection extends LitElement {
     this.observeTopics();
   }
 
-  updated(changed) {
-    // Reset collapsed state when switching between different modules to avoid stale UI.
-    if (changed?.has?.('module')) {
-      const previous = changed.get('module');
-      if ((previous?.name ?? previous) !== (this.module?.name ?? this.module)) {
-        this.expandedTopics = new Set();
-      }
-    }
+  updated() {
     // Re-attach observer to any newly rendered topic cards.
     this.observeTopics();
   }
