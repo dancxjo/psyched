@@ -35,6 +35,7 @@ setup(
             'transcriber_short_node = ear.transcriber_short_node:main',
             'transcriber_medium_node = ear.transcriber_medium_node:main',
             'transcriber_long_node = ear.transcriber_long_node:main',
+            'transcriber_local_node = ear.transcriber_local_node:main',
             'speech_accumulator_node = ear.speech_accumulator_node:main',
         ],
     },

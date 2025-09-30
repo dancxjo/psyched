@@ -26,6 +26,11 @@ pipeline:
 - `transcriber_long_node` – decodes the rolling context assembled on
   `/audio/speech_accumulating` and emits archival transcripts on
   `/audio/transcript/long`.
+- `transcriber_local_node` / `local_transcription` – new local faster-whisper
+  tier that decodes completed segments from `/audio/speech_segment` and by
+  default publishes to `/audio/transcription` (this mirrors the medium-tier
+  compatibility topic). It is configured to run the `small` model on `cpu` by
+  default when launched from the included `ear.launch.py`.
 
 ## Parameters
 
@@ -86,6 +91,17 @@ pipeline:
 - `transcript_topic` (string, default `/audio/transcription`): Compatibility
   topic that mirrors the medium-tier output for downstream consumers that still
   expect a single stream.
+
+### `transcriber_local_node` / `local_transcription`
+- `segment_topic` (string, default `/audio/speech_segment`): Completed segment
+  source for the local transcription node.
+- `transcript_topic` (string, default `/audio/transcription`): Default output
+  topic for local transcriptions. This is intentionally the same compatibility
+  topic used by the medium tier so downstream consumers can read from a single
+  stream if desired.
+- `model`, `device`, `compute_type`, `language`, `beam_size`, `speaker`: Same
+  semantics as the other transcriber tiers. The included launch file sets the
+  `device` to `cpu` and the `model` default is `small`.
 - `medium_remote_ws_url` (string, default `ws://forebrain.local:8083/ws`):
   Medium-tier remote ASR endpoint.
 

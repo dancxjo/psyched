@@ -37,6 +37,8 @@ TRANSCRIBER_DEFAULTS = {
     "transcriber_transcript_short_topic": "/audio/transcript/short",
     "transcriber_transcript_medium_topic": "/audio/transcript/medium",
     "transcriber_transcript_long_topic": "/audio/transcript/long",
+    # local transcriber output (new): default mirrors the medium-tier compatibility topic
+    "transcriber_local_transcript_topic": "/audio/transcription",
     "transcriber_fast_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_medium_remote_ws_url": "ws://forebrain.local:8082/ws",
     "transcriber_long_remote_ws_url": "ws://forebrain.local:8082/ws",
@@ -251,6 +253,38 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
+    # Local transcription node: runs small faster-whisper locally on incoming speech segments
+    # Subscribes to the same segment topic (default: /audio/speech_segment) and
+    # publishes short transcripts to the short transcript topic.
+    transcriber_local = Node(
+        package="ear",
+        executable="transcriber_local_node",
+        name="local_transcription",
+        parameters=[
+            {
+                # listen for completed segments
+                "segment_topic": LaunchConfiguration("transcriber_segment_topic"),
+                # local transcriber publishes to its own compatibility topic by default
+                "transcript_topic": LaunchConfiguration("transcriber_local_transcript_topic"),
+                # older short-tier still uses /audio/transcript/short (left commented out)
+                # "transcript_short_topic": LaunchConfiguration("transcriber_transcript_short_topic"),
+                "speaker": LaunchConfiguration("transcriber_speaker"),
+                "segment_sample_rate": ParameterValue(
+                    LaunchConfiguration("transcriber_segment_sample_rate"), value_type=int
+                ),
+                # model and compute settings (model default is 'small')
+                "model": LaunchConfiguration("transcriber_model"),
+                "device": "cpu",
+                "compute_type": LaunchConfiguration("transcriber_compute_type"),
+                "language": LaunchConfiguration("transcriber_language"),
+                "beam_size": ParameterValue(
+                    LaunchConfiguration("transcriber_beam_size"), value_type=int
+                ),
+            }
+        ],
+        output="screen",
+    )
+
     return LaunchDescription(
         args
         + [
@@ -259,6 +293,7 @@ def generate_launch_description() -> LaunchDescription:
             vad_node,
             segmenter_node,
             accumulator_node,
+            transcriber_local,
             # transcriber_short,
             # transcriber_medium,
             # transcriber_long,
