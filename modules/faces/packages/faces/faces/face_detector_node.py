@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 from typing import Optional
+from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 import rclpy
@@ -30,12 +31,13 @@ class FaceDetectorNode(Node):
             embedder=BasicEmbeddingExtractor(),
         )
 
-        self.declare_parameter("camera_topic", "/camera/color/image_raw")
+        # prefer the generic /image_raw topic (and its children) by default
+        self.declare_parameter("camera_topic", "/image_raw")
         self.declare_parameter("faces_topic", "/vision/faces")
         self.declare_parameter("face_detected_topic", "/vision/face_detected")
         self.declare_parameter("trigger_cooldown_sec", 2.0)
 
-        self._camera_topic = self._get_param("camera_topic", "/camera/color/image_raw")
+        self._camera_topic = self._get_param("camera_topic", "/image_raw")
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
         self._face_detected_topic = self._get_param("face_detected_topic", "/vision/face_detected")
         self._trigger_cooldown = float(self._get_param("trigger_cooldown_sec", 2.0))
@@ -45,7 +47,11 @@ class FaceDetectorNode(Node):
         self._detections_pub = self.create_publisher(FaceDetections, self._faces_topic, 10)
         self._trigger_pub = self.create_publisher(String, self._face_detected_topic, 10)
 
-        self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
+        # create the subscription and keep a handle so we can change it at runtime
+        self._camera_sub = self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
+
+        # watch for parameter updates so we can re-subscribe if camera_topic changes
+        self.add_on_set_parameters_callback(self._on_set_parameters)
 
         # pragma: no cover - logging only
         self.get_logger().info(
@@ -103,6 +109,34 @@ class FaceDetectorNode(Node):
             self._last_trigger_time = now
         else:
             self.get_logger().info(f"Skipping trigger publish ({decision}) for signature {signature}")
+
+    def _on_set_parameters(self, params: list) -> SetParametersResult:
+        """Handle parameter updates; when camera_topic changes, recreate subscription."""
+        new_topic: Optional[str] = None
+        for p in params:
+            if p.name == "camera_topic":
+                # ignore empty strings
+                if isinstance(p.value, str) and p.value:
+                    new_topic = p.value
+                break
+
+        if new_topic is None or new_topic == self._camera_topic:
+            return SetParametersResult(successful=True)
+
+        try:
+            # remove old subscription
+            try:
+                self.destroy_subscription(self._camera_sub)
+            except Exception:
+                pass
+            # create new subscription
+            self._camera_topic = new_topic
+            self._camera_sub = self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
+            self.get_logger().info(f"Re-subscribed to camera topic: {self._camera_topic}")
+            return SetParametersResult(successful=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            self.get_logger().error(f"Failed to update camera subscription: {exc}")
+            return SetParametersResult(successful=False)
 
     @staticmethod
     def _derive_signature(embedding: np.ndarray) -> str:
