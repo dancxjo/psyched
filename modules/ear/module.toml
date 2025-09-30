@@ -13,69 +13,62 @@ access = "ro"
 presentation = "oscilloscope"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
-# [[pilot.topics]]
-# name = "/audio/autophony_duration"
-# type = "std_msgs/msg/UInt32"
-# access = "ro"
-# presentation = "gauge"
-# qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/speech_duration"
-# type = "std_msgs/msg/UInt32"
-# access = "ro"
-# # presentation = "diode"
-# presentation = "gauge"
-# qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/silence_ms"
-# type = "std_msgs/msg/UInt32"
-# access = "ro"
-# presentation = "gauge"
-# qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/speech_segment"
-# type = "std_msgs/msg/ByteMultiArray"
-# access = "ro"
-# presentation = "waveform"
-# qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/speech_segment_accumulating"
-# type = "std_msgs/msg/ByteMultiArray"
-# access = "ro"
-# presentation = "waveform"
-# qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/speech_accumulating"
-# type = "std_msgs/msg/ByteMultiArray"
-# access = "ro"
-# presentation = "waveform"
-# qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+[[pilot.topics]]
+name = "/audio/autophony_duration"
+type = "std_msgs/msg/UInt32"
+access = "ro"
+presentation = "gauge"
+qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
-name = "/audio/transcription"
+name = "/audio/speech_duration"
+type = "std_msgs/msg/UInt32"
+access = "ro"
+# presentation = "diode"
+presentation = "gauge"
+qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/silence_ms"
+type = "std_msgs/msg/UInt32"
+access = "ro"
+presentation = "gauge"
+qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_segment"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_segment_accumulating"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/speech_accumulating"
+type = "std_msgs/msg/ByteMultiArray"
+access = "ro"
+presentation = "waveform"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/audio/transcript/medium"
 type = "psyched_msgs/msg/Transcript"
 access = "ro"
 presentation = "transcription"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
-# [[pilot.topics]]
-# name = "/audio/transcript/medium"
-# type = "psyched_msgs/msg/Transcript"
-# access = "ro"
-# presentation = "transcription"
-# qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
-
-# [[pilot.topics]]
-# name = "/audio/transcript/long"
-# type = "psyched_msgs/msg/Transcript"
-# access = "ro"
-# presentation = "transcription"
-# qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
+[[pilot.topics]]
+name = "/audio/transcript/long"
+type = "psyched_msgs/msg/Transcript"
+access = "ro"
+presentation = "transcription"
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
 name = "/audio/transcription"
