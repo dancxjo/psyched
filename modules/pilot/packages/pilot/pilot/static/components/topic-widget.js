@@ -14,8 +14,36 @@ import './diagnostics-panel.js';
 import './event-log.js';
 import './voice-control-bridge.js';
 import './voice-volume.js';
+import { batteryLabel } from '../utils/battery.js';
 
 const MAX_PREVIEW = 1200;
+
+const PRESENTATION_TITLES = {
+  joystick: 'Joystick Control',
+  imu: 'IMU Metrics',
+  waveform: 'Audio Waveform',
+  oscilloscope: 'Audio Oscilloscope',
+  transcription: 'Transcription',
+  gauge: 'Metric Gauge',
+  'battery-panel': 'Battery Charge',
+  'battery-feed': 'Battery Metric',
+  diagnostics: 'Diagnostics',
+  'event-log': 'Event Log',
+  diode: 'Binary Sensor',
+  chat: 'Conversation Console',
+  voice: 'Voice Console',
+  'voice-control': 'Voice Control',
+  'voice-volume': 'Voice Output Level',
+  status: 'Status',
+};
+
+function titleize(text) {
+  return text
+    .split(/[_\s/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 function formatNumber(value, digits = 2) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '--';
@@ -137,6 +165,48 @@ class PilotTopicWidget extends LitElement {
     return describeGeneric(this.record.last);
   }
 
+  get controlTitle() {
+    const topic = this.topic || {};
+    const explicit = topic.title || topic.label || topic.display_name || topic.displayName;
+    if (explicit) {
+      return explicit;
+    }
+
+    const topicName = topic.topic || topic.name || '';
+    if (topicName.startsWith('/hosts/health')) {
+      return 'Host Health';
+    }
+
+    const presentation = topic.presentation || '';
+    if (presentation === 'battery-panel' || presentation === 'battery-feed' || topicName.startsWith('/battery/')) {
+      const label = batteryLabel(topicName || 'battery_metric');
+      const composed = label.toLowerCase().includes('battery') ? label : `Battery ${label}`;
+      return titleize(composed);
+    }
+
+    if (presentation && PRESENTATION_TITLES[presentation]) {
+      return PRESENTATION_TITLES[presentation];
+    }
+
+    if (topicName) {
+      const trimmed = topicName.replace(/^\/+/, '');
+      const segments = trimmed.split('/').filter(Boolean);
+      if (segments.length) {
+        return titleize(segments[segments.length - 1]);
+      }
+      return titleize(trimmed || topicName);
+    }
+
+    if (topic.type) {
+      const typeName = topic.type.split('/').pop();
+      if (typeName) {
+        return titleize(typeName);
+      }
+    }
+
+    return 'Topic';
+  }
+
   renderContent() {
     if (!this.record) {
       return html`<div class="inactive">Not subscribed</div>`;
@@ -236,6 +306,7 @@ class PilotTopicWidget extends LitElement {
           ${this.record?.paused ? html`<span class="paused">Paused</span>` : nothing}
           ${this.record?.error ? html`<span class="error">${this.record.error}</span>` : nothing}
         </div>
+        <h5 class="metric-title">${this.controlTitle}</h5>
         ${this.renderContent()}
       </div>
     `;

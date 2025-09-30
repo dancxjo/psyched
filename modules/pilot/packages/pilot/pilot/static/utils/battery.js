@@ -1,17 +1,19 @@
 import { extractNumeric } from './metrics.js';
 
-const subscribers = new Set();
-const metrics = new Map();
+function normalise(topic) {
+  if (typeof topic !== 'string') {
+    return '';
+  }
+  return topic.trim();
+}
 
-const FRIENDLY_NAMES = {
-  '/battery/charge_ratio': 'Charge',
-  '/battery/capacity': 'Capacity',
-  '/battery/charge': 'Charge',
-  '/battery/charging_state': 'State',
-  '/battery/current': 'Current',
-  '/battery/temperature': 'Temperature',
-  '/battery/voltage': 'Voltage',
-};
+function titleize(text) {
+  return text
+    .split(/[_\s/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 const CHARGING_STATE = {
   0: 'Not charging',
@@ -21,73 +23,93 @@ const CHARGING_STATE = {
   4: 'Trickle',
 };
 
-function snapshot() {
-  const data = {};
-  metrics.forEach((value, key) => {
-    data[key] = value;
-  });
-  return data;
-}
+const BATTERY_METADATA = {
+  '/battery/charge_ratio': {
+    label: 'Charge Level',
+    unit: '%',
+    digits: 1,
+    scale: 100,
+  },
+  '/battery/capacity': {
+    label: 'Capacity',
+    unit: 'mAh',
+    digits: 0,
+  },
+  '/battery/charge': {
+    label: 'Charge Remaining',
+    unit: 'mAh',
+    digits: 0,
+  },
+  '/battery/charging_state': {
+    label: 'Charging State',
+    format: 'state',
+  },
+  '/battery/current': {
+    label: 'Current Draw',
+    unit: 'A',
+    digits: 2,
+  },
+  '/battery/temperature': {
+    label: 'Temperature',
+    unit: '°C',
+    digits: 1,
+  },
+  '/battery/voltage': {
+    label: 'Voltage',
+    unit: 'V',
+    digits: 2,
+  },
+};
 
-function notify() {
-  const state = snapshot();
-  for (const listener of subscribers) {
-    try {
-      listener(state);
-    } catch (error) {
-      console.warn('Battery subscriber failed', error);
-    }
-  }
-}
+const DEFAULT_METADATA = {
+  label: 'Battery',
+  unit: '',
+  digits: 2,
+  scale: 1,
+  format: 'number',
+};
 
-function normalise(topic) {
-  if (typeof topic !== 'string') {
-    return '';
-  }
-  return topic.trim();
-}
-
-export function updateBatteryMetric(topic, payload) {
+export function batteryMetadata(topic) {
   const key = normalise(topic);
+  const source = BATTERY_METADATA[key];
+  if (source) {
+    return { ...DEFAULT_METADATA, ...source };
+  }
   if (!key) {
-    return;
+    return { ...DEFAULT_METADATA };
   }
-  let value = payload;
-  if (key === '/battery/charging_state') {
-    const numeric = extractNumeric(payload, Number.NaN);
-    value = {
-      numeric,
-      label: Number.isFinite(numeric) ? CHARGING_STATE[numeric] ?? `State ${numeric}` : 'Unknown',
-    };
-  } else {
-    value = extractNumeric(payload, Number.NaN);
-  }
-  metrics.set(key, value);
-  notify();
-}
-
-export function subscribeBattery(listener) {
-  if (typeof listener !== 'function') {
-    return () => {};
-  }
-  subscribers.add(listener);
-  try {
-    listener(snapshot());
-  } catch (error) {
-    console.warn('Battery subscriber failed during initial delivery', error);
-  }
-  return () => {
-    subscribers.delete(listener);
-  };
+  const fallbackLabel = titleize(key.split('/').pop() || key);
+  return { ...DEFAULT_METADATA, label: fallbackLabel };
 }
 
 export function batteryLabel(topic) {
-  const key = normalise(topic);
-  return FRIENDLY_NAMES[key] ?? key.split('/').pop() ?? key;
+  return batteryMetadata(topic).label;
+}
+
+export function batteryUnit(topic) {
+  return batteryMetadata(topic).unit;
+}
+
+export function formatBatteryValue(topic, payload) {
+  const metadata = batteryMetadata(topic);
+  if (metadata.format === 'state') {
+    const numeric = extractNumeric(payload, Number.NaN);
+    return Number.isFinite(numeric) ? CHARGING_STATE[numeric] ?? `State ${numeric}` : 'Unknown';
+  }
+  const numeric = extractNumeric(payload, Number.NaN);
+  if (!Number.isFinite(numeric)) {
+    return '—';
+  }
+  const scale = metadata.scale ?? 1;
+  const scaled = scale === 100 && numeric > 1 ? numeric : numeric * scale;
+  const digits = typeof metadata.digits === 'number' ? metadata.digits : DEFAULT_METADATA.digits;
+  const fixed = scaled.toFixed(digits);
+  return metadata.unit ? `${fixed} ${metadata.unit}` : fixed;
 }
 
 export default {
-  updateBatteryMetric,
-  subscribeBattery,
+  batteryMetadata,
   batteryLabel,
+  batteryUnit,
+  formatBatteryValue,
 };
