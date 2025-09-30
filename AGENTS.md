@@ -177,7 +177,9 @@ Visit `http://<cerebellum-host>:8080`.
 * `voice`: espeak-ng or Coqui/Piper via WebSocket, with playback.
 * `chat`: connects transcription → Ollama LLM → voice. Exposes a `pilot_base_url`
   parameter that should point at the running Pilot backend so the chat system
-  prompt can include the text-only control surface summary.
+  prompt can include the text-only control surface summary. The Forebrain
+  websocket LLM is currently paused; the node always calls Ollama over HTTP via
+  `ollama_host`.
 * `pilot`: LCARS-style web frontend + health reporter.
 * `nav`: depth-to-scan pipeline + AMCL, vision LLM prompts.
 * Others (`eye`, `foot`, `imu`, `gps`, `wifi`, `will`) follow similar structure.

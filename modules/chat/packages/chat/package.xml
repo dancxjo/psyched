@@ -2,7 +2,7 @@
 <package format="3">
     <name>chat</name>
     <version>0.1.0</version>
-    <description>Chat node that uses Ollama (llama3.2) and coordinates with the voice module</description>
+    <description>Chat node that uses Ollama (gpt-oss:20b) and coordinates with the voice module</description>
     <maintainer email="tdreed@gmail.com">Psyched</maintainer>
     <license>MIT</license>
 

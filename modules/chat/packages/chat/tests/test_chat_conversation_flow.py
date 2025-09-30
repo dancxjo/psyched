@@ -10,9 +10,6 @@ if str(package_root) not in sys.path:
     sys.path.insert(0, str(package_root))
 
 
-os.environ.setdefault("FOREBRAIN_LLM_URL", "")
-
-
 for module_name in ("rclpy", "rclpy.node", "rclpy.executors"):
     sys.modules.pop(module_name, None)
 
@@ -225,7 +222,6 @@ if "requests" not in sys.modules:
 from psyched_msgs.msg import Message as MsgMessage  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
-from chat.llm_client import ForebrainUnavailable  # noqa: E402
 from chat.node import ChatNode, _normalise_ollama_host  # noqa: E402
 
 
@@ -295,37 +291,28 @@ def test_chatnode_matches_voice_done_with_whitespace_variations() -> None:
     assert node.pending_to_confirm == []
 
 
-def test_chatnode_falls_back_to_ollama_when_llm_unreachable() -> None:
+def test_chatnode_defaults_to_llama32_model() -> None:
     node = ChatNode()
 
-    class StubLLM:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def generate(self, history):  # noqa: ANN001
-            self.calls += 1
-            raise ForebrainUnavailable("offline")
-
-    stub = StubLLM()
-    node._llm_client = stub
-    node._llm_ws_url = "ws://example.invalid/chat"
-    node._ollama_chat = lambda messages: "Rescued by Ollama."  # noqa: ANN001
-
-    user = MsgMessage()
-    user.role = "user"
-    user.content = "Hello?"
-
-    node._publish_user_turn(user)
-    node.on_conversation(user)
-
-    assert node.pub_voice.messages[-1].data == "Rescued by Ollama."
-    assert stub.calls == 1
+    assert node.model == "gpt-oss:20b"
 
 
-def test_chatnode_defaults_to_tinyllama_for_ollama_fallback() -> None:
+def test_chatnode_generate_response_uses_ollama_directly() -> None:
     node = ChatNode()
 
-    assert node.model == "tinyllama"
+    calls: dict[str, list[dict[str, str]]] = {}
+
+    def _capture(messages: list[dict[str, str]]) -> str:
+        calls.setdefault("messages", []).extend(messages)
+        return "Direct answer."
+
+    node._ollama_chat = _capture  # type: ignore[assignment]
+
+    history = [{"role": "user", "content": "Ping"}]
+    reply = node._generate_response(history)
+
+    assert reply == "Direct answer."
+    assert calls.get("messages") == history
 
 
 def test_chatnode_honors_ollama_host_environment_variable() -> None:

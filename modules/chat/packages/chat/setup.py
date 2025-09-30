@@ -11,7 +11,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/chat.launch.py']),
     ],
-    install_requires=['setuptools', 'requests', 'websockets>=11,<12'],
+    install_requires=['setuptools', 'requests'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',

@@ -16,7 +16,7 @@ DEFAULT_ARGUMENTS = {
     "conversation_topic": "/conversation",
     "voice_topic": "/voice",
     "transcript_topic": "/audio/transcription",
-    "model": "llama3.2",
+    "model": "gpt-oss:20b",
     "ollama_host": "http://forebrain.local:11434",
     "max_history": "20",
 }

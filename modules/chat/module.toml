@@ -31,8 +31,8 @@ packages = ["voice"]
 
 [[actions]]
 type = "pip_install"
-packages = ["requests", "websockets>=11,<12"]
-import_check = ["requests", "websockets"]
+packages = ["requests"]
+import_check = ["requests"]
 break_system = true
 
 [[actions]]
