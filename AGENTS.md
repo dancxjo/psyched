@@ -125,6 +125,9 @@ Visit `http://<cerebellum-host>:8080`.
   psh launch voice # check TTS output
   psh launch pilot # web UI health
   ```
+* Pilot backend unit tests rely on FastAPI and related dependencies. Set
+  `PYTHONPATH=modules/pilot/packages/pilot` before running `pytest` so the
+  `pilot` package resolves without installation.
 * Deno tests: run with `DENO_TLS_CA_STORE=system` and explicit permissions.
 * Pilot backend tests require `fastapi`, `httpx`, `uvicorn`.
 

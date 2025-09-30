@@ -1,10 +1,12 @@
 import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
 // Regime grouping removed - modules are shown in the order returned by the API (host-defined)
-import { topicKey, topicIdentifier } from '../utils/topics.js';
+import { topicKey, topicIdentifier, topicUpdateProfile } from '../utils/topics.js';
 import './module-section.js';
 
 const MAX_LOG_ENTRIES = 40;
+const MAX_MESSAGE_HISTORY = 50;
+const MAX_PENDING_BATCH = 32;
 
 /**
  * Root component that orchestrates the pilot control surface.
@@ -31,6 +33,7 @@ class PilotApp extends LitElement {
     this.activeTopics = new Map();
     this.socketCount = 0;
     this.logCollapsed = false;
+    this._pendingTopicFlushes = new Map();
   }
 
   /**
@@ -104,6 +107,7 @@ class PilotApp extends LitElement {
   }
 
   deleteTopicRecord(key) {
+    this.clearPendingTopicUpdates(key);
     const next = new Map(this.activeTopics);
     next.delete(key);
     this.activeTopics = next;
@@ -278,22 +282,120 @@ class PilotApp extends LitElement {
       try {
         const payload = JSON.parse(event.data);
         const data = payload?.data ?? payload;
-        this.updateTopicRecord(key, (existing) => ({
-          ...existing,
-          last: data,
-          messages: [data, ...existing.messages].slice(0, 50),
-        }));
-        try {
-          if (record.topic?.presentation === 'imu') {
-            window.dispatchEvent(new CustomEvent('pilot-imu', { detail: data }));
-          }
-        } catch (dispatchError) {
-          console.warn('Failed to dispatch pilot-imu event', dispatchError);
-        }
+        this.queueTopicMessage(key, data);
       } catch (error) {
         console.warn('Failed to parse topic payload', error);
       }
     });
+  }
+
+  clearPendingTopicUpdates(key) {
+    const pending = this._pendingTopicFlushes.get(key);
+    if (!pending) {
+      return;
+    }
+    if (typeof pending.cancel === 'function') {
+      try {
+        pending.cancel();
+      } catch (error) {
+        console.warn('Failed to cancel pending topic flush', error);
+      }
+    }
+    this._pendingTopicFlushes.delete(key);
+  }
+
+  queueTopicMessage(key, data) {
+    const record = this.activeTopics.get(key);
+    const topic = record?.topic;
+    if (!record || !topic) {
+      return;
+    }
+
+    const profile = topicUpdateProfile(topic);
+    if (profile.mode === 'immediate') {
+      this.applyTopicUpdates(key, [data]);
+      this.dispatchImuEvent(topic, data);
+      return;
+    }
+
+    const existing = this._pendingTopicFlushes.get(key);
+    const queue = existing?.queue ?? [];
+    if (profile.collapse) {
+      queue.length = 0;
+      queue.push(data);
+    } else {
+      queue.push(data);
+      if (queue.length > MAX_PENDING_BATCH) {
+        queue.splice(0, queue.length - MAX_PENDING_BATCH);
+      }
+    }
+
+    const scheduleFlush = () => {
+      this._pendingTopicFlushes.delete(key);
+      const updates = queue.splice(0);
+      if (!updates.length) {
+        return;
+      }
+      this.applyTopicUpdates(key, updates);
+      const latest = updates[updates.length - 1];
+      this.dispatchImuEvent(topic, latest);
+    };
+
+    if (existing?.timer) {
+      return;
+    }
+
+    if (profile.frame) {
+      const handle = window.requestAnimationFrame(() => {
+        scheduleFlush();
+      });
+      this._pendingTopicFlushes.set(key, {
+        queue,
+        timer: handle,
+        cancel: () => window.cancelAnimationFrame(handle),
+      });
+      return;
+    }
+
+    const delay = Math.max(0, Number(profile.interval) || 0);
+    const timeout = window.setTimeout(() => {
+      scheduleFlush();
+    }, delay);
+    this._pendingTopicFlushes.set(key, {
+      queue,
+      timer: timeout,
+      cancel: () => window.clearTimeout(timeout),
+    });
+  }
+
+  applyTopicUpdates(key, updates) {
+    if (!updates?.length) {
+      return;
+    }
+    const newest = updates[updates.length - 1];
+    const reversed = [...updates].reverse();
+    this.updateTopicRecord(key, (existing) => {
+      if (!existing) {
+        return existing;
+      }
+      const history = Array.isArray(existing.messages) ? existing.messages : [];
+      const messages = [...reversed, ...history].slice(0, MAX_MESSAGE_HISTORY);
+      return {
+        ...existing,
+        last: newest,
+        messages,
+      };
+    });
+  }
+
+  dispatchImuEvent(topic, data) {
+    try {
+      if (topic?.presentation === 'imu' || topic?.topic === '/imu') {
+        window.dispatchEvent(new CustomEvent('pilot-imu', { detail: data }));
+      }
+    } catch (dispatchError) {
+      console.warn('Failed to dispatch pilot-imu event', dispatchError);
+    }
   }
 
   renderModules() {
