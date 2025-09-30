@@ -5,6 +5,13 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan
 
+try:  # pragma: no cover - requires ROS 2 runtime
+    from rclpy.qos import SensorDataQoS
+except ImportError:  # pragma: no cover - exercised outside ROS
+
+    def SensorDataQoS():  # type: ignore[misc]
+        return 10
+
 from psyched_nav.depth_projection import DepthToScan
 
 class DepthProjectionNode(Node):
@@ -14,10 +21,10 @@ class DepthProjectionNode(Node):
         super().__init__('depth_projection')
         self.bridge = CvBridge()
         self.d2s = DepthToScan(fx=525, fy=525, cx=160, cy=120, min_y=100, max_y=140)
-        self.scan_pub = self.create_publisher(LaserScan, 'scan', 10)
-        self.overlay_pub = self.create_publisher(Image, 'scan_overlay', 10)
-        self.create_subscription(Image, 'kinect/depth', self.depth_callback, 10)
-        self.create_subscription(Image, 'kinect/rgb', self.rgb_callback, 10)
+        self.scan_pub = self.create_publisher(LaserScan, 'scan', SensorDataQoS())
+        self.overlay_pub = self.create_publisher(Image, 'scan_overlay', SensorDataQoS())
+        self.create_subscription(Image, 'kinect/depth', self.depth_callback, SensorDataQoS())
+        self.create_subscription(Image, 'kinect/rgb', self.rgb_callback, SensorDataQoS())
         self.last_rgb = None
 
     def depth_callback(self, msg):

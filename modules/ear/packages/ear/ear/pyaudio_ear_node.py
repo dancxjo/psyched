@@ -12,6 +12,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import ByteMultiArray
 
+from .qos import sensor_data_qos
+
 
 class PyAudioEarNode(Node):
     def __init__(self) -> None:
@@ -25,7 +27,7 @@ class PyAudioEarNode(Node):
         self.format = pyaudio.paInt16  # 16-bit PCM
         
         # Publisher for raw PCM payloads
-        self.audio_pub = self.create_publisher(ByteMultiArray, '/audio/raw', 10)
+        self.audio_pub = self.create_publisher(ByteMultiArray, '/audio/raw', sensor_data_qos())
         
         # Audio processing
         self.audio = pyaudio.PyAudio()

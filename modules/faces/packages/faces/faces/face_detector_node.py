@@ -19,6 +19,39 @@ from faces_msgs.msg import FaceDetections
 from .message_builder import build_face_detections_msg
 from .processing import BasicEmbeddingExtractor, FaceProcessor, HaarCascadeDetector
 
+try:  # pragma: no cover - requires ROS 2 runtime
+    from rclpy.qos import (
+        QoSDurabilityPolicy,
+        QoSHistoryPolicy,
+        QoSProfile,
+        QoSReliabilityPolicy,
+        SensorDataQoS,
+    )
+except ImportError:  # pragma: no cover - exercised in unit tests without rclpy
+    QoSDurabilityPolicy = None  # type: ignore[assignment]
+    QoSHistoryPolicy = None  # type: ignore[assignment]
+    QoSProfile = None  # type: ignore[assignment]
+    QoSReliabilityPolicy = None  # type: ignore[assignment]
+
+    def SensorDataQoS():  # type: ignore[misc]
+        return 10
+
+
+def _best_effort_qos(*, depth: int = 10):
+    if (
+        QoSProfile is None
+        or QoSHistoryPolicy is None
+        or QoSReliabilityPolicy is None
+        or QoSDurabilityPolicy is None
+    ):
+        return depth
+    return QoSProfile(
+        history=QoSHistoryPolicy.KEEP_LAST,
+        depth=depth,
+        reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        durability=QoSDurabilityPolicy.VOLATILE,
+    )
+
 
 class FaceDetectorNode(Node):
     """Detect faces from camera frames and publish crops and embeddings."""
@@ -44,11 +77,16 @@ class FaceDetectorNode(Node):
         self._last_signature: Optional[str] = None
         self._last_trigger_time: float = 0.0
 
-        self._detections_pub = self.create_publisher(FaceDetections, self._faces_topic, 10)
-        self._trigger_pub = self.create_publisher(String, self._face_detected_topic, 10)
+        self._detections_pub = self.create_publisher(FaceDetections, self._faces_topic, SensorDataQoS())
+        self._trigger_pub = self.create_publisher(String, self._face_detected_topic, _best_effort_qos(depth=5))
 
         # create the subscription and keep a handle so we can change it at runtime
-        self._camera_sub = self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
+        self._camera_sub = self.create_subscription(
+            Image,
+            self._camera_topic,
+            self._handle_image,
+            SensorDataQoS(),
+        )
 
         # watch for parameter updates so we can re-subscribe if camera_topic changes
         self.add_on_set_parameters_callback(self._on_set_parameters)
@@ -131,7 +169,12 @@ class FaceDetectorNode(Node):
                 pass
             # create new subscription
             self._camera_topic = new_topic
-            self._camera_sub = self.create_subscription(Image, self._camera_topic, self._handle_image, 10)
+            self._camera_sub = self.create_subscription(
+                Image,
+                self._camera_topic,
+                self._handle_image,
+                SensorDataQoS(),
+            )
             self.get_logger().info(f"Re-subscribed to camera topic: {self._camera_topic}")
             return SetParametersResult(successful=True)
         except Exception as exc:  # pragma: no cover - defensive

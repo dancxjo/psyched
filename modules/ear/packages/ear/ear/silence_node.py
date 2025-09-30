@@ -15,12 +15,18 @@ import math
 import struct
 from dataclasses import dataclass
 from types import SimpleNamespace
+import sys
 from typing import Any, Callable, Optional
 
 from .audio_utils import coerce_pcm_bytes
 from .silence_tracker import SilenceTracker
+from .qos import best_effort_qos, sensor_data_qos
+
+_FORCE_STUBS = "pytest" in sys.modules
 
 try:  # pragma: no cover - exercised only in ROS environments
+    if _FORCE_STUBS:
+        raise ImportError
     import rclpy
     from rclpy.node import Node
     from std_msgs.msg import ByteMultiArray, UInt32
@@ -65,10 +71,10 @@ except ImportError:  # pragma: no cover - unit tests rely on these lightweight s
         def declare_parameter(self, name: str, default_value: Any) -> SimpleNamespace:
             return SimpleNamespace(value=default_value)
 
-        def create_publisher(self, msg_type: Any, topic: str, qos: int) -> _PublisherStub:
+        def create_publisher(self, msg_type: Any, topic: str, qos: Any) -> _PublisherStub:
             return _PublisherStub(topic)
 
-        def create_subscription(self, msg_type: Any, topic: str, callback: Callable[[Any], None], qos: int) -> _SubscriptionStub:
+        def create_subscription(self, msg_type: Any, topic: str, callback: Callable[[Any], None], qos: Any) -> _SubscriptionStub:
             return _SubscriptionStub(topic, callback)
 
         def get_logger(self) -> _LoggerStub:
@@ -115,8 +121,8 @@ class SilenceNode(Node):  # type: ignore[misc]
         factory = tracker_factory or (lambda threshold: SilenceTracker(threshold))
         self._tracker = factory(self._silence_threshold)
 
-        self._publisher = self.create_publisher(UInt32, '/audio/silence_ms', 10)
-        self._subscription = self.create_subscription(ByteMultiArray, '/audio/raw', self._on_audio, 10)
+        self._publisher = self.create_publisher(UInt32, '/audio/silence_ms', best_effort_qos())
+        self._subscription = self.create_subscription(ByteMultiArray, '/audio/raw', self._on_audio, sensor_data_qos())
 
         self.get_logger().info(f'Silence monitor ready: threshold={self._silence_threshold:.1f}')
 

@@ -8,6 +8,8 @@ import webrtcvad
 from rclpy.node import Node
 from std_msgs.msg import ByteMultiArray
 
+from .qos import sensor_data_qos
+
 try:
     from psyched_msgs.msg import VadFrame
 except ImportError:  # pragma: no cover - enables unit tests without generated interfaces
@@ -44,8 +46,10 @@ class VADNode(Node):
 
         self._buffer = b''
 
-        self._subscription = self.create_subscription(ByteMultiArray, self._input_topic, self.audio_callback, 10)
-        self._publisher = self.create_publisher(VadFrame, self._frame_topic, 10)
+        self._subscription = self.create_subscription(
+            ByteMultiArray, self._input_topic, self.audio_callback, sensor_data_qos()
+        )
+        self._publisher = self.create_publisher(VadFrame, self._frame_topic, sensor_data_qos())
 
         self.get_logger().info(
             (

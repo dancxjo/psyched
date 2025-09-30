@@ -8,6 +8,7 @@ from typing import Optional, Sequence, Tuple
 from .audio_utils import coerce_pcm_bytes
 from .transcription_backends import initialise_remote_backend, load_backend
 from .transcription_pipeline import Transcript, TranscriptPublisher, TranscriptionPipeline
+from .qos import best_effort_qos, sensor_data_qos
 
 try:  # pragma: no cover - available only inside a ROS 2 environment
     from std_msgs.msg import ByteMultiArray
@@ -61,7 +62,7 @@ class BaseTranscriberApp:
         self._publishers = []
         for name, default in transcript_topic_params:
             topic = str(node.declare_parameter(name, default).value)
-            publisher = node.create_publisher(Transcript, topic, 10)
+            publisher = node.create_publisher(Transcript, topic, best_effort_qos(depth=10))
             self._publishers.append(publisher)
 
         self._transcript_publisher = TranscriptPublisher(
@@ -82,7 +83,12 @@ class BaseTranscriberApp:
             start_worker=start_worker,
         )
 
-        self._subscription = node.create_subscription(ByteMultiArray, self._input_topic, self._on_audio_segment, 10)
+        self._subscription = node.create_subscription(
+            ByteMultiArray,
+            self._input_topic,
+            self._on_audio_segment,
+            sensor_data_qos(),
+        )
 
     def destroy(self) -> None:
         self._pipeline.stop()

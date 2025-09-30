@@ -2,7 +2,7 @@ import base64
 import json
 import types
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List
 
 import pytest
 
@@ -96,12 +96,12 @@ class FakeNode:
         value = self.parameters.get(name, default_value)
         return types.SimpleNamespace(value=value)
 
-    def create_publisher(self, _msg_type, topic: str, _queue_size: int):
+    def create_publisher(self, _msg_type, topic: str, _qos: Any):
         publisher = FakePublisher()
         self.publishers[topic] = publisher
         return publisher
 
-    def create_subscription(self, _msg_type, topic: str, callback, _queue_size: int):
+    def create_subscription(self, _msg_type, topic: str, callback, _qos: Any):
         subscription = FakeSubscription(topic, callback)
         self.subscriptions.append(subscription)
         return subscription

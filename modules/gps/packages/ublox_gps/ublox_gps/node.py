@@ -5,7 +5,13 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+
+try:  # pragma: no cover - requires ROS 2 runtime
+    from rclpy.qos import SensorDataQoS
+except ImportError:  # pragma: no cover - exercised in tests
+
+    def SensorDataQoS():  # type: ignore[misc]
+        return 10
 
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
 from std_msgs.msg import Header
@@ -27,9 +33,7 @@ class UbloxGpsNode(Node):
         frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
         publish_rate = self.get_parameter('publish_rate').get_parameter_value().double_value
 
-        qos = QoSProfile(depth=10)
-        qos.reliability = QoSReliabilityPolicy.BEST_EFFORT
-        qos.history = QoSHistoryPolicy.KEEP_LAST
+        qos = SensorDataQoS()
 
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', qos)
         self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', qos)
@@ -115,4 +119,3 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-

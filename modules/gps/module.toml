@@ -11,14 +11,14 @@ name = "/gps/fix"
 type = "sensor_msgs/msg/NavSatFix"
 access = "ro"
 presentation = "map"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
 name = "/gps/velocity"
 type = "geometry_msgs/msg/TwistStamped"
 access = "ro"
 presentation = "vector"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[actions]]
 type = "link_packages"

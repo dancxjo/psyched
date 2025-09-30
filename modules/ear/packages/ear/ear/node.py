@@ -23,6 +23,8 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import ParameterType
 from audio_common_msgs.msg import AudioData
 
+from .qos import best_effort_qos, sensor_data_qos
+
 
 class EarNode(Node):
     def __init__(self) -> None:
@@ -63,7 +65,7 @@ class EarNode(Node):
         self.chunk = _as_int('chunk', 2048)
 
         # Publishers
-        self.pub = self.create_publisher(AudioData, self.topic, 10)
+        self.pub = self.create_publisher(AudioData, self.topic, sensor_data_qos())
         # Optional AudioInfo publisher; import lazily
         self._info_enabled = bool(self.get_parameter('publish_info').value)
         self._info_pub = None
@@ -72,7 +74,11 @@ class EarNode(Node):
             try:
                 from audio_common_msgs.msg import AudioInfo  # type: ignore
                 self._info_msg_type = AudioInfo
-                self._info_pub = self.create_publisher(AudioInfo, self.get_parameter('info_topic').value, 1)
+                self._info_pub = self.create_publisher(
+                    AudioInfo,
+                    self.get_parameter('info_topic').value,
+                    best_effort_qos(depth=1),
+                )
             except Exception:
                 self._info_enabled = False
 

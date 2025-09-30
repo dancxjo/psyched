@@ -5,6 +5,7 @@ import time
 from typing import Any, Callable, Optional
 
 from .audio_utils import coerce_pcm_bytes
+from .qos import sensor_data_qos
 
 try:  # pragma: no cover - exercised only when ROS is available
     import rclpy
@@ -46,10 +47,10 @@ except ImportError:  # pragma: no cover - unit tests rely on these lightweight s
         def declare_parameter(self, name: str, default_value: Any) -> Any:
             return type('Param', (), {'value': default_value})()
 
-        def create_publisher(self, msg_type: Any, topic: str, qos: int) -> _PublisherStub:
+        def create_publisher(self, msg_type: Any, topic: str, qos: Any) -> _PublisherStub:
             return _PublisherStub(topic)
 
-        def create_subscription(self, msg_type: Any, topic: str, callback, qos: int) -> _SubscriptionStub:
+        def create_subscription(self, msg_type: Any, topic: str, callback, qos: Any) -> _SubscriptionStub:
             return _SubscriptionStub(topic, callback)
 
         def get_logger(self) -> _LoggerStub:
@@ -128,8 +129,8 @@ class SegmentAccumulatorNode(Node):  # type: ignore[misc]
             max_segments=self._max_segments,
         )
 
-        self._publisher = self.create_publisher(ByteMultiArray, self._accum_topic, 10)
-        self._subscription = self.create_subscription(ByteMultiArray, self._segment_topic, self._on_segment, 10)
+        self._publisher = self.create_publisher(ByteMultiArray, self._accum_topic, sensor_data_qos())
+        self._subscription = self.create_subscription(ByteMultiArray, self._segment_topic, self._on_segment, sensor_data_qos())
 
         self.get_logger().info(
             (

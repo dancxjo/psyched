@@ -15,6 +15,35 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Empty, Float32, String, UInt32
 
+try:  # pragma: no cover - requires ROS runtime
+    from rclpy.qos import (
+        QoSDurabilityPolicy,
+        QoSHistoryPolicy,
+        QoSProfile,
+        QoSReliabilityPolicy,
+    )
+except ImportError:  # pragma: no cover - exercised by unit tests
+    QoSDurabilityPolicy = None  # type: ignore[assignment]
+    QoSHistoryPolicy = None  # type: ignore[assignment]
+    QoSProfile = None  # type: ignore[assignment]
+    QoSReliabilityPolicy = None  # type: ignore[assignment]
+
+
+def _best_effort_qos(*, depth: int = 10):
+    if (
+        QoSProfile is None
+        or QoSHistoryPolicy is None
+        or QoSReliabilityPolicy is None
+        or QoSDurabilityPolicy is None
+    ):
+        return depth
+    return QoSProfile(
+        history=QoSHistoryPolicy.KEEP_LAST,
+        depth=depth,
+        reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        durability=QoSDurabilityPolicy.VOLATILE,
+    )
+
 from psyched_msgs.msg import Message as MsgMessage
 
 from .providers import (
@@ -102,10 +131,18 @@ class VoiceNode(Node):
         self.volume = max(0.0, min(2.0, self.volume))
 
         self.topic = self._get_string_param("topic", "/voice")
-        self._pub_done = self.create_publisher(String, "voice_done", 10)
+        self._pub_done = self.create_publisher(String, "voice_done", _best_effort_qos(depth=5))
         self._conversation_topic = self._get_string_param("conversation_topic", "/conversation")
-        self._pub_conversation = self.create_publisher(MsgMessage, self._conversation_topic, 10)
-        self.autophony_pub = self.create_publisher(UInt32, "/audio/autophony_duration", 10)
+        self._pub_conversation = self.create_publisher(
+            MsgMessage,
+            self._conversation_topic,
+            _best_effort_qos(depth=10),
+        )
+        self.autophony_pub = self.create_publisher(
+            UInt32,
+            "/audio/autophony_duration",
+            _best_effort_qos(depth=10),
+        )
 
         self.create_subscription(String, self.topic, self.enqueue, 10)
         self.create_subscription(String, "voice_interrupt", lambda _msg: self._on_pause(None), 10)

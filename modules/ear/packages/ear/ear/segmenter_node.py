@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .audio_utils import coerce_pcm_bytes
+from .qos import best_effort_qos, sensor_data_qos
 
 try:  # pragma: no cover - exercised only when ROS is available
     import rclpy
@@ -47,10 +48,10 @@ except ImportError:  # pragma: no cover - unit tests rely on these lightweight s
         def declare_parameter(self, name: str, default_value: Any) -> Any:
             return type('Param', (), {'value': default_value})()
 
-        def create_publisher(self, msg_type: Any, topic: str, qos: int) -> _PublisherStub:
+        def create_publisher(self, msg_type: Any, topic: str, qos: Any) -> _PublisherStub:
             return _PublisherStub(topic)
 
-        def create_subscription(self, msg_type: Any, topic: str, callback, qos: int) -> _SubscriptionStub:
+        def create_subscription(self, msg_type: Any, topic: str, callback, qos: Any) -> _SubscriptionStub:
             return _SubscriptionStub(topic, callback)
 
         def get_logger(self) -> _LoggerStub:
@@ -172,10 +173,10 @@ class SegmenterNode(Node):  # type: ignore[misc]
         self._segmenter = SpeechSegmenter()
         self._current_accum = bytearray()
 
-        self._segment_pub = self.create_publisher(ByteMultiArray, self._segment_topic, 10)
-        self._accum_pub = self.create_publisher(ByteMultiArray, self._accum_topic, 10)
-        self._duration_pub = self.create_publisher(UInt32, self._duration_topic, 10)
-        self._subscription = self.create_subscription(VadFrame, self._frame_topic, self._on_frame, 10)
+        self._segment_pub = self.create_publisher(ByteMultiArray, self._segment_topic, sensor_data_qos())
+        self._accum_pub = self.create_publisher(ByteMultiArray, self._accum_topic, sensor_data_qos())
+        self._duration_pub = self.create_publisher(UInt32, self._duration_topic, best_effort_qos())
+        self._subscription = self.create_subscription(VadFrame, self._frame_topic, self._on_frame, sensor_data_qos())
 
         self.get_logger().info(
             (
