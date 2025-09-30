@@ -10,7 +10,7 @@ EAR_DEFAULTS = {
     "ear_device_id": "0",
     "ear_sample_rate": "44100",
     "ear_channels": "1",
-    "ear_chunk_size": "1024",
+    "ear_chunk_size": "2048",
 }
 
 SILENCE_DEFAULTS = {
@@ -293,9 +293,9 @@ def generate_launch_description() -> LaunchDescription:
             vad_node,
             segmenter_node,
             accumulator_node,
-            transcriber_local,
+            # transcriber_local,
             # transcriber_short,
-            # transcriber_medium,
+            transcriber_medium,
             # transcriber_long,
         ]
     )

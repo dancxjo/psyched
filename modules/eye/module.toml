@@ -21,12 +21,6 @@ presentation = "depth"
 qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }
 
 [[actions]]
-type = "run"
-description = "Ensure cv_bridge overlay when headers missing"
-script = "scripts/ensure_cv_bridge_overlay.sh"
-optional = true
-
-[[actions]]
 type = "git_clone"
 repo = "https://github.com/bribribriambriguy/kinect_ros2.git"
 dest = "kinect_ros2"
