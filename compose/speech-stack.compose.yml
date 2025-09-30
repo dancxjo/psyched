@@ -23,6 +23,7 @@ services:
       - /dev/nvidiactl:/dev/nvidiactl
       - /dev/nvidia-uvm:/dev/nvidia-uvm
       - /dev/nvidia-modeset:/dev/nvidia-modeset
+    gpus: all
 
   asr_medium:
     build:
@@ -48,6 +49,7 @@ services:
       - /dev/nvidiactl:/dev/nvidiactl
       - /dev/nvidia-uvm:/dev/nvidia-uvm
       - /dev/nvidia-modeset:/dev/nvidia-modeset
+    gpus: all
 
   asr_long:
     build:
@@ -72,6 +74,7 @@ services:
       - /dev/nvidiactl:/dev/nvidiactl
       - /dev/nvidia-uvm:/dev/nvidia-uvm
       - /dev/nvidia-modeset:/dev/nvidia-modeset
+    gpus: all
 
   tts:
     build:
@@ -111,5 +114,6 @@ services:
       - /dev/nvidiactl:/dev/nvidiactl
       - /dev/nvidia-uvm:/dev/nvidia-uvm
       - /dev/nvidia-modeset:/dev/nvidia-modeset
+    gpus: all
     ports:
       - "8080:8080"
