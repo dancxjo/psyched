@@ -1133,7 +1133,7 @@ body {
   right: 1rem;
   bottom: 3.75rem; /* sits above the fixed status bar */
   max-height: 36vh;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 0.75rem 1rem;
   border-radius: 0.5rem 0.5rem 0 0;
   background: var(--lcars-panel);
