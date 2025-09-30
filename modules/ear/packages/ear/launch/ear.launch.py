@@ -28,6 +28,8 @@ SEGMENTER_DEFAULTS = {
     "segmenter_accum_topic": "/audio/speech_segment_accumulating",
     "segmenter_duration_topic": "/audio/speech_duration",
     "segmenter_silence_release_ms": "450.0",
+    "segmenter_lead_silence_ms": "120.0",
+    "segmenter_min_speech_ms": "300.0",
     "segmenter_max_segment_ms": "12000.0",
 }
 
@@ -138,6 +140,12 @@ def generate_launch_description() -> LaunchDescription:
                 "duration_topic": ParameterValue(LaunchConfiguration("segmenter_duration_topic"), value_type=str),
                 "silence_release_ms": ParameterValue(
                     LaunchConfiguration("segmenter_silence_release_ms"), value_type=float
+                ),
+                "lead_silence_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_lead_silence_ms"), value_type=float
+                ),
+                "min_speech_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_min_speech_ms"), value_type=float
                 ),
                 "max_segment_ms": ParameterValue(
                     LaunchConfiguration("segmenter_max_segment_ms"), value_type=float
