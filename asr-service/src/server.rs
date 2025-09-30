@@ -6,7 +6,7 @@ use crate::core::pipeline::Pipeline;
 pub use crate::core::pipeline::Pipeline as PipelineTrait;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
-use axum::response::IntoResponse;
+use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::Router;
 use futures::stream::StreamExt;
@@ -21,11 +21,16 @@ pub fn router(pipeline: Arc<dyn Pipeline>) -> Router {
     let state = AppState { pipeline };
     Router::new()
         .route("/ws", get(ws_handler))
+        .route("/", get(test_page))
         .with_state(state)
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| websocket_loop(socket, state.pipeline))
+}
+
+async fn test_page() -> Html<&'static str> {
+    Html(include_str!("static/websocket_tester.html"))
 }
 
 async fn websocket_loop(mut socket: WebSocket, pipeline: Arc<dyn Pipeline>) {

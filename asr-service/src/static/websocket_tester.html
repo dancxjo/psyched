@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ASR Service WebSocket Tester</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color-scheme: light dark; }
+    body { margin: 2rem auto; max-width: 48rem; line-height: 1.5; }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    button { padding: 0.5rem 1rem; margin-right: 0.5rem; font-size: 1rem; }
+    #status { margin: 1rem 0; font-weight: 600; }
+    textarea { width: 100%; height: 12rem; margin-top: 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9rem; }
+    .metrics { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+    .panel { flex: 1 1 12rem; border: 1px solid currentColor; padding: 0.75rem; border-radius: 0.5rem; }
+    .panel h2 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; word-break: break-word; }
+    label { display: block; margin-top: 0.5rem; }
+    input[type="text"] { width: 100%; padding: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>ASR Service WebSocket Tester</h1>
+  <p>
+    Use this page to stream microphone audio to the ASR service over the existing
+    websocket interface. Grant microphone access when prompted, then press
+    <strong>Start</strong> to begin streaming at 16 kHz PCM. Partial and final
+    hypotheses will appear below.
+  </p>
+  <div>
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+  <div id="status">Idle</div>
+  <div class="metrics">
+    <div class="panel">
+      <h2>Stream</h2>
+      <div>Stream ID:</div>
+      <div class="mono" id="streamId">-</div>
+      <label for="language">Language (optional)</label>
+      <input id="language" type="text" placeholder="e.g. en" />
+    </div>
+    <div class="panel">
+      <h2>Latest Partial</h2>
+      <div class="mono" id="partialText">-</div>
+    </div>
+    <div class="panel">
+      <h2>Latest Final</h2>
+      <div class="mono" id="finalText">-</div>
+    </div>
+  </div>
+  <label for="log">Event Log</label>
+  <textarea id="log" readonly></textarea>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const streamIdEl = document.getElementById('streamId');
+    const partialTextEl = document.getElementById('partialText');
+    const finalTextEl = document.getElementById('finalText');
+    const languageEl = document.getElementById('language');
+
+    const TARGET_SAMPLE_RATE = 16000;
+    const AUDIO_SEQ_INCREMENT = 1;
+
+    let audioContext = null;
+    let mediaStream = null;
+    let processor = null;
+    let sourceNode = null;
+    let websocket = null;
+    let streamId = null;
+    let nextSeq = 0;
+    let running = false;
+
+    function log(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      logEl.value += `[${timestamp}] ${message}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function setControls(active) {
+      startBtn.disabled = active;
+      stopBtn.disabled = !active;
+    }
+
+    function buildWebSocketUrl() {
+      const url = new URL(window.location.href);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.pathname = url.pathname.replace(/\/$/, '') + '/ws';
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    }
+
+    function downsampleBuffer(buffer, inputRate, outputRate) {
+      if (outputRate === inputRate) {
+        return buffer;
+      }
+      if (outputRate > inputRate) {
+        throw new Error('Cannot up-sample audio');
+      }
+      const sampleRateRatio = inputRate / outputRate;
+      const newLength = Math.round(buffer.length / sampleRateRatio);
+      const result = new Float32Array(newLength);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+        let accum = 0;
+        let count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+          accum += buffer[i];
+          count += 1;
+        }
+        result[offsetResult] = accum / (count || 1);
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+      }
+      return result;
+    }
+
+    function floatTo16BitPCM(float32Array) {
+      const buffer = new ArrayBuffer(float32Array.length * 2);
+      const view = new DataView(buffer);
+      let offset = 0;
+      for (let i = 0; i < float32Array.length; i++, offset += 2) {
+        let sample = float32Array[i];
+        const clamped = Math.max(-1, Math.min(1, sample));
+        view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+      }
+      return buffer;
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+      }
+      return btoa(binary);
+    }
+
+    function sendInitMessage() {
+      if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      const payload = {
+        type: 'init',
+        stream_id: streamId,
+        lang: languageEl.value ? languageEl.value.trim() : null,
+        content_type: 'audio/pcm; rate=' + TARGET_SAMPLE_RATE,
+        sample_rate: TARGET_SAMPLE_RATE,
+        extras: {},
+      };
+      websocket.send(JSON.stringify(payload));
+      log('Sent init message.');
+    }
+
+    function sendCommitMessage() {
+      if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      const chunkId = crypto.randomUUID();
+      const payload = {
+        type: 'commit',
+        stream_id: streamId,
+        chunk_id: chunkId,
+      };
+      websocket.send(JSON.stringify(payload));
+      log(`Sent commit message (${chunkId}).`);
+    }
+
+    function sendCancelMessage() {
+      if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      websocket.send(JSON.stringify({ type: 'cancel', stream_id: streamId }));
+      log('Sent cancel message.');
+    }
+
+    function handleServerMessage(event) {
+      try {
+        const message = JSON.parse(event.data);
+        if (!message.type) {
+          log('Received message without type: ' + event.data);
+          return;
+        }
+        if (message.type === 'partial') {
+          partialTextEl.textContent = message.text || '-';
+        } else if (message.type === 'final') {
+          finalTextEl.textContent = message.text || '-';
+        } else if (message.type === 'error') {
+          log('Server error: ' + message.message);
+        } else if (message.type === 'stats') {
+          log(`Stats: realtime factor=${message.rtf?.toFixed?.(3) ?? message.rtf}`);
+        } else if (message.type === 'refine') {
+          finalTextEl.textContent = message.text || '-';
+        }
+      } catch (err) {
+        log('Failed to parse server message: ' + err);
+      }
+    }
+
+    function teardownAudioGraph() {
+      if (sourceNode) {
+        try { sourceNode.disconnect(); } catch (err) {}
+        sourceNode = null;
+      }
+      if (processor) {
+        try { processor.disconnect(); } catch (err) {}
+        processor.onaudioprocess = null;
+        processor = null;
+      }
+      if (audioContext) {
+        try { audioContext.close(); } catch (err) {}
+        audioContext = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+    }
+
+    function stopStreaming(options = {}) {
+      const { sendTerminal = true } = options;
+      if (!running && !websocket) {
+        return;
+      }
+      running = false;
+      setControls(false);
+      setStatus('Idle');
+      teardownAudioGraph();
+      if (websocket) {
+        try {
+          if (sendTerminal && websocket.readyState === WebSocket.OPEN) {
+            if (nextSeq > 0) {
+              sendCommitMessage();
+            }
+            sendCancelMessage();
+          }
+          if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
+            websocket.close();
+          }
+        } catch (err) {
+          log('Error closing websocket: ' + err);
+        }
+        websocket = null;
+      }
+      streamId = null;
+      nextSeq = 0;
+      streamIdEl.textContent = '-';
+      partialTextEl.textContent = '-';
+      log('Stopped streaming.');
+    }
+
+    startBtn.addEventListener('click', async () => {
+      if (running) {
+        return;
+      }
+      try {
+        setControls(true);
+        setStatus('Connecting…');
+        streamId = crypto.randomUUID();
+        streamIdEl.textContent = streamId;
+        nextSeq = 0;
+        websocket = new WebSocket(buildWebSocketUrl());
+        websocket.addEventListener('open', () => {
+          log('WebSocket connected.');
+          setStatus('Capturing audio…');
+          sendInitMessage();
+        });
+        websocket.addEventListener('close', () => {
+          log('WebSocket closed.');
+          stopStreaming({ sendTerminal: false });
+        });
+        websocket.addEventListener('error', (event) => {
+          log('WebSocket error: ' + event.message);
+        });
+        websocket.addEventListener('message', handleServerMessage);
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const inputSampleRate = audioContext.sampleRate;
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (event) => {
+          if (!running || !websocket || websocket.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          const inputBuffer = event.inputBuffer.getChannelData(0);
+          let downsampled;
+          try {
+            downsampled = downsampleBuffer(inputBuffer, inputSampleRate, TARGET_SAMPLE_RATE);
+          } catch (err) {
+            log('Downsample error: ' + err.message);
+            stopStreaming();
+            return;
+          }
+          if (!downsampled || downsampled.length === 0) {
+            return;
+          }
+          const pcmBuffer = floatTo16BitPCM(downsampled);
+          const payload = arrayBufferToBase64(pcmBuffer);
+          websocket.send(JSON.stringify({
+            type: 'audio',
+            stream_id: streamId,
+            seq: nextSeq,
+            payload_b64: payload,
+          }));
+          nextSeq += AUDIO_SEQ_INCREMENT;
+        };
+        sourceNode.connect(processor);
+        processor.connect(audioContext.destination);
+        running = true;
+        setStatus(`Capturing audio at ${inputSampleRate} Hz`);
+        log('Microphone capture started.');
+      } catch (err) {
+        setControls(false);
+        setStatus('Idle');
+        log('Failed to start streaming: ' + err);
+        teardownAudioGraph();
+        if (websocket) {
+          websocket.close();
+          websocket = null;
+        }
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (!running) {
+        return;
+      }
+      stopStreaming();
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (running) {
+        stopStreaming();
+      }
+    });
+  </script>
+</body>
+</html>
