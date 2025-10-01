@@ -9,14 +9,6 @@ apt = [
 ]
 pip = []
 
-[[unit.imu.git]]
-url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
-branch = "main"
-
-[unit.imu.ros]
-workspace = "."
-packages = ["mpu6050driver"]
-
 # Scripts to apply patches to the driver before build
 patches = ["modules/imu/apply_patches.sh"]
 
@@ -24,3 +16,11 @@ patches = ["modules/imu/apply_patches.sh"]
 launch = "modules/imu/launch_unit.sh"
 shutdown = "modules/imu/shutdown_unit.sh"
 pilot_control = "modules/imu/pilot/components/ImuReadout.tsx"
+
+[[unit.imu.git]]
+url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
+branch = "main"
+
+[unit.imu.ros]
+workspace = "."
+packages = ["mpu6050driver"]

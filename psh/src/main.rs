@@ -8,7 +8,7 @@ use clap::Parser;
 use crate::cli::{Cli, Commands, HostCommands, ModCommands};
 use crate::module_runner::{
     all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
-    teardown_module,
+    setup_modules, teardown_module,
 };
 use crate::setup::{run_setup, setup_env};
 
@@ -64,9 +64,7 @@ fn main() -> Result<()> {
                 } else {
                     modules
                 };
-                for m in targets {
-                    setup_module(&m)?;
-                }
+                setup_modules(&targets)?;
             }
             ModCommands::Teardown { modules } => {
                 let targets = if modules.is_empty() {

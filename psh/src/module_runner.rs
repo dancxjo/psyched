@@ -31,7 +31,6 @@ struct UnitConfig {
     #[serde(default)]
     apt: Vec<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     pip: Vec<String>,
     patches: Option<Vec<String>>,
     launch: Option<String>,
@@ -64,24 +63,57 @@ struct RosBuildConfig {
 }
 
 pub fn setup_module(module: &str) -> Result<()> {
-    let module_dir = locate_module_dir(module)
-        .with_context(|| format!("module '{}' not found under modules/", module))?;
+    setup_modules(&[module.to_string()])
+}
 
-    let unit_config = load_unit_config(&module_dir, module)?;
-
-    if let Some(repos) = unit_config.git.as_ref() {
-        sync_git_repos(module, &module_dir, repos)?;
+pub fn setup_modules(modules: &[String]) -> Result<()> {
+    if modules.is_empty() {
+        return Ok(());
     }
 
-    install_apt_packages(module, &unit_config.apt)?;
+    let mut plans: Vec<(String, PathBuf, UnitConfig)> = Vec::new();
+    let mut apt_requirements: Vec<String> = Vec::new();
+    let mut pip_requirements: Vec<String> = Vec::new();
 
-    if let Some(patches) = unit_config.patches.as_ref() {
-        run_patch_scripts(module, &module_dir, patches);
+    for module in modules {
+        let module_dir = locate_module_dir(module)
+            .with_context(|| format!("module '{}' not found under modules/", module))?;
+
+        let unit_config = load_unit_config(&module_dir, module)?;
+
+        apt_requirements.extend(unit_config.apt.iter().cloned());
+        pip_requirements.extend(unit_config.pip.iter().cloned());
+
+        plans.push((module.clone(), module_dir, unit_config));
     }
 
-    prepare_ros_workspace(module, &module_dir, unit_config.ros.as_ref())?;
+    let apt_unique = dedupe_preserve_order(apt_requirements);
+    if !apt_unique.is_empty() {
+        let label = format!("batch(setup:{})", modules.join(","));
+        install_apt_packages(&label, &apt_unique)?;
+    }
 
-    setup_module_internal(module, &module_dir, true)
+    let pip_unique = dedupe_preserve_order(pip_requirements);
+    if !pip_unique.is_empty() {
+        let label = format!("batch(setup:{})", modules.join(","));
+        install_pip_packages(&label, &pip_unique)?;
+    }
+
+    for (module, module_dir, unit_config) in plans {
+        if let Some(repos) = unit_config.git.as_ref() {
+            sync_git_repos(&module, &module_dir, repos)?;
+        }
+
+        if let Some(patches) = unit_config.patches.as_ref() {
+            run_patch_scripts(&module, &module_dir, patches);
+        }
+
+        prepare_ros_workspace(&module, &module_dir, unit_config.ros.as_ref())?;
+
+        setup_module_internal(&module, &module_dir, true)?;
+    }
+
+    Ok(())
 }
 
 pub fn teardown_module(module: &str) -> Result<()> {
@@ -341,7 +373,7 @@ fn prepare_ros_workspace(
     Ok(())
 }
 
-fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
+fn install_apt_packages(label: &str, packages: &[String]) -> Result<()> {
     if packages.is_empty() {
         return Ok(());
     }
@@ -349,7 +381,7 @@ fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
     which("apt-get").with_context(|| {
         format!(
             "[{}] apt-get not found in PATH; unable to install apt packages",
-            module
+            label
         )
     })?;
 
@@ -358,7 +390,7 @@ fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
         let resolved = expand_env_placeholders(pkg).with_context(|| {
             format!(
                 "[{}] failed to expand environment variables in '{}'",
-                module, pkg
+                label, pkg
             )
         })?;
 
@@ -366,7 +398,7 @@ fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
         if trimmed.is_empty() {
             bail!(
                 "[{}] expanded apt package '{}' resolved to an empty string",
-                module,
+                label,
                 pkg
             );
         }
@@ -376,7 +408,7 @@ fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
 
     println!(
         "[{}] Installing apt packages: {}",
-        module,
+        label,
         expanded.join(", ")
     );
 
@@ -398,7 +430,56 @@ fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
         .env("DEBIAN_FRONTEND", "noninteractive")
         .stderr_to_stdout()
         .run()
-        .with_context(|| format!("[{}] apt package installation failed", module))?;
+        .with_context(|| format!("[{}] apt package installation failed", label))?;
+
+    Ok(())
+}
+
+fn install_pip_packages(label: &str, packages: &[String]) -> Result<()> {
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    let pip_cmd = which("pip3")
+        .or_else(|_| which("pip"))
+        .with_context(|| format!("[{}] pip executable not found (pip3 or pip)", label))?;
+    let pip_program = pip_cmd.to_string_lossy().into_owned();
+
+    let mut expanded = Vec::with_capacity(packages.len());
+    for pkg in packages {
+        let resolved = expand_env_placeholders(pkg).with_context(|| {
+            format!(
+                "[{}] failed to expand environment variables in '{}'",
+                label, pkg
+            )
+        })?;
+
+        let trimmed = resolved.trim();
+        if trimmed.is_empty() {
+            bail!(
+                "[{}] expanded pip package '{}' resolved to an empty string",
+                label,
+                pkg
+            );
+        }
+
+        expanded.push(trimmed.to_string());
+    }
+
+    println!(
+        "[{}] Installing pip packages: {}",
+        label,
+        expanded.join(", ")
+    );
+
+    let mut args = Vec::with_capacity(1 + expanded.len());
+    args.push("install".to_string());
+    args.extend(expanded.iter().cloned());
+
+    cmd(pip_program, args)
+        .stderr_to_stdout()
+        .run()
+        .with_context(|| format!("[{}] pip package installation failed", label))?;
 
     Ok(())
 }
@@ -433,6 +514,17 @@ fn expand_env_placeholders(input: &str) -> Result<String> {
 
     result.push_str(&input[last_index..]);
     Ok(result)
+}
+
+fn dedupe_preserve_order(items: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut result = Vec::new();
+    for item in items {
+        if seen.insert(item.clone()) {
+            result.push(item);
+        }
+    }
+    result
 }
 
 fn run_patch_scripts(module: &str, module_dir: &Path, scripts: &[String]) {
@@ -505,6 +597,7 @@ pub fn bring_module_up(module: &str) -> Result<()> {
     }
 
     install_apt_packages(module, &unit_config.apt)?;
+    install_pip_packages(module, &unit_config.pip)?;
 
     if let Some(patches) = unit_config.patches.as_ref() {
         run_patch_scripts(module, &module_dir, patches);
