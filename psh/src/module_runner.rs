@@ -29,9 +29,10 @@ struct ModuleManifest {
 #[derive(Deserialize, Clone)]
 struct UnitConfig {
     #[serde(default)]
-    apt: Vec<PackageSpec>,
+    apt: Vec<String>,
     #[serde(default)]
-    pip: Vec<PackageSpec>,
+    #[allow(dead_code)]
+    pip: Vec<String>,
     patches: Option<Vec<String>>,
     launch: Option<String>,
     shutdown: Option<String>,
@@ -60,11 +61,6 @@ struct RosBuildConfig {
     skip_rosdep: bool,
     #[serde(default)]
     skip_colcon: bool,
-}
-
-#[derive(Deserialize, Clone)]
-struct PackageSpec {
-    package: String,
 }
 
 pub fn setup_module(module: &str) -> Result<()> {
@@ -345,7 +341,7 @@ fn prepare_ros_workspace(
     Ok(())
 }
 
-fn install_apt_packages(module: &str, packages: &[PackageSpec]) -> Result<()> {
+fn install_apt_packages(module: &str, packages: &[String]) -> Result<()> {
     if packages.is_empty() {
         return Ok(());
     }
@@ -359,10 +355,10 @@ fn install_apt_packages(module: &str, packages: &[PackageSpec]) -> Result<()> {
 
     let mut expanded = Vec::with_capacity(packages.len());
     for pkg in packages {
-        let resolved = expand_env_placeholders(&pkg.package).with_context(|| {
+        let resolved = expand_env_placeholders(pkg).with_context(|| {
             format!(
                 "[{}] failed to expand environment variables in '{}'",
-                module, pkg.package
+                module, pkg
             )
         })?;
 
@@ -371,7 +367,7 @@ fn install_apt_packages(module: &str, packages: &[PackageSpec]) -> Result<()> {
             bail!(
                 "[{}] expanded apt package '{}' resolved to an empty string",
                 module,
-                pkg.package
+                pkg
             );
         }
 
