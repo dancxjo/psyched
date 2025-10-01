@@ -31,6 +31,10 @@ SEGMENTER_DEFAULTS = {
     "segmenter_lead_silence_ms": "120.0",
     "segmenter_min_speech_ms": "300.0",
     "segmenter_max_segment_ms": "12000.0",
+    "segmenter_trim_window_ms": "30.0",
+    "segmenter_trim_keep_ms": "60.0",
+    "segmenter_trim_rms_ratio": "0.12",
+    "segmenter_trim_rms_floor": "200.0",
 }
 
 TRANSCRIBER_DEFAULTS = {
@@ -149,6 +153,18 @@ def generate_launch_description() -> LaunchDescription:
                 ),
                 "max_segment_ms": ParameterValue(
                     LaunchConfiguration("segmenter_max_segment_ms"), value_type=float
+                ),
+                "trim_window_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_trim_window_ms"), value_type=float
+                ),
+                "trim_keep_ms": ParameterValue(
+                    LaunchConfiguration("segmenter_trim_keep_ms"), value_type=float
+                ),
+                "trim_rms_ratio": ParameterValue(
+                    LaunchConfiguration("segmenter_trim_rms_ratio"), value_type=float
+                ),
+                "trim_rms_floor": ParameterValue(
+                    LaunchConfiguration("segmenter_trim_rms_floor"), value_type=float
                 ),
             }
         ],

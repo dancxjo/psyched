@@ -1,6 +1,7 @@
 """VAD-driven speech segmentation node and supporting helpers."""
 from __future__ import annotations
 
+import audioop
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Deque, List, Optional
@@ -116,12 +117,20 @@ class SpeechSegmenter:
         lead_silence_ms: float = 120.0,
         min_speech_ms: float = 300.0,
         max_segment_ms: Optional[float] = 12000.0,
+        trim_window_ms: float = 30.0,
+        trim_keep_ms: float = 60.0,
+        trim_rms_ratio: float = 0.12,
+        trim_rms_floor: float = 200.0,
     ) -> None:
         self._silence_release_ms = max(0.0, float(silence_release_ms))
         self._lead_silence_ms = max(0.0, float(lead_silence_ms))
         self._min_speech_ms = max(0.0, float(min_speech_ms))
         max_segment = float(max_segment_ms) if max_segment_ms not in (None, 0.0) else None
         self._max_segment_ms = max_segment if (max_segment is None or max_segment > 0.0) else None
+        self._trim_window_ms = max(1.0, float(trim_window_ms))
+        self._trim_keep_ms = max(0.0, float(trim_keep_ms))
+        self._trim_rms_ratio = max(0.0, float(trim_rms_ratio))
+        self._trim_rms_floor = max(0.0, float(trim_rms_floor))
 
         self._sample_rate: Optional[int] = None
         self._silence_release_samples = 0
@@ -136,6 +145,8 @@ class SpeechSegmenter:
         self._speech_samples = 0
         self._total_samples = 0
         self._trailing_silence_samples = 0
+        self._trim_window_samples = 0
+        self._trim_keep_samples = 0
 
     def reset(self, *, preserve_rate: bool = True) -> None:
         """Clear any buffered state."""
@@ -257,9 +268,17 @@ class SpeechSegmenter:
             self._seed_lead_frames(trailing)
             return None
 
+        trimmed_payload = self._trim_silence(payload_bytes)
+        if not trimmed_payload:
+            trimmed_payload = payload_bytes
+        if self._min_speech_samples and len(trimmed_payload) // 2 < self._min_speech_samples:
+            self.reset(preserve_rate=True)
+            self._seed_lead_frames(trailing)
+            return None
+
         self.reset(preserve_rate=True)
         self._seed_lead_frames(trailing)
-        return payload_bytes
+        return trimmed_payload
 
     def _pop_trailing_silence(self) -> List[FrameChunk]:
         trailing: List[FrameChunk] = []
@@ -284,6 +303,54 @@ class SpeechSegmenter:
             self._lead_frames.appendleft(chunk)
         self._lead_samples = carry_samples
 
+    def _trim_silence(self, pcm: bytes) -> bytes:
+        if not pcm or self._sample_rate is None or self._trim_window_samples <= 0:
+            return pcm
+        window_samples = self._trim_window_samples
+        window_bytes = window_samples * 2
+        if window_bytes <= 0:
+            return pcm
+        rms_values: List[int] = []
+        chunks: List[bytes] = []
+        for offset in range(0, len(pcm), window_bytes):
+            chunk = pcm[offset : offset + window_bytes]
+            if not chunk:
+                break
+            chunks.append(chunk)
+            try:
+                rms = audioop.rms(chunk, 2)
+            except Exception:
+                rms = 0
+            rms_values.append(rms)
+        if not rms_values:
+            return pcm
+        max_rms = max(rms_values)
+        if max_rms <= 0:
+            return pcm
+        threshold = max(int(self._trim_rms_floor), int(max_rms * self._trim_rms_ratio))
+        if threshold <= 0:
+            return pcm
+        start_index = None
+        for idx, value in enumerate(rms_values):
+            if value >= threshold:
+                start_index = idx
+                break
+        if start_index is None:
+            return pcm
+        end_index = None
+        for idx, value in enumerate(reversed(rms_values)):
+            if value >= threshold:
+                end_index = len(rms_values) - idx - 1
+                break
+        if end_index is None or end_index < start_index:
+            return pcm
+        keep_start_samples = max(0, start_index * window_samples - self._trim_keep_samples)
+        keep_end_samples = min(len(pcm) // 2, (end_index + 1) * window_samples + self._trim_keep_samples)
+        keep_start_bytes = keep_start_samples * 2
+        keep_end_bytes = keep_end_samples * 2
+        trimmed = pcm[keep_start_bytes:keep_end_bytes]
+        return trimmed if trimmed else pcm
+
     def _configure_for_rate(self, sample_rate: int) -> None:
         sample_rate = max(1, sample_rate)
         self._sample_rate = sample_rate
@@ -307,6 +374,8 @@ class SpeechSegmenter:
             if self._max_segment_ms
             else None
         )
+        self._trim_window_samples = max(1, int(round(sample_rate * (self._trim_window_ms / 1000.0))))
+        self._trim_keep_samples = max(0, int(round(sample_rate * (self._trim_keep_ms / 1000.0))))
 
     def _current_duration_ms(self) -> int:
         if not self._active or not self._sample_rate:
@@ -333,14 +402,23 @@ class SegmenterNode(Node):  # type: ignore[misc]
         min_speech = float(self.declare_parameter('min_speech_ms', 300.0).value)
         max_segment = self.declare_parameter('max_segment_ms', 12000.0).value
         max_segment_ms = float(max_segment) if max_segment is not None else 0.0
+        trim_window = float(self.declare_parameter('trim_window_ms', 30.0).value)
+        trim_keep = float(self.declare_parameter('trim_keep_ms', 60.0).value)
+        trim_ratio = float(self.declare_parameter('trim_rms_ratio', 0.12).value)
+        trim_floor = float(self.declare_parameter('trim_rms_floor', 200.0).value)
 
         self._segmenter = SpeechSegmenter(
             silence_release_ms=silence_release,
             lead_silence_ms=lead_silence,
             min_speech_ms=min_speech,
             max_segment_ms=max_segment_ms,
+            trim_window_ms=trim_window,
+            trim_keep_ms=trim_keep,
+            trim_rms_ratio=trim_ratio,
+            trim_rms_floor=trim_floor,
         )
         self._current_accum = bytearray()
+        self._segment_active = False
 
         self._segment_pub = self.create_publisher(ByteMultiArray, self._segment_topic, sensor_data_qos())
         self._accum_pub = self.create_publisher(ByteMultiArray, self._accum_topic, sensor_data_qos())
@@ -350,7 +428,8 @@ class SegmenterNode(Node):  # type: ignore[misc]
         self.get_logger().info(
             (
                 'Speech segmenter ready: frame=%s segment=%s accum=%s duration=%s '
-                'silence_release=%.1fms lead_silence=%.1fms min_speech=%.1fms max_segment=%.1fms'
+                'silence_release=%.1fms lead_silence=%.1fms min_speech=%.1fms max_segment=%.1fms '
+                'trim_window=%.1fms trim_keep=%.1fms trim_ratio=%.2f trim_floor=%.0f'
                 % (
                     self._frame_topic,
                     self._segment_topic,
@@ -360,32 +439,47 @@ class SegmenterNode(Node):  # type: ignore[misc]
                     lead_silence,
                     min_speech,
                     max_segment_ms,
+                    trim_window,
+                    trim_keep,
+                    trim_ratio,
+                    trim_floor,
                 )
             )
         )
 
     def _on_frame(self, msg: VadFrame) -> None:  # pragma: no cover - requires ROS
+        prev_active = self._segment_active
         update = self._segmenter.process_frame(msg)
 
         duration_msg = UInt32()
         duration_msg.data = max(0, update.duration_ms)
         self._duration_pub.publish(duration_msg)
 
-        if getattr(msg, 'is_speech', False):
+        is_speech = bool(getattr(msg, 'is_speech', False))
+        if is_speech:
             pcm = coerce_pcm_bytes(getattr(msg, 'audio', b""))
             if pcm:
                 self._current_accum.extend(pcm)
                 accum_msg = ByteMultiArray()
                 accum_msg.data = bytes(self._current_accum)
                 self._accum_pub.publish(accum_msg)
-        elif not update.active:
-            self._current_accum.clear()
 
+        active = bool(update.active)
+        segment_payload: Optional[bytes] = None
         if update.segment is not None:
+            segment_payload = bytes(update.segment)
+        elif prev_active and not active and self._current_accum:
+            segment_payload = bytes(self._current_accum)
+
+        if segment_payload is not None:
             segment_msg = ByteMultiArray()
-            segment_msg.data = bytes(update.segment)
+            segment_msg.data = segment_payload
             self._segment_pub.publish(segment_msg)
             self._current_accum.clear()
+        elif not is_speech and not active:
+            self._current_accum.clear()
+
+        self._segment_active = active
 
 
 def main(args: Any = None) -> None:  # pragma: no cover - requires ROS
