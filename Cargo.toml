@@ -1,4 +1,4 @@
 [workspace]
-members = ["psh", "psyched", "psyched-msgs"]
+members = ["psh", "psyched-msgs", "psyched"]
 
 resolver = "2"

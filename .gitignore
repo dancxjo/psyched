@@ -60,6 +60,7 @@ log/
 
 # ROS 2 workspace overlay
 /src/
+/packages/
 
 # ------------------------------
 # Local machine configs
