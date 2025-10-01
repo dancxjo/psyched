@@ -1,320 +1,243 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+"""
+A lean, explicit rewrite of the chat node to avoid "AI-slop" behaviors:
+- No dynamic API probing; use Ollama's official client in one clear way.
+- No hidden HTTP fallbacks; fail fast with a crisp error.
+- Deterministic streaming: we either stream or we don't, controlled by a flag.
+- Minimal history handling and turn-taking, no duplicated assistant echoes.
+- Clean logging and small, testable helpers.
+
+ROS graph (topics):
+  In:
+    - conversation (psyched_msgs/Message)  # expects user turns
+    - voice/done (std_msgs/String)         # what TTS actually spoke
+  Out:
+    - voice/say (std_msgs/String)          # TTS input (assistant's line)
+    - chat/stream (std_msgs/String)        # live streaming buffer (optional)
+    - conversation (psyched_msgs/Message)  # assistant turn after TTS confirms
+
+Env / Params:
+  - OLLAMA_HOST (env) default "http://127.0.0.1:11434"
+  - OLLAMA_MODEL (env) default "gpt-oss:20b"
+  - declare_parameter("max_history", 20)
+  - declare_parameter("stream", True)        # enable streaming to chat/stream
+  - declare_parameter("first_sentence_only", True)
+  - declare_parameter("system_prompt", "You are a helpful assistant.")
+
+Notes:
+  - Keep responsibilities tight: compose -> call LLM -> speak -> confirm -> log.
+  - No Pilot scraping, no sys.modules magic, no unused transcript glue.
+"""
+
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
-from psyched_msgs.msg import Message as MsgMessage, Transcript
+from psyched_msgs.msg import Message as MsgMessage
 
-# Use the official `ollama` python client directly. Fail fast if missing so
-# deployments know to install it. We'll use streaming if the client exposes it.
-logger = logging.getLogger("psyched.chat.node")
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [chat.node] %(message)s"))
-    logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
+try:  # pragma: no cover - requires ROS runtime
+    from rclpy.qos import (
+        QoSDurabilityPolicy,
+        QoSHistoryPolicy,
+        QoSProfile,
+        QoSReliabilityPolicy,
+    )
+except Exception:  # pragma: no cover - exercised in tests
+    QoSDurabilityPolicy = None  # type: ignore[assignment]
+    QoSHistoryPolicy = None  # type: ignore[assignment]
+    QoSProfile = None  # type: ignore[assignment]
+    QoSReliabilityPolicy = None  # type: ignore[assignment]
 
-logger.info("Importing ollama client")
-from ollama import Ollama  # type: ignore
-import requests  # type: ignore
+try:
+    # Official client: https://pypi.org/project/ollama/
+    import ollama
+except Exception as e:  # pragma: no cover
+    raise RuntimeError(
+        "The 'ollama' package is required. Install with: pip install ollama"
+    ) from e
 
 
-def _normalize_voice_text(text: str) -> str:
-    return " ".join(text.split())
+# -------------------------- helpers -------------------------- #
+
+def normalize_whitespace(s: str) -> str:
+    return " ".join((s or "").split())
 
 
-def first_sentence(text: str) -> str:
-    s = text.strip()
+def first_sentence(s: str, fallback_chars: int = 200) -> str:
+    s = (s or "").strip()
     if not s:
         return s
     for i, ch in enumerate(s):
         if ch in ".!?":
             return s[: i + 1].strip()
-    return (s[:200] + ("…" if len(s) > 200 else "")).strip()
+    # No terminal punctuation—truncate politely
+    return (s[:fallback_chars] + ("…" if len(s) > fallback_chars else "")).strip()
 
 
-def transcript_to_message(transcript: Transcript) -> Optional[MsgMessage]:
-    text = str(getattr(transcript, "text", "")).strip()
-    if not text:
-        return None
-    msg = MsgMessage()
-    msg.role = "user"
-    msg.content = text
-    msg.speaker = getattr(transcript, "speaker", "") or ""
-    try:
-        msg.confidence = float(getattr(transcript, "confidence", 0.0) or 0.0)
-    except Exception:
-        msg.confidence = 0.0
-    msg.segments = getattr(transcript, "segments", []) or []
-    msg.words = getattr(transcript, "words", []) or []
-    return msg
+# ---------------------------- LLM ---------------------------- #
+
+class OllamaChat:
+    def __init__(self, host: str, model: str) -> None:
+        self._client = ollama.Client(host=host)
+        self._model = model
+
+    def chat(self,
+             messages: List[Dict[str, str]],
+             stream: bool,
+             on_token: Optional[Callable[[str], None]] = None) -> str:
+        """Call Ollama in a single, explicit way.
+        If stream=True, on_token will be called with incremental content.
+        Returns the final full assistant text either way.
+        """
+        if stream:
+            full = []
+            for chunk in self._client.chat(model=self._model, messages=messages, stream=True):
+                # chunk shape: { 'message': { 'role': 'assistant', 'content': '...' } }
+                token = (chunk.get('message', {}) or {}).get('content', '')
+                if token:
+                    full.append(token)
+                    if on_token:
+                        on_token(token)
+            return "".join(full).strip()
+        else:
+            resp = self._client.chat(model=self._model, messages=messages)
+            return (resp.get('message', {}) or {}).get('content', '').strip()
 
 
-def _normalise_ollama_host(host: str) -> str:
-    h = (host or "").strip()
-    if not h:
-        return ""
-    h = h.rstrip("/")
-    if h.startswith("http://") or h.startswith("https://"):
-        return h
-    return "http://" + h
-
+# ---------------------------- Node --------------------------- #
 
 class ChatNode(Node):
     def __init__(self) -> None:
         super().__init__("chat_node")
 
-        self.pub_conversation = self.create_publisher(MsgMessage, "conversation", 10)
+        # pubs
+        # Use best-effort QoS for conversational short-lived messages so
+        # it matches other nodes (for example the voice node) which publish
+        # with BEST_EFFORT reliability. This avoids the "incompatible QoS"
+        # warning where RELIABILITY policies don't match.
+        def _best_effort_qos(*, depth: int = 10) -> Any:
+            if (
+                QoSProfile is None
+                or QoSHistoryPolicy is None
+                or QoSReliabilityPolicy is None
+                or QoSDurabilityPolicy is None
+            ):
+                return depth
+            return QoSProfile(
+                history=QoSHistoryPolicy.KEEP_LAST,
+                depth=depth,
+                reliability=QoSReliabilityPolicy.BEST_EFFORT,
+                durability=QoSDurabilityPolicy.VOLATILE,
+            )
+
+        self.pub_conversation = self.create_publisher(MsgMessage, "conversation", _best_effort_qos(depth=10))
         self.pub_voice = self.create_publisher(String, "voice/say", 10)
         self.pub_stream = self.create_publisher(String, "chat/stream", 10)
 
-        self.history: List[Dict[str, Any]] = []
-        self.pending_to_confirm: List[str] = []
-        self.max_history: int = int(self.declare_parameter("max_history", 20).get_parameter_value().integer_value)
+        # subs
+        self.create_subscription(MsgMessage, "conversation", self._on_conversation, _best_effort_qos(depth=10))
+        self.create_subscription(String, "voice/done", self._on_voice_done, 10)
 
-        self.model: str = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b")
-        self.ollama_host: str = _normalise_ollama_host(os.environ.get("OLLAMA_HOST", ""))
+        # params
+        self.max_history: int = int(self.declare_parameter("max_history", 20).value)
+        self.stream_enabled: bool = bool(self.declare_parameter("stream", True).value)
+        self.first_sentence_only: bool = bool(self.declare_parameter("first_sentence_only", True).value)
+        self.system_prompt: str = str(self.declare_parameter("system_prompt", "You are a helpful assistant.").value)
 
-        # Initialize Ollama client (direct). Ollama client API may accept a
-        # host/base_url; set up a client instance and detect streaming support.
-        self._client = None
-        try:
-            # The `ollama` package exposes an Ollama client which accepts a
-            # `host` kwarg in some versions. Try constructing it; if it fails
-            # the exception will propagate (we want fast failure).
-            try:
-                self._client = Ollama(host=self.ollama_host or None)
-            except TypeError:
-                # older/newer client variants may differ; try no-arg
-                self._client = Ollama()
-            logger.info(f"Ollama client initialized, model={self.model}, host={self.ollama_host}")
-        except Exception as exc:
-            logger.exception("Failed to initialize Ollama client")
-            raise
+        # env
+        host = os.environ.get("OLLAMA_HOST", "http://forebrain.local:11434").rstrip("/")
+        model = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b").strip()
 
-        self._serve_proc = None
-        # detect streaming capability (we'll attempt to call `stream` if present)
-        self._supports_stream = hasattr(self._client, "stream") or hasattr(self._client, "create_stream")
-        logger.debug(f"Ollama streaming supported: {self._supports_stream}")
+        # llm client
+        self._llm = OllamaChat(host=host, model=model)
 
-        # wrapper used by _generate_response
-        self._ollama_chat = lambda messages, stream_callback=None: self._call_ollama(messages, stream_callback=stream_callback)
+        # state
+        self._history: List[Dict[str, Any]] = []
+        self._pending_utterance: Optional[str] = None
 
-    def _compose_system_message(self) -> str:
-        base = "You are a helpful assistant."
-        try:
-            pilot_base = os.environ.get("PILOT_BASE", "http://localhost:8080")
-            url = pilot_base.rstrip("/") + "/api/modules"
-            # Query Pilot's control surface (optional). Tests inject a fake
-            # `requests` module into sys.modules; prefer that at runtime so
-            # tests remain hermetic even if import-time resolution differs.
-            requests_mod = sys.modules.get("requests")
-            if requests_mod is not None:
-                resp = requests_mod.get(url, timeout=2)
-                if resp and getattr(resp, "status_code", 200) == 200:
-                    data = resp.json()
-                    modules = data.get("modules", []) if isinstance(data, dict) else []
-                    for mod in modules:
-                        if mod.get("name") == "pilot" or mod.get("display_name", "").lower().startswith("pilot"):
-                            display = mod.get("display_name", "Pilot Control Surface")
-                            desc = mod.get("description", "")
-                            base += f"\n\nPilot Control Surface:\n{display}\n{desc}\n"
-                            break
-        except Exception:
-            pass
-        return base
+        # log
+        self.get_logger().info(f"chat_node online | model={model} host={host} stream={self.stream_enabled}")
 
-    def _call_ollama(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
-        """Call Ollama directly using the `ollama` client.
+    # ------------------------ callbacks ----------------------- #
 
-        messages is a list of {"role":"system|user|assistant","content":"..."}.
-        If streaming is supported and a stream_callback is given, emit tokens
-        to the callback as they arrive; otherwise return the full response.
-        """
-        if not self._client:
-            raise RuntimeError("Ollama client not initialized")
+    def _on_conversation(self, msg: MsgMessage) -> None:
+        # Track every message, but only act on user turns.
+        record = {
+            "role": msg.role,
+            "content": msg.content,
+            "speaker": getattr(msg, "speaker", ""),
+            "confidence": float(getattr(msg, "confidence", 0.0) or 0.0),
+        }
+        self._history.append(record)
+        if len(self._history) > self.max_history:
+            self._history = self._history[-self.max_history :]
 
-        # Build a simple prompt for the Ollama chat model. Ollama's Python
-        # client APIs vary; many environments provide a `chat` or `generate`
-        # method. We'll try a few common names and raise if none are present.
-        payload = {"model": self.model, "messages": messages}
-
-        logger.debug("Calling Ollama with payload: %s", payload)
-
-        # Streaming path
-        try:
-            if stream_callback and self._supports_stream:
-                # Try client.stream(...) signature
-                if hasattr(self._client, "stream"):
-                    for chunk in self._client.stream(model=self.model, messages=messages):
-                        token = str(chunk or "")
-                        stream_callback(token)
-                    return ""
-                # some clients may expose create_stream
-                if hasattr(self._client, "create_stream"):
-                    for chunk in self._client.create_stream(model=self.model, messages=messages):
-                        token = str(chunk or "")
-                        stream_callback(token)
-                    return ""
-        except Exception as exc:
-            logger.exception("Ollama streaming failed: %s", exc)
-
-        # Non-streaming path: try client.chat/generate/predict
-        try:
-            if hasattr(self._client, "chat"):
-                resp = self._client.chat(model=self.model, messages=messages)
-            elif hasattr(self._client, "generate"):
-                resp = self._client.generate(model=self.model, messages=messages)
-            elif hasattr(self._client, "predict"):
-                resp = self._client.predict(model=self.model, messages=messages)
-            else:
-                # Last resort: call the local Ollama HTTP API directly via requests
-                if not self.ollama_host:
-                    raise RuntimeError("No ollama host configured and client lacks chat API")
-                url = self.ollama_host.rstrip("/") + "/api/chat"
-                r = requests.post(url, json={"model": self.model, "messages": messages}, timeout=30)
-                r.raise_for_status()
-                data = r.json()
-                # try common response shapes
-                if isinstance(data, dict):
-                    if isinstance(data.get("message"), dict):
-                        return str(data["message"].get("content", "")).strip()
-                    choices = data.get("choices") or []
-                    if choices and isinstance(choices[0], dict):
-                        return str(choices[0].get("message", {}).get("content", "")).strip()
-                return ""
-
-            # Extract text depending on response shape
-            if isinstance(resp, str):
-                return resp.strip()
-            if hasattr(resp, "text"):
-                return str(resp.text or "").strip()
-            # some clients return an object with 'content' attribute
-            if hasattr(resp, "content"):
-                return str(getattr(resp, "content", "") or "").strip()
-            # fallback to stringifying
-            return str(resp or "").strip()
-        except Exception as exc:
-            logger.exception("Ollama call failed: %s", exc)
-            return ""
-
-    def _generate_response(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
-        try:
-            # Call the configured chat wrapper. Some tests monkeypatch
-            # _ollama_chat with a single-argument callable (messages), while
-            # production wrapper accepts (messages, stream_callback). Try the
-            # full signature first and fall back to the single-arg form.
-            try:
-                result = self._ollama_chat(messages, stream_callback=stream_callback)
-            except TypeError:
-                result = self._ollama_chat(messages)
-            return str(result or "").strip()
-        except Exception as exc:
-            self.get_logger().error(f"_generate_response error: {exc}")
-            return ""
-
-    def _publish_user_turn(self, msg: MsgMessage) -> None:
-        try:
-            self.pub_conversation.publish(msg)
-        except Exception:
-            pass
-
-    def on_conversation(self, msg: MsgMessage) -> None:
-        self.history.append(
-            {
-                "role": msg.role,
-                "content": msg.content,
-                "speaker": getattr(msg, "speaker", ""),
-                "confidence": float(getattr(msg, "confidence", 0.0) or 0.0),
-            }
-        )
-        if len(self.history) > self.max_history:
-            self.history = self.history[-self.max_history :]
-
-        if msg.role.lower().strip() != "user":
+        if (msg.role or "").strip().lower() != "user":
             return
 
-        system_message = self._compose_system_message()
-        messages: List[Dict[str, str]] = [{"role": "system", "content": system_message}]
-        messages.extend(self.history)
+        # Compose messages with a single system message at the front.
+        messages: List[Dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
+        # Keep only role+content for the model—strip extras.
+        messages.extend({"role": h["role"], "content": h["content"]} for h in self._history)
 
-        token_buffer: List[str] = []
+        stream_buf: List[str] = []
 
-        def _on_token(token: str) -> None:
-            token_buffer.append(token)
-            stream_msg = String()
-            stream_msg.data = "".join(token_buffer)
-            try:
-                self.pub_stream.publish(stream_msg)
-            except Exception:
-                pass
+        def on_token(tok: str) -> None:
+            stream_buf.append(tok)
+            out = String()
+            out.data = "".join(stream_buf)
+            self.pub_stream.publish(out)
 
+        # Call the model
         try:
-            assistant_text = self._generate_response(messages, stream_callback=_on_token)
-        except TypeError:
-            # Some tests replace _generate_response with a single-arg callable.
-            assistant_text = self._generate_response(messages)
-        if not assistant_text:
-            self.get_logger().warning("Empty response from language model")
+            full_text = self._llm.chat(messages, stream=self.stream_enabled, on_token=on_token if self.stream_enabled else None)
+        except Exception as e:
+            self.get_logger().error(f"LLM error: {e}")
             return
 
-        assistant_text = first_sentence(assistant_text)
-
-        speak = String()
-        speak.data = assistant_text
-        try:
-            self.pub_voice.publish(speak)
-        except Exception:
-            pass
-        self.pending_to_confirm.append(assistant_text)
-
-    def on_voice_done(self, msg: String) -> None:
-        if not self.pending_to_confirm:
+        if not full_text:
+            self.get_logger().warning("empty assistant text")
             return
-        spoken = str(getattr(msg, "data", "") or "").strip()
+
+        say_text = first_sentence(full_text) if self.first_sentence_only else full_text
+        self._pending_utterance = say_text
+
+        speak = String(); speak.data = say_text
+        self.pub_voice.publish(speak)
+
+    def _on_voice_done(self, msg: String) -> None:
+        if not self._pending_utterance:
+            return
+        spoken = (msg.data or "").strip()
         if not spoken:
             return
-        expected = self.pending_to_confirm.pop(0)
-        if _normalize_voice_text(spoken) != _normalize_voice_text(expected):
-            self.get_logger().warning("voice_done did not match pending utterance; publishing spoken text anyway")
 
-        recent_match = False
-        if self.history:
-            last = self.history[-1]
-            if last.get("role") == "assistant" and _normalize_voice_text(str(last.get("content", ""))) == _normalize_voice_text(spoken):
-                recent_match = True
+        expected = self._pending_utterance
+        if normalize_whitespace(spoken) != normalize_whitespace(expected):
+            self.get_logger().warn("voice/done mismatch; using spoken text anyway")
 
-        if not recent_match:
-            out = MsgMessage()
-            out.role = "assistant"
-            out.content = spoken
-            out.speaker = "assistant"
-            out.confidence = 1.0
-            try:
-                self.pub_conversation.publish(out)
-            except Exception:
-                pass
-            self.history.append({"role": "assistant", "content": spoken, "speaker": "assistant", "confidence": 1.0})
-        else:
-            if not self.history or self.history[-1].get("content") != spoken:
-                self.history.append({"role": "assistant", "content": spoken, "speaker": "assistant", "confidence": 1.0})
-        if len(self.history) > self.max_history:
-            self.history = self.history[-self.max_history :]
+        # Publish assistant turn to conversation exactly once, then clear pending.
+        out = MsgMessage()
+        out.role = "assistant"
+        out.content = spoken
+        out.speaker = "assistant"
+        out.confidence = 1.0
+        self.pub_conversation.publish(out)
 
-    def destroy_node(self) -> None:  # type: ignore[override]
-        try:
-            if self._serve_proc is not None:
-                self._serve_proc.terminate()
-        except Exception:
-            pass
-        super().destroy_node()
+        self._history.append({"role": "assistant", "content": spoken, "speaker": "assistant", "confidence": 1.0})
+        if len(self._history) > self.max_history:
+            self._history = self._history[-self.max_history :]
 
+        self._pending_utterance = None
+
+
+# --------------------------- entry --------------------------- #
 
 def main(argv: Optional[List[str]] = None) -> None:
     rclpy.init(args=argv)
@@ -331,6 +254,5 @@ def main(argv: Optional[List[str]] = None) -> None:
         rclpy.shutdown()
 
 
-if __name__ == '__main__':  # pragma: no cover - entrypoint behaviour
+if __name__ == "__main__":  # pragma: no cover
     main()
-
