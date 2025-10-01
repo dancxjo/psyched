@@ -8,8 +8,9 @@ apt = [
 pip = []
 
 # Scripts to apply patches to the driver before build
-patches = ["modules/imu/patches.sh"]
+patches = ["modules/imu/apply_patches.sh"]
 
 # Service control
-launch = "modules/imu/launch.sh"
-shutdown = "modules/imu/shutdown.sh"
+launch = "modules/imu/launch_unit.sh"
+shutdown = "modules/imu/shutdown_unit.sh"
+pilot_control = "modules/imu/pilot/components/ImuReadout.tsx"

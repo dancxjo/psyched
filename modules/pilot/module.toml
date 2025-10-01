@@ -1,0 +1,11 @@
+[unit.pilot]
+# Pilot frontend dependencies handled via Deno; no system packages required yet
+apt = []
+pip = []
+
+# Pilot module does not require patch scripts
+patches = []
+
+# Service control
+launch = "modules/pilot/launch_unit.sh"
+shutdown = "modules/pilot/shutdown_unit.sh"
