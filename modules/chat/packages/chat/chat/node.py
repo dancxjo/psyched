@@ -167,6 +167,10 @@ class ChatNode(Node):
     # ------------------------ callbacks ----------------------- #
 
     def _on_conversation(self, msg: MsgMessage) -> None:
+        self.get_logger().debug(
+            f"_on_conversation | role={msg.role} speaker={getattr(msg, 'speaker', '')} "
+            f"confidence={getattr(msg, 'confidence', 0.0):.2f} len={len(msg.content or '')}"
+        )
         # Track every message, but only act on user turns.
         record = {
             "role": msg.role,
