@@ -1,0 +1,19 @@
+[unit.foot]
+# TODO: Replace hardcoded 'kilted' prefix with ${ROS_DISTRO} once substitution is available
+apt = ["libboost-all-dev", "ros-kilted-diagnostic-updater", "ros-kilted-xacro"]
+pip = []
+patches = []
+launch = "modules/foot/foot.launch.sh"
+shutdown = "modules/foot/foot.shutdown.sh"
+pilot_control = "modules/foot/pilot/components/FootControlPanel.tsx"
+
+[[unit.foot.git]]
+url = "https://github.com/autonomylab/create_robot.git"
+
+[[unit.foot.git]]
+url = "https://github.com/revyos-ros/libcreate.git"
+branch = "fix-std-string"
+path = "libcreate"
+
+[unit.foot.ros]
+workspace = "."
