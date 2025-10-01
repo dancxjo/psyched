@@ -62,3 +62,7 @@ log/
 # Local machine configs
 # ------------------------------
 hosts/*.local.toml
+modules/pilot/frontend/fresh.gen.ts
+modules/pilot/frontend/components/ImuReadout.tsx
+modules/pilot/frontend/routes/modules/imu.tsx
+modules/pilot/frontend/fresh.gen.ts
