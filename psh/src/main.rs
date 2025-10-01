@@ -9,7 +9,7 @@ use crate::cli::{Cli, Commands};
 use crate::module_runner::{
     bring_module_down, bring_module_up, list_modules, setup_module, teardown_module,
 };
-use crate::setup::run_setup;
+use crate::setup::{run_setup, setup_env};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -21,8 +21,9 @@ fn main() -> Result<()> {
         Some(Commands::SetupModule { module }) => setup_module(&module)?,
         Some(Commands::TeardownModule { module }) => teardown_module(&module)?,
         Some(Commands::List) => list_modules()?,
+        Some(Commands::Env) => setup_env()?,
         None => {
-            println!("Usage:\n  psh setup\n  psh up <module>\n  psh down <module>\n  psh list");
+            println!("Usage:\n  psh setup\n  psh up <module>\n  psh down <module>\n  psh list\n  psh env");
         }
     }
 

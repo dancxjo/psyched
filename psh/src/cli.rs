@@ -35,4 +35,6 @@ pub enum Commands {
     },
     /// List available modules and their status
     List,
+    /// Set up shell environment (add psyched alias to ~/.bashrc)
+    Env,
 }
