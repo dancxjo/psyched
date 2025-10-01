@@ -14,28 +14,6 @@ presentation = "oscilloscope"
 qos = { history = "keep_last", depth = 5, reliability = "best_effort", durability = "volatile" }
 
 [[pilot.topics]]
-name = "/audio/autophony_duration"
-type = "std_msgs/msg/UInt32"
-access = "ro"
-presentation = "gauge"
-qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/audio/speech_duration"
-type = "std_msgs/msg/UInt32"
-access = "ro"
-# presentation = "diode"
-presentation = "gauge"
-qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/audio/silence_ms"
-type = "std_msgs/msg/UInt32"
-access = "ro"
-presentation = "gauge"
-qos = { history = "keep_last", depth = 10, reliability = "best_effort", durability = "volatile" }
-
-[[pilot.topics]]
 name = "/audio/speech_segment"
 type = "std_msgs/msg/ByteMultiArray"
 access = "ro"

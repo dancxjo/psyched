@@ -84,9 +84,13 @@ def _create_node(
         recording_factory = factory_builder(stop_ref)
         factory = recording_factory
 
+    params: dict[str, object] = {"segment_dump_enabled": False}
+    if overrides:
+        params.update(overrides)
+
     node = PyAudioEarNode(
         popen_factory=factory,
-        parameter_overrides=overrides or {},
+        parameter_overrides=params,
     )
     stop_ref.append(node._stop_evt)  # type: ignore[attr-defined]
     node._factory = recording_factory  # type: ignore[attr-defined]
@@ -95,7 +99,7 @@ def _create_node(
 
 def test_arecord_node_publishes_audio_frames() -> None:
     """Chunks from arecord should be forwarded to ``/audio/raw``."""
-    node = _create_node()
+    node = _create_node(overrides={"sample_rate": 16000, "segment_sample_rate": 16000})
     publisher = node.audio_pub  # type: ignore[attr-defined]
 
     for _ in range(50):
@@ -134,5 +138,71 @@ def test_arecord_node_uses_device_id_for_hw_mapping() -> None:
     assert cmd[device_index] == "hw:3,0"
     channel_index = cmd.index("-c") + 1
     assert cmd[channel_index] == "2"
+
+    node.destroy_node()
+
+
+class _DeterministicVad:
+    def __init__(self, sequence: Iterable[bool]) -> None:
+        self._sequence = deque(bool(v) for v in sequence)
+
+    def is_speech(self, frame: bytes, sample_rate: int) -> bool:  # noqa: ARG002 - signature parity
+        if self._sequence:
+            return self._sequence.popleft()
+        return False
+
+
+def test_node_emits_segments_and_accumulator() -> None:
+    speech_frame = (b"\x20\x00" * 480)
+    silence_frame = (b"\x00\x00" * 480)
+    chunk = speech_frame * 3 + silence_frame * 3
+
+    start_event = threading.Event()
+
+    class _GatedStdout(_FakeStdout):
+        def read(self, size: int) -> bytes:
+            start_event.wait()
+            return super().read(size)
+
+    class _GatedFactory(_RecordingFactory):
+        def __call__(self, cmd: Sequence[str], **_: object) -> _FakeProcess:
+            self.commands.append(tuple(cmd))
+            return _FakeProcess(_GatedStdout(self._stop_ref, self._chunks))
+
+    def build_factory(stop_ref: List[threading.Event]) -> _RecordingFactory:
+        return _GatedFactory(stop_ref, (chunk, b""))
+
+    node = _create_node(
+        overrides={
+            "sample_rate": 16000,
+            "segment_sample_rate": 16000,
+            "chunk_size": len(chunk),
+            "segmenter_silence_release_ms": 30,
+            "segmenter_min_speech_ms": 0,
+        },
+        factory_builder=build_factory,
+    )
+
+    node._vad = _DeterministicVad([True, True, True, False, False, False])  # type: ignore[attr-defined]
+    start_event.set()
+
+    segment_pub = node._segment_pub  # type: ignore[attr-defined]
+    accum_pub = node._speech_accum_pub  # type: ignore[attr-defined]
+
+    for _ in range(200):
+        if segment_pub.published and accum_pub.published:
+            break
+        time.sleep(0.02)
+
+    assert segment_pub.published, "expected a completed speech segment"
+    assert accum_pub.published, "expected rolling accumulator output"
+
+    segment = segment_pub.published[0]
+    assert isinstance(segment, ByteMultiArray)
+    assert len(segment.data) > 0
+
+    aggregate = accum_pub.published[0]
+    assert isinstance(aggregate, ByteMultiArray)
+    assert aggregate.data.startswith(segment.data)
 
     node.destroy_node()

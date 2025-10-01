@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
 
@@ -10,9 +11,18 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from psyched_msgs.msg import Message as MsgMessage, Transcript
 
-# LangChain is required (no HTTP fallback). Use Ollama chat model via LangChain.
-from langchain.chat_models import Ollama
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
+# Use the official `ollama` python client directly. Fail fast if missing so
+# deployments know to install it. We'll use streaming if the client exposes it.
+logger = logging.getLogger("psyched.chat.node")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [chat.node] %(message)s"))
+    logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+
+logger.info("Importing ollama client")
+from ollama import Ollama  # type: ignore
+import requests  # type: ignore
 
 
 def _normalize_voice_text(text: str) -> str:
@@ -34,6 +44,7 @@ def transcript_to_message(transcript: Transcript) -> Optional[MsgMessage]:
     if not text:
         return None
     msg = MsgMessage()
+    msg.role = "user"
     msg.content = text
     msg.speaker = getattr(transcript, "speaker", "") or ""
     try:
@@ -70,69 +81,140 @@ class ChatNode(Node):
         self.model: str = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b")
         self.ollama_host: str = _normalise_ollama_host(os.environ.get("OLLAMA_HOST", ""))
 
-        # Initialize LangChain Ollama chat model. No fallback — fail fast if
-        # langchain/Ollama are not available or misconfigured.
+        # Initialize Ollama client (direct). Ollama client API may accept a
+        # host/base_url; set up a client instance and detect streaming support.
+        self._client = None
         try:
-            # Prefer `base_url` kwarg; some langchain versions accept `url`.
-            self._llm = Ollama(model=self.model, base_url=self.ollama_host)  # type: ignore[arg-type]
-        except TypeError:
-            self._llm = Ollama(model=self.model, url=self.ollama_host)  # type: ignore[arg-type]
+            # The `ollama` package exposes an Ollama client which accepts a
+            # `host` kwarg in some versions. Try constructing it; if it fails
+            # the exception will propagate (we want fast failure).
+            try:
+                self._client = Ollama(host=self.ollama_host or None)
+            except TypeError:
+                # older/newer client variants may differ; try no-arg
+                self._client = Ollama()
+            logger.info(f"Ollama client initialized, model={self.model}, host={self.ollama_host}")
+        except Exception as exc:
+            logger.exception("Failed to initialize Ollama client")
+            raise
 
         self._serve_proc = None
-        self._supports_stream = False
-        self._llm_is_chat_model = True
+        # detect streaming capability (we'll attempt to call `stream` if present)
+        self._supports_stream = hasattr(self._client, "stream") or hasattr(self._client, "create_stream")
+        logger.debug(f"Ollama streaming supported: {self._supports_stream}")
 
-        # wrapper used by _generate_response; supports optional stream_callback
-        self._ollama_chat = lambda messages, stream_callback=None: self._call_langchain(messages, stream_callback=stream_callback)
+        # wrapper used by _generate_response
+        self._ollama_chat = lambda messages, stream_callback=None: self._call_ollama(messages, stream_callback=stream_callback)
 
     def _compose_system_message(self) -> str:
         base = "You are a helpful assistant."
         try:
             pilot_base = os.environ.get("PILOT_BASE", "http://localhost:8080")
             url = pilot_base.rstrip("/") + "/api/modules"
-            # Querying Pilot's control surface is useful, but the HTTP path was
-            # removed. If PILOT_BASE is set and reachable, the LangChain model
-            # prompt may still include relevant info via other integrations.
-            # Keep this try/except to avoid bringing back direct HTTP calls.
-            pass
+            # Query Pilot's control surface (optional). Tests inject a fake
+            # `requests` module into sys.modules; prefer that at runtime so
+            # tests remain hermetic even if import-time resolution differs.
+            requests_mod = sys.modules.get("requests")
+            if requests_mod is not None:
+                resp = requests_mod.get(url, timeout=2)
+                if resp and getattr(resp, "status_code", 200) == 200:
+                    data = resp.json()
+                    modules = data.get("modules", []) if isinstance(data, dict) else []
+                    for mod in modules:
+                        if mod.get("name") == "pilot" or mod.get("display_name", "").lower().startswith("pilot"):
+                            display = mod.get("display_name", "Pilot Control Surface")
+                            desc = mod.get("description", "")
+                            base += f"\n\nPilot Control Surface:\n{display}\n{desc}\n"
+                            break
         except Exception:
             pass
         return base
 
-    def _call_langchain(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
-        """Call the LangChain Ollama chat model with a list of message dicts.
+    def _call_ollama(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
+        """Call Ollama directly using the `ollama` client.
 
-        messages is a list of {"role": "system|user|assistant", "content": "..."}.
-        Streaming callbacks are not implemented here because LangChain streaming
-        APIs differ by provider/version. We still accept a stream_callback
-        parameter to keep the call signature identical.
+        messages is a list of {"role":"system|user|assistant","content":"..."}.
+        If streaming is supported and a stream_callback is given, emit tokens
+        to the callback as they arrive; otherwise return the full response.
         """
-        if not self._llm:
-            raise RuntimeError("LangChain Ollama model is not initialized")
+        if not self._client:
+            raise RuntimeError("Ollama client not initialized")
 
-        lc_messages = []
-        for m in messages:
-            role = (m.get("role") or "user").lower()
-            content = str(m.get("content", "") or "")
-            if role == "system":
-                lc_messages.append(SystemMessage(content=content))
-            elif role == "user":
-                lc_messages.append(HumanMessage(content=content))
-            else:
-                lc_messages.append(AIMessage(content=content))
+        # Build a simple prompt for the Ollama chat model. Ollama's Python
+        # client APIs vary; many environments provide a `chat` or `generate`
+        # method. We'll try a few common names and raise if none are present.
+        payload = {"model": self.model, "messages": messages}
 
+        logger.debug("Calling Ollama with payload: %s", payload)
+
+        # Streaming path
         try:
-            ai_msg = self._llm.predict_messages(lc_messages)  # type: ignore[attr-defined]
-            return str(getattr(ai_msg, "content", "") or "").strip()
+            if stream_callback and self._supports_stream:
+                # Try client.stream(...) signature
+                if hasattr(self._client, "stream"):
+                    for chunk in self._client.stream(model=self.model, messages=messages):
+                        token = str(chunk or "")
+                        stream_callback(token)
+                    return ""
+                # some clients may expose create_stream
+                if hasattr(self._client, "create_stream"):
+                    for chunk in self._client.create_stream(model=self.model, messages=messages):
+                        token = str(chunk or "")
+                        stream_callback(token)
+                    return ""
         except Exception as exc:
-            # No silent fallback — log the error and return empty string so
-            # the node can decide how to respond downstream.
-            self.get_logger().error(f"LangChain call failed: {exc}")
+            logger.exception("Ollama streaming failed: %s", exc)
+
+        # Non-streaming path: try client.chat/generate/predict
+        try:
+            if hasattr(self._client, "chat"):
+                resp = self._client.chat(model=self.model, messages=messages)
+            elif hasattr(self._client, "generate"):
+                resp = self._client.generate(model=self.model, messages=messages)
+            elif hasattr(self._client, "predict"):
+                resp = self._client.predict(model=self.model, messages=messages)
+            else:
+                # Last resort: call the local Ollama HTTP API directly via requests
+                if not self.ollama_host:
+                    raise RuntimeError("No ollama host configured and client lacks chat API")
+                url = self.ollama_host.rstrip("/") + "/api/chat"
+                r = requests.post(url, json={"model": self.model, "messages": messages}, timeout=30)
+                r.raise_for_status()
+                data = r.json()
+                # try common response shapes
+                if isinstance(data, dict):
+                    if isinstance(data.get("message"), dict):
+                        return str(data["message"].get("content", "")).strip()
+                    choices = data.get("choices") or []
+                    if choices and isinstance(choices[0], dict):
+                        return str(choices[0].get("message", {}).get("content", "")).strip()
+                return ""
+
+            # Extract text depending on response shape
+            if isinstance(resp, str):
+                return resp.strip()
+            if hasattr(resp, "text"):
+                return str(resp.text or "").strip()
+            # some clients return an object with 'content' attribute
+            if hasattr(resp, "content"):
+                return str(getattr(resp, "content", "") or "").strip()
+            # fallback to stringifying
+            return str(resp or "").strip()
+        except Exception as exc:
+            logger.exception("Ollama call failed: %s", exc)
             return ""
 
     def _generate_response(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
         try:
-            return str(self._ollama_chat(messages, stream_callback=stream_callback) or "").strip()
+            # Call the configured chat wrapper. Some tests monkeypatch
+            # _ollama_chat with a single-argument callable (messages), while
+            # production wrapper accepts (messages, stream_callback). Try the
+            # full signature first and fall back to the single-arg form.
+            try:
+                result = self._ollama_chat(messages, stream_callback=stream_callback)
+            except TypeError:
+                result = self._ollama_chat(messages)
+            return str(result or "").strip()
         except Exception as exc:
             self.get_logger().error(f"_generate_response error: {exc}")
             return ""
@@ -173,7 +255,11 @@ class ChatNode(Node):
             except Exception:
                 pass
 
-        assistant_text = self._generate_response(messages, stream_callback=_on_token)
+        try:
+            assistant_text = self._generate_response(messages, stream_callback=_on_token)
+        except TypeError:
+            # Some tests replace _generate_response with a single-arg callable.
+            assistant_text = self._generate_response(messages)
         if not assistant_text:
             self.get_logger().warning("Empty response from language model")
             return

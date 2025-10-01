@@ -31,7 +31,7 @@ packages = ["voice"]
 
 [[actions]]
 type = "pip_install"
-packages = ["requests", "langchain", "langchain-community"]
+packages = ["ollama"]
 break_system = true
 
 [[actions]]
