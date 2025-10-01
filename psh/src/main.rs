@@ -7,7 +7,8 @@ use clap::Parser;
 
 use crate::cli::{Cli, Commands, HostCommands, ModCommands};
 use crate::module_runner::{
-    bring_module_down, bring_module_up, list_modules, setup_module, teardown_module, all_module_names,
+    all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
+    teardown_module,
 };
 use crate::setup::{run_setup, setup_env};
 
@@ -25,7 +26,10 @@ fn main() -> Result<()> {
                     for host in hosts {
                         // Temporarily change hostname detection by setting HOSTNAME env? Simpler: locate config and run commands similarly to run_setup logic
                         // Reuse run_setup by temporarily changing current executable? To keep simple, call setup::run_setup for local host only.
-                        println!("Running host setup for {} (delegating to run_setup for local host only)", host);
+                        println!(
+                            "Running host setup for {} (delegating to run_setup for local host only)",
+                            host
+                        );
                         // For now we call run_setup() which uses detected hostname; advanced per-host handling could be added later.
                         run_setup()?;
                     }
@@ -35,25 +39,41 @@ fn main() -> Result<()> {
 
         Some(Commands::Mod { command }) => match command {
             ModCommands::Up { modules } => {
-                let targets = if modules.is_empty() { all_module_names()? } else { modules };
+                let targets = if modules.is_empty() {
+                    all_module_names()?
+                } else {
+                    modules
+                };
                 for m in targets {
                     bring_module_up(&m)?;
                 }
             }
             ModCommands::Down { modules } => {
-                let targets = if modules.is_empty() { all_module_names()? } else { modules };
+                let targets = if modules.is_empty() {
+                    all_module_names()?
+                } else {
+                    modules
+                };
                 for m in targets {
                     bring_module_down(&m)?;
                 }
             }
             ModCommands::Setup { modules } => {
-                let targets = if modules.is_empty() { all_module_names()? } else { modules };
+                let targets = if modules.is_empty() {
+                    all_module_names()?
+                } else {
+                    modules
+                };
                 for m in targets {
                     setup_module(&m)?;
                 }
             }
             ModCommands::Teardown { modules } => {
-                let targets = if modules.is_empty() { all_module_names()? } else { modules };
+                let targets = if modules.is_empty() {
+                    all_module_names()?
+                } else {
+                    modules
+                };
                 for m in targets {
                     teardown_module(&m)?;
                 }
@@ -62,7 +82,9 @@ fn main() -> Result<()> {
                 if modules.is_empty() {
                     list_modules()?;
                 } else {
-                    for m in modules { println!("{}", m); }
+                    for m in modules {
+                        println!("{}", m);
+                    }
                 }
             }
         },
@@ -76,7 +98,9 @@ fn main() -> Result<()> {
         Some(Commands::List) => list_modules()?,
         Some(Commands::Env) => setup_env()?,
         None => {
-            println!("Usage:\n  psh host setup {{hosts...}}\n  psh mod up|down|setup|teardown|list {{modules...}}");
+            println!(
+                "Usage:\n  psh host setup {{hosts...}}\n  psh mod up|down|setup|teardown|list {{modules...}}"
+            );
         }
     }
 

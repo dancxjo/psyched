@@ -58,6 +58,9 @@ log/
 *.old
 *.tmp
 
+# ROS 2 workspace overlay
+/src/
+
 # ------------------------------
 # Local machine configs
 # ------------------------------

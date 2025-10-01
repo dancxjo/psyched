@@ -7,6 +7,10 @@ apt = [
 ]
 pip = []
 
+[[unit.imu.git]]
+url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
+branch = "main"
+
 # Scripts to apply patches to the driver before build
 patches = ["modules/imu/apply_patches.sh"]
 

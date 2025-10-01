@@ -30,14 +30,25 @@ struct UnitConfig {
     launch: Option<String>,
     shutdown: Option<String>,
     pilot_control: Option<String>,
+    git: Option<Vec<GitRepo>>,
+}
+
+#[derive(Deserialize, Clone)]
+struct GitRepo {
+    url: String,
+    branch: Option<String>,
+    path: Option<String>,
 }
 
 pub fn setup_module(module: &str) -> Result<()> {
     let module_dir = locate_module_dir(module)
         .with_context(|| format!("module '{}' not found under modules/", module))?;
 
-    // Validate manifest exists even if we don't use the contents yet.
-    let _ = load_unit_config(&module_dir, module)?;
+    let unit_config = load_unit_config(&module_dir, module)?;
+
+    if let Some(repos) = unit_config.git.as_ref() {
+        sync_git_repos(module, &module_dir, repos)?;
+    }
 
     setup_module_internal(module, &module_dir, true)
 }
@@ -71,6 +82,139 @@ fn setup_module_internal(module: &str, module_dir: &Path, strict: bool) -> Resul
     Ok(())
 }
 
+fn sync_git_repos(module: &str, module_dir: &Path, repos: &[GitRepo]) -> Result<()> {
+    if repos.is_empty() {
+        return Ok(());
+    }
+
+    let repo_root = module_dir
+        .parent()
+        .and_then(|modules_dir| modules_dir.parent())
+        .ok_or_else(|| {
+            anyhow!(
+                "unable to determine repository root for {}",
+                module_dir.display()
+            )
+        })?;
+
+    let src_dir = repo_root.join("src");
+    fs::create_dir_all(&src_dir)
+        .with_context(|| format!("failed to ensure {} exists", src_dir.display()))?;
+
+    for repo in repos {
+        let destination = if let Some(path) = &repo.path {
+            src_dir.join(path)
+        } else {
+            let name = derive_repo_dirname(&repo.url)?;
+            src_dir.join(name)
+        };
+
+        let branch_desc = repo.branch.as_deref().unwrap_or("<default>");
+        println!(
+            "[{}] Syncing git repo {} (branch {}) into {}",
+            module,
+            repo.url,
+            branch_desc,
+            destination.display()
+        );
+
+        if destination.exists() {
+            if !destination.is_dir() {
+                bail!(
+                    "target path {} exists and is not a directory",
+                    destination.display()
+                );
+            }
+
+            if !destination.join(".git").is_dir() {
+                bail!(
+                    "target path {} exists but is not a git repository",
+                    destination.display()
+                );
+            }
+
+            if let Some(branch) = repo.branch.as_deref() {
+                cmd!("git", "-C", &destination, "fetch", "origin", branch)
+                    .stderr_to_stdout()
+                    .run()
+                    .with_context(|| {
+                        format!("failed to fetch branch {} for {}", branch, repo.url)
+                    })?;
+
+                cmd!("git", "-C", &destination, "checkout", branch)
+                    .stderr_to_stdout()
+                    .run()
+                    .with_context(|| {
+                        format!("failed to checkout branch {} for {}", branch, repo.url)
+                    })?;
+
+                cmd!(
+                    "git",
+                    "-C",
+                    &destination,
+                    "reset",
+                    "--hard",
+                    format!("origin/{}", branch)
+                )
+                .stderr_to_stdout()
+                .run()
+                .with_context(|| format!("failed to reset branch {} for {}", branch, repo.url))?;
+            } else {
+                cmd!("git", "-C", &destination, "fetch", "--all")
+                    .stderr_to_stdout()
+                    .run()
+                    .with_context(|| format!("failed to fetch updates for {}", repo.url))?;
+
+                cmd!("git", "-C", &destination, "pull", "--ff-only")
+                    .stderr_to_stdout()
+                    .run()
+                    .with_context(|| format!("failed to pull updates for {}", repo.url))?;
+            }
+        } else {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("failed to ensure parent directory {}", parent.display())
+                })?;
+            }
+
+            if let Some(branch) = repo.branch.as_deref() {
+                cmd!(
+                    "git",
+                    "clone",
+                    "--branch",
+                    branch,
+                    "--single-branch",
+                    &repo.url,
+                    &destination
+                )
+                .stderr_to_stdout()
+                .run()
+                .with_context(|| format!("failed to clone {} (branch {})", repo.url, branch))?;
+            } else {
+                cmd!("git", "clone", &repo.url, &destination)
+                    .stderr_to_stdout()
+                    .run()
+                    .with_context(|| format!("failed to clone {}", repo.url))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn derive_repo_dirname(url: &str) -> Result<String> {
+    let trimmed = url.trim_end_matches('/');
+    let candidate = trimmed
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| anyhow!("unable to derive repository name from {}", url))?;
+    let name = candidate.trim_end_matches(".git");
+    if name.is_empty() {
+        bail!("repository name resolved to empty string for {}", url);
+    }
+    Ok(name.to_string())
+}
+
 fn teardown_module_internal(module: &str, module_dir: &Path, strict: bool) -> Result<()> {
     if strict {
         println!("==> Tearing down module '{}'", module);
@@ -100,6 +244,10 @@ pub fn bring_module_up(module: &str) -> Result<()> {
     let unit_config = load_unit_config(&module_dir, module)?;
 
     println!("==> Loading module '{}'", module);
+
+    if let Some(repos) = unit_config.git.as_ref() {
+        sync_git_repos(module, &module_dir, repos)?;
+    }
 
     setup_module_internal(module, &module_dir, false)?;
 

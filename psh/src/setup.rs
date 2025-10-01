@@ -142,28 +142,27 @@ fn resolve_script_path(script: &str, config_path: &Path) -> PathBuf {
 pub fn setup_env() -> Result<()> {
     // Determine the ROS distribution (from environment or default to "kilted")
     let ros_distro = env::var("ROS_DISTRO").unwrap_or_else(|_| "kilted".to_string());
-    
+
     // Get the home directory
     let home_dir = directories::BaseDirs::new()
         .context("failed to determine home directory")?
         .home_dir()
         .to_path_buf();
-    
+
     let bashrc_path = home_dir.join(".bashrc");
-    
+
     // The function to add - it will source ROS2 setup when called
     let function_block = format!(
         "psyched() {{\n    source /opt/ros/{}/setup.bash\n}}",
         ros_distro
     );
-    
+
     // Check if the function already exists
     let mut function_exists = false;
     if bashrc_path.exists() {
-        let file = fs::File::open(&bashrc_path)
-            .context("failed to open ~/.bashrc")?;
+        let file = fs::File::open(&bashrc_path).context("failed to open ~/.bashrc")?;
         let reader = BufReader::new(file);
-        
+
         for line in reader.lines() {
             if let Ok(line) = line {
                 if line.contains("psyched()") {
@@ -173,7 +172,7 @@ pub fn setup_env() -> Result<()> {
             }
         }
     }
-    
+
     // Add the function if it doesn't exist
     if !function_exists {
         let mut file = OpenOptions::new()
@@ -181,32 +180,48 @@ pub fn setup_env() -> Result<()> {
             .append(true)
             .open(&bashrc_path)
             .context("failed to open ~/.bashrc for writing")?;
-        
+
         writeln!(file, "\n# Added by psh env")?;
         writeln!(file, "{}", function_block)?;
         writeln!(file, "psyched  # Auto-activate ROS 2 environment")?;
-        
-    println!("✓ Added 'psyched' shell function to {}/.bashrc", home_dir.display());
-    println!("Appended the following lines to {}/.bashrc:", home_dir.display());
-    println!("# Added by psh env");
-    println!("psyched() {{");
-    println!("    source /opt/ros/{}/setup.bash", ros_distro);
-    println!("}}",);
-    println!("psyched  # Auto-activate ROS 2 environment\n");
-    println!("This will automatically source /opt/ros/{}/setup.bash for new interactive shells.", ros_distro);
-    println!("To activate the ROS 2 environment in your CURRENT shell, run:");
-    println!("  source ~/.bashrc");
-    println!("or just run:");
-    println!("  psyched\n");
-    println!("If you want a different ROS distribution, re-run this command with ROS_DISTRO set, e.g.");
-    println!("  ROS_DISTRO=humble psh env");
+
+        println!(
+            "✓ Added 'psyched' shell function to {}/.bashrc",
+            home_dir.display()
+        );
+        println!(
+            "Appended the following lines to {}/.bashrc:",
+            home_dir.display()
+        );
+        println!("# Added by psh env");
+        println!("psyched() {{");
+        println!("    source /opt/ros/{}/setup.bash", ros_distro);
+        println!("}}",);
+        println!("psyched  # Auto-activate ROS 2 environment\n");
+        println!(
+            "This will automatically source /opt/ros/{}/setup.bash for new interactive shells.",
+            ros_distro
+        );
+        println!("To activate the ROS 2 environment in your CURRENT shell, run:");
+        println!("  source ~/.bashrc");
+        println!("or just run:");
+        println!("  psyched\n");
+        println!(
+            "If you want a different ROS distribution, re-run this command with ROS_DISTRO set, e.g."
+        );
+        println!("  ROS_DISTRO=humble psh env");
     } else {
-        println!("✓ 'psyched' function already exists in {}/.bashrc", home_dir.display());
+        println!(
+            "✓ 'psyched' function already exists in {}/.bashrc",
+            home_dir.display()
+        );
         println!("It will auto-activate the ROS 2 environment for new shells.");
         println!("To activate it in the current shell, run: source ~/.bashrc  (or run 'psyched')");
-        println!("To change which ROS distribution is sourced, remove or edit the 'psyched' block in ~/.bashrc and re-run with ROS_DISTRO set.");
+        println!(
+            "To change which ROS distribution is sourced, remove or edit the 'psyched' block in ~/.bashrc and re-run with ROS_DISTRO set."
+        );
     }
-    
+
     println!("\nDone. The ROS 2 environment will be active in any new interactive shells.");
     println!("To activate it in this current terminal, run:");
     println!("  source ~/.bashrc");
@@ -214,6 +229,6 @@ pub fn setup_env() -> Result<()> {
     println!("  psyched\n");
     println!("If you want to inspect what was added, run:");
     println!("  tail -n 10 ~/.bashrc");
-    
+
     Ok(())
 }
