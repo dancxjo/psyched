@@ -1,0 +1,64 @@
+# ------------------------------
+# Rust / Cargo
+# ------------------------------
+target/
+**/target/
+Cargo.lock        # keep out of git if this is a library workspace
+
+# Incremental build and profiling
+**/*.rs.bk
+**/*.pdb
+**/*.profraw
+**/*.profdata
+
+# ------------------------------
+# Editors / IDEs
+# ------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+
+# Others
+*.swp
+*.swo
+*~
+
+# ------------------------------
+# Logs / Dumps
+# ------------------------------
+*.log
+*.stderr
+*.stdout
+*.dmp
+core
+.DS_Store
+
+# ------------------------------
+# Python / ROS2 glue
+# ------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+build/
+install/
+log/
+.colcon/
+
+# ------------------------------
+# System / bootstrap
+# ------------------------------
+/tools/bootstrap/*.bak
+*.old
+*.tmp
+
+# ------------------------------
+# Local machine configs
+# ------------------------------
+hosts/*.local.toml

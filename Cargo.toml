@@ -1,0 +1,4 @@
+[workspace]
+members = ["psh", "psyched", "psyched-msgs"]
+
+resolver = "2"

@@ -1,0 +1,15 @@
+[unit.imu]
+# Requirements (apt + pip)
+apt = [
+    "ros-${ROS_DISTRO}-ros2-control",
+    "ros-${ROS_DISTRO}-imu-filter-madgwick",
+    "ros-${ROS_DISTRO}-rosidl-default-generators",
+]
+pip = []
+
+# Scripts to apply patches to the driver before build
+patches = ["modules/imu/patches.sh"]
+
+# Service control
+launch = "modules/imu/launch.sh"
+shutdown = "modules/imu/shutdown.sh"
