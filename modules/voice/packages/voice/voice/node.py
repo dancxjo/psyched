@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover - exercised by unit tests
     QoSReliabilityPolicy = None  # type: ignore[assignment]
 
 
-def _best_effort_qos(*, depth: int = 10):
+def qos_profile(*, depth: int = 10, reliability: int = QoSReliabilityPolicy.BEST_EFFORT):
     if (
         QoSProfile is None
         or QoSHistoryPolicy is None
@@ -40,9 +40,10 @@ def _best_effort_qos(*, depth: int = 10):
     return QoSProfile(
         history=QoSHistoryPolicy.KEEP_LAST,
         depth=depth,
-        reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        reliability=reliability,
         durability=QoSDurabilityPolicy.VOLATILE,
     )
+
 
 from psyched_msgs.msg import Message as MsgMessage
 
@@ -131,17 +132,17 @@ class VoiceNode(Node):
         self.volume = max(0.0, min(2.0, self.volume))
 
         self.topic = self._get_string_param("topic", "/voice")
-        self._pub_done = self.create_publisher(String, "voice_done", _best_effort_qos(depth=5))
+        self._pub_done = self.create_publisher(String, "voice_done", qos_profile(depth=5))
         self._conversation_topic = self._get_string_param("conversation_topic", "/conversation")
         self._pub_conversation = self.create_publisher(
             MsgMessage,
             self._conversation_topic,
-            _best_effort_qos(depth=10),
+            qos_profile(depth=10, reliability=QoSReliabilityPolicy.RELIABLE),
         )
         self.autophony_pub = self.create_publisher(
             UInt32,
             "/audio/autophony_duration",
-            _best_effort_qos(depth=10),
+            qos_profile(depth=10),
         )
 
         self.create_subscription(String, self.topic, self.enqueue, 10)

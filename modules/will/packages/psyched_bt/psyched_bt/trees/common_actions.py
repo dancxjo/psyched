@@ -159,13 +159,18 @@ class SeedConversation(py_trees.behaviour.Behaviour):
             raise RuntimeError("SeedConversation requires a ROS node via setup(node=...)")
 
         try:
+            from rclpy.qos import QoSReliabilityPolicy
             from psyched_msgs.msg import Message as ConversationMessage  # type: ignore
+            qos = py_trees.common.QoSProfile(
+                reliability=QoSReliabilityPolicy.RELIABLE,
+            )
         except ImportError:  # pragma: no cover - tests stub this module
             ConversationMessage = None
+            qos = 10
 
         self._message_type = ConversationMessage
         msg_type = ConversationMessage if ConversationMessage is not None else types.SimpleNamespace
-        self._publisher = self._node.create_publisher(msg_type, self.topic, 10)
+        self._publisher = self._node.create_publisher(msg_type, self.topic, qos)
 
     def initialise(self) -> None:
         self._published = False
