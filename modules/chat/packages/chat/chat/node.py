@@ -117,31 +117,22 @@ class ChatNode(Node):
         super().__init__("chat_node")
 
         # pubs
-        # Use best-effort QoS for conversational short-lived messages so
-        # it matches other nodes (for example the voice node) which publish
-        # with BEST_EFFORT reliability. This avoids the "incompatible QoS"
-        # warning where RELIABILITY policies don't match.
-        def _best_effort_qos(*, depth: int = 10) -> Any:
-            if (
-                QoSProfile is None
-                or QoSHistoryPolicy is None
-                or QoSReliabilityPolicy is None
-                or QoSDurabilityPolicy is None
-            ):
-                return depth
-            return QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=depth,
-                reliability=QoSReliabilityPolicy.BEST_EFFORT,
-                durability=QoSDurabilityPolicy.VOLATILE,
-            )
+        # Use a reliable QoS profile to ensure messages are not dropped, which
+        # is a common cause of "incompatible QoS" warnings when other nodes
+        # default to reliable publishing.
+        reliable_qos = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.VOLATILE,
+        ) if QoSProfile is not None else 10
 
-        self.pub_conversation = self.create_publisher(MsgMessage, "conversation", _best_effort_qos(depth=10))
+        self.pub_conversation = self.create_publisher(MsgMessage, "conversation", reliable_qos)
         self.pub_voice = self.create_publisher(String, "voice/say", 10)
         self.pub_stream = self.create_publisher(String, "chat/stream", 10)
 
         # subs
-        self.create_subscription(MsgMessage, "conversation", self._on_conversation, _best_effort_qos(depth=10))
+        self.create_subscription(MsgMessage, "conversation", self._on_conversation, reliable_qos)
         self.create_subscription(String, "voice/done", self._on_voice_done, 10)
 
         # params
