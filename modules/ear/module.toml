@@ -62,8 +62,8 @@ packages = ["ear", "psyched_msgs"]
 
 [[actions]]
 type = "pip_install"
-packages = ["webrtcvad"]
-import_check = ["webrtcvad"]
+packages = ["audioop-lts", "webrtcvad"]
+import_check = ["audioop", "webrtcvad"]
 break_system = true
 
 [[actions]]

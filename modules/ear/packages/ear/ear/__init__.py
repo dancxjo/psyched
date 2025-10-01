@@ -12,4 +12,5 @@ __all__ = [
     'transcriber_long_node',
     'transcriber_local_node',
     'vad_node',
+    'hole_node',
 ]
