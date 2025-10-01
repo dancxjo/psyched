@@ -1,17 +1,19 @@
 use anyhow::{Context, Result, anyhow, bail};
 use directories::ProjectDirs;
 use duct::cmd;
+use regex::Regex;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use walkdir::WalkDir;
 use which::which;
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::symlink;
-
 #[cfg(target_family = "windows")]
 use std::os::windows::fs::{symlink_dir, symlink_file};
 
@@ -26,11 +28,16 @@ struct ModuleManifest {
 
 #[derive(Deserialize, Clone)]
 struct UnitConfig {
+    #[serde(default)]
+    apt: Vec<PackageSpec>,
+    #[serde(default)]
+    pip: Vec<PackageSpec>,
     patches: Option<Vec<String>>,
     launch: Option<String>,
     shutdown: Option<String>,
     pilot_control: Option<String>,
     git: Option<Vec<GitRepo>>,
+    ros: Option<RosBuildConfig>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -38,6 +45,26 @@ struct GitRepo {
     url: String,
     branch: Option<String>,
     path: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Default)]
+struct RosBuildConfig {
+    workspace: Option<String>,
+    #[serde(default)]
+    packages: Vec<String>,
+    #[serde(default)]
+    build_args: Vec<String>,
+    #[serde(default)]
+    skip_rosdep_keys: Vec<String>,
+    #[serde(default)]
+    skip_rosdep: bool,
+    #[serde(default)]
+    skip_colcon: bool,
+}
+
+#[derive(Deserialize, Clone)]
+struct PackageSpec {
+    package: String,
 }
 
 pub fn setup_module(module: &str) -> Result<()> {
@@ -49,6 +76,14 @@ pub fn setup_module(module: &str) -> Result<()> {
     if let Some(repos) = unit_config.git.as_ref() {
         sync_git_repos(module, &module_dir, repos)?;
     }
+
+    install_apt_packages(module, &unit_config.apt)?;
+
+    if let Some(patches) = unit_config.patches.as_ref() {
+        run_patch_scripts(module, &module_dir, patches);
+    }
+
+    prepare_ros_workspace(module, &module_dir, unit_config.ros.as_ref())?;
 
     setup_module_internal(module, &module_dir, true)
 }
@@ -202,6 +237,230 @@ fn sync_git_repos(module: &str, module_dir: &Path, repos: &[GitRepo]) -> Result<
     Ok(())
 }
 
+fn prepare_ros_workspace(
+    module: &str,
+    module_dir: &Path,
+    ros_config: Option<&RosBuildConfig>,
+) -> Result<()> {
+    let Some(config) = ros_config else {
+        return Ok(());
+    };
+
+    let repo_root = module_dir
+        .parent()
+        .and_then(|modules_dir| modules_dir.parent())
+        .ok_or_else(|| {
+            anyhow!(
+                "unable to determine repository root for {}",
+                module_dir.display()
+            )
+        })?;
+
+    let workspace_rel = config.workspace.as_deref().unwrap_or(".");
+    let workspace_dir = repo_root.join(workspace_rel);
+
+    if !workspace_dir.exists() {
+        bail!(
+            "ROS workspace {} not found for module '{}'",
+            workspace_dir.display(),
+            module
+        );
+    }
+
+    let src_dir = workspace_dir.join("src");
+    if !src_dir.is_dir() {
+        bail!(
+            "ROS workspace {} missing src/ directory for module '{}'",
+            workspace_dir.display(),
+            module
+        );
+    }
+
+    if !config.skip_rosdep {
+        which("rosdep").with_context(|| {
+            "rosdep binary not found in PATH; install rosdep or add it to PATH".to_string()
+        })?;
+
+        println!(
+            "[{}] Running rosdep install in {}",
+            module,
+            workspace_dir.display()
+        );
+
+        let mut rosdep_args = vec![
+            "install".to_string(),
+            "--from-paths".to_string(),
+            src_dir.to_string_lossy().into_owned(),
+            "--ignore-src".to_string(),
+            "-r".to_string(),
+            "-y".to_string(),
+        ];
+
+        if !config.skip_rosdep_keys.is_empty() {
+            rosdep_args.push("--skip-keys".to_string());
+            rosdep_args.push(config.skip_rosdep_keys.join(" "));
+        }
+
+        cmd("rosdep", rosdep_args)
+            .dir(&workspace_dir)
+            .stderr_to_stdout()
+            .run()
+            .with_context(|| format!("[{}] rosdep install failed", module))?;
+    } else {
+        println!("[{}] Skipping rosdep install (skip_rosdep = true)", module);
+    }
+
+    if config.skip_colcon {
+        println!("[{}] Skipping colcon build (skip_colcon = true)", module);
+        return Ok(());
+    }
+
+    which("colcon").with_context(|| {
+        "colcon binary not found in PATH; ensure colcon is installed".to_string()
+    })?;
+
+    let mut colcon_args = vec!["build".to_string(), "--symlink-install".to_string()];
+
+    if !config.build_args.is_empty() {
+        colcon_args.extend(config.build_args.clone());
+    }
+
+    if !config.packages.is_empty() {
+        colcon_args.push("--packages-select".to_string());
+        colcon_args.extend(config.packages.iter().cloned());
+    }
+
+    println!(
+        "[{}] Running colcon build in {}",
+        module,
+        workspace_dir.display()
+    );
+
+    cmd("colcon", colcon_args)
+        .dir(&workspace_dir)
+        .stderr_to_stdout()
+        .run()
+        .with_context(|| format!("[{}] colcon build failed", module))?;
+
+    Ok(())
+}
+
+fn install_apt_packages(module: &str, packages: &[PackageSpec]) -> Result<()> {
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    which("apt-get").with_context(|| {
+        format!(
+            "[{}] apt-get not found in PATH; unable to install apt packages",
+            module
+        )
+    })?;
+
+    let mut expanded = Vec::with_capacity(packages.len());
+    for pkg in packages {
+        let resolved = expand_env_placeholders(&pkg.package).with_context(|| {
+            format!(
+                "[{}] failed to expand environment variables in '{}'",
+                module, pkg.package
+            )
+        })?;
+
+        let trimmed = resolved.trim();
+        if trimmed.is_empty() {
+            bail!(
+                "[{}] expanded apt package '{}' resolved to an empty string",
+                module,
+                pkg.package
+            );
+        }
+
+        expanded.push(trimmed.to_string());
+    }
+
+    println!(
+        "[{}] Installing apt packages: {}",
+        module,
+        expanded.join(", ")
+    );
+
+    let use_sudo = which("sudo").is_ok();
+
+    let mut install_args: Vec<String> = vec!["install".into(), "-y".into()];
+    install_args.extend(expanded.iter().cloned());
+
+    let install_expression = if use_sudo {
+        let mut args = Vec::with_capacity(1 + install_args.len());
+        args.push("apt-get".to_string());
+        args.extend(install_args.iter().cloned());
+        cmd("sudo", args)
+    } else {
+        cmd("apt-get", install_args.clone())
+    };
+
+    install_expression
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .stderr_to_stdout()
+        .run()
+        .with_context(|| format!("[{}] apt package installation failed", module))?;
+
+    Ok(())
+}
+
+fn expand_env_placeholders(input: &str) -> Result<String> {
+    static ENV_VAR_REGEX: OnceLock<Regex> = OnceLock::new();
+
+    let regex = ENV_VAR_REGEX.get_or_init(|| {
+        Regex::new(r"\$\{([A-Za-z0-9_]+)\}").expect("valid environment variable pattern")
+    });
+
+    let mut result = String::with_capacity(input.len());
+    let mut last_index = 0;
+
+    for captures in regex.captures_iter(input) {
+        let m = captures
+            .get(0)
+            .expect("captures_iter should yield a full match");
+        result.push_str(&input[last_index..m.start()]);
+
+        let var_name = captures
+            .get(1)
+            .expect("captures_iter should yield capture group 1")
+            .as_str();
+
+        let value = env::var(var_name)
+            .with_context(|| format!("environment variable {} is not set", var_name))?;
+
+        result.push_str(&value);
+        last_index = m.end();
+    }
+
+    result.push_str(&input[last_index..]);
+    Ok(result)
+}
+
+fn run_patch_scripts(module: &str, module_dir: &Path, scripts: &[String]) {
+    for script in scripts {
+        println!("[{}] Running patch script: {}", module, script);
+        let resolved = resolve_script_path(script, module_dir);
+        if !resolved.exists() {
+            eprintln!("[{}] Patch script missing: {}", module, resolved.display());
+            continue;
+        }
+
+        if let Err(err) = run_script(&resolved) {
+            eprintln!(
+                "[{}] Patch script failed ({}): {}",
+                module,
+                resolved.display(),
+                err
+            );
+        } else {
+            println!("[{}] Patch script complete: {}", module, resolved.display());
+        }
+    }
+}
+
 fn derive_repo_dirname(url: &str) -> Result<String> {
     let trimmed = url.trim_end_matches('/');
     let candidate = trimmed
@@ -249,32 +508,18 @@ pub fn bring_module_up(module: &str) -> Result<()> {
         sync_git_repos(module, &module_dir, repos)?;
     }
 
+    install_apt_packages(module, &unit_config.apt)?;
+
+    if let Some(patches) = unit_config.patches.as_ref() {
+        run_patch_scripts(module, &module_dir, patches);
+    }
+
+    prepare_ros_workspace(module, &module_dir, unit_config.ros.as_ref())?;
+
     setup_module_internal(module, &module_dir, false)?;
 
     if let Some(control) = unit_config.pilot_control.as_deref() {
         println!("[{}] Pilot control component: {}", module, control);
-    }
-
-    if let Some(patches) = &unit_config.patches {
-        for script in patches {
-            println!("[{}] Running patch script: {}", module, script);
-            let resolved = resolve_script_path(script, &module_dir);
-            if !resolved.exists() {
-                eprintln!("[{}] Patch script missing: {}", module, resolved.display());
-                continue;
-            }
-
-            if let Err(err) = run_script(&resolved) {
-                eprintln!(
-                    "[{}] Patch script failed ({}): {}",
-                    module,
-                    resolved.display(),
-                    err
-                );
-            } else {
-                println!("[{}] Patch script complete: {}", module, resolved.display());
-            }
-        }
     }
 
     let launch = unit_config

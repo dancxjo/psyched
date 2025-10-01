@@ -1,10 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use duct::cmd;
+use regex::Regex;
 use serde::Deserialize;
 use std::env;
 use std::fs;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use which::which;
 
@@ -139,96 +138,101 @@ fn resolve_script_path(script: &str, config_path: &Path) -> PathBuf {
     requested
 }
 
-pub fn setup_env() -> Result<()> {
-    // Determine the ROS distribution (from environment or default to "kilted")
-    let ros_distro = env::var("ROS_DISTRO").unwrap_or_else(|_| "kilted".to_string());
+fn locate_repo_root() -> Result<PathBuf> {
+    let mut candidates = Vec::new();
 
-    // Get the home directory
-    let home_dir = directories::BaseDirs::new()
-        .context("failed to determine home directory")?
-        .home_dir()
-        .to_path_buf();
+    if let Ok(cwd) = env::current_dir() {
+        candidates.push(cwd);
+    }
 
-    let bashrc_path = home_dir.join(".bashrc");
-
-    // The function to add - it will source ROS2 setup when called
-    let function_block = format!(
-        "psyched() {{\n    source /opt/ros/{}/setup.bash\n}}",
-        ros_distro
-    );
-
-    // Check if the function already exists
-    let mut function_exists = false;
-    if bashrc_path.exists() {
-        let file = fs::File::open(&bashrc_path).context("failed to open ~/.bashrc")?;
-        let reader = BufReader::new(file);
-
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if line.contains("psyched()") {
-                    function_exists = true;
-                    break;
-                }
+    if let Ok(exe) = env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.to_path_buf());
+            if let Some(parent) = dir.parent() {
+                candidates.push(parent.to_path_buf());
             }
         }
     }
 
-    // Add the function if it doesn't exist
-    if !function_exists {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&bashrc_path)
-            .context("failed to open ~/.bashrc for writing")?;
+    for root in candidates {
+        if root.join("modules").is_dir() && root.join("src").is_dir() {
+            return Ok(root);
+        }
+    }
 
-        writeln!(file, "\n# Added by psh env")?;
-        writeln!(file, "{}", function_block)?;
-        writeln!(file, "psyched  # Auto-activate ROS 2 environment")?;
+    bail!("could not determine psyched repository root; run 'psh env' from inside the repository");
+}
 
-        println!(
-            "✓ Added 'psyched' shell function to {}/.bashrc",
-            home_dir.display()
-        );
-        println!(
-            "Appended the following lines to {}/.bashrc:",
-            home_dir.display()
-        );
-        println!("# Added by psh env");
-        println!("psyched() {{");
-        println!("    source /opt/ros/{}/setup.bash", ros_distro);
-        println!("}}",);
-        println!("psyched  # Auto-activate ROS 2 environment\n");
-        println!(
-            "This will automatically source /opt/ros/{}/setup.bash for new interactive shells.",
-            ros_distro
-        );
-        println!("To activate the ROS 2 environment in your CURRENT shell, run:");
-        println!("  source ~/.bashrc");
-        println!("or just run:");
-        println!("  psyched\n");
-        println!(
-            "If you want a different ROS distribution, re-run this command with ROS_DISTRO set, e.g."
-        );
-        println!("  ROS_DISTRO=humble psh env");
+pub fn setup_env() -> Result<()> {
+    let ros_distro = env::var("ROS_DISTRO").unwrap_or_else(|_| "kilted".to_string());
+    let workspace_root = locate_repo_root().context("failed to locate repository root")?;
+
+    let install_setup = workspace_root.join("install").join("setup.bash");
+    let install_local_setup = workspace_root.join("install").join("local_setup.bash");
+
+    let home_dir = directories::BaseDirs::new()
+        .context("failed to determine home directory")?
+        .home_dir()
+        .to_path_buf();
+    let bashrc_path = home_dir.join(".bashrc");
+
+    let existing = if bashrc_path.exists() {
+        fs::read_to_string(&bashrc_path).context("failed to read ~/.bashrc")?
+    } else {
+        String::new()
+    };
+
+    let cleanup_re =
+        Regex::new(r"(?ms)^# Added by psh env\npsyched\(\) \{\n.*?\n\}\n(?:\n)?psyched.*?(?:\n|$)")
+            .context("failed to compile cleanup regex")?;
+    let cleaned = cleanup_re.replace_all(&existing, "").to_string();
+
+    let mut updated = cleaned.trim_end().to_string();
+    if !updated.is_empty() {
+        updated.push_str("\n\n");
+    }
+
+    let workspace_str = workspace_root.to_string_lossy().replace('"', "\\\"");
+    let function_block = format!(
+        "# Added by psh env\npsyched() {{\n    local workspace_root=\"{workspace}\"\n    source /opt/ros/{ros}/setup.bash\n    if [ -f \"$workspace_root/install/setup.bash\" ]; then\n        source \"$workspace_root/install/setup.bash\"\n    elif [ -f \"$workspace_root/install/local_setup.bash\" ]; then\n        source \"$workspace_root/install/local_setup.bash\"\n    fi\n}}\n\npsyched  # Auto-activate ROS 2 workspace\n",
+        workspace = workspace_str,
+        ros = ros_distro
+    );
+
+    updated.push_str(&function_block);
+
+    if !updated.ends_with('\n') {
+        updated.push('\n');
+    }
+
+    fs::write(&bashrc_path, updated).context("failed to update ~/.bashrc")?;
+
+    println!(
+        "✓ Updated '{}' to source ROS and the local workspace",
+        bashrc_path.display()
+    );
+    println!("The 'psyched' function now sources:");
+    println!("  - /opt/ros/{}/setup.bash", ros_distro);
+
+    if install_setup.exists() {
+        println!("  - {}", install_setup.display());
+    } else if install_local_setup.exists() {
+        println!("  - {}", install_local_setup.display());
     } else {
         println!(
-            "✓ 'psyched' function already exists in {}/.bashrc",
-            home_dir.display()
-        );
-        println!("It will auto-activate the ROS 2 environment for new shells.");
-        println!("To activate it in the current shell, run: source ~/.bashrc  (or run 'psyched')");
-        println!(
-            "To change which ROS distribution is sourced, remove or edit the 'psyched' block in ~/.bashrc and re-run with ROS_DISTRO set."
+            "  - {} (not found yet; run 'psh mod setup <ros-module>' to build the workspace)",
+            workspace_root.join("install").join("setup.bash").display()
         );
     }
 
-    println!("\nDone. The ROS 2 environment will be active in any new interactive shells.");
-    println!("To activate it in this current terminal, run:");
-    println!("  source ~/.bashrc");
-    println!("or run:");
-    println!("  psyched\n");
-    println!("If you want to inspect what was added, run:");
-    println!("  tail -n 10 ~/.bashrc");
+    println!(
+        "\nTo use it in this shell, run: source {}",
+        bashrc_path.display()
+    );
+    println!("Or simply run: psyched\n");
+    println!(
+        "Re-run with ROS_DISTRO set if you need a different base (e.g. ROS_DISTRO=humble psh env)."
+    );
 
     Ok(())
 }
