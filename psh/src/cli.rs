@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "psh", about = "psyched shell")]
+#[command(name = "psh", about = "psyched shell", version = env!("CARGO_PKG_VERSION"), propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -23,35 +23,39 @@ pub enum Commands {
 
     // Backwards-compatibility top-level aliases. These map to the same actions
     /// Run host bootstrap scripts (alias for `psh host setup`)
+    #[command(hide = true)]
     Setup,
 
     /// Bring a module online (alias for `psh mod up`)
+    #[command(hide = true)]
     Up {
         /// Module name (directory under modules/). If omitted, defaults to all modules when used via `psh mod`.
         module: String,
     },
 
     /// Gracefully stop a module (alias for `psh mod down`)
+    #[command(hide = true)]
     Down {
         /// Module name (directory under modules/)
         module: String,
     },
 
     /// Prepare module assets (setup lifecycle) (alias for `psh mod setup`)
-    #[command(name = "setup-module")]
+    #[command(name = "setup-module", hide = true)]
     SetupModule {
         /// Module name (directory under modules/)
         module: String,
     },
 
     /// Remove prepared module assets (teardown lifecycle) (alias for `psh mod teardown`)
-    #[command(name = "teardown-module")]
+    #[command(name = "teardown-module", hide = true)]
     TeardownModule {
         /// Module name (directory under modules/)
         module: String,
     },
 
     /// List available modules and their status (alias for `psh mod list`)
+    #[command(hide = true)]
     List,
 
     /// Set up shell environment (add psyched alias to ~/.bashrc)
