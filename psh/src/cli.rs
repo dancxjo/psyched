@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "psh", about = "Pete's setup helper")]
+#[command(name = "psh", about = "psyched shell")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -9,32 +9,89 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Run host bootstrap scripts
+    /// Host-related actions
+    Host {
+        #[command(subcommand)]
+        command: HostCommands,
+    },
+
+    /// Module-related actions (use `psh mod ...`)
+    Mod {
+        #[command(subcommand)]
+        command: ModCommands,
+    },
+
+    // Backwards-compatibility top-level aliases. These map to the same actions
+    /// Run host bootstrap scripts (alias for `psh host setup`)
     Setup,
-    /// Bring a module online
+
+    /// Bring a module online (alias for `psh mod up`)
     Up {
-        /// Module name (directory under modules/)
+        /// Module name (directory under modules/). If omitted, defaults to all modules when used via `psh mod`.
         module: String,
     },
-    /// Gracefully stop a module
+
+    /// Gracefully stop a module (alias for `psh mod down`)
     Down {
         /// Module name (directory under modules/)
         module: String,
     },
-    /// Prepare module assets (setup lifecycle)
+
+    /// Prepare module assets (setup lifecycle) (alias for `psh mod setup`)
     #[command(name = "setup-module")]
     SetupModule {
         /// Module name (directory under modules/)
         module: String,
     },
-    /// Remove prepared module assets (teardown lifecycle)
+
+    /// Remove prepared module assets (teardown lifecycle) (alias for `psh mod teardown`)
     #[command(name = "teardown-module")]
     TeardownModule {
         /// Module name (directory under modules/)
         module: String,
     },
-    /// List available modules and their status
+
+    /// List available modules and their status (alias for `psh mod list`)
     List,
+
     /// Set up shell environment (add psyched alias to ~/.bashrc)
     Env,
+}
+
+#[derive(Subcommand)]
+pub enum HostCommands {
+    /// Run host bootstrap for one or more hosts. If no hosts are provided the current hostname is used.
+    Setup {
+        /// Host names (matching files in hosts/*.toml). Defaults to the local hostname when empty.
+        hosts: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ModCommands {
+    /// Bring module(s) online. If none provided, defaults to all modules.
+    Up {
+        /// Module names (directories under modules/)
+        modules: Vec<String>,
+    },
+    /// Gracefully stop module(s). If none provided, defaults to all modules.
+    Down {
+        /// Module names (directories under modules/)
+        modules: Vec<String>,
+    },
+    /// Prepare module assets (setup lifecycle). If none provided, defaults to all modules.
+    Setup {
+        /// Module names (directories under modules/)
+        modules: Vec<String>,
+    },
+    /// Remove prepared module assets (teardown lifecycle). If none provided, defaults to all modules.
+    Teardown {
+        /// Module names (directories under modules/)
+        modules: Vec<String>,
+    },
+    /// List available modules and their status
+    List {
+        /// Optional module names to filter the list
+        modules: Vec<String>,
+    },
 }

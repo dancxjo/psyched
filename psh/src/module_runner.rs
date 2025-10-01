@@ -250,6 +250,26 @@ pub fn list_modules() -> Result<()> {
     Ok(())
 }
 
+/// Return a Vec of all module directory names under the repository's modules/ directory.
+pub fn all_module_names() -> Result<Vec<String>> {
+    let modules_root =
+        locate_modules_root().with_context(|| "unable to locate modules/ directory".to_string())?;
+
+    let mut entries: Vec<_> = fs::read_dir(&modules_root)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .collect();
+
+    entries.sort_by_key(|e| e.file_name());
+
+    let names = entries
+        .into_iter()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+
+    Ok(names)
+}
+
 fn module_status(module: &str) -> Result<String> {
     match read_pid(module)? {
         Some(pid) if is_pid_running(pid) => Ok(format!("running (pid {})", pid)),
