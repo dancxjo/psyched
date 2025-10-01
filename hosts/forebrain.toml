@@ -1,6 +1,18 @@
-setup_ros2 = false
-setup_docker = true
-setup_cuda = true
-setup_speech = true
-modules = []
+# Pete Rizzlington host config: forebrain
+# Heavyweight compute node for LLMs, ASR, TTS.
+# Onboard headless laptop with GPU (no screen).
 
+[host]
+name = "forebrain"
+
+[provision]
+# Bootstrap scripts to run on this host
+scripts = [
+    "tools/bootstrap/install_docker.sh",
+    "tools/bootstrap/install_cuda.sh",
+]
+
+[features]
+docker = true
+ros2 = false
+cuda = true

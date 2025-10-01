@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "make -n ros2 (dry-run)",
+			"type": "shell",
+			"command": "make -n ros2",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "make -n build (dry-run)",
+			"type": "shell",
+			"command": "make -n build",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "make -n build (dry-run) after eval change",
+			"type": "shell",
+			"command": "make -n build",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "make -n build (dry-run) after escaping",
+			"type": "shell",
+			"command": "make -n build",
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}
