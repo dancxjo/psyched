@@ -72,6 +72,8 @@ services/tts/models/*
 # ROS 2 workspace overlay
 /work/
 
+fresh.gen.ts
+
 # ------------------------------
 # Local machine configs
 # ------------------------------
