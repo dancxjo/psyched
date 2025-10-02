@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use duct::cmd;
 use regex::Regex;
 use serde::Deserialize;
@@ -16,6 +16,8 @@ struct HostConfig {
     host: Host,
     provision: Option<Provision>,
     #[serde(default)]
+    features: Features,
+    #[serde(default)]
     modules: Vec<ModuleDirective>,
     #[serde(default)]
     services: Vec<ServiceDirective>,
@@ -29,6 +31,16 @@ struct Host {
 #[derive(Deserialize)]
 struct Provision {
     scripts: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Features {
+    #[serde(default)]
+    docker: bool,
+    #[serde(default)]
+    ros2: bool,
+    #[serde(default)]
+    cuda: bool,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +128,7 @@ pub fn run_setup() -> Result<()> {
     let HostConfig {
         host,
         provision,
+        features,
         modules,
         services,
     } = cfg;
@@ -123,6 +136,7 @@ pub fn run_setup() -> Result<()> {
     let host_name = host.name;
 
     let scripts = provision.and_then(|p| p.scripts).unwrap_or_default();
+    let scripts = plan_provision_scripts(scripts, &features);
 
     if scripts.is_empty() {
         println!("No provisioning scripts listed. Nothing to run.");
@@ -234,6 +248,106 @@ fn resolve_script_path(script: &str, config_path: &Path) -> PathBuf {
     }
 
     requested
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScriptKind {
+    Docker,
+    GenerateBindings,
+    Ros2,
+}
+
+fn classify_script(script: &str) -> Option<ScriptKind> {
+    if script.ends_with("install_docker.sh") {
+        return Some(ScriptKind::Docker);
+    }
+    if script.ends_with("generate_ros_rust_bindings.sh") {
+        return Some(ScriptKind::GenerateBindings);
+    }
+    if script.ends_with("install_ros2.sh") {
+        return Some(ScriptKind::Ros2);
+    }
+    None
+}
+
+/// Merge explicit provisioning scripts with feature-driven defaults while ensuring
+/// Docker, ROS 2, and Rust binding generation run in a safe order.
+fn plan_provision_scripts(mut scripts: Vec<String>, features: &Features) -> Vec<String> {
+    if scripts.is_empty() && !features.docker && !features.ros2 {
+        return scripts;
+    }
+
+    let mut planned = Vec::new();
+    let mut first_feature_index: Option<usize> = None;
+
+    let mut docker_script: Option<String> = None;
+    let mut ros2_script: Option<String> = None;
+    let mut bindings_script: Option<String> = None;
+
+    let mut docker_present = false;
+    let mut ros2_present = false;
+    let mut bindings_present = false;
+
+    for script in scripts.drain(..) {
+        match classify_script(&script) {
+            Some(ScriptKind::Docker) => {
+                docker_present = true;
+                if docker_script.is_none() {
+                    docker_script = Some(script);
+                }
+                if first_feature_index.is_none() {
+                    first_feature_index = Some(planned.len());
+                }
+            }
+            Some(ScriptKind::GenerateBindings) => {
+                bindings_present = true;
+                if bindings_script.is_none() {
+                    bindings_script = Some(script);
+                }
+                if first_feature_index.is_none() {
+                    first_feature_index = Some(planned.len());
+                }
+            }
+            Some(ScriptKind::Ros2) => {
+                ros2_present = true;
+                if ros2_script.is_none() {
+                    ros2_script = Some(script);
+                }
+                if first_feature_index.is_none() {
+                    first_feature_index = Some(planned.len());
+                }
+            }
+            None => planned.push(script),
+        }
+    }
+
+    let docker_required = docker_present || features.docker;
+    let ros2_required = ros2_present || features.ros2;
+    let bindings_required = bindings_present || (docker_required && ros2_required);
+
+    if !docker_required && !ros2_required && !bindings_required {
+        return planned;
+    }
+
+    let mut feature_block = Vec::new();
+    if docker_required {
+        feature_block
+            .push(docker_script.unwrap_or_else(|| "tools/provision/install_docker.sh".to_string()));
+    }
+    if bindings_required {
+        feature_block.push(
+            bindings_script
+                .unwrap_or_else(|| "tools/provision/generate_ros_rust_bindings.sh".to_string()),
+        );
+    }
+    if ros2_required {
+        feature_block
+            .push(ros2_script.unwrap_or_else(|| "tools/provision/install_ros2.sh".to_string()));
+    }
+
+    let insert_index = first_feature_index.unwrap_or(planned.len());
+    planned.splice(insert_index..insert_index, feature_block);
+    planned
 }
 
 pub(crate) fn locate_repo_root() -> Result<PathBuf> {
@@ -441,4 +555,72 @@ fn process_services(host_name: &str, services: Vec<ServiceDirective>) -> Result<
     }
 
     Ok(failures)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn features(docker: bool, ros2: bool) -> Features {
+        Features {
+            docker,
+            ros2,
+            ..Features::default()
+        }
+    }
+
+    #[test]
+    fn retains_unrelated_scripts_when_no_features() {
+        let scripts = vec!["tools/provision/install_deno.sh".to_string()];
+        let planned = plan_provision_scripts(scripts.clone(), &Features::default());
+        assert_eq!(planned, scripts);
+    }
+
+    #[test]
+    fn injects_defaults_for_docker_and_ros2_features() {
+        let planned = plan_provision_scripts(Vec::new(), &features(true, true));
+        assert_eq!(
+            planned,
+            vec![
+                "tools/provision/install_docker.sh".to_string(),
+                "tools/provision/generate_ros_rust_bindings.sh".to_string(),
+                "tools/provision/install_ros2.sh".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn preserves_existing_paths_and_order() {
+        let scripts = vec![
+            "tools/bootstrap/install_ros2.sh".to_string(),
+            "tools/bootstrap/install_deno.sh".to_string(),
+        ];
+        let planned = plan_provision_scripts(scripts, &features(true, true));
+        assert_eq!(
+            planned,
+            vec![
+                "tools/provision/install_docker.sh".to_string(),
+                "tools/provision/generate_ros_rust_bindings.sh".to_string(),
+                "tools/bootstrap/install_ros2.sh".to_string(),
+                "tools/bootstrap/install_deno.sh".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn respects_manual_docker_script_path() {
+        let scripts = vec![
+            "tools/bootstrap/install_docker.sh".to_string(),
+            "tools/provision/install_ros2.sh".to_string(),
+        ];
+        let planned = plan_provision_scripts(scripts, &Features::default());
+        assert_eq!(
+            planned,
+            vec![
+                "tools/bootstrap/install_docker.sh".to_string(),
+                "tools/provision/generate_ros_rust_bindings.sh".to_string(),
+                "tools/provision/install_ros2.sh".to_string(),
+            ],
+        );
+    }
 }
