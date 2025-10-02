@@ -38,6 +38,7 @@ export default function PilotOverview({
   );
 
   const connectionStatus = status as ConnectionStatus;
+  const connectionLabel = STATUS_LABELS[connectionStatus] ?? "Unknown";
 
   const formattedTimestamp = useMemo(() => {
     const source = data?.timestamp;
@@ -68,8 +69,6 @@ export default function PilotOverview({
   }, [publish]);
 
   const activeModules = data?.activeModules ?? "—";
-  const connectionLabel = STATUS_LABELS[connectionStatus];
-
   return (
     <article class="pilot-overview">
       <header class="pilot-overview__header">

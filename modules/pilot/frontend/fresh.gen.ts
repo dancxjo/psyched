@@ -4,19 +4,27 @@
 
 import * as $_app from "./routes/_app.tsx";
 import * as $index from "./routes/index.tsx";
+import * as $modules_foot from "./routes/modules/foot.tsx";
 import * as $modules_imu from "./routes/modules/imu.tsx";
 import * as $modules_pilot from "./routes/modules/pilot.tsx";
-
+import * as $FootControlPanelIsland from "./islands/FootControlPanelIsland.tsx";
+import * as $ImuTelemetryIsland from "./islands/ImuTelemetryIsland.tsx";
+import * as $PilotOverviewIsland from "./islands/PilotOverviewIsland.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
 const manifest = {
   routes: {
     "./routes/_app.tsx": $_app,
     "./routes/index.tsx": $index,
+    "./routes/modules/foot.tsx": $modules_foot,
     "./routes/modules/imu.tsx": $modules_imu,
     "./routes/modules/pilot.tsx": $modules_pilot,
   },
-  islands: {},
+  islands: {
+    "./islands/FootControlPanelIsland.tsx": $FootControlPanelIsland,
+    "./islands/ImuTelemetryIsland.tsx": $ImuTelemetryIsland,
+    "./islands/PilotOverviewIsland.tsx": $PilotOverviewIsland,
+  },
   baseUrl: import.meta.url,
 } satisfies Manifest;
 

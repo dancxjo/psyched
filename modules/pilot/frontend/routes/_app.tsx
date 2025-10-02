@@ -1,4 +1,3 @@
-import { Head } from "$fresh/runtime.ts";
 import type { RouteContext } from "$fresh/server.ts";
 import { define } from "../utils.ts";
 
@@ -7,7 +6,7 @@ export default define.app((_req: Request, ctx: RouteContext) => {
 
   return (
     <html lang="en">
-      <Head>
+      <head>
         <meta charSet="utf-8" />
         <meta
           name="viewport"
@@ -15,12 +14,14 @@ export default define.app((_req: Request, ctx: RouteContext) => {
         />
         <title>Psyched Pilot</title>
         <link rel="stylesheet" href="/styles.css" />
-      </Head>
+      </head>
       <body>
         <header class="site-header">
           <nav>
             <a href="/">Home</a>
+            <a href="/modules/pilot">Pilot</a>
             <a href="/modules/imu">IMU</a>
+            <a href="/modules/foot">Foot</a>
           </nav>
         </header>
         <main class="site-main">

@@ -79,3 +79,7 @@ Always prefer running the smallest relevant command set.
 - MPU6050 ROS driver: <https://github.com/hiwad-aziz/ros2_mpu6050_driver>
 
 Happy hacking!
+
+## Miscellaneous
+### Symlinks
+* Each module has its own pilot folder, which is linked into the main Fresh app by `psh mod setup <module>`. This allows modules to declare their own UI components and pages without merging everything into a single codebase.

@@ -1,5 +1,5 @@
 import type { RouteContext } from "$fresh/server.ts";
-import PilotOverview from "../../components/PilotOverview.tsx";
+import PilotOverview from "../../islands/PilotOverviewIsland.tsx";
 import { define } from "../../utils.ts";
 
 export default define.route((_req: Request, ctx: RouteContext) => {

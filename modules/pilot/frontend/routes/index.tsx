@@ -23,7 +23,7 @@ const modules: ModuleLink[] = [
     slug: "foot",
     name: "Foot Module",
     description:
-      "Drive base controls and telemetry for the Create robot platform.",
+      "Send manual commands and monitor Create drive base telemetry and faults.",
   },
 ];
 
