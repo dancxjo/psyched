@@ -13,6 +13,9 @@ jobs:
   test:
     name: Run e2e scenarios
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: psh
 
     steps:
       - name: Check out repository
@@ -24,7 +27,7 @@ jobs:
           deno-version: v1.x
 
       - name: Prime Deno cache
-        run: deno cache psh/e2e/mod.ts
+        run: deno cache e2e/mod.ts
 
       - name: Prepare report directory
         run: mkdir -p reports
@@ -39,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-junit-report
-          path: reports/e2e.xml
+          path: psh/reports/e2e.xml
           if-no-files-found: warn

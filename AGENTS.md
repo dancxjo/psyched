@@ -141,6 +141,9 @@ Visit `http://<cerebellum-host>:8080`.
 * Keep JUnit output concise: prefer focused assertions, avoid dumping large
   payloads to stdout, and trim noisy logs so the artifact uploaded by CI stays
   lightweight.
+* Run the suite from the `psh/` directory (`cd psh && deno task e2e`) so the
+  Deno config resolves without extra flags. Alternatively, invoke
+  `deno task --config psh/deno.json e2e` from the repo root.
 
 ---
 
