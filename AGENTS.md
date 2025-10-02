@@ -131,6 +131,17 @@ Visit `http://<cerebellum-host>:8080`.
 * Deno tests: run with `DENO_TLS_CA_STORE=system` and explicit permissions.
 * Pilot backend tests require `fastapi`, `httpx`, `uvicorn`.
 
+### E2E Scenarios (Deno)
+
+* Put new scenarios under `psh/e2e/` and import helpers from `./mod.ts` so the
+  shared harness stays in sync.
+* Use `defineScenario("behaviour", fn, { knownFailure })` to wrap
+  expectations; only tag failures that are actively triaged and include a short
+  reason string.
+* Keep JUnit output concise: prefer focused assertions, avoid dumping large
+  payloads to stdout, and trim noisy logs so the artifact uploaded by CI stays
+  lightweight.
+
 ---
 
 ## Common Issues

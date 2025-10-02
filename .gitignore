@@ -57,3 +57,5 @@ target/
 
 models/
 .speech_setup_complete
+reports/
+
