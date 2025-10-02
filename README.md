@@ -51,6 +51,22 @@ psh host setup forebrain
 
 Each host file lists shell scripts under `tools/bootstrap/` (or `tools/provision/`) to install ROS 2, CUDA, Docker, and Deno.
 
+Host configs can also declare module directives so provisioning automatically installs and launches the right services. For example:
+
+```toml
+# hosts/motherbrain.toml
+[[modules]]
+name = "imu"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
+name = "foot"
+launch = true
+```
+
+During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unless `setup = false`) and optionally launches the module when `launch = true`. The optional `env` map supplies environment variables to those lifecycle steps.
+
 ### 3. Bring modules online
 
 ```bash

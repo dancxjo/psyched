@@ -2,15 +2,20 @@ use anyhow::{Context, Result, bail};
 use duct::cmd;
 use regex::Regex;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use which::which;
 
+use crate::module_runner::{bring_module_up, setup_module};
+
 #[derive(Deserialize)]
 struct HostConfig {
     host: Host,
     provision: Option<Provision>,
+    #[serde(default)]
+    modules: Vec<ModuleDirective>,
 }
 
 #[derive(Deserialize)]
@@ -21,6 +26,60 @@ struct Host {
 #[derive(Deserialize)]
 struct Provision {
     scripts: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+struct ModuleDirective {
+    name: String,
+    #[serde(default = "default_true")]
+    setup: bool,
+    #[serde(default)]
+    launch: bool,
+    #[serde(default)]
+    env: HashMap<String, String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+struct EnvOverride {
+    saved: Vec<(String, Option<String>)>,
+}
+
+impl EnvOverride {
+    fn apply(overrides: &HashMap<String, String>) -> Self {
+        let mut saved = Vec::new();
+
+        for (key, value) in overrides {
+            let key_owned = key.to_string();
+            saved.push((key_owned.clone(), env::var(&key_owned).ok()));
+            // SAFETY: Host provisioning runs in a single-threaded context and
+            // orchestrates child processes sequentially, so temporarily
+            // mutating the process environment is well-defined for the
+            // duration of this guard.
+            unsafe {
+                std::env::set_var(&key_owned, value);
+            }
+        }
+
+        Self { saved }
+    }
+}
+
+impl Drop for EnvOverride {
+    fn drop(&mut self) {
+        while let Some((key, prior)) = self.saved.pop() {
+            match prior {
+                Some(value) => unsafe {
+                    std::env::set_var(&key, value);
+                },
+                None => unsafe {
+                    std::env::remove_var(&key);
+                },
+            }
+        }
+    }
 }
 
 pub fn run_setup() -> Result<()> {
@@ -40,11 +99,27 @@ pub fn run_setup() -> Result<()> {
     let cfg: HostConfig = toml::from_str(&toml)
         .with_context(|| format!("failed to parse TOML {}", config_path.display()))?;
 
-    let scripts = cfg.provision.and_then(|p| p.scripts).unwrap_or_default();
+    let HostConfig {
+        host,
+        provision,
+        modules,
+    } = cfg;
+
+    let host_name = host.name;
+
+    let scripts = provision.and_then(|p| p.scripts).unwrap_or_default();
 
     if scripts.is_empty() {
         println!("No provisioning scripts listed. Nothing to run.");
-        println!("PSH setup complete for host '{}'.", cfg.host.name);
+        let module_failures = process_modules(&host_name, modules)?;
+        if module_failures.is_empty() {
+            println!("PSH setup complete for host '{}'.", host_name);
+        } else {
+            println!("PSH setup finished with warnings for host '{}':", host_name);
+            for failure in module_failures {
+                eprintln!("  - {failure}");
+            }
+        }
         return Ok(());
     }
 
@@ -69,13 +144,13 @@ pub fn run_setup() -> Result<()> {
         }
     }
 
+    let module_failures = process_modules(&host_name, modules)?;
+    failures.extend(module_failures);
+
     if failures.is_empty() {
-        println!("PSH setup complete for host '{}'", cfg.host.name);
+        println!("PSH setup complete for host '{}'", host_name);
     } else {
-        println!(
-            "PSH setup finished with warnings for host '{}':",
-            cfg.host.name
-        );
+        println!("PSH setup finished with warnings for host '{}':", host_name);
         for failure in failures {
             eprintln!("  - {failure}");
         }
@@ -235,4 +310,58 @@ pub fn setup_env() -> Result<()> {
     );
 
     Ok(())
+}
+
+fn process_modules(host_name: &str, modules: Vec<ModuleDirective>) -> Result<Vec<String>> {
+    if modules.is_empty() {
+        println!("No modules configured for host '{host_name}'. Skipping module setup.");
+        return Ok(Vec::new());
+    }
+
+    println!(
+        "Processing {} module directive(s) for host '{host_name}'.",
+        modules.len()
+    );
+
+    let mut failures = Vec::new();
+
+    for ModuleDirective {
+        name,
+        setup,
+        launch,
+        env,
+    } in modules
+    {
+        let mut setup_ok = true;
+        let env_guard = EnvOverride::apply(&env);
+
+        if setup {
+            println!("[{name}] Running module setup …");
+            if let Err(err) = setup_module(&name) {
+                eprintln!("[{name}] Setup failed: {err}");
+                failures.push(format!("{name} (setup: {err})"));
+                setup_ok = false;
+            } else {
+                println!("[{name}] Setup complete.");
+            }
+        }
+
+        if launch {
+            if setup_ok || !setup {
+                println!("[{name}] Launching module …");
+                if let Err(err) = bring_module_up(&name) {
+                    eprintln!("[{name}] Launch failed: {err}");
+                    failures.push(format!("{name} (launch: {err})"));
+                } else {
+                    println!("[{name}] Launch initiated.");
+                }
+            } else {
+                eprintln!("[{name}] Skipping launch because setup failed for this module.");
+            }
+        }
+
+        drop(env_guard);
+    }
+
+    Ok(failures)
 }

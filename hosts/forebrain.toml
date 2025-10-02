@@ -17,3 +17,8 @@ scripts = [
 docker = true
 ros2 = false
 cuda = true
+
+[[modules]]
+name = "pilot"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }

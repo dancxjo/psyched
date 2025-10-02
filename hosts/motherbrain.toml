@@ -13,3 +13,13 @@ scripts = ["tools/bootstrap/install_deno.sh", "tools/bootstrap/install_ros2.sh"]
 docker = true
 ros2 = true
 cuda = false
+
+[[modules]]
+name = "imu"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
+name = "foot"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }
