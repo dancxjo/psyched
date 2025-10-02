@@ -94,8 +94,26 @@ fn main() -> Result<()> {
         // Backwards-compatible top-level commands map into the new subcommands
         Some(Commands::Build { packages }) => build_workspace(&packages)?,
         Some(Commands::Setup) => run_setup()?,
-        Some(Commands::Up { module }) => bring_module_up(&module)?,
-        Some(Commands::Down { module }) => bring_module_down(&module)?,
+        Some(Commands::Up { modules }) => {
+            let targets = if modules.is_empty() {
+                all_module_names()?
+            } else {
+                modules
+            };
+            for m in targets {
+                bring_module_up(&m)?;
+            }
+        }
+        Some(Commands::Down { modules }) => {
+            let targets = if modules.is_empty() {
+                all_module_names()?
+            } else {
+                modules
+            };
+            for m in targets {
+                bring_module_down(&m)?;
+            }
+        }
         Some(Commands::SetupModule { module }) => setup_module(&module)?,
         Some(Commands::TeardownModule { module }) => teardown_module(&module)?,
         Some(Commands::List) => list_modules()?,

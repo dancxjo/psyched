@@ -592,21 +592,6 @@ pub fn bring_module_up(module: &str) -> Result<()> {
 
     println!("==> Loading module '{}'", module);
 
-    if let Some(repos) = unit_config.git.as_ref() {
-        sync_git_repos(module, &module_dir, repos)?;
-    }
-
-    install_apt_packages(module, &unit_config.apt)?;
-    install_pip_packages(module, &unit_config.pip)?;
-
-    if let Some(patches) = unit_config.patches.as_ref() {
-        run_patch_scripts(module, &module_dir, patches);
-    }
-
-    prepare_ros_workspace(module, &module_dir, unit_config.ros.as_ref())?;
-
-    setup_module_internal(module, &module_dir, false)?;
-
     if let Some(control) = unit_config.pilot_control.as_deref() {
         println!("[{}] Pilot control component: {}", module, control);
     }
@@ -699,8 +684,6 @@ pub fn bring_module_down(module: &str) -> Result<()> {
     }
 
     clear_pid(module);
-
-    teardown_module_internal(module, &module_dir, false)?;
 
     Ok(())
 }

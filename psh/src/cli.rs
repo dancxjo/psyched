@@ -33,18 +33,20 @@ pub enum Commands {
     #[command(hide = true)]
     Setup,
 
-    /// Bring a module online (alias for `psh mod up`)
+    /// Bring module(s) online (alias for `psh mod up`)
     #[command(hide = true)]
     Up {
-        /// Module name (directory under modules/). If omitted, defaults to all modules when used via `psh mod`.
-        module: String,
+        /// Module names (directories under modules/). When empty, defaults to all modules.
+        #[arg(value_name = "MODULE")]
+        modules: Vec<String>,
     },
 
-    /// Gracefully stop a module (alias for `psh mod down`)
+    /// Gracefully stop module(s) (alias for `psh mod down`)
     #[command(hide = true)]
     Down {
-        /// Module name (directory under modules/)
-        module: String,
+        /// Module names (directories under modules/). When empty, defaults to all modules.
+        #[arg(value_name = "MODULE")]
+        modules: Vec<String>,
     },
 
     /// Prepare module assets (setup lifecycle) (alias for `psh mod setup`)
