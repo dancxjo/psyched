@@ -377,3 +377,108 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 8px 20px rgba(78, 143, 255, 0.35);
 }
+
+.foot-panel__joystick {
+  display: grid;
+  gap: 1rem;
+}
+
+.foot-panel__joystick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.foot-panel__joystick-description {
+  margin: 0;
+  opacity: 0.85;
+}
+
+.foot-panel__joystick-pad {
+  position: relative;
+  width: min(240px, 100%);
+  padding-top: min(240px, 100%);
+  border-radius: 1rem;
+  background: radial-gradient(
+    circle at center,
+    rgba(136, 83, 255, 0.18),
+    rgba(12, 20, 32, 0.85)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 12px 24px rgba(0, 0, 0, 0.4);
+  touch-action: none;
+  cursor: grab;
+}
+
+.foot-panel__joystick-pad--active {
+  cursor: grabbing;
+  border-color: rgba(103, 212, 255, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 212, 255, 0.25),
+    inset 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.foot-panel__joystick-axis {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.foot-panel__joystick-axis--y {
+  width: 1px;
+  height: 100%;
+}
+
+.foot-panel__joystick-thumb {
+  --stick-x: 0;
+  --stick-y: 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    rgba(113, 201, 248, 0.9),
+    rgba(136, 83, 255, 0.9)
+  );
+  box-shadow: 0 12px 18px rgba(56, 120, 255, 0.35);
+  transform: translate(
+    calc(-50% + var(--stick-x) * 45%),
+    calc(-50% + var(--stick-y) * 45%)
+  );
+  transition: transform 0.08s ease;
+  pointer-events: none;
+}
+
+.foot-panel__joystick-thumb--active {
+  transition: transform 0s;
+}
+
+.foot-panel__joystick-readout {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.foot-panel__joystick-readout dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.foot-panel__joystick-readout dd {
+  margin: 0;
+  font-family:
+    "Fira Mono", "SFMono-Regular", ui-monospace, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}

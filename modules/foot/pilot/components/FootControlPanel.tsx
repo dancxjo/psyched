@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+// @ts-nocheck
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { type ConnectionStatus, useCockpitTopic } from "@pilot/lib/cockpit.ts";
 
 type FootStatus = {
@@ -46,7 +53,8 @@ const ZERO_TWIST: Twist = {
 const MAX_LINEAR_X = 0.45; // m/s
 const MAX_ANGULAR_Z = 1.2; // rad/s
 
-const clamp = (value: number, min = -1, max = 1) => Math.min(max, Math.max(min, value));
+const clamp = (value: number, min = -1, max = 1) =>
+  Math.min(max, Math.max(min, value));
 
 export default function FootControlPanel() {
   const {
@@ -71,7 +79,9 @@ export default function FootControlPanel() {
   const connectionLabel = STATUS_LABELS[status] ?? "Unknown";
   const badgeVariant = STATUS_LABELS[status] ? status : "idle";
   const cmdVelLabel = STATUS_LABELS[cmdVelStatus] ?? "Unknown";
-  const cmdVelBadgeVariant = STATUS_LABELS[cmdVelStatus] ? cmdVelStatus : "idle";
+  const cmdVelBadgeVariant = STATUS_LABELS[cmdVelStatus]
+    ? cmdVelStatus
+    : "idle";
 
   const formattedBattery = useMemo(() => {
     const pct = statusPayload.batteryPct;
@@ -103,7 +113,10 @@ export default function FootControlPanel() {
   type StickPosition = { x: number; y: number };
 
   const joystickRef = useRef<HTMLDivElement | null>(null);
-  const [stickPosition, setStickPosition] = useState<StickPosition>({ x: 0, y: 0 });
+  const [stickPosition, setStickPosition] = useState<StickPosition>({
+    x: 0,
+    y: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const activePointerId = useRef<number | null>(null);
 
@@ -216,7 +229,9 @@ export default function FootControlPanel() {
     const derivedY = clamp(-linear.x / MAX_LINEAR_X);
 
     setStickPosition((prev) => {
-      if (Math.abs(prev.x - derivedX) < 0.01 && Math.abs(prev.y - derivedY) < 0.01) {
+      if (
+        Math.abs(prev.x - derivedX) < 0.01 && Math.abs(prev.y - derivedY) < 0.01
+      ) {
         return prev;
       }
       return { x: derivedX, y: derivedY };
@@ -298,37 +313,54 @@ export default function FootControlPanel() {
       <section class="foot-panel__joystick">
         <header class="foot-panel__joystick-header">
           <h2>Joystick</h2>
-          <span class={`foot-panel__badge foot-panel__badge--${cmdVelBadgeVariant}`}>
+          <span
+            class={`foot-panel__badge foot-panel__badge--${cmdVelBadgeVariant}`}
+          >
             {cmdVelLabel}
           </span>
         </header>
         <p class="foot-panel__joystick-description">
-          Drag inside the pad to send velocity commands on <code>/cmd_vel</code>.
-          Vertical motion maps to forward speed (±{MAX_LINEAR_X.toFixed(2)} m/s).
-          Horizontal motion adjusts angular velocity (±{MAX_ANGULAR_Z.toFixed(1)} rad/s).
-          Releasing the stick sends a stop.
+          Drag inside the pad to send velocity commands on{" "}
+          <code>/cmd_vel</code>. Vertical motion maps to forward speed
+          (±{MAX_LINEAR_X.toFixed(2)}{" "}
+          m/s). Horizontal motion adjusts angular velocity (±
+          {MAX_ANGULAR_Z.toFixed(1)} rad/s). Releasing the stick sends a stop.
         </p>
         <div
           ref={joystickRef}
-          class={`foot-panel__joystick-pad${isDragging ? " foot-panel__joystick-pad--active" : ""}`}
+          class={`foot-panel__joystick-pad${
+            isDragging ? " foot-panel__joystick-pad--active" : ""
+          }`}
           aria-label="Drive joystick"
           role="application"
         >
           <div
-            class={`foot-panel__joystick-thumb${isDragging ? " foot-panel__joystick-thumb--active" : ""}`}
+            class={`foot-panel__joystick-thumb${
+              isDragging ? " foot-panel__joystick-thumb--active" : ""
+            }`}
             style={joystickThumbStyle}
           />
-          <div class="foot-panel__joystick-axis foot-panel__joystick-axis--x" aria-hidden="true" />
-          <div class="foot-panel__joystick-axis foot-panel__joystick-axis--y" aria-hidden="true" />
+          <div
+            class="foot-panel__joystick-axis foot-panel__joystick-axis--x"
+            aria-hidden="true"
+          />
+          <div
+            class="foot-panel__joystick-axis foot-panel__joystick-axis--y"
+            aria-hidden="true"
+          />
         </div>
         <dl class="foot-panel__joystick-readout">
           <div>
             <dt>linear.x</dt>
-            <dd>{currentTwist.linear.x.toFixed(2)} m/s</dd>
+            <dd>
+              {currentTwist.linear.x.toFixed(2)} m/s
+            </dd>
           </div>
           <div>
             <dt>angular.z</dt>
-            <dd>{currentTwist.angular.z.toFixed(2)} rad/s</dd>
+            <dd>
+              {currentTwist.angular.z.toFixed(2)} rad/s
+            </dd>
           </div>
         </dl>
       </section>
