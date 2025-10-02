@@ -1,0 +1,1 @@
+/root/ws/build/trajectory_msgs/rosidl_generator_rs/trajectory_msgs/rust/build.rs

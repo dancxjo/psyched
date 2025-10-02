@@ -60,10 +60,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       git \
       curl \
+      unzip \
       build-essential \
       python3-colcon-common-extensions \
-      ros-${ROS_DISTRO}-rosidl-generator-rust \
-      ros-${ROS_DISTRO}-rosidl-typesupport-rust \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust toolchain for rosidl_generator_rs (minimal profile).
@@ -71,13 +70,18 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --pr
 ENV PATH=/root/.cargo/bin:${PATH}
 
 WORKDIR /root/ws/src
-RUN git clone --branch ${ROS_DISTRO} --depth 1 https://github.com/ros2/common_interfaces.git \
-    && git clone --branch ${ROS_DISTRO} --depth 1 https://github.com/ros2/rosidl_rust.git
+RUN curl -L https://github.com/ros2/common_interfaces/archive/refs/heads/rolling.zip -o common_interfaces.zip \
+    && unzip common_interfaces.zip \
+    && mv common_interfaces-rolling common_interfaces \
+    && rm common_interfaces.zip \
+    && curl -L https://github.com/ros2-rust/rosidl_rust/archive/refs/heads/main.zip -o rosidl_rust.zip \
+    && unzip rosidl_rust.zip \
+    && mv rosidl_rust-main rosidl_rust \
+    && rm rosidl_rust.zip
 
 WORKDIR /root/ws
 RUN bash -lc 'source /opt/ros/${ROS_DISTRO}/setup.bash \
   && colcon build --symlink-install --merge-install \
-  --packages-up-to actionlib_msgs diagnostic_msgs geometry_msgs nav_msgs sensor_msgs shape_msgs std_msgs trajectory_msgs \
   --cmake-args -DCMAKE_BUILD_TYPE=Release'
 DOCKERFILE
 

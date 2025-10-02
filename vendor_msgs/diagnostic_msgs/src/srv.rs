@@ -1,0 +1,1 @@
+/root/ws/build/diagnostic_msgs/rosidl_generator_rs/diagnostic_msgs/rust/src/srv.rs

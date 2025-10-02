@@ -1,0 +1,1 @@
+/root/ws/build/nav_msgs/rosidl_generator_rs/nav_msgs/rust/build.rs

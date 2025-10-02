@@ -95,7 +95,7 @@ if ! sudo apt install -y unzip 1>&2; then
 fi
 
 # 5. ROS colcon tooling + cargo bridge
-sudo apt install -y python3-colcon-common-extensions
+sudo apt install -y python3-colcon-*
 
 install_colcon_ros_cargo() {
     if python3 -m pip show colcon-ros-cargo >/dev/null 2>&1; then
@@ -125,12 +125,12 @@ fi
 # 7. Build psh
 echo "Building psh crate..."
 cd "$(dirname "$0")/psh"
-cargo build --release
+cargo build --release --package psh
 cd -
 
 # Install globally as /usr/bin/psh (symlink to the freshly built binary)
 repo_root="$(cd "$(dirname "$0")" && pwd)"
-psh_binary="${repo_root}/target/debug/psh"
+psh_binary="${repo_root}/psh/target/release/psh"
 
 if [ ! -x "${psh_binary}" ]; then
     echo "Error: expected psh binary at ${psh_binary} (did cargo build --release succeed?)" >&2
