@@ -9,8 +9,9 @@ use axum::{
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use rclrs::{
     vendor::example_interfaces::msg::String as RosString, vendor::sensor_msgs::msg::Imu as RosImu,
-    Context, CreateBasicExecutor, QoSProfile, RclReturnCode, RclrsError, SpinOptions,
+    Context, CreateBasicExecutor, RclReturnCode, RclrsError, SpinOptions,
 };
+use rclrs::IntoPrimitiveOptions as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -21,7 +22,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 #[derive(Clone)]
 struct AppState {
@@ -498,14 +499,14 @@ fn create_topic_subscription(
             let ws_for_topic = ws_outbound;
             let topic_for_message = topic.to_owned();
             let subscription = node
-                .create_subscription((topic, QoSProfile::default()), move |msg: RosString| {
-                        let outbound = WsOutbound::Msg {
-                            topic: topic_for_message.clone(),
-                            msg: serde_json::json!({ "data": msg.data }),
-                        };
-                        if let Err(err) = ws_for_topic.send(outbound) {
-                            warn!(?err, "no websocket listeners for transcript broadcast");
-                        }
+                .create_subscription(topic, move |msg: RosString| {
+                    let outbound = WsOutbound::Msg {
+                        topic: topic_for_message.clone(),
+                        msg: serde_json::json!({ "data": msg.data }),
+                    };
+                    if let Err(err) = ws_for_topic.send(outbound) {
+                        warn!(?err, "no websocket listeners for transcript broadcast");
+                    }
                 })
                 .map_err(|source| CockpitError::SubscribeFailed {
                     topic: topic.to_owned(),
@@ -517,7 +518,7 @@ fn create_topic_subscription(
             let ws_for_topic = ws_outbound;
             let topic_for_message = topic.to_owned();
             let subscription = node
-                .create_subscription((topic, QoSProfile::sensor_data()), move |msg: RosImu| {
+                .create_subscription(topic.sensor_data_qos(), move |msg: RosImu| {
                     let RosImu {
                         header,
                         orientation,
@@ -562,6 +563,8 @@ fn create_topic_subscription(
 
                     if let Err(err) = ws_for_topic.send(outbound) {
                         warn!(?err, "no websocket listeners for imu telemetry broadcast");
+                    } else {
+                        trace!("forwarded imu telemetry frame");
                     }
                 })
                 .map_err(|source| CockpitError::SubscribeFailed {
