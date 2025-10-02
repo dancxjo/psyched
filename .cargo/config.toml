@@ -1,20 +1,23 @@
+[patch.crates-io.std_msgs]
+path = "vendor_msgs/std_msgs"
+
 [patch.crates-io.trajectory_msgs]
-path = "/home/pete/psyched/install/share/trajectory_msgs/rust"
+path = "vendor_msgs/trajectory_msgs"
 
 [patch.crates-io.sensor_msgs]
-path = "/home/pete/psyched/install/share/sensor_msgs/rust"
+path = "vendor_msgs/sensor_msgs"
 
 [patch.crates-io.nav_msgs]
-path = "/home/pete/psyched/install/share/nav_msgs/rust"
+path = "vendor_msgs/nav_msgs"
 
 [patch.crates-io.geometry_msgs]
-path = "/home/pete/psyched/install/share/geometry_msgs/rust"
+path = "vendor_msgs/geometry_msgs"
 
 [patch.crates-io.diagnostic_msgs]
-path = "/home/pete/psyched/install/share/diagnostic_msgs/rust"
+path = "vendor_msgs/diagnostic_msgs"
 
 [patch.crates-io.actionlib_msgs]
-path = "/home/pete/psyched/install/share/actionlib_msgs/rust"
+path = "vendor_msgs/actionlib_msgs"
 
 [patch.crates-io.shape_msgs]
-path = "/home/pete/psyched/install/share/shape_msgs/rust"
+path = "vendor_msgs/shape_msgs"

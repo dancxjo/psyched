@@ -176,6 +176,18 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ## Development workflows
 
+### Vendored ROS Rust bindings
+
+Provisioning invokes `tools/bootstrap/generate_ros_rust_bindings.sh` after the ROS apt packages finish installing. The helper spins up a temporary Docker builder for `ros-${ROS_DISTRO:-kilted}-ros-base`, runs `colcon build` with `rosidl_generator_rs`, and copies the resulting crates into `vendor_msgs/`. Cargo is configured to patch common message crates (e.g. `std_msgs`, `sensor_msgs`) to those vendored copies so Rust builds no longer depend on a local colcon workspace.
+
+If Docker was unavailable during provisioning—or you switch `ROS_DISTRO` later—rerun the script manually:
+
+```bash
+ROS_DISTRO=${ROS_DISTRO:-kilted} tools/bootstrap/generate_ros_rust_bindings.sh
+```
+
+The command refreshes the crates in `vendor_msgs/` and prints warnings for any package that fails to build. Commit the updated directories when upstream interface definitions change.
+
 ### Rust + ROS backend
 
 - Build everything: `cargo build --workspace`

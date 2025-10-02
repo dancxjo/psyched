@@ -68,6 +68,7 @@ Always prefer running the smallest relevant command set.
 
 - **Lockfile drift:** `deno.lock` enforces lockfile version ≥5. Older Deno releases will fail with “unsupported lockfile version”. Upgrade Deno or regenerate the lock.
 - **ROS distro mismatch:** Scripts default to the custom `kilted` distro name. Override with `ROS_DISTRO=<distro>` before running `psh env` if you target `humble`/`jazzy`.
+- **Vendored ROS bindings:** `tools/bootstrap/generate_ros_rust_bindings.sh` runs after ROS provisioning to populate `vendor_msgs/`. It requires Docker; rerun it manually if provisioning skipped the step.
 - **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
 - **Background processes:** Launch scripts spawn long-lived processes (`cargo run`, `deno task`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
 
