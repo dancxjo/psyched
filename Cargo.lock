@@ -1105,10 +1105,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "psyched-msgs"
-version = "0.1.0"
-
-[[package]]
 name = "quote"
 version = "1.0.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
