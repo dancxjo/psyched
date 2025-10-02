@@ -99,9 +99,17 @@ cd "$(dirname "$0")/psh"
 cargo build --release
 cd -
 
-# Install globally as /usr/bin/psh
+# Install globally as /usr/bin/psh (symlink to the freshly built binary)
+repo_root="$(cd "$(dirname "$0")" && pwd)"
+psh_binary="${repo_root}/target/release/psh"
+
+if [ ! -x "${psh_binary}" ]; then
+    echo "Error: expected psh binary at ${psh_binary} (did cargo build --release succeed?)" >&2
+    exit 1
+fi
+
 echo "Installing psh binary -> /usr/bin/psh"
-sudo ln -sf target/release/psh /usr/bin/psh
+sudo ln -sf "${psh_binary}" /usr/bin/psh
 sudo chmod a+x /usr/bin/psh
 
 # 8. Run psh setup
