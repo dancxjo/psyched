@@ -21,6 +21,12 @@ pub enum Commands {
         command: ModCommands,
     },
 
+    /// Service-related actions (use `psh svc ...`)
+    Svc {
+        #[command(subcommand)]
+        command: ServiceCommands,
+    },
+
     /// Build the ROS workspace (wraps `colcon build`)
     Build {
         /// Optional package names to limit the build (maps to `--packages-select`)
@@ -109,5 +115,34 @@ pub enum ModCommands {
     List {
         /// Optional module names to filter the list
         modules: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ServiceCommands {
+    /// Bring service(s) online. If none provided, defaults to all services.
+    Up {
+        /// Service names (directories under services/)
+        services: Vec<String>,
+    },
+    /// Stop service(s). If none provided, defaults to all services.
+    Down {
+        /// Service names (directories under services/)
+        services: Vec<String>,
+    },
+    /// Run setup steps for service(s). If none provided, defaults to all services.
+    Setup {
+        /// Service names (directories under services/)
+        services: Vec<String>,
+    },
+    /// Run teardown steps for service(s). If none provided, defaults to all services.
+    Teardown {
+        /// Service names (directories under services/)
+        services: Vec<String>,
+    },
+    /// List available services and their status
+    List {
+        /// Optional service names to filter the list
+        services: Vec<String>,
     },
 }

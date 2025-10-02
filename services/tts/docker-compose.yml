@@ -1,0 +1,18 @@
+services:
+  tts:
+    build:
+      context: ../..
+      dockerfile: services/tts/docker/tts-websocket.Dockerfile
+    image: psyched-tts-websocket:local
+    restart: unless-stopped
+    environment:
+      TTS_MODEL: "tts_models/en/vctk/vits"
+      TTS_USE_CUDA: "false"
+      TTS_MODEL_DIR: "/models"
+    ports:
+      - "5002:5002"
+    volumes:
+      - type: bind
+        source: ../../tools/tts_websocket/models
+        target: /models
+        read_only: false

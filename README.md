@@ -11,6 +11,8 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 	- [Pilot](#pilot)
 	- [IMU](#imu)
 	- [Foot](#foot)
+- [Services](#services)
+	- [TTS](#tts)
 - [Development workflows](#development-workflows)
 	- [Rust + ROS backend](#rust--ros-backend)
 	- [Pilot frontend](#pilot-frontend)
@@ -25,8 +27,9 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 Psyched is organized around three ideas:
 
 1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
-2. **A ROS 2 + Rust bridge.** The `psyched` crate exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
-3. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
+2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
+3. **A ROS 2 + Rust bridge.** The `psyched` crate exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
+4. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
 
 Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that provisions hosts, orchestrates modules, and maintains the Deno symlinks required by the pilot.
 
@@ -63,9 +66,14 @@ env = { ROS_DOMAIN_ID = "25" }
 [[modules]]
 name = "foot"
 launch = true
+
+[[services]]
+name = "tts"
+setup = true
+up = true
 ```
 
-During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unless `setup = false`) and optionally launches the module when `launch = true`. The optional `env` map supplies environment variables to those lifecycle steps.
+During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unless `setup = false`) and optionally launches the module when `launch = true`. The optional `env` map supplies environment variables to those lifecycle steps. Likewise, `services` entries trigger `psh svc setup <name>` and start the Compose stack when `up = true`.
 
 ### 3. Bring modules online
 
@@ -80,6 +88,7 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 ```
 ├── modules/           # Module definitions (pilot, foot, imu, …)
+├── services/          # Containerised microservices (tts, …)
 │   └── <name>/
 │       ├── module.toml        # Lifecycle metadata consumed by psh
 │       ├── launch_*.sh        # Start the module
@@ -129,6 +138,22 @@ Integrates the iRobot Create 1 drive base. The module checks out upstream ROS p
 
 Modules can optionally contribute Fresh components or routes by placing files inside `modules/<name>/pilot/{components,routes,islands,static}`. `psh mod setup <name>` manages symlinks into the pilot frontend.
 
+## Services
+
+Services complement modules by packaging long-running capabilities (speech, perception, data pipelines) as Docker Compose stacks under `services/<name>`. Each service has a `service.toml` manifest that `psh svc ...` understands. The manifest points at a Compose file plus any setup scripts required to fetch assets such as model checkpoints.
+
+Use the `psh svc` subcommands to interact with services:
+
+- `psh svc setup <service>` – run any declarative setup scripts (for example, download models)
+- `psh svc up <service>` / `psh svc down <service>` – start or stop the Compose stack
+- `psh svc list` – inspect available services and their status
+
+### TTS
+
+`services/tts` hosts a streaming text-to-speech websocket based on 🐸Coqui TTS. The Compose stack builds a slim Python image (`services/tts/docker/tts-websocket.Dockerfile`) that runs `tools/tts_websocket/websocket_server.py` and exposes port `5002`.
+
+Model assets live under `tools/tts_websocket/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `psh/scripts/download_speech_models.sh` manually) to pull the default English voice. Once prepared, start the service with `psh svc up tts` and connect clients to `ws://<host>:5002/tts`.
+
 ## Development workflows
 
 ### Rust + ROS backend
@@ -160,6 +185,8 @@ source install/setup.bash
 - `psh mod list` – inspect module status
 - `psh mod setup|teardown <module>` – manage symlinks + prep work
 - `psh mod up|down <module>` – start/stop module services
+- `psh svc list` – inspect containerised services and their status
+- `psh svc setup|up|down <service>` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
 - `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
 - `psh clean` – wipe `src/`, `build/`, and `install/`, then recreate local `psyched` and `psyched-msgs` symlinks
 

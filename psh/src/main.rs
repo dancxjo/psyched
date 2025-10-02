@@ -2,6 +2,7 @@ mod build;
 mod clean;
 mod cli;
 mod module_runner;
+mod service_runner;
 mod setup;
 
 use anyhow::Result;
@@ -9,10 +10,14 @@ use clap::Parser;
 
 use crate::build::build_workspace;
 use crate::clean::clean_workspace;
-use crate::cli::{Cli, Commands, HostCommands, ModCommands};
+use crate::cli::{Cli, Commands, HostCommands, ModCommands, ServiceCommands};
 use crate::module_runner::{
     all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
     setup_modules, teardown_module,
+};
+use crate::service_runner::{
+    all_service_names, bring_service_down, bring_service_up, list_services, setup_service,
+    setup_services, teardown_service,
 };
 use crate::setup::{run_setup, setup_env};
 
@@ -86,6 +91,56 @@ fn main() -> Result<()> {
                 } else {
                     for m in modules {
                         println!("{}", m);
+                    }
+                }
+            }
+        },
+
+        Some(Commands::Svc { command }) => match command {
+            ServiceCommands::Up { services } => {
+                let targets = if services.is_empty() {
+                    all_service_names()?
+                } else {
+                    services
+                };
+                for svc in targets {
+                    bring_service_up(&svc)?;
+                }
+            }
+            ServiceCommands::Down { services } => {
+                let targets = if services.is_empty() {
+                    all_service_names()?
+                } else {
+                    services
+                };
+                for svc in targets {
+                    bring_service_down(&svc)?;
+                }
+            }
+            ServiceCommands::Setup { services } => {
+                let targets = if services.is_empty() {
+                    all_service_names()?
+                } else {
+                    services
+                };
+                setup_services(&targets)?;
+            }
+            ServiceCommands::Teardown { services } => {
+                let targets = if services.is_empty() {
+                    all_service_names()?
+                } else {
+                    services
+                };
+                for svc in targets {
+                    teardown_service(&svc)?;
+                }
+            }
+            ServiceCommands::List { services } => {
+                if services.is_empty() {
+                    list_services()?;
+                } else {
+                    for svc in services {
+                        println!("{}", svc);
                     }
                 }
             }

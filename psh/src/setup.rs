@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use which::which;
 
 use crate::module_runner::{bring_module_up, setup_module};
+use crate::service_runner::{bring_service_up, setup_service};
 
 #[derive(Deserialize)]
 struct HostConfig {
@@ -16,6 +17,8 @@ struct HostConfig {
     provision: Option<Provision>,
     #[serde(default)]
     modules: Vec<ModuleDirective>,
+    #[serde(default)]
+    services: Vec<ServiceDirective>,
 }
 
 #[derive(Deserialize)]
@@ -35,6 +38,17 @@ struct ModuleDirective {
     setup: bool,
     #[serde(default)]
     launch: bool,
+    #[serde(default)]
+    env: HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct ServiceDirective {
+    name: String,
+    #[serde(default = "default_true")]
+    setup: bool,
+    #[serde(default)]
+    up: bool,
     #[serde(default)]
     env: HashMap<String, String>,
 }
@@ -103,6 +117,7 @@ pub fn run_setup() -> Result<()> {
         host,
         provision,
         modules,
+        services,
     } = cfg;
 
     let host_name = host.name;
@@ -112,11 +127,17 @@ pub fn run_setup() -> Result<()> {
     if scripts.is_empty() {
         println!("No provisioning scripts listed. Nothing to run.");
         let module_failures = process_modules(&host_name, modules)?;
-        if module_failures.is_empty() {
+        let service_failures = process_services(&host_name, services)?;
+
+        let mut failures = Vec::new();
+        failures.extend(module_failures);
+        failures.extend(service_failures);
+
+        if failures.is_empty() {
             println!("PSH setup complete for host '{}'.", host_name);
         } else {
             println!("PSH setup finished with warnings for host '{}':", host_name);
-            for failure in module_failures {
+            for failure in failures {
                 eprintln!("  - {failure}");
             }
         }
@@ -145,7 +166,9 @@ pub fn run_setup() -> Result<()> {
     }
 
     let module_failures = process_modules(&host_name, modules)?;
+    let service_failures = process_services(&host_name, services)?;
     failures.extend(module_failures);
+    failures.extend(service_failures);
 
     if failures.is_empty() {
         println!("PSH setup complete for host '{}'", host_name);
@@ -357,6 +380,60 @@ fn process_modules(host_name: &str, modules: Vec<ModuleDirective>) -> Result<Vec
                 }
             } else {
                 eprintln!("[{name}] Skipping launch because setup failed for this module.");
+            }
+        }
+
+        drop(env_guard);
+    }
+
+    Ok(failures)
+}
+
+fn process_services(host_name: &str, services: Vec<ServiceDirective>) -> Result<Vec<String>> {
+    if services.is_empty() {
+        println!("No services configured for host '{host_name}'. Skipping service setup.");
+        return Ok(Vec::new());
+    }
+
+    println!(
+        "Processing {} service directive(s) for host '{host_name}'.",
+        services.len()
+    );
+
+    let mut failures = Vec::new();
+
+    for ServiceDirective {
+        name,
+        setup,
+        up,
+        env,
+    } in services
+    {
+        let env_guard = EnvOverride::apply(&env);
+
+        let mut setup_ok = true;
+        if setup {
+            println!("[{name}] Running service setup …");
+            if let Err(err) = setup_service(&name) {
+                eprintln!("[{name}] Setup failed: {err}");
+                failures.push(format!("{name} (setup: {err})"));
+                setup_ok = false;
+            } else {
+                println!("[{name}] Setup complete.");
+            }
+        }
+
+        if up {
+            if setup_ok || !setup {
+                println!("[{name}] Starting service …");
+                if let Err(err) = bring_service_up(&name) {
+                    eprintln!("[{name}] Start failed: {err}");
+                    failures.push(format!("{name} (up: {err})"));
+                } else {
+                    println!("[{name}] Service running.");
+                }
+            } else {
+                eprintln!("[{name}] Skipping start because setup failed.");
             }
         }
 

@@ -7,11 +7,11 @@ use axum::{
     serve, Router,
 };
 use futures::{stream::SplitSink, SinkExt, StreamExt};
+use rclrs::IntoPrimitiveOptions as _;
 use rclrs::{
     vendor::example_interfaces::msg::String as RosString, vendor::sensor_msgs::msg::Imu as RosImu,
     Context, CreateBasicExecutor, RclReturnCode, RclrsError, SpinOptions,
 };
-use rclrs::IntoPrimitiveOptions as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;

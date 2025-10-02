@@ -22,3 +22,8 @@ cuda = true
 name = "pilot"
 launch = true
 env = { ROS_DOMAIN_ID = "25" }
+
+[[services]]
+name = "tts"
+setup = true
+up = true
