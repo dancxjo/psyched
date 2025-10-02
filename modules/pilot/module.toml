@@ -1,5 +1,5 @@
 [unit.pilot]
-apt = ["ros-$ROS_DISTRO-example-interfaces", "ros-$ROS_DISTRO-test-msgs"]
+apt = ["ros-${ROS_DISTRO}-example-interfaces", "ros-${ROS_DISTRO}-test-msgs"]
 pip = []
 
 # Pilot module does not require patch scripts
