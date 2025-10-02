@@ -9,7 +9,7 @@ use axum::{
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use rclrs::{
     vendor::example_interfaces::msg::String as RosString, vendor::sensor_msgs::msg::Imu as RosImu,
-    Context, CreateBasicExecutor, RclReturnCode, RclrsError, SpinOptions,
+    Context, CreateBasicExecutor, QoSProfile, RclReturnCode, RclrsError, SpinOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -498,14 +498,14 @@ fn create_topic_subscription(
             let ws_for_topic = ws_outbound;
             let topic_for_message = topic.to_owned();
             let subscription = node
-                .create_subscription(topic, move |msg: RosString| {
-                    let outbound = WsOutbound::Msg {
-                        topic: topic_for_message.clone(),
-                        msg: serde_json::json!({ "data": msg.data }),
-                    };
-                    if let Err(err) = ws_for_topic.send(outbound) {
-                        warn!(?err, "no websocket listeners for transcript broadcast");
-                    }
+                .create_subscription((topic, QoSProfile::default()), move |msg: RosString| {
+                        let outbound = WsOutbound::Msg {
+                            topic: topic_for_message.clone(),
+                            msg: serde_json::json!({ "data": msg.data }),
+                        };
+                        if let Err(err) = ws_for_topic.send(outbound) {
+                            warn!(?err, "no websocket listeners for transcript broadcast");
+                        }
                 })
                 .map_err(|source| CockpitError::SubscribeFailed {
                     topic: topic.to_owned(),
@@ -517,7 +517,7 @@ fn create_topic_subscription(
             let ws_for_topic = ws_outbound;
             let topic_for_message = topic.to_owned();
             let subscription = node
-                .create_subscription(topic, move |msg: RosImu| {
+                .create_subscription((topic, QoSProfile::sensor_data()), move |msg: RosImu| {
                     let RosImu {
                         header,
                         orientation,
