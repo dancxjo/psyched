@@ -8,15 +8,17 @@ use axum::{
 };
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use rclrs::{
-    vendor::example_interfaces::msg::String as RosString, Context, CreateBasicExecutor,
-    RclReturnCode, SpinOptions,
+    vendor::example_interfaces::msg::String as RosString, vendor::sensor_msgs::msg::Imu as RosImu,
+    Context, CreateBasicExecutor, RclReturnCode, RclrsError, SpinOptions,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task;
 use tracing::{error, info, warn};
@@ -63,14 +65,38 @@ enum CockpitError {
     MissingString(&'static str),
     #[error("ROS bridge offline")]
     BridgeOffline,
+    #[error("failed to subscribe to topic '{topic}': {source}")]
+    SubscribeFailed {
+        topic: String,
+        #[source]
+        source: RclrsError,
+    },
 }
 
 #[derive(Debug)]
 enum RosCommand {
     PublishConversation(String),
+    SubscribeTopic {
+        topic: String,
+        respond_to: oneshot::Sender<Result<(), CockpitError>>,
+    },
+    UnsubscribeTopic {
+        topic: String,
+        respond_to: oneshot::Sender<Result<(), CockpitError>>,
+    },
 }
 
 type SharedSender = Arc<Mutex<SplitSink<WebSocket, Message>>>;
+
+struct SubscriptionEntry {
+    ref_count: usize,
+    handle: TopicSubscription,
+}
+
+enum TopicSubscription {
+    Transcript(rclrs::Subscription<RosString>),
+    Imu(rclrs::Subscription<RosImu>),
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -147,11 +173,124 @@ async fn client_loop(socket: WebSocket, state: AppState) {
     while let Some(msg_result) = receiver.next().await {
         match msg_result {
             Ok(Message::Text(payload)) => match serde_json::from_str::<WsInbound>(&payload) {
-                Ok(WsInbound::Sub { .. }) | Ok(WsInbound::Unsub { .. }) => {
-                    if let Err(err) = send_json(&shared_sender, &WsOutbound::Ok { id: None }).await
+                Ok(WsInbound::Sub { topic }) => {
+                    let (respond_to, response) = oneshot::channel();
+                    if state
+                        .tx_ros
+                        .send(RosCommand::SubscribeTopic {
+                            topic: topic.clone(),
+                            respond_to,
+                        })
+                        .is_err()
                     {
-                        warn!(?err, "client disconnected while sending ack");
+                        if let Err(err) = send_json(
+                            &shared_sender,
+                            &WsOutbound::Err {
+                                reason: CockpitError::BridgeOffline.to_string(),
+                            },
+                        )
+                        .await
+                        {
+                            warn!(?err, "client disconnected while sending error");
+                        }
                         break;
+                    }
+
+                    match response.await {
+                        Ok(Ok(())) => {
+                            if let Err(err) =
+                                send_json(&shared_sender, &WsOutbound::Ok { id: None }).await
+                            {
+                                warn!(?err, "client disconnected while sending ack");
+                                break;
+                            }
+                        }
+                        Ok(Err(err)) => {
+                            if let Err(send_err) = send_json(
+                                &shared_sender,
+                                &WsOutbound::Err {
+                                    reason: err.to_string(),
+                                },
+                            )
+                            .await
+                            {
+                                warn!(?send_err, "client disconnected while sending error");
+                                break;
+                            }
+                        }
+                        Err(_canceled) => {
+                            if let Err(send_err) = send_json(
+                                &shared_sender,
+                                &WsOutbound::Err {
+                                    reason: CockpitError::BridgeOffline.to_string(),
+                                },
+                            )
+                            .await
+                            {
+                                warn!(?send_err, "client disconnected while sending error");
+                            }
+                            break;
+                        }
+                    }
+                }
+                Ok(WsInbound::Unsub { topic }) => {
+                    let (respond_to, response) = oneshot::channel();
+                    if state
+                        .tx_ros
+                        .send(RosCommand::UnsubscribeTopic {
+                            topic: topic.clone(),
+                            respond_to,
+                        })
+                        .is_err()
+                    {
+                        if let Err(err) = send_json(
+                            &shared_sender,
+                            &WsOutbound::Err {
+                                reason: CockpitError::BridgeOffline.to_string(),
+                            },
+                        )
+                        .await
+                        {
+                            warn!(?err, "client disconnected while sending error");
+                        }
+                        break;
+                    }
+
+                    match response.await {
+                        Ok(Ok(())) => {
+                            if let Err(err) =
+                                send_json(&shared_sender, &WsOutbound::Ok { id: None }).await
+                            {
+                                warn!(?err, "client disconnected while sending ack");
+                                break;
+                            }
+                        }
+                        Ok(Err(err)) => {
+                            if let Err(send_err) = send_json(
+                                &shared_sender,
+                                &WsOutbound::Err {
+                                    reason: err.to_string(),
+                                },
+                            )
+                            .await
+                            {
+                                warn!(?send_err, "client disconnected while sending error");
+                                break;
+                            }
+                        }
+                        Err(_canceled) => {
+                            if let Err(send_err) = send_json(
+                                &shared_sender,
+                                &WsOutbound::Err {
+                                    reason: CockpitError::BridgeOffline.to_string(),
+                                },
+                            )
+                            .await
+                            {
+                                warn!(?send_err, "client disconnected while sending error");
+                            }
+                            break;
+                        }
                     }
                 }
                 Ok(WsInbound::Pub { topic, msg }) => match convert_pub(&topic, msg) {
@@ -242,18 +381,7 @@ fn ros_spin(
     let node = executor.create_node("cockpit")?;
 
     let conversation_publisher = node.create_publisher::<RosString>("/conversation")?;
-
-    let ws_for_transcripts = ws_outbound.clone();
-    let _transcript_subscription =
-        node.create_subscription("/audio/transcript/final", move |msg: RosString| {
-            let outbound = WsOutbound::Msg {
-                topic: "/audio/transcript/final".into(),
-                msg: serde_json::json!({ "data": msg.data }),
-            };
-            if let Err(err) = ws_for_transcripts.send(outbound) {
-                warn!(?err, "no websocket listeners for transcript broadcast");
-            }
-        })?;
+    let mut subscriptions: HashMap<String, SubscriptionEntry> = HashMap::new();
 
     loop {
         let mut disconnected = false;
@@ -273,6 +401,15 @@ fn ros_spin(
                                 msg: serde_json::json!({ "data": data }),
                             });
                         }
+                    }
+                    RosCommand::SubscribeTopic { topic, respond_to } => {
+                        let result =
+                            subscribe_topic(&node, &ws_outbound, &mut subscriptions, &topic);
+                        let _ = respond_to.send(result);
+                    }
+                    RosCommand::UnsubscribeTopic { topic, respond_to } => {
+                        let result = unsubscribe_topic(&mut subscriptions, &topic);
+                        let _ = respond_to.send(result);
                     }
                 },
                 Err(TryRecvError::Empty) => break,
@@ -304,6 +441,137 @@ fn ros_spin(
     drop(node);
 
     Ok(())
+}
+
+fn subscribe_topic(
+    node: &rclrs::Node,
+    ws_outbound: &broadcast::Sender<WsOutbound>,
+    subscriptions: &mut HashMap<String, SubscriptionEntry>,
+    topic: &str,
+) -> Result<(), CockpitError> {
+    if let Some(entry) = subscriptions.get_mut(topic) {
+        entry.ref_count += 1;
+        return Ok(());
+    }
+
+    let handle = create_topic_subscription(node, topic, ws_outbound.clone())?;
+    subscriptions.insert(
+        topic.to_owned(),
+        SubscriptionEntry {
+            ref_count: 1,
+            handle,
+        },
+    );
+    Ok(())
+}
+
+fn unsubscribe_topic(
+    subscriptions: &mut HashMap<String, SubscriptionEntry>,
+    topic: &str,
+) -> Result<(), CockpitError> {
+    if !is_supported_topic(topic) {
+        return Err(CockpitError::UnsupportedTopic(topic.to_owned()));
+    }
+
+    if let Some(entry) = subscriptions.get_mut(topic) {
+        if entry.ref_count > 1 {
+            entry.ref_count -= 1;
+        } else {
+            subscriptions.remove(topic);
+        }
+    }
+
+    Ok(())
+}
+
+fn is_supported_topic(topic: &str) -> bool {
+    matches!(topic, "/audio/transcript/final" | "/imu/data")
+}
+
+fn create_topic_subscription(
+    node: &rclrs::Node,
+    topic: &str,
+    ws_outbound: broadcast::Sender<WsOutbound>,
+) -> Result<TopicSubscription, CockpitError> {
+    match topic {
+        "/audio/transcript/final" => {
+            let ws_for_topic = ws_outbound;
+            let topic_for_message = topic.to_owned();
+            let subscription = node
+                .create_subscription(topic, move |msg: RosString| {
+                    let outbound = WsOutbound::Msg {
+                        topic: topic_for_message.clone(),
+                        msg: serde_json::json!({ "data": msg.data }),
+                    };
+                    if let Err(err) = ws_for_topic.send(outbound) {
+                        warn!(?err, "no websocket listeners for transcript broadcast");
+                    }
+                })
+                .map_err(|source| CockpitError::SubscribeFailed {
+                    topic: topic.to_owned(),
+                    source,
+                })?;
+            Ok(TopicSubscription::Transcript(subscription))
+        }
+        "/imu/data" => {
+            let ws_for_topic = ws_outbound;
+            let topic_for_message = topic.to_owned();
+            let subscription = node
+                .create_subscription(topic, move |msg: RosImu| {
+                    let RosImu {
+                        header,
+                        orientation,
+                        angular_velocity,
+                        linear_acceleration,
+                        ..
+                    } = msg;
+
+                    let frame_id = header.frame_id;
+                    let stamp = header.stamp;
+
+                    let payload = serde_json::json!({
+                        "header": {
+                            "frame_id": frame_id,
+                            "stamp": {
+                                "sec": stamp.sec,
+                                "nanosec": stamp.nanosec,
+                            },
+                        },
+                        "orientation": {
+                            "x": orientation.x,
+                            "y": orientation.y,
+                            "z": orientation.z,
+                            "w": orientation.w,
+                        },
+                        "angular_velocity": {
+                            "x": angular_velocity.x,
+                            "y": angular_velocity.y,
+                            "z": angular_velocity.z,
+                        },
+                        "linear_acceleration": {
+                            "x": linear_acceleration.x,
+                            "y": linear_acceleration.y,
+                            "z": linear_acceleration.z,
+                        },
+                    });
+
+                    let outbound = WsOutbound::Msg {
+                        topic: topic_for_message.clone(),
+                        msg: payload,
+                    };
+
+                    if let Err(err) = ws_for_topic.send(outbound) {
+                        warn!(?err, "no websocket listeners for imu telemetry broadcast");
+                    }
+                })
+                .map_err(|source| CockpitError::SubscribeFailed {
+                    topic: topic.to_owned(),
+                    source,
+                })?;
+            Ok(TopicSubscription::Imu(subscription))
+        }
+        _ => Err(CockpitError::UnsupportedTopic(topic.to_owned())),
+    }
 }
 
 async fn send_json(sender: &SharedSender, payload: &WsOutbound) -> anyhow::Result<()> {

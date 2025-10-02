@@ -1,6 +1,5 @@
 [unit.pilot]
-# Pilot frontend dependencies handled via Deno; no system packages required yet
-apt = []
+apt = ["ros-$ROS_DISTRO-example-interfaces", "ros-$ROS_DISTRO-test-msgs"]
 pip = []
 
 # Pilot module does not require patch scripts

@@ -65,7 +65,7 @@ export interface ImuTelemetryIslandProps {
 export default function ImuTelemetryIsland({
   fallback,
   title = "IMU Telemetry",
-  topic = "/imu",
+  topic = "/imu/data",
 }: ImuTelemetryIslandProps) {
   const { data, status, error } = useCockpitTopic<RosImuMessage>(topic, {
     replay: true,

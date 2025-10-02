@@ -5,6 +5,7 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
 
 # shellcheck disable=SC1090
+# Temporary disable nounset before sourcing scripts that expect unset vars.
 source_with_nounset_guard() {
   local script_path=$1
   set +u
