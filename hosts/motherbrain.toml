@@ -15,6 +15,11 @@ ros2 = true
 cuda = false
 
 [[modules]]
+name = "pilot"
+launch = false
+env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
 name = "imu"
 launch = true
 env = { ROS_DOMAIN_ID = "25" }

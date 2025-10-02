@@ -15,9 +15,22 @@ export const handler: Handlers<IndexData> = {
     return ctx.render({
       modules: [
         {
+          slug: "pilot",
+          name: "Pilot Module",
+          description:
+            "Status dashboard for the cockpit backend and websocket bridge.",
+        },
+        {
           slug: "imu",
           name: "IMU Module",
-          description: "Read-only telemetry stream with orientation and velocity vectors.",
+          description:
+            "Read-only telemetry stream with orientation and velocity vectors.",
+        },
+        {
+          slug: "foot",
+          name: "Foot Module",
+          description:
+            "Drive base controls and telemetry for the Create robot platform.",
         },
       ],
     });

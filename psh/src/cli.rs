@@ -67,6 +67,9 @@ pub enum Commands {
 
     /// Set up shell environment (add psyched alias to ~/.bashrc)
     Env,
+
+    /// Remove build artifacts and recreate src symlinks for local crates
+    Clean,
 }
 
 #[derive(Subcommand)]

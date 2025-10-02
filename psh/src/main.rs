@@ -1,4 +1,5 @@
 mod build;
+mod clean;
 mod cli;
 mod module_runner;
 mod setup;
@@ -7,6 +8,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::build::build_workspace;
+use crate::clean::clean_workspace;
 use crate::cli::{Cli, Commands, HostCommands, ModCommands};
 use crate::module_runner::{
     all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
@@ -98,6 +100,7 @@ fn main() -> Result<()> {
         Some(Commands::TeardownModule { module }) => teardown_module(&module)?,
         Some(Commands::List) => list_modules()?,
         Some(Commands::Env) => setup_env()?,
+        Some(Commands::Clean) => clean_workspace()?,
         None => {
             println!(
                 "Usage:\n  psh host setup {{hosts...}}\n  psh mod up|down|setup|teardown|list {{modules...}}"

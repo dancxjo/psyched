@@ -161,6 +161,7 @@ source install/setup.bash
 - `psh mod setup|teardown <module>` – manage symlinks + prep work
 - `psh mod up|down <module>` – start/stop module services
 - `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
+- `psh clean` – wipe `src/`, `build/`, and `install/`, then recreate local `psyched` and `psyched-msgs` symlinks
 
 ## Testing & validation
 

@@ -17,6 +17,10 @@ launch = "modules/imu/launch_unit.sh"
 shutdown = "modules/imu/shutdown_unit.sh"
 pilot_control = "modules/imu/pilot/components/ImuReadout.tsx"
 
+[[unit.foot.git]]
+# TODO: this is a global dependency, move to `psh setup`
+url = "https://github.com/ros2-rust/ament_cargo.git"
+
 [[unit.imu.git]]
 url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
 branch = "main"
