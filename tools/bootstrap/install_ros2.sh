@@ -56,7 +56,9 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   python3-colcon-common-extensions \
-  python3-rosdep \ ros-$ROS_DISTRO-ament-cargo
+  python3-rosdep
+
+cargo install cargo-ament-build
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
   "${SUDO[@]}" rosdep init
