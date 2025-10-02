@@ -14,6 +14,16 @@ sudo apt install -y \
   python3-full python3-pip python3-venv python-is-python3 \
   shellcheck micro mc
 
+# Ensure ~/.local/bin is on PATH for the current session and future logins
+if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
+    export PATH="${HOME}/.local/bin:${PATH}"
+fi
+local_path_export="export PATH=\"\$HOME/.local/bin:\$PATH\""
+if ! grep -Fx "$local_path_export" "$HOME/.bashrc" >/dev/null 2>&1; then
+    printf '%s
+' "$local_path_export" >> "$HOME/.bashrc"
+fi
+
 # 3. mDNS support (Avahi)
 sudo apt install -y avahi-daemon avahi-utils libnss-mdns
 
@@ -84,7 +94,26 @@ if ! sudo apt install -y unzip 1>&2; then
     echo "Warning: failed to install unzip; continuing" >&2
 fi
 
-# 5. Rust toolchain (rustup + cargo)
+# 5. ROS colcon tooling + cargo bridge
+sudo apt install -y python3-colcon-common-extensions
+
+install_colcon_ros_cargo() {
+    if python3 -m pip show colcon-ros-cargo >/dev/null 2>&1; then
+        local version
+        version=$(python3 -m pip show colcon-ros-cargo | awk '/^Version:/ {print $2}')
+        echo "colcon-ros-cargo already installed (version ${version:-unknown})"
+        return 0
+    fi
+
+    echo "Installing colcon-ros-cargo from GitHub..."
+    python3 -m pip install --user --upgrade pip
+    python3 -m pip install --user --upgrade \
+        "git+https://github.com/colcon/colcon-ros-cargo.git"
+}
+
+install_colcon_ros_cargo
+
+# 6. Rust toolchain (rustup + cargo)
 if ! command -v cargo >/dev/null 2>&1; then
     echo "Installing Rust toolchain via rustup..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -93,7 +122,7 @@ else
     echo "Rust already installed: $(cargo --version)"
 fi
 
-# 6. Build psh
+# 7. Build psh
 echo "Building psh crate..."
 cd "$(dirname "$0")/psh"
 cargo build --release
