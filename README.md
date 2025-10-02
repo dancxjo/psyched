@@ -121,10 +121,11 @@ Modules can optionally contribute Fresh components or routes by placing files in
 - Run the cockpit backend alone: `cargo run -p psyched --bin cockpit`
 - Format / lint: `cargo fmt`, `cargo clippy --workspace --all-targets`
 
-ROS packages live under `src/` (mirrored into `packages/` for colcon). Use colcon to build ROS nodes when modifying C++/Python packages:
+ROS packages live under `src/` (mirrored into `packages/` for colcon). Use `psh build` to compile ROS nodes without invoking `colcon` directly:
 
 ```bash
-colcon build --packages-select mpu6050driver
+psh build                 # builds the entire workspace
+psh build mpu6050driver   # optionally target specific packages
 source install/setup.bash
 ```
 

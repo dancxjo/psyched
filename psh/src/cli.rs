@@ -21,6 +21,13 @@ pub enum Commands {
         command: ModCommands,
     },
 
+    /// Build the ROS workspace (wraps `colcon build`)
+    Build {
+        /// Optional package names to limit the build (maps to `--packages-select`)
+        #[arg(value_name = "PACKAGE")]
+        packages: Vec<String>,
+    },
+
     // Backwards-compatibility top-level aliases. These map to the same actions
     /// Run host bootstrap scripts (alias for `psh host setup`)
     #[command(hide = true)]

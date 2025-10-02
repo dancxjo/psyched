@@ -8,8 +8,8 @@ use axum::{
 };
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use rclrs::{
-    vendor::example_interfaces::msg::String as RosString, Context, CreateBasicExecutor, RclReturnCode,
-    SpinOptions,
+    vendor::example_interfaces::msg::String as RosString, Context, CreateBasicExecutor,
+    RclReturnCode, SpinOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -244,9 +244,8 @@ fn ros_spin(
     let conversation_publisher = node.create_publisher::<RosString>("/conversation")?;
 
     let ws_for_transcripts = ws_outbound.clone();
-    let _transcript_subscription = node.create_subscription(
-        "/audio/transcript/final",
-        move |msg: RosString| {
+    let _transcript_subscription =
+        node.create_subscription("/audio/transcript/final", move |msg: RosString| {
             let outbound = WsOutbound::Msg {
                 topic: "/audio/transcript/final".into(),
                 msg: serde_json::json!({ "data": msg.data }),
@@ -254,8 +253,7 @@ fn ros_spin(
             if let Err(err) = ws_for_transcripts.send(outbound) {
                 warn!(?err, "no websocket listeners for transcript broadcast");
             }
-        },
-    )?;
+        })?;
 
     loop {
         let mut disconnected = false;

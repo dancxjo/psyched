@@ -1,3 +1,4 @@
+mod build;
 mod cli;
 mod module_runner;
 mod setup;
@@ -5,6 +6,7 @@ mod setup;
 use anyhow::Result;
 use clap::Parser;
 
+use crate::build::build_workspace;
 use crate::cli::{Cli, Commands, HostCommands, ModCommands};
 use crate::module_runner::{
     all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
@@ -88,6 +90,7 @@ fn main() -> Result<()> {
         },
 
         // Backwards-compatible top-level commands map into the new subcommands
+        Some(Commands::Build { packages }) => build_workspace(&packages)?,
         Some(Commands::Setup) => run_setup()?,
         Some(Commands::Up { module }) => bring_module_up(&module)?,
         Some(Commands::Down { module }) => bring_module_down(&module)?,

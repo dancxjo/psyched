@@ -138,7 +138,7 @@ fn resolve_script_path(script: &str, config_path: &Path) -> PathBuf {
     requested
 }
 
-fn locate_repo_root() -> Result<PathBuf> {
+pub(crate) fn locate_repo_root() -> Result<PathBuf> {
     let mut candidates = Vec::new();
 
     if let Ok(cwd) = env::current_dir() {
