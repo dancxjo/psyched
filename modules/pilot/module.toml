@@ -13,4 +13,8 @@ pilot_control = "modules/pilot/pilot/components/PilotOverview.tsx"
 
 [[unit.foot.git]]
 # TODO: this is a global dependency, move to `psh setup`
-url = "https://github.com/ros2-rust/ament_cargo.git"
+url = "https://github.com/ros2-rust/cargo-ament-build.git"
+
+[[unit.foot.git]]
+# TODO: this is a global dependency, move to `psh setup`
+url = "https://github.com/colcon/colcon-ros-cargo.git"

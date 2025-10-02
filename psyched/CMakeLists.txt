@@ -3,6 +3,6 @@ project(psyched)
 
 find_package(ament_cargo REQUIRED)
 
-ament_cargo_build()
+cargo_ament_build()
 
 ament_package()
