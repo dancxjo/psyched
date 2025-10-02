@@ -1,5 +1,5 @@
-import { defineConfig } from "$fresh/server.ts";
+import { define } from "./utils.ts";
 
-export default defineConfig({
+export default define.config({
     plugins: [],
 });

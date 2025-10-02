@@ -1,4 +1,4 @@
-import { type Handlers, type PageProps } from "$fresh/server.ts";
+import { define } from "../utils.ts";
 
 interface ModuleLink {
   slug: string;
@@ -6,39 +6,28 @@ interface ModuleLink {
   description: string;
 }
 
-interface IndexData {
-  modules: ModuleLink[];
-}
-
-export const handler: Handlers<IndexData> = {
-  GET(_req, ctx) {
-    return ctx.render({
-      modules: [
-        {
-          slug: "pilot",
-          name: "Pilot Module",
-          description:
-            "Status dashboard for the cockpit backend and websocket bridge.",
-        },
-        {
-          slug: "imu",
-          name: "IMU Module",
-          description:
-            "Read-only telemetry stream with orientation and velocity vectors.",
-        },
-        {
-          slug: "foot",
-          name: "Foot Module",
-          description:
-            "Drive base controls and telemetry for the Create robot platform.",
-        },
-      ],
-    });
+const modules: ModuleLink[] = [
+  {
+    slug: "pilot",
+    name: "Pilot Module",
+    description:
+      "Status dashboard for the cockpit backend and websocket bridge.",
   },
-};
+  {
+    slug: "imu",
+    name: "IMU Module",
+    description:
+      "Read-only telemetry stream with orientation and velocity vectors.",
+  },
+  {
+    slug: "foot",
+    name: "Foot Module",
+    description:
+      "Drive base controls and telemetry for the Create robot platform.",
+  },
+];
 
-export default function IndexPage(props: PageProps<IndexData>) {
-  const { modules } = props.data;
+export default define.route(() => {
   return (
     <section class="content">
       <h1>Psyched Pilot</h1>
@@ -54,4 +43,4 @@ export default function IndexPage(props: PageProps<IndexData>) {
       </ul>
     </section>
   );
-}
+});

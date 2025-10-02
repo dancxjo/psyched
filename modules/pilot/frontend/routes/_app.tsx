@@ -1,24 +1,32 @@
 import { Head } from "$fresh/runtime.ts";
-import type { AppProps } from "$fresh/server.ts";
+import type { RouteContext } from "$fresh/server.ts";
+import { define } from "../utils.ts";
 
-export default function App({ Component }: AppProps) {
+export default define.app((_req: Request, ctx: RouteContext) => {
+  const Component = ctx.Component;
+
   return (
-    <>
+    <html lang="en">
       <Head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        />
         <title>Psyched Pilot</title>
         <link rel="stylesheet" href="/styles.css" />
       </Head>
-      <header class="site-header">
-        <nav>
-          <a href="/">Home</a>
-          <a href="/modules/imu">IMU</a>
-        </nav>
-      </header>
-      <main class="site-main">
-        <Component />
-      </main>
-    </>
+      <body>
+        <header class="site-header">
+          <nav>
+            <a href="/">Home</a>
+            <a href="/modules/imu">IMU</a>
+          </nav>
+        </header>
+        <main class="site-main">
+          <Component />
+        </main>
+      </body>
+    </html>
   );
-}
+});
