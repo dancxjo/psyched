@@ -70,6 +70,7 @@ Always prefer running the smallest relevant command set.
 - **ROS distro mismatch:** Scripts default to the custom `kilted` distro name. Override with `ROS_DISTRO=<distro>` before running `psh env` if you target `humble`/`jazzy`.
 - **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
 - **Background processes:** Launch scripts spawn long-lived processes (`cargo run`, `deno task`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
+- **ROS message crates:** Rust binaries expect generated message crates under `install/share/<pkg>/rust`. Run the relevant `colcon build` step (e.g. via `psh mod setup`) before invoking `cargo fmt`/`cargo check` so `create_msgs`, `geometry_msgs`, etc. are discoverable.
 
 ## Useful references
 
