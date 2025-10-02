@@ -106,8 +106,8 @@ install_colcon_ros_cargo() {
     fi
 
     echo "Installing colcon-ros-cargo from GitHub..."
-    python3 -m pip install --user --upgrade pip
-    python3 -m pip install --user --upgrade \
+    python3 -m pip install --user --upgrade --break-system-packages pip 
+    python3 -m pip install --user --upgrade --break-system-packages \
         "git+https://github.com/colcon/colcon-ros-cargo.git"
 }
 
