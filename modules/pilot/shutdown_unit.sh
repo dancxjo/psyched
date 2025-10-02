@@ -4,6 +4,16 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
 FRONTEND_DEV_TS="${FRONTEND_DIR}/dev.ts"
+WORKSPACE_ENV="${ROOT_DIR}/workspace_env.sh"
+
+if [[ -f "${WORKSPACE_ENV}" ]]; then
+	# shellcheck disable=SC1090
+	source "${WORKSPACE_ENV}"
+fi
+
+WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
+WORKSPACE_SRC="${PSYCHED_WORKSPACE_SRC:-${WORKSPACE_DIR}/src}"
+COCKPIT_MANIFEST="${WORKSPACE_SRC}/pilot/Cargo.toml"
 
 TIMEOUT=${TIMEOUT:-10}
 
@@ -52,12 +62,12 @@ terminate_process_group() {
 }
 
 terminate_process_group \
-	"Psyched cockpit backend" \
-	"cargo run --package psyched --bin cockpit" \
+	"Pilot cockpit backend" \
+	"cargo run --manifest-path ${COCKPIT_MANIFEST} --bin cockpit" \
 	"target/debug/cockpit"
 
 terminate_process_group \
-	"Psyched pilot Fresh dev server" \
+	"Pilot Fresh dev server" \
 	"deno task dev" \
 	"deno run -A --watch=static/,routes/ dev.ts" \
 	"${FRONTEND_DEV_TS}"

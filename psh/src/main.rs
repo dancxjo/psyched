@@ -4,6 +4,7 @@ mod cli;
 mod module_runner;
 mod service_runner;
 mod setup;
+mod workspace;
 
 use anyhow::Result;
 use clap::Parser;
@@ -16,8 +17,8 @@ use crate::module_runner::{
     setup_modules, teardown_module,
 };
 use crate::service_runner::{
-    all_service_names, bring_service_down, bring_service_up, list_services, setup_service,
-    setup_services, teardown_service,
+    all_service_names, bring_service_down, bring_service_up, list_services, setup_services,
+    teardown_service,
 };
 use crate::setup::{run_setup, setup_env};
 

@@ -1,5 +1,5 @@
-[patch.crates-io.std_msgs]
-path = "vendor_msgs/std_msgs"
+#[patch.crates-io.std_msgs]
+#path = "vendor_msgs/std_msgs"
 
 [patch.crates-io.trajectory_msgs]
 path = "vendor_msgs/trajectory_msgs"
@@ -12,12 +12,6 @@ path = "vendor_msgs/nav_msgs"
 
 [patch.crates-io.geometry_msgs]
 path = "vendor_msgs/geometry_msgs"
-
-[patch.crates-io.diagnostic_msgs]
-path = "vendor_msgs/diagnostic_msgs"
-
-[patch.crates-io.actionlib_msgs]
-path = "vendor_msgs/actionlib_msgs"
 
 [patch.crates-io.shape_msgs]
 path = "vendor_msgs/shape_msgs"

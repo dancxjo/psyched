@@ -29,7 +29,7 @@ Always prefer running the smallest relevant command set.
 | Domain | Commands |
 | --- | --- |
 | Rust workspace | `cargo fmt`, `cargo check --workspace`, `cargo clippy --workspace --all-targets`, `cargo test --workspace` |
-| Cockpit backend only | `cargo run -p psyched --bin cockpit` |
+| Cockpit backend only | `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit` |
 | ROS packages (colcon) | `colcon build --packages-select <pkg>` followed by `source install/setup.bash` |
 | Deno pilot UI | `deno fmt`, `deno check lib/cockpit.ts`, `deno task dev`, `deno test` |
 | Shell scripts | `shellcheck modules/**/launch_*.sh modules/**/shutdown_*.sh setup` |

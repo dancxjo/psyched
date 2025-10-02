@@ -32,7 +32,7 @@ Psyched is organized around three ideas:
 
 1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
 2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
-3. **A ROS 2 + Rust bridge.** The `psyched` crate exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
+3. **A ROS 2 + Rust bridge.** The `pilot` crate (linked into `work/src/pilot`) exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
 4. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
 
 Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that provisions hosts, orchestrates modules, and maintains the Deno symlinks required by the pilot.
@@ -92,17 +92,16 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 ```
 ├── modules/           # Module definitions (pilot, foot, imu, …)
+├── modules/pilot/packages/pilot/  # Rust ROS bridge providing the cockpit backend (symlinked into work/src/pilot)
 ├── services/          # Containerised microservices (tts, language, graphs, vectors, …)
 │   └── <name>/
 │       ├── service.toml        # Manifest consumed by psh svc
 │       └── docker-compose.yml  # Compose stack plus supporting assets
-├── psyched/           # Rust ROS bridge providing the websocket cockpit backend
 ├── psh/               # Rust CLI for provisioning + module orchestration
 ├── psyched-msgs/      # Placeholder crate for shared ROS message helpers
-├── src/               # Colcon workspace overlays (mirrors modules/* packages)
 ├── tools/             # Host bootstrap & provisioning scripts
 ├── hosts/             # Host configuration TOML files
-├── install/, build/, log/  # Colcon build outputs
+├── work/              # Colcon workspace (src/, build/, install/, log/) populated by tools/clean_workspace
 ├── target/            # Cargo build outputs
 └── setup              # Top-level bootstrap script (see above)
 ```
@@ -113,7 +112,7 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 The pilot module provides a browser-based cockpit with two parts:
 
-- **Backend:** `psyched/src/bin/cockpit.rs` exposes a websocket at `ws://0.0.0.0:8088/ws`. Incoming messages are mapped to ROS topics (currently `/conversation`; more topics coming soon). Outbound broadcasts like `/audio/transcript/final` are streamed to every connected browser.
+- **Backend:** `modules/pilot/packages/pilot/src/bin/cockpit.rs` exposes a websocket at `ws://0.0.0.0:8088/ws`. Incoming messages are mapped to ROS topics (currently `/conversation`; more topics coming soon). Outbound broadcasts like `/audio/transcript/final` are streamed to every connected browser.
 - **Frontend:** `modules/pilot/frontend` is a Fresh app. `lib/cockpit.ts` contains the websocket client (`CockpitClient`) and a `useCockpitTopic` hook that any component can reuse.
 
 Bring it up with:
@@ -191,7 +190,7 @@ The command refreshes the crates in `vendor_msgs/` and prints warnings for any p
 ### Rust + ROS backend
 
 - Build everything: `cargo build --workspace`
-- Run the cockpit backend alone: `cargo run -p psyched --bin cockpit`
+- Run the cockpit backend alone: `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit`
 - Format / lint: `cargo fmt`, `cargo clippy --workspace --all-targets`
 
 ROS packages live under `src/` (mirrored into `packages/` for colcon). Use `psh build` to compile ROS nodes without invoking `colcon` directly:
@@ -220,7 +219,7 @@ source install/setup.bash
 - `psh svc list` – inspect containerised services and their status
 - `psh svc setup|up|down <service>` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
 - `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
-- `psh clean` – wipe `src/`, `build/`, and `install/`, then recreate local `psyched` and `psyched-msgs` symlinks
+- `psh clean` – reset `work/` and re-establish local ROS package symlinks (including module packages)
 
 ## Testing & validation
 
@@ -233,7 +232,7 @@ CI is currently manual; prefer running the commands above before pushing.
 ## Troubleshooting
 
 - Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Re-run `psh env` after changing the distro.
-- Cockpit websocket unreachable: verify `cargo run -p psyched --bin cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
+- Cockpit websocket unreachable: verify `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
 
@@ -247,4 +246,3 @@ CI is currently manual; prefer running the commands above before pushing.
 ## License
 
 Licensed under the MIT License. See [`LICENSE`](./LICENSE).
-

@@ -6,7 +6,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             Node(
-                package="psyched",
+                package="pilot",
                 executable="cockpit",
                 output="screen",
                 name="cockpit",

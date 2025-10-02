@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(psyched)
+project(pilot)
 
 find_package(ament_cargo REQUIRED)
 

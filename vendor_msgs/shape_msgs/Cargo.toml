@@ -1,1 +1,14 @@
-/root/ws/build/shape_msgs/rosidl_generator_rs/shape_msgs/rust/Cargo.toml
+[package]
+name = "shape_msgs"
+version = "5.8.3"
+edition = "2021"
+
+[dependencies]
+rosidl_runtime_rs = "0.4"
+serde = { version = "1", optional = true, features = ["derive"] }
+serde-big-array = { version = "0.5.1", optional = true }
+geometry_msgs = "*"
+std_msgs = "*"
+
+[features]
+serde = ['dep:serde', 'dep:serde-big-array', 'rosidl_runtime_rs/serde', 'geometry_msgs/serde', 'std_msgs/serde']

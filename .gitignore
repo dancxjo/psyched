@@ -70,8 +70,7 @@ services/tts/models/*
 !services/tts/models/.gitkeep
 
 # ROS 2 workspace overlay
-/src/
-/packages/
+/work/
 
 # ------------------------------
 # Local machine configs

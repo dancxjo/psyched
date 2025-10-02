@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use duct::cmd;
 use regex::Regex;
 use serde::Deserialize;
@@ -10,6 +10,7 @@ use which::which;
 
 use crate::module_runner::{bring_module_up, setup_module};
 use crate::service_runner::{bring_service_up, setup_service};
+use crate::workspace::{repo_root, workspace_install, workspace_root};
 
 #[derive(Deserialize)]
 struct HostConfig {
@@ -236,37 +237,15 @@ fn resolve_script_path(script: &str, config_path: &Path) -> PathBuf {
     requested
 }
 
-pub(crate) fn locate_repo_root() -> Result<PathBuf> {
-    let mut candidates = Vec::new();
-
-    if let Ok(cwd) = env::current_dir() {
-        candidates.push(cwd);
-    }
-
-    if let Ok(exe) = env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.to_path_buf());
-            if let Some(parent) = dir.parent() {
-                candidates.push(parent.to_path_buf());
-            }
-        }
-    }
-
-    for root in candidates {
-        if root.join("modules").is_dir() && root.join("src").is_dir() {
-            return Ok(root);
-        }
-    }
-
-    bail!("could not determine psyched repository root; run 'psh env' from inside the repository");
-}
-
 pub fn setup_env() -> Result<()> {
     let ros_distro = env::var("ROS_DISTRO").unwrap_or_else(|_| "kilted".to_string());
-    let workspace_root = locate_repo_root().context("failed to locate repository root")?;
+    let workspace_path = workspace_root().context("failed to locate ROS workspace root")?;
+    let repo_path = repo_root().context("failed to locate repository root")?;
+    let install_dir =
+        workspace_install().context("failed to determine workspace install directory")?;
 
-    let install_setup = workspace_root.join("install").join("setup.bash");
-    let install_local_setup = workspace_root.join("install").join("local_setup.bash");
+    let install_setup = install_dir.join("setup.bash");
+    let install_local_setup = install_dir.join("local_setup.bash");
 
     let home_dir = directories::BaseDirs::new()
         .context("failed to determine home directory")?
@@ -290,10 +269,12 @@ pub fn setup_env() -> Result<()> {
         updated.push_str("\n\n");
     }
 
-    let workspace_str = workspace_root.to_string_lossy().replace('"', "\\\"");
+    let workspace_str = workspace_path.to_string_lossy().replace('"', "\\\"");
+    let repo_str = repo_path.to_string_lossy().replace('"', "\\\"");
     let function_block = format!(
-        "# Added by psh env\npsyched() {{\n    local workspace_root=\"{workspace}\"\n    source /opt/ros/{ros}/setup.bash\n    if [ -f \"$workspace_root/install/setup.bash\" ]; then\n        source \"$workspace_root/install/setup.bash\"\n    elif [ -f \"$workspace_root/install/local_setup.bash\" ]; then\n        source \"$workspace_root/install/local_setup.bash\"\n    fi\n}}\n\npsyched  # Auto-activate ROS 2 workspace\n",
+        "# Added by psh env\npsyched() {{\n    local repo_root=\"{repo}\"\n    export PSYCHED_REPO_ROOT=\"$repo_root\"\n    export PSYCHED_WORKSPACE_DIR=\"${{PSYCHED_WORKSPACE_DIR:-{workspace}}}\"\n    if [ -f \"$repo_root/workspace_env.sh\" ]; then\n        # shellcheck disable=SC1090\n        source \"$repo_root/workspace_env.sh\"\n    fi\n    local workspace_root=\"$PSYCHED_WORKSPACE_DIR\"\n    local install_dir=\"${{PSYCHED_WORKSPACE_INSTALL:-$workspace_root/install}}\"\n    source /opt/ros/{ros}/setup.bash\n    if [ -f \"$install_dir/setup.bash\" ]; then\n        source \"$install_dir/setup.bash\"\n    elif [ -f \"$install_dir/local_setup.bash\" ]; then\n        source \"$install_dir/local_setup.bash\"\n    fi\n}}\n\npsyched  # Auto-activate ROS 2 workspace\n",
         workspace = workspace_str,
+        repo = repo_str,
         ros = ros_distro
     );
 
@@ -319,7 +300,7 @@ pub fn setup_env() -> Result<()> {
     } else {
         println!(
             "  - {} (not found yet; run 'psh mod setup <ros-module>' to build the workspace)",
-            workspace_root.join("install").join("setup.bash").display()
+            install_dir.join("setup.bash").display()
         );
     }
 

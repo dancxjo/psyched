@@ -47,7 +47,7 @@ mkdir -p "${VENDOR_DIR}"
 
 BUILD_CONTEXT=$(mktemp -d)
 OUTPUT_DIR=$(mktemp -d)
-trap 'rm -rf "${BUILD_CONTEXT}" "${OUTPUT_DIR}"' EXIT
+trap 'sudo rm -rf "${BUILD_CONTEXT}" "${OUTPUT_DIR}"' EXIT
 
 cat <<'DOCKERFILE' >"${BUILD_CONTEXT}/Dockerfile"
 ARG ROS_DISTRO=kilted
@@ -99,7 +99,7 @@ docker run --rm \
     for rust_dir in /root/ws/install/share/*/rust; do \
       pkg=$(basename "$(dirname "${rust_dir}")"); \
       mkdir -p "/out/${pkg}"; \
-      cp -R "${rust_dir}/." "/out/${pkg}/"; \
+      cp -rL "${rust_dir}/." "/out/${pkg}/"; \
     done'
 
 log "Copying crates into ${VENDOR_DIR}..."

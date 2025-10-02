@@ -2,16 +2,16 @@ use anyhow::{Context, Result};
 use duct::cmd;
 use which::which;
 
-use crate::setup::locate_repo_root;
+use crate::workspace::workspace_root;
 
 pub fn build_workspace(packages: &[String]) -> Result<()> {
     which("colcon").with_context(|| {
         "colcon executable not found in PATH; install colcon before running `psh build`".to_string()
     })?;
 
-    let repo_root = locate_repo_root().context("failed to locate psyched repository root")?;
+    let workspace_root = workspace_root().context("failed to locate ROS workspace root")?;
 
-    println!("==> Building ROS workspace at {}", repo_root.display());
+    println!("==> Building ROS workspace at {}", workspace_root.display());
 
     let mut args = vec!["build".to_string(), "--symlink-install".to_string()];
 
@@ -22,7 +22,7 @@ pub fn build_workspace(packages: &[String]) -> Result<()> {
     }
 
     cmd("colcon", args)
-        .dir(&repo_root)
+        .dir(&workspace_root)
         .stderr_to_stdout()
         .run()
         .context("colcon build failed")?;

@@ -12,6 +12,8 @@ use std::sync::OnceLock;
 use walkdir::WalkDir;
 use which::which;
 
+use crate::workspace::{workspace_root, workspace_src};
+
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::symlink;
 #[cfg(target_family = "windows")]
@@ -104,6 +106,8 @@ pub fn setup_modules(modules: &[String]) -> Result<()> {
             sync_git_repos(&module, &module_dir, repos)?;
         }
 
+        link_module_packages(&module, &module_dir)?;
+
         if let Some(patches) = unit_config.patches.as_ref() {
             run_patch_scripts(&module, &module_dir, patches);
         }
@@ -145,22 +149,12 @@ fn setup_module_internal(module: &str, module_dir: &Path, strict: bool) -> Resul
     Ok(())
 }
 
-fn sync_git_repos(module: &str, module_dir: &Path, repos: &[GitRepo]) -> Result<()> {
+fn sync_git_repos(module: &str, _module_dir: &Path, repos: &[GitRepo]) -> Result<()> {
     if repos.is_empty() {
         return Ok(());
     }
 
-    let repo_root = module_dir
-        .parent()
-        .and_then(|modules_dir| modules_dir.parent())
-        .ok_or_else(|| {
-            anyhow!(
-                "unable to determine repository root for {}",
-                module_dir.display()
-            )
-        })?;
-
-    let src_dir = repo_root.join("src");
+    let src_dir = workspace_src().context("failed to locate workspace src directory")?;
     fs::create_dir_all(&src_dir)
         .with_context(|| format!("failed to ensure {} exists", src_dir.display()))?;
 
@@ -267,25 +261,23 @@ fn sync_git_repos(module: &str, module_dir: &Path, repos: &[GitRepo]) -> Result<
 
 fn prepare_ros_workspace(
     module: &str,
-    module_dir: &Path,
+    _module_dir: &Path,
     ros_config: Option<&RosBuildConfig>,
 ) -> Result<()> {
     let Some(config) = ros_config else {
         return Ok(());
     };
 
-    let repo_root = module_dir
-        .parent()
-        .and_then(|modules_dir| modules_dir.parent())
-        .ok_or_else(|| {
-            anyhow!(
-                "unable to determine repository root for {}",
-                module_dir.display()
-            )
-        })?;
-
     let workspace_rel = config.workspace.as_deref().unwrap_or(".");
-    let workspace_dir = repo_root.join(workspace_rel);
+    let base_workspace = workspace_root().context("failed to locate default workspace root")?;
+    let workspace_dir = {
+        let candidate = PathBuf::from(workspace_rel);
+        if candidate.is_absolute() {
+            candidate
+        } else {
+            base_workspace.join(candidate)
+        }
+    };
 
     if !workspace_dir.exists() {
         bail!(
@@ -582,6 +574,7 @@ fn teardown_module_internal(module: &str, module_dir: &Path, strict: bool) -> Re
 
     unlink_pilot_assets(module, module_dir, &overlay_root)?;
     rebuild_pilot_manifest(&overlay_root)?;
+    unlink_module_packages(module, module_dir)?;
     Ok(())
 }
 
@@ -745,6 +738,128 @@ fn module_status(module: &str) -> Result<String> {
         }
         None => Ok("stopped".to_string()),
     }
+}
+
+fn link_module_packages(module: &str, module_dir: &Path) -> Result<()> {
+    let packages_dir = module_dir.join("packages");
+    if !packages_dir.is_dir() {
+        return Ok(());
+    }
+
+    let src_root = workspace_src().context("failed to locate workspace src directory")?;
+    fs::create_dir_all(&src_root)
+        .with_context(|| format!("failed to ensure {} exists", src_root.display()))?;
+
+    let mut linked_any = false;
+
+    for entry in fs::read_dir(&packages_dir)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let package_path = entry.path();
+        if !package_path.join("Cargo.toml").is_file() && !package_path.join("package.xml").is_file()
+        {
+            continue;
+        }
+
+        let package_name = entry.file_name().to_string_lossy().to_string();
+        let link_path = src_root.join(&package_name);
+
+        if let Ok(metadata) = fs::symlink_metadata(&link_path) {
+            if metadata.file_type().is_symlink() {
+                let target = fs::read_link(&link_path).with_context(|| {
+                    format!("failed to read existing symlink {}", link_path.display())
+                })?;
+                if target == package_path {
+                    continue;
+                }
+                fs::remove_file(&link_path).with_context(|| {
+                    format!("failed to remove existing symlink {}", link_path.display())
+                })?;
+            } else {
+                bail!(
+                    "refusing to overwrite existing non-symlink destination {}",
+                    link_path.display()
+                );
+            }
+        }
+
+        create_symlink(&package_path, &link_path).with_context(|| {
+            format!(
+                "failed to create package symlink {} -> {}",
+                link_path.display(),
+                package_path.display()
+            )
+        })?;
+
+        linked_any = true;
+    }
+
+    if linked_any {
+        println!(
+            "[{}] Linked ROS packages from {} into {}",
+            module,
+            packages_dir.display(),
+            src_root.display()
+        );
+    } else {
+        println!(
+            "[{}] Packages directory {} contained no ROS packages to link",
+            module,
+            packages_dir.display()
+        );
+    }
+
+    Ok(())
+}
+
+fn unlink_module_packages(module: &str, module_dir: &Path) -> Result<()> {
+    let packages_dir = module_dir.join("packages");
+    if !packages_dir.is_dir() {
+        return Ok(());
+    }
+
+    let src_root = workspace_src().context("failed to locate workspace src directory")?;
+
+    for entry in fs::read_dir(&packages_dir)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let package_path = entry.path();
+        if !package_path.join("Cargo.toml").is_file() && !package_path.join("package.xml").is_file()
+        {
+            continue;
+        }
+
+        let package_name = entry.file_name().to_string_lossy().to_string();
+        let link_path = src_root.join(&package_name);
+
+        if let Ok(metadata) = fs::symlink_metadata(&link_path) {
+            if metadata.file_type().is_symlink() {
+                let target = fs::read_link(&link_path)
+                    .with_context(|| format!("failed to read symlink {}", link_path.display()))?;
+                if target == package_path {
+                    fs::remove_file(&link_path).with_context(|| {
+                        format!("failed to remove symlink {}", link_path.display())
+                    })?;
+                }
+            }
+        }
+    }
+
+    println!(
+        "[{}] Unlinked ROS packages from {}",
+        module,
+        src_root.display()
+    );
+
+    Ok(())
 }
 
 fn link_pilot_assets(module: &str, module_dir: &Path, overlay_root: &Path) -> Result<()> {
