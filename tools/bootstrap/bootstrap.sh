@@ -101,7 +101,7 @@ cd -
 
 # Install globally as /usr/bin/psh
 echo "Installing psh binary -> /usr/bin/psh"
-sudo cp target/release/psh /usr/bin/psh
+sudo ln -sf target/release/psh /usr/bin/psh
 sudo chmod a+x /usr/bin/psh
 
 # 8. Run psh setup
