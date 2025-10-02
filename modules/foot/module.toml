@@ -2,7 +2,7 @@
 # TODO: Replace hardcoded 'kilted' prefix with ${ROS_DISTRO} once substitution is available
 apt = ["libboost-all-dev", "ros-kilted-diagnostic-updater", "ros-kilted-xacro"]
 pip = []
-patches = []
+patches = ["modules/foot/apply_patches.sh"]
 launch = "modules/foot/launch_unit.sh"
 shutdown = "modules/foot/shutdown_unit.sh"
 pilot_control = "modules/foot/pilot/components/FootControlPanel.tsx"

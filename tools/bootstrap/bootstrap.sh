@@ -12,7 +12,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y \
   curl git build-essential make \
   python3-full python3-pip python3-venv python-is-python3 \
-  shellcheck micro mc
+  shellcheck micro mc ripgrep
 
 # Ensure ~/.local/bin is on PATH for the current session and future logins
 if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
