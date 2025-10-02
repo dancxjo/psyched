@@ -101,7 +101,7 @@ cd -
 
 # Install globally as /usr/bin/psh (symlink to the freshly built binary)
 repo_root="$(cd "$(dirname "$0")" && pwd)"
-psh_binary="${repo_root}/target/release/psh"
+psh_binary="${repo_root}/target/debug/psh"
 
 if [ ! -x "${psh_binary}" ]; then
     echo "Error: expected psh binary at ${psh_binary} (did cargo build --release succeed?)" >&2
