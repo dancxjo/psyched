@@ -358,17 +358,18 @@ fn prepare_ros_workspace(
         colcon_args.extend(config.packages.iter().cloned());
     }
 
-    println!(
-        "[{}] Running colcon build in {}",
-        module,
-        workspace_dir.display()
-    );
+    // TODO: Only run this once `psh mod setup` happens
+    // println!(
+    //     "[{}] Running colcon build in {}",
+    //     module,
+    //     workspace_dir.display()
+    // );
 
-    cmd("colcon", colcon_args)
-        .dir(&workspace_dir)
-        .stderr_to_stdout()
-        .run()
-        .with_context(|| format!("[{}] colcon build failed", module))?;
+    // cmd("colcon", colcon_args)
+    //     .dir(&workspace_dir)
+    //     .stderr_to_stdout()
+    //     .run()
+    //     .with_context(|| format!("[{}] colcon build failed", module))?;
 
     Ok(())
 }
