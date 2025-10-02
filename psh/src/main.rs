@@ -1,4 +1,5 @@
 mod build;
+mod cargo_patch;
 mod clean;
 mod cli;
 mod module_runner;

@@ -9,7 +9,7 @@
   <buildtool_depend>ament_cargo</buildtool_depend>
 
   <depend>rclrs</depend>
-
+    <buildtool_depend>rosidl_generator_rs</buildtool_depend>
   <export>
     <build_type>ament_cargo</build_type>
   </export>

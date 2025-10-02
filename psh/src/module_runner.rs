@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 use walkdir::WalkDir;
 use which::which;
 
+use crate::cargo_patch::refresh_cargo_patches;
 use crate::workspace::{workspace_root, workspace_src};
 
 #[cfg(target_family = "unix")]
@@ -116,6 +117,8 @@ pub fn setup_modules(modules: &[String]) -> Result<()> {
 
         setup_module_internal(&module, &module_dir, true)?;
     }
+
+    refresh_cargo_patches()?;
 
     Ok(())
 }
