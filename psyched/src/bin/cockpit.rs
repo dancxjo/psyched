@@ -9,7 +9,7 @@ use axum::{
 use futures::{stream::SplitSink, SinkExt, StreamExt};
 use rclrs::IntoPrimitiveOptions as _;
 use rclrs::{
-    vendor::example_interfaces::msg::String as RosString, vendor::sensor_msgs::msg::Imu as RosImu,
+    vendor::example_interfaces::msg::String as RosString, sensor_msgs::msg::Imu as RosImu,
     Context, CreateBasicExecutor, RclReturnCode, RclrsError, SpinOptions,
 };
 use serde::{Deserialize, Serialize};

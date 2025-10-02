@@ -10,6 +10,7 @@
 
   <depend>rclrs</depend>
   <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
 
   <!-- <depend>psyched_msgs</depend> -->
 

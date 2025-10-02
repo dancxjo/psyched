@@ -11,11 +11,10 @@ path = "src/bin/cockpit.rs"
 anyhow = "1"
 axum = { version = "0.7", features = ["ws"] }
 futures = "0.3"
-rclrs = { version = "0.5.1", features = [
-    "sensor_msgs",
-    "geometry_msgs",
-    "std_msgs",
-] }
+rclrs = "*"
+std_msgs = { version = "*", path = "../install/share/std_msgs/rust" }
+# geometry_msgs = { version = "*", path = "../install/geometry_msgs/share/geometry_msgs/rust" }
+sensor_msgs = { version = "*", path = "../install/share/sensor_msgs/rust" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"

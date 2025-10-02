@@ -2130,3 +2130,31 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "actionlib_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "diagnostic_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "geometry_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "nav_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "sensor_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "shape_msgs"
+version = "5.5.1"
+
+[[patch.unused]]
+name = "trajectory_msgs"
+version = "5.5.1"
