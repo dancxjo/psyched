@@ -7,7 +7,7 @@ import * as $4 from "./routes/modules/pilot.tsx";
 import * as $I0 from "./islands/FootControlPanelIsland.tsx";
 import * as $I1 from "./islands/ImuTelemetryIsland.tsx";
 import * as $I2 from "./islands/PilotOverviewIsland.tsx";
-import { type Manifest } from "$fresh/server.ts";
+import { type Manifest } from "$fresh/server";
 
 const manifest: Manifest = {
     routes: {

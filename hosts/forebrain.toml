@@ -18,12 +18,27 @@ docker = true
 ros2 = false
 cuda = true
 
-[[modules]]
-name = "pilot"
-launch = true
-env = { ROS_DOMAIN_ID = "25" }
-
 [[services]]
 name = "tts"
+setup = true
+up = true
+
+[[services]]
+name = "llm"
+setup = false
+up = true
+
+[[services]]
+name = "graphs"
+setup = false
+up = true
+
+[[services]]
+name = "vectors"
+setup = false
+up = true
+
+[[services]]
+name = "asr"
 setup = true
 up = true

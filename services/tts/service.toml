@@ -4,6 +4,6 @@ compose = "docker-compose.yml"
 # Compose project name (overrides the default 'psyched-tts').
 project = "psyched-tts"
 # Script that prepares local model assets so the Compose stack can mount them.
-setup_scripts = ["psh/scripts/download_speech_models.sh"]
+setup_scripts = ["setup.sh"]
 # Optional human-readable description for tooling / docs.
 description = "Streaming Coqui TTS websocket microservice"

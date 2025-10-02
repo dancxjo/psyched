@@ -1,0 +1,3 @@
+[service.vectors]
+compose = "docker-compose.yml"
+description = "Qdrant vector database for retrieval-augmented pipelines"

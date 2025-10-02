@@ -137,7 +137,7 @@ class TTSSynthesizer:
         # If the operator has mounted a local models directory into the
         # container (e.g. via docker-compose), prefer a matching local model
         # path to avoid pulling from the Coqui registry. The download scripts
-        # in this repo place TTS assets under tools/tts_websocket/models which
+    # in this repo place TTS assets under services/tts/models which
         # is mounted as /models in the compose stack.
         tts_model_dir = os.environ.get("TTS_MODEL_DIR")
         if tts_model_dir:

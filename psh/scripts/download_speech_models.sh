@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
 # psh/scripts/download_speech_models.sh
-# Downloads required models for ASR, TTS, and LLM microservices for compose/speech-stack.compose.yml
-# Usage: ./psh/scripts/download_speech_models.sh
+# Legacy aggregator for speech-related model assets.
+# Prefer running the service-specific setup scripts in services/<name>/setup.sh.
 set -euo pipefail
 
 # Resolve repository root relative to this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Directories
-LLM_MODEL_DIR="${REPO_ROOT}/forebrain-llm/models"
-TTS_MODEL_DIR="${REPO_ROOT}/tools/tts_websocket/models"
-ASR_MODEL_DIR="${REPO_ROOT}/asr-service/models"
-
-# Create directories if they do not exist
-mkdir -p "$LLM_MODEL_DIR" "$TTS_MODEL_DIR" "$ASR_MODEL_DIR"
+LLM_MODEL_DIR="${REPO_ROOT}/services/llm/models"
+TTS_MODEL_DIR="${REPO_ROOT}/services/tts/models"
+ASR_MODEL_DIR="${REPO_ROOT}/services/asr/models"
 
 # Support Hugging Face token via environment variable.
 # It will look for, in order: HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_HUB_TOKEN, HF_TOKEN
@@ -59,8 +56,7 @@ download() {
   echo "[ERROR] Failed to download $url (HTTP $http_code)"
   if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
     echo "[ERROR] The Hugging Face URL returned HTTP $http_code, which usually means the model requires authentication."
-    echo "[HINT] Export a Hugging Face token into one of these env vars and re-run:" \
-         "HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_HUB_TOKEN, or HF_TOKEN"
+    echo "[HINT] Export a Hugging Face token into one of these env vars and re-run: HUGGINGFACE_HUB_TOKEN, HUGGINGFACE_TOKEN, HF_HUB_TOKEN, or HF_TOKEN"
     echo "  export HUGGINGFACE_HUB_TOKEN=\"<your-token>\""
     echo "See https://huggingface.co/settings/tokens to create a token."
     echo "If you prefer, log in locally with 'huggingface-cli login' and re-run this script."
@@ -74,97 +70,110 @@ download() {
   return 22
 }
 
-echo "[INFO] Downloading LLM model (GGUF) for forebrain-llm..."
-LLM_MODEL_NAME="gpt-oss-20b-Q5_K_M.gguf"
-LLM_MODEL_PATH="$LLM_MODEL_DIR/$LLM_MODEL_NAME"
-if [ ! -f "$LLM_MODEL_PATH" ]; then
-  # Prefer the canonical resolve URL without the extra query param which can
-  # sometimes produce HTML wrappers or redirects depending on HF settings.
-  HF_MODEL_URL="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$LLM_MODEL_NAME"
-  echo "[INFO] Fetching $LLM_MODEL_NAME from $HF_MODEL_URL"
-  if ! download "$HF_MODEL_URL" "$LLM_MODEL_PATH" 5 5; then
+check_magic() {
+  local file="$1"
+  hexdump -n4 -v -e '4/1 "%02X"' "$file" 2>/dev/null || true
+}
+
+download_llm_models() {
+  mkdir -p "$LLM_MODEL_DIR"
+  local model_name="gpt-oss-20b-Q5_K_M.gguf"
+  local model_path="$LLM_MODEL_DIR/$model_name"
+
+  echo "[INFO] Downloading LLM model (GGUF) for services/llm..."
+  if [ -f "$model_path" ]; then
+    echo "[INFO] LLM model already present."
+    return 0
+  fi
+
+  local hf_url="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/$model_name"
+  echo "[INFO] Fetching $model_name from $hf_url"
+  if ! download "$hf_url" "$model_path" 5 5; then
     echo "[ERROR] Failed to download LLM model. See messages above for details and check your Hugging Face token/permissions."
-    exit 22
+    return 22
   fi
 
-  # Quick sanity-check: GGUF files start with ASCII 'GGUF' (bytes 47 47 55 46).
-  # Some common failure modes are: an HTML error page, a Git LFS pointer file,
-  # or an auth/login HTML response. Detect those and print a clear diagnostic.
-  check_magic() {
-    # Read first 4 bytes as hex (upper-case, no separator)
-    local magic
-    magic=$(hexdump -n4 -v -e '4/1 "%02X"' "$1" 2>/dev/null || true)
-    echo "$magic"
-  }
-
-  MAGIC_HEX=$(check_magic "$LLM_MODEL_PATH")
-  if [ -z "$MAGIC_HEX" ]; then
-    echo "[ERROR] Could not read header from $LLM_MODEL_PATH"
-    file "$LLM_MODEL_PATH" || true
-    exit 23
+  local magic_hex
+  magic_hex=$(check_magic "$model_path")
+  if [ -z "$magic_hex" ]; then
+    echo "[ERROR] Could not read header from $model_path"
+    file "$model_path" || true
+    return 23
   fi
 
-  # Expected: 47 47 55 46 -> 47475546. Some tools/platforms may show the bytes
-  # in little-endian order; treat the reversed sequence as a warning as well.
-  if [ "$MAGIC_HEX" != "47475546" ] && [ "$MAGIC_HEX" != "46554747" ]; then
-    echo "[ERROR] Downloaded file does not look like a GGUF model (magic=0x$MAGIC_HEX)"
+  if [ "$magic_hex" != "47475546" ] && [ "$magic_hex" != "46554747" ]; then
+    echo "[ERROR] Downloaded file does not look like a GGUF model (magic=0x$magic_hex)"
     echo "[ERROR] Common causes: you downloaded an HTML error page, a Git LFS pointer, or the file is incomplete."
-    echo "[ERROR] File type:"; file "$LLM_MODEL_PATH" || true
-    echo "[ERROR] First 200 bytes (for debugging):"; head -c 200 "$LLM_MODEL_PATH" | sed -n '1,200p' || true
+    echo "[ERROR] File type:"; file "$model_path" || true
+    echo "[ERROR] First 200 bytes (for debugging):"; head -c 200 "$model_path" | sed -n '1,200p' || true
     echo "[HINT] If the file contains 'git-lfs' or 'version https://git-lfs.github.com', you need to pull LFS objects or download via the Hugging Face web UI with credentials."
     echo "[HINT] If the file looks like HTML (starts with '<!doctype' or '<html'), export HUGGINGFACE_HUB_TOKEN and re-run this script, or use 'huggingface-cli login' locally."
     echo "See https://huggingface.co/settings/tokens to create a token."
-    exit 24
+    return 24
   fi
-else
-  echo "[INFO] LLM model already present."
-fi
 
-echo "[INFO] Downloading TTS model for tts-websocket..."
-# Example: Download en_US-amy-medium.onnx (adjust as needed)
-if [ ! -f "$TTS_MODEL_DIR/en_US-amy-medium.onnx" ]; then
-  if ! download "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx" "$TTS_MODEL_DIR/en_US-amy-medium.onnx"; then
+  return 0
+}
+
+download_tts_models() {
+  mkdir -p "$TTS_MODEL_DIR"
+  local model_path="$TTS_MODEL_DIR/en_US-amy-medium.onnx"
+
+  echo "[INFO] Downloading TTS model for tts-websocket..."
+  if [ -f "$model_path" ]; then
+    echo "[INFO] TTS model already present."
+    return 0
+  fi
+
+  if ! download "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx" "$model_path"; then
     echo "[ERROR] Failed to download TTS model. See messages above for details."
-    exit 22
+    return 22
   fi
-else
-  echo "[INFO] TTS model already present."
-fi
 
-echo "[INFO] Downloading ASR models for asr-service..."
-# The ggerganov/whisper.cpp repo provides ggml-converted Whisper models
-# (ggml-*.bin). We no longer attempt to download CT2 zip packages (tiny.en-ct2)
-# because those files are not present in that repo. The script downloads the
-# ggml binaries below (ggml-tiny.en.bin, ggml-small.en.bin, etc.).
+  return 0
+}
 
-GGML_MODEL_PATH="$ASR_MODEL_DIR/ggml-tiny.en.bin"
-if [ ! -f "$GGML_MODEL_PATH" ]; then
-  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin" "$GGML_MODEL_PATH"; then
-    echo "[ERROR] Failed to download ggml ASR model. See messages above for details."
-    exit 22
+download_asr_models() {
+  mkdir -p "$ASR_MODEL_DIR"
+
+  echo "[INFO] Downloading ASR models for services/asr..."
+
+  local -a models=(
+    "ggml-tiny.en.bin|https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"
+    "ggml-small.en.bin|https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
+    "ggml-large-v3-q5_0.bin|https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin"
+  )
+
+  local entry
+  for entry in "${models[@]}"; do
+    local filename="${entry%%|*}"
+    local url="${entry##*|}"
+    local path="$ASR_MODEL_DIR/$filename"
+
+    if [ -f "$path" ]; then
+      echo "[INFO] $filename already present."
+      continue
+    fi
+
+    if ! download "$url" "$path"; then
+      echo "[ERROR] Failed to download $filename. See messages above for details."
+      return 22
+    fi
+  done
+
+  return 0
+}
+
+legacy_main() {
+  download_llm_models
+  download_tts_models
+  download_asr_models
+  echo "[SUCCESS] All models downloaded and folders set up."
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  echo "[WARN] psh/scripts/download_speech_models.sh is deprecated. Run services/<name>/setup.sh instead."
+  if ! legacy_main "$@"; then
+    exit $?
   fi
-else
-  echo "[INFO] ggml ASR model already present."
 fi
-
-SMALL_MODEL_PATH="$ASR_MODEL_DIR/ggml-small.en.bin"
-if [ ! -f "$SMALL_MODEL_PATH" ]; then
-  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin" "$SMALL_MODEL_PATH"; then
-    echo "[ERROR] Failed to download ggml small ASR model. See messages above for details."
-    exit 22
-  fi
-else
-  echo "[INFO] ggml small ASR model already present."
-fi
-
-LARGE_MODEL_PATH="$ASR_MODEL_DIR/ggml-large-v3-q5_0.bin"
-if [ ! -f "$LARGE_MODEL_PATH" ]; then
-  if ! download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin" "$LARGE_MODEL_PATH"; then
-    echo "[ERROR] Failed to download ggml large ASR model. See messages above for details."
-    exit 22
-  fi
-else
-  echo "[INFO] ggml large ASR model already present."
-fi
-
-echo "[SUCCESS] All models downloaded and folders set up."

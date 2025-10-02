@@ -1,0 +1,4 @@
+[service.asr]
+compose = "docker-compose.yml"
+setup_scripts = ["setup.sh"]
+description = "Streaming Whisper-based ASR over websockets"

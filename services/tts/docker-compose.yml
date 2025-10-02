@@ -13,6 +13,6 @@ services:
       - "5002:5002"
     volumes:
       - type: bind
-        source: ../../tools/tts_websocket/models
+        source: ./models
         target: /models
         read_only: false

@@ -13,6 +13,10 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 	- [Foot](#foot)
 - [Services](#services)
 	- [TTS](#tts)
+	- [Language](#language)
+	- [Graphs](#graphs)
+	- [Vectors](#vectors)
+	- [ASR](#asr)
 - [Development workflows](#development-workflows)
 	- [Rust + ROS backend](#rust--ros-backend)
 	- [Pilot frontend](#pilot-frontend)
@@ -88,12 +92,10 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 ```
 ├── modules/           # Module definitions (pilot, foot, imu, …)
-├── services/          # Containerised microservices (tts, …)
+├── services/          # Containerised microservices (tts, language, graphs, vectors, …)
 │   └── <name>/
-│       ├── module.toml        # Lifecycle metadata consumed by psh
-│       ├── launch_*.sh        # Start the module
-│       ├── shutdown_*.sh      # Stop / cleanup
-│       └── pilot/             # Optional UI components exposed to the cockpit
+│       ├── service.toml        # Manifest consumed by psh svc
+│       └── docker-compose.yml  # Compose stack plus supporting assets
 ├── psyched/           # Rust ROS bridge providing the websocket cockpit backend
 ├── psh/               # Rust CLI for provisioning + module orchestration
 ├── psyched-msgs/      # Placeholder crate for shared ROS message helpers
@@ -152,7 +154,25 @@ Use the `psh svc` subcommands to interact with services:
 
 `services/tts` hosts a streaming text-to-speech websocket based on 🐸Coqui TTS. The Compose stack builds a slim Python image (`services/tts/docker/tts-websocket.Dockerfile`) that runs `tools/tts_websocket/websocket_server.py` and exposes port `5002`.
 
-Model assets live under `tools/tts_websocket/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `psh/scripts/download_speech_models.sh` manually) to pull the default English voice. Once prepared, start the service with `psh svc up tts` and connect clients to `ws://<host>:5002/tts`.
+Model assets live under `services/tts/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `services/tts/setup.sh` manually) to pull the default English voice. Once prepared, start the service with `psh svc up tts` and connect clients to `ws://<host>:5002/tts`.
+
+### Language
+
+`services/language` provides a GPU-enabled [Ollama](https://ollama.com/) runtime. The Compose stack binds Ollama's data directory from `/usr/share/ollama/.ollama` so models persist across container restarts and exposes the standard API on port `11434`.
+
+Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host (create it and grant write access to the Docker daemon user if needed). Bring the service online with `psh svc up language`; stop it via `psh svc down language`. GPU access requires Docker's NVIDIA runtime—verify that `nvidia-smi` works on the host and the Docker daemon has `default-runtime=nvidia` or an equivalent device mapping configured. After the first run, load desired models inside the container using `ollama run <model>` or the HTTP API.
+
+### Graphs
+
+`services/graphs` runs a standalone [Neo4j](https://neo4j.com/) graph database. Ports `7474` (HTTP UI) and `7687` (Bolt) are exposed, and named volumes back `/data`, `/logs`, `/import`, and `/plugins` to persist graph state between restarts. Start and stop it with `psh svc up graphs` / `psh svc down graphs`. The `NEO4J_AUTH` environment variable defaults to `neo4j/password`; override this in production by editing the Compose file or passing environment overrides in your host configuration.
+
+### Vectors
+
+`services/vectors` offers a [Qdrant](https://qdrant.tech/) vector database useful for retrieval-augmented generation pipelines. It publishes HTTP and gRPC endpoints on `6333` and `6334` respectively and persists storage under the `vectors_data` named volume. Use `psh svc up vectors` to launch it and `psh svc down vectors` to stop. Populate the collection schema via Qdrant's REST API, the CLI, or any of the official client libraries.
+
+### ASR
+
+`services/asr` exposes a custom Rust websocket server that streams speech-to-text using [`whisper-rs`](https://github.com/tazz4843/whisper-rs). Send 16-bit little-endian PCM frames (default `16 kHz`) to `/asr`; the service buffers audio, emits partial transcripts with token-level timings as the model converges, and publishes finalised chunks alongside a WAV payload once segments stabilise. Mount pretrained Whisper models into `services/asr/models` (run `psh svc setup asr` to download defaults) and bring the stack online with `psh svc up asr`.
 
 ## Development workflows
 

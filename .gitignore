@@ -59,6 +59,16 @@ log/
 *.old
 *.tmp
 
+# ------------------------------
+# Service asset caches
+# ------------------------------
+services/llm/models/*
+!services/llm/models/.gitkeep
+services/asr/models/*.bin
+!services/asr/models/.gitkeep
+services/tts/models/*
+!services/tts/models/.gitkeep
+
 # ROS 2 workspace overlay
 /src/
 /packages/

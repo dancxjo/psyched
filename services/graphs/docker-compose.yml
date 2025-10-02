@@ -1,0 +1,20 @@
+services:
+  graphs:
+    image: neo4j:latest
+    container_name: graphs
+    environment:
+      NEO4J_AUTH: neo4j/password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - graphs_data:/data
+      - graphs_logs:/logs
+      - graphs_import:/var/lib/neo4j/import
+      - graphs_plugins:/plugins
+
+volumes:
+  graphs_data:
+  graphs_logs:
+  graphs_import:
+  graphs_plugins:
