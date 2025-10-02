@@ -1,17 +1,1 @@
-#[patch.crates-io.std_msgs]
-#path = "vendor_msgs/std_msgs"
-
-[patch.crates-io.trajectory_msgs]
-path = "vendor_msgs/trajectory_msgs"
-
-[patch.crates-io.sensor_msgs]
-path = "vendor_msgs/sensor_msgs"
-
-[patch.crates-io.nav_msgs]
-path = "vendor_msgs/nav_msgs"
-
-[patch.crates-io.geometry_msgs]
-path = "vendor_msgs/geometry_msgs"
-
-[patch.crates-io.shape_msgs]
-path = "vendor_msgs/shape_msgs"
+[patch.crates-io]

@@ -32,6 +32,9 @@ mkdir -p "${SRC_DIR}" "${BUILD_DIR}" "${INSTALL_DIR}" "${LOG_DIR}"
 printf '*\n!.gitignore\n' > "${WORKSPACE_DIR}/.gitignore"
 printf '*\n!.gitignore\n' > "${SRC_DIR}/.gitignore"
 
+echo "==> Setting up ROS 2 Rust support"
+"${REPO_ROOT}/tools/bootstrap/setup_ros_rust_bindings.sh"
+
 # Remove deprecated top-level directories if they still exist.
 for legacy in "${REPO_ROOT}/src" "${REPO_ROOT}/build" "${REPO_ROOT}/install"; do
   if [[ -e "${legacy}" ]]; then

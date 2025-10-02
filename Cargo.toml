@@ -1,5 +1,0 @@
-[workspace]
-# Keep psyched out of here; it depends on a working psh setup
-members = ["psh"]
-
-resolver = "2"

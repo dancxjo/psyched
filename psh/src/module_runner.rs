@@ -289,11 +289,12 @@ fn prepare_ros_workspace(
 
     let src_dir = workspace_dir.join("src");
     if !src_dir.is_dir() {
-        bail!(
-            "ROS workspace {} missing src/ directory for module '{}'",
-            workspace_dir.display(),
-            module
-        );
+        fs::create_dir_all(&src_dir).with_context(|| {
+            format!(
+                "failed to create missing src/ directory in {}",
+                workspace_dir.display()
+            )
+        })?;
     }
 
     if !config.skip_rosdep {
