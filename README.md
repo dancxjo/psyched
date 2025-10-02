@@ -1,19 +1,173 @@
 # psyched
 
-This is my robot control system, the software I am using to make my own robot named Pete. You can use this to make your own robot too! Start by forking this repository. Then configure the hosts in the `hosts` directory, choosing which modules to run where. ....
+Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a collection of hardware-specific modules, and a web-based “pilot” console that lets you drive a robot from any browser. The repo doubles as a reference for building your own robot—swap out the hardware-specific bits, keep the orchestration.
 
-## Pilot module
-The pilot module provides a web-based cockpit interface to control the robot. It consists of a Rust backend and a Deno frontend.
+## Table of contents
 
-## IMU module
-This is hardware specific to my robot, but it provides an example of how to create a ROS2 package that reads from an MPU6050 IMU sensor and publishes the data as ROS2 messages.
+- [Project overview](#project-overview)
+- [Quick start](#quick-start)
+- [Repository layout](#repository-layout)
+- [Modules](#modules)
+	- [Pilot](#pilot)
+	- [IMU](#imu)
+	- [Foot](#foot)
+- [Development workflows](#development-workflows)
+	- [Rust + ROS backend](#rust--ros-backend)
+	- [Pilot frontend](#pilot-frontend)
+	- [Using the `psh` CLI](#using-the-psh-cli)
+- [Testing & validation](#testing--validation)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [License](#license)
 
-## Foot module
-This is hardware specific for my iRobot Create 1 robot platform, but it provides an example of how to create a ROS2 package that interfaces with a robot platform and provides control and sensor data.
+## Project overview
 
-## More to come...
-* ear module - microphone array and speech recognition
-* eye module - camera and computer vision
-* chat module - large language model integration
-* voice module - text-to-speech
+Psyched is organized around three ideas:
+
+1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
+2. **A ROS 2 + Rust bridge.** The `psyched` crate exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
+3. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
+
+Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that provisions hosts, orchestrates modules, and maintains the Deno symlinks required by the pilot.
+
+## Quick start
+
+### 1. Clone & bootstrap
+
+```bash
+git clone https://github.com/dancxjo/psyched.git
+cd psyched
+./setup  # installs system dependencies, builds psh, and drops you into psh setup
+```
+
+`./setup` installs build toolchains (Rust, Python, ROS dependencies), configures mDNS, compiles the `psh` helper, and runs `psh setup` to execute the host-specific bootstrap scripts defined in `hosts/*.toml`.
+
+### 2. Provision additional machines (optional)
+
+```bash
+psh host setup motherbrain
+psh host setup forebrain
+```
+
+Each host file lists shell scripts under `tools/bootstrap/` (or `tools/provision/`) to install ROS 2, CUDA, Docker, and Deno.
+
+### 3. Bring modules online
+
+```bash
+psh mod setup pilot   # prepare symlinks and dependencies
+psh mod up pilot      # start the cockpit backend + Fresh frontend
+```
+
+Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. Shutdown with `psh mod down <name>`.
+
+## Repository layout
+
+```
+├── modules/           # Module definitions (pilot, foot, imu, …)
+│   └── <name>/
+│       ├── module.toml        # Lifecycle metadata consumed by psh
+│       ├── launch_*.sh        # Start the module
+│       ├── shutdown_*.sh      # Stop / cleanup
+│       └── pilot/             # Optional UI components exposed to the cockpit
+├── psyched/           # Rust ROS bridge providing the websocket cockpit backend
+├── psh/               # Rust CLI for provisioning + module orchestration
+├── psyched-msgs/      # Placeholder crate for shared ROS message helpers
+├── src/               # Colcon workspace overlays (mirrors modules/* packages)
+├── tools/             # Host bootstrap & provisioning scripts
+├── hosts/             # Host configuration TOML files
+├── install/, build/, log/  # Colcon build outputs
+├── target/            # Cargo build outputs
+└── setup              # Top-level bootstrap script (see above)
+```
+
+## Modules
+
+### Pilot
+
+The pilot module provides a browser-based cockpit with two parts:
+
+- **Backend:** `psyched/src/bin/cockpit.rs` exposes a websocket at `ws://0.0.0.0:8088/ws`. Incoming messages are mapped to ROS topics (currently `/conversation`; more topics coming soon). Outbound broadcasts like `/audio/transcript/final` are streamed to every connected browser.
+- **Frontend:** `modules/pilot/frontend` is a Fresh app. `lib/cockpit.ts` contains the websocket client (`CockpitClient`) and a `useCockpitTopic` hook that any component can reuse.
+
+Bring it up with:
+
+```bash
+psh mod setup pilot
+psh mod up pilot
+```
+
+During development you can run the frontend directly:
+
+```bash
+cd modules/pilot/frontend
+deno task dev
+```
+
+### IMU
+
+Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver) and exposes pilot UI components under `modules/imu/pilot/`. Launch it with `psh mod up imu` once the hardware is attached.
+
+### Foot
+
+Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`) and provides cockpit controls in `modules/foot/pilot/`. Launch via `psh mod up foot`.
+
+Modules can optionally contribute Fresh components or routes by placing files inside `modules/<name>/pilot/{components,routes,islands,static}`. `psh mod setup <name>` manages symlinks into the pilot frontend.
+
+## Development workflows
+
+### Rust + ROS backend
+
+- Build everything: `cargo build --workspace`
+- Run the cockpit backend alone: `cargo run -p psyched --bin cockpit`
+- Format / lint: `cargo fmt`, `cargo clippy --workspace --all-targets`
+
+ROS packages live under `src/` (mirrored into `packages/` for colcon). Use colcon to build ROS nodes when modifying C++/Python packages:
+
+```bash
+colcon build --packages-select mpu6050driver
+source install/setup.bash
+```
+
+### Pilot frontend
+
+- Install dependencies: handled automatically by Deno (`deno.json` + `deno.lock`)
+- Dev server: `deno task dev`
+- Type-check: `deno check lib/cockpit.ts`
+- Format: `deno fmt`
+
+### Using the `psh` CLI
+
+`psh` wraps common workflows:
+
+- `psh host setup <host>` – executes the bootstrap scripts for a host defined in `hosts/<host>.toml`
+- `psh mod list` – inspect module status
+- `psh mod setup|teardown <module>` – manage symlinks + prep work
+- `psh mod up|down <module>` – start/stop module services
+- `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
+
+## Testing & validation
+
+- **Rust:** `cargo test --workspace`
+- **Pilot Frontend:** `deno test` (add tests under `modules/pilot/frontend`). Use `deno check` to catch type errors.
+- **ROS nodes:** Build via `colcon build` then run `ros2 test` or module-specific launch files as needed.
+
+CI is currently manual; prefer running the commands above before pushing.
+
+## Troubleshooting
+
+- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Re-run `psh env` after changing the distro.
+- Cockpit websocket unreachable: verify `cargo run -p psyched --bin cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
+- Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
+- Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
+
+## Roadmap
+
+- Expand cockpit topics beyond `/conversation`
+- Ship IMU + drive base dashboards in the pilot UI
+- Add ear/eye/chat/voice modules (see `modules/` placeholders)
+- Automate CI for cargo, deno, and colcon builds
+
+## License
+
+Licensed under the MIT License. See [`LICENSE`](./LICENSE).
 
