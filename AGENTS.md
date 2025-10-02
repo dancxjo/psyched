@@ -71,6 +71,7 @@ Always prefer running the smallest relevant command set.
 - **Vendored ROS bindings:** `tools/bootstrap/generate_ros_rust_bindings.sh` runs after ROS provisioning to populate `vendor_msgs/`. It requires Docker; rerun it manually if provisioning skipped the step.
 - **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
 - **Background processes:** Launch scripts spawn long-lived processes (`cargo run`, `deno task`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
+- **ROS message crates:** Rust binaries expect generated message crates under `install/share/<pkg>/rust`. Run the relevant `colcon build` step (e.g. via `psh mod setup`) before invoking `cargo fmt`/`cargo check` so `create_msgs`, `geometry_msgs`, etc. are discoverable.
 
 ## Useful references
 
