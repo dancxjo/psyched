@@ -1,5 +1,5 @@
 import { Handler } from "$fresh/server.ts";
-import { startSystemd } from "../../../../../../../psh/lib/systemd.ts";
+import { startSystemd } from "../../../../../../../tools/psh/lib/systemd.ts";
 
 interface RequestBody {
   module: string;

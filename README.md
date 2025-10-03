@@ -101,8 +101,8 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 │   └── <name>/
 │       ├── service.toml           # Manifest consumed by psh svc
 │       └── docker-compose.yml     # Compose stack plus supporting assets
-├── psh/                           # Deno CLI for provisioning + module orchestration
 ├── tools/                         # Host bootstrap & provisioning scripts
+│   └── psh/                       # Deno CLI for provisioning + module orchestration
 ├── hosts/                         # Host configuration TOML files
 ├── setup                          # Top-level bootstrap script (see above)
 └── work/                          # Colcon workspace (src/, build/, install/, log/) created by tools/clean_workspace

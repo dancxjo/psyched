@@ -2,7 +2,7 @@ import { Handler } from "$fresh/server.ts";
 import {
   bringServiceDown,
   listServices,
-} from "../../../../../../../psh/lib/service.ts";
+} from "../../../../../../../tools/psh/lib/service.ts";
 
 interface RequestBody {
   services?: string[];

@@ -11,7 +11,7 @@ import {
 Deno.test("repoRoot matches project root", () => {
   const actual = repoRoot();
   const expected = resolve(
-    join(dirname(fromFileUrl(import.meta.url)), "../.."),
+    join(dirname(fromFileUrl(import.meta.url)), "../../.."),
   );
   assertEquals(actual, expected);
 });

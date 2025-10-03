@@ -1,5 +1,5 @@
 import { Handler } from "$fresh/server.ts";
-import { provisionHost } from "../../../../../../../psh/lib/host.ts";
+import { provisionHost } from "../../../../../../../tools/psh/lib/host.ts";
 
 interface RequestBody {
   hosts?: string[];

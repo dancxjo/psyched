@@ -15,7 +15,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 
 | Path | Purpose |
 | --- | --- |
-| `psh/` | `psh` Deno CLI for provisioning and module orchestration. Entry: `main.ts`. |
+| `tools/psh/` | `psh` Deno CLI for provisioning and module orchestration. Entry: `main.ts`. |
 | `modules/pilot/packages/pilot/pilot_cockpit/` | ROS-aware Python backend serving the cockpit websocket. |
 | `modules/pilot/frontend/` | Deno Fresh app for the pilot console. |
 | `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
@@ -31,7 +31,7 @@ Always prefer running the smallest relevant command set.
 | Cockpit backend only | `colcon build --packages-select pilot && ros2 run pilot cockpit` |
 | ROS packages (colcon) | `colcon build --packages-select <pkg>` followed by `source install/setup.bash` |
 | Deno pilot UI | `deno fmt`, `deno check lib/cockpit.ts`, `deno task dev`, `deno test` |
-| `psh` CLI | `cd psh && deno fmt && deno lint && deno task test` |
+| `psh` CLI | `cd tools/psh && deno fmt && deno lint && deno task test` |
 | Shell scripts | `shellcheck modules/**/launch_*.sh modules/**/shutdown_*.sh setup` |
 
 > ✅ **Definition of done:** code formatted, linted, and the smallest relevant test/build commands above succeed.
@@ -40,7 +40,7 @@ Always prefer running the smallest relevant command set.
 
 ### Deno CLI
 
-- Use the shared import map in `psh/deno.json` (run scripts with `deno run --config psh/deno.json ...`).
+- Use the shared import map in `tools/psh/deno.json` (run scripts with `deno run --config tools/psh/deno.json ...`).
 - Prefer [`dax`](https://deno.land/x/dax) for shell orchestration instead of bespoke bash snippets.
 - Add regression coverage with `deno test` for new helpers before wiring them into the CLI (TDD/BDD encouraged).
 - Document exported helpers with `/** ... */` JSDoc comments when behaviour isn’t self-evident.

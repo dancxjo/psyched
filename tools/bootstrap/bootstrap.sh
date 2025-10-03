@@ -144,7 +144,7 @@ set -euo pipefail
 REPO_ROOT="__REPO_ROOT__"
 export PSYCHED_REPO_ROOT="${REPO_ROOT}"
 
-exec "__DENO_BIN__" run -A --config "${REPO_ROOT}/psh/deno.json" "${REPO_ROOT}/psh/main.ts" "$@"
+exec "__DENO_BIN__" run -A --config "${REPO_ROOT}/tools/psh/deno.json" "${REPO_ROOT}/tools/psh/main.ts" "$@"
 PSH
 
 sed -i "s#__REPO_ROOT__#${repo_root//\/\\/}#g" "${tmp_wrapper}"
@@ -152,7 +152,7 @@ sed -i "s#__DENO_BIN__#${deno_path//\/\\/}#g" "${tmp_wrapper}"
 sudo install -m 0755 "${tmp_wrapper}" "${psh_wrapper}"
 rm -f "${tmp_wrapper}"
 
-if ! "${deno_path}" cache --config "${repo_root}/psh/deno.json" "${repo_root}/psh/main.ts" >/dev/null 2>&1; then
+if ! "${deno_path}" cache --config "${repo_root}/tools/psh/deno.json" "${repo_root}/tools/psh/main.ts" >/dev/null 2>&1; then
     echo "Warning: deno cache failed; dependencies will download on first run." >&2
 fi
 

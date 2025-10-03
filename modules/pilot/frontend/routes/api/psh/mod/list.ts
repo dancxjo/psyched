@@ -1,5 +1,5 @@
 import { Handler } from "$fresh/server.ts";
-import { moduleStatuses } from "../../../../../../../psh/lib/module.ts";
+import { moduleStatuses } from "../../../../../../../tools/psh/lib/module.ts";
 
 export const handler: Handler = () => {
   const statuses = moduleStatuses();
