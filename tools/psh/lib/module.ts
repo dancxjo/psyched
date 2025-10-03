@@ -604,26 +604,25 @@ export async function bringModuleUp(module: string): Promise<void> {
   console.log(colors.dim(`[${module}] writing logs to ${logFile}`));
 
   // Build complete environment setup command
-  const workspaceEnv = join(repoRoot(), "workspace_env.sh");
-  const workspaceSetup = join(workspaceRoot(), "install", "setup.bash");
+  const workspaceEnv = join(repoRoot(), "env", "psyched_env.sh");
 
   const envCommands: string[] = [];
 
-  // Source workspace_env.sh to set directory variables
+  // Source environment helpers
   if (pathExists(workspaceEnv)) {
     envCommands.push(`source ${workspaceEnv}`);
-  }
-
-  // Source ROS workspace setup
-  if (pathExists(workspaceSetup)) {
-    envCommands.push(`source ${workspaceSetup}`);
+    envCommands.push("psyched::activate --quiet");
   } else {
-    // Fall back to system ROS if workspace not built
-    const rosDistro = Deno.env.get("ROS_DISTRO");
-    if (rosDistro) {
-      const systemSetup = `/opt/ros/${rosDistro}/setup.bash`;
-      if (pathExists(systemSetup)) {
-        envCommands.push(`source ${systemSetup}`);
+    const workspaceSetup = join(workspaceRoot(), "install", "setup.bash");
+    if (pathExists(workspaceSetup)) {
+      envCommands.push(`source ${workspaceSetup}`);
+    } else {
+      const rosDistro = Deno.env.get("ROS_DISTRO");
+      if (rosDistro) {
+        const systemSetup = `/opt/ros/${rosDistro}/setup.bash`;
+        if (pathExists(systemSetup)) {
+          envCommands.push(`source ${systemSetup}`);
+        }
       }
     }
   }

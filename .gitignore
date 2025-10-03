@@ -46,6 +46,9 @@ __pycache__/
 *.pyd
 .venv/
 env/
+!env/
+!env/AGENTS.md
+!env/psyched_env.sh
 venv/
 build/
 install/
