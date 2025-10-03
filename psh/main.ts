@@ -104,8 +104,7 @@ async function main() {
       await bringModulesDown(targets);
     });
 
-  root.command("mod", moduleCommand);
-  root.command("module", moduleCommand);
+  root.command("mod", moduleCommand).alias("module");
 
   const serviceCommand = new Command()
     .description("Service lifecycle commands");
@@ -119,11 +118,10 @@ async function main() {
         const state = status.status === "running"
           ? colors.green("running")
           : status.status === "stopped"
-          ? colors.yellow("stopped")
-          : colors.red("error");
+            ? colors.yellow("stopped")
+            : colors.red("error");
         console.log(
-          `- ${status.name}: ${state}${
-            status.description ? ` – ${status.description}` : ""
+          `- ${status.name}: ${state}${status.description ? ` – ${status.description}` : ""
           }`,
         );
       }
@@ -161,8 +159,7 @@ async function main() {
       for (const svc of targets) await bringServiceDown(svc);
     });
 
-  root.command("srv", serviceCommand);
-  root.command("service", serviceCommand);
+  root.command("srv", serviceCommand).alias("service");
 
   const systemCommand = new Command()
     .description("Systemd integration for modules");
