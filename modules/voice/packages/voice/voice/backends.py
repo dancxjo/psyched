@@ -1,31 +1,68 @@
 """Speech backend implementations.
 
-Two backends are provided:
+Three backends are provided:
 
 * :class:`PrintSpeechBackend` writes spoken text to a stream (stdout by
   default). It is useful for testing or systems without a speech synthesizer.
 * :class:`EspeakSpeechBackend` wraps the ``espeak`` command line utility.
+* :class:`WebsocketTTSSpeechBackend` connects to the Coqui-driven websocket
+  service in :mod:`services.tts` and streams PCM audio frames to a local
+  playback command such as ``aplay``.
 
-Both backends implement the :class:`SpeechBackend` protocol and cooperate with
+All backends implement the :class:`SpeechBackend` protocol and cooperate with
 :class:`~voice.queue.SpeechQueue` through the
 :class:`~voice.exceptions.SpeechInterrupted` exception.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import subprocess
 import sys
 import threading
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol, Sequence, TextIO
+from typing import BinaryIO, Callable, Optional, Protocol, Sequence, TextIO
 
 from .exceptions import SpeechInterrupted
 
 _LOGGER = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], None]
+
+
+class _WebsocketConnection(Protocol):
+    """Subset of websocket client behaviour used by the backend."""
+
+    def send(self, message: str | bytes) -> None:
+        """Send ``message`` to the websocket peer."""
+
+    def recv(self) -> str | bytes:
+        """Receive the next message from the websocket peer."""
+
+    def close(self) -> None:
+        """Close the websocket connection."""
+
+
+class _PlayerProcess(Protocol):
+    """Protocol describing the audio playback subprocess used for PCM output."""
+
+    stdin: BinaryIO
+
+    def terminate(self) -> None:
+        """Request that the playback process stops."""
+
+    def wait(self, timeout: float | None = None) -> None:
+        """Wait for the playback process to exit."""
+
+    def kill(self) -> None:
+        """Forcefully kill the playback process."""
+
+
+ConnectionFactory = Callable[[], AbstractContextManager[_WebsocketConnection]]
+PlayerFactory = Callable[[int, int], _PlayerProcess]
 
 
 class SpeechBackend(Protocol):
@@ -165,4 +202,218 @@ class EspeakSpeechBackend:
                 process.stdout.close()
             if process.stderr:
                 process.stderr.close()
+
+
+class WebsocketTTSSpeechBackend:
+    """Speech backend that streams audio from the Coqui websocket service.
+
+    Parameters
+    ----------
+    url:
+        Websocket URL of the text-to-speech service. Defaults to
+        ``"ws://127.0.0.1:5002/tts"``.
+    speaker:
+        Optional speaker identifier forwarded with each synthesis request.
+    language:
+        Optional language hint forwarded with each request.
+    player_command:
+        Optional base command used to play PCM audio. When ``None`` the backend
+        uses ``aplay`` with flags appropriate for little-endian 16-bit PCM.
+    connection_factory:
+        Advanced hook allowing tests to supply a fake websocket connection.
+    player_factory:
+        Advanced hook allowing tests to provide a fake playback process.
+    connect_timeout:
+        Maximum number of seconds to wait while establishing the websocket
+        connection.
+    """
+
+    def __init__(
+        self,
+        *,
+        url: str = "ws://127.0.0.1:5002/tts",
+        speaker: str | None = None,
+        language: str | None = None,
+        player_command: Sequence[str] | None = None,
+        connection_factory: ConnectionFactory | None = None,
+        player_factory: PlayerFactory | None = None,
+        connect_timeout: float = 5.0,
+    ) -> None:
+        if not url:
+            raise ValueError("url must be a non-empty string")
+        self._url = url
+        self._speaker = speaker
+        self._language = language
+        self._connect_timeout = connect_timeout
+        self._connection_factory = connection_factory or self._default_connection_factory
+        self._player_factory = player_factory or self._build_player_factory(player_command)
+
+    # ----------------------------------------------------------------- protocol
+    def speak(
+        self,
+        text: str,
+        stop_event: threading.Event,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
+        if stop_event.is_set():
+            raise SpeechInterrupted("stop requested before synthesis")
+
+        payload: dict[str, str] = {"text": text}
+        if self._speaker:
+            payload["speaker"] = self._speaker
+        if self._language:
+            payload["language"] = self._language
+
+        process: _PlayerProcess | None = None
+        stopped = False
+        try:
+            with self._connection_factory() as websocket:
+                websocket.send(json.dumps(payload))
+                metadata = self._await_start(websocket, stop_event)
+                process = self._player_factory(metadata["sample_rate"], metadata["channels"])
+                stdin = getattr(process, "stdin", None)
+                if stdin is None:
+                    raise RuntimeError("Playback process does not expose a stdin pipe")
+                self._stream_audio(websocket, process, stop_event)
+        except SpeechInterrupted:
+            if process is not None:
+                self._stop_process(process)
+                stopped = True
+            raise
+        except Exception:
+            if process is not None:
+                self._stop_process(process)
+                stopped = True
+            raise
+        else:
+            if progress_callback:
+                progress_callback(text)
+        finally:
+            if process is not None and not stopped:
+                self._close_process(process)
+
+    # ------------------------------------------------------------------ internals
+    def _default_connection_factory(self) -> AbstractContextManager[_WebsocketConnection]:
+        try:
+            from websockets.sync.client import connect  # type: ignore import
+        except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
+            raise RuntimeError(
+                "The websockets package is required for WebsocketTTSSpeechBackend"
+            ) from exc
+
+        return connect(self._url, open_timeout=self._connect_timeout, close_timeout=5, max_size=None)
+
+    def _build_player_factory(
+        self, player_command: Sequence[str] | None
+    ) -> PlayerFactory:
+        if player_command is None:
+            executable = shutil.which("aplay")
+            if executable is None:
+                raise FileNotFoundError("Unable to locate 'aplay' for PCM playback")
+            base_command = [executable, "-q"]
+        else:
+            base_command = list(player_command)
+            if not base_command:
+                raise ValueError("player_command must contain at least one element")
+            executable = shutil.which(base_command[0])
+            if executable is None:
+                raise FileNotFoundError(f"Unable to locate playback command '{base_command[0]}'")
+            base_command[0] = executable
+
+        def factory(sample_rate: int, channels: int) -> _PlayerProcess:
+            command = [*base_command, "-f", "S16_LE", "-c", str(channels), "-r", str(sample_rate)]
+            process = subprocess.Popen(command, stdin=subprocess.PIPE)
+            assert process.stdin is not None  # pragma: no cover - type checker hint
+            return process  # type: ignore[return-value]
+
+        return factory
+
+    def _await_start(
+        self, websocket: _WebsocketConnection, stop_event: threading.Event
+    ) -> dict[str, int]:
+        while True:
+            self._ensure_not_stopped(stop_event)
+            message = websocket.recv()
+            if isinstance(message, bytes):
+                raise RuntimeError("TTS websocket sent binary frame before metadata")
+            data = self._parse_json(message)
+            event = data.get("event")
+            if event == "start":
+                try:
+                    sample_rate = int(data["sample_rate"])
+                    channels = int(data["channels"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RuntimeError(
+                        "TTS websocket start event missing sample_rate or channels"
+                    ) from exc
+                if sample_rate <= 0 or channels <= 0:
+                    raise RuntimeError("TTS websocket reported invalid audio parameters")
+                audio_format = str(data.get("format", "")).lower()
+                if audio_format and audio_format not in {"pcm_s16le", "pcm16", "pcm16le"}:
+                    raise RuntimeError(f"Unsupported audio format '{audio_format}' from TTS websocket")
+                return {
+                    "sample_rate": sample_rate,
+                    "channels": channels,
+                }
+            if event == "error":
+                raise RuntimeError(str(data.get("message", "Unknown TTS error")))
+            if event == "end":
+                raise RuntimeError("TTS websocket signalled end before streaming audio")
+
+    def _stream_audio(
+        self,
+        websocket: _WebsocketConnection,
+        process: _PlayerProcess,
+        stop_event: threading.Event,
+    ) -> None:
+        stdin = process.stdin
+        while True:
+            self._ensure_not_stopped(stop_event)
+            message = websocket.recv()
+            if isinstance(message, bytes):
+                if not message:
+                    continue
+                stdin.write(message)
+                stdin.flush()
+                continue
+            data = self._parse_json(message)
+            event = data.get("event")
+            if event == "end":
+                break
+            if event == "error":
+                raise RuntimeError(str(data.get("message", "Unknown TTS error")))
+
+    def _ensure_not_stopped(self, stop_event: threading.Event) -> None:
+        if stop_event.is_set():
+            raise SpeechInterrupted("stop requested")
+
+    def _parse_json(self, payload: str) -> dict[str, object]:
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("TTS websocket returned invalid JSON") from exc
+
+    def _stop_process(self, process: _PlayerProcess) -> None:
+        try:
+            process.terminate()
+            try:
+                process.stdin.close()
+            except Exception:  # pragma: no cover - defensive cleanup
+                _LOGGER.debug("Failed to close playback stdin during stop", exc_info=True)
+            process.wait(timeout=1)
+        except Exception:  # pragma: no cover - defensive cleanup
+            _LOGGER.debug("Killing playback process after termination failure", exc_info=True)
+            try:
+                process.kill()
+            except Exception:
+                _LOGGER.debug("Failed to kill playback process", exc_info=True)
+
+    def _close_process(self, process: _PlayerProcess) -> None:
+        try:
+            process.stdin.close()
+        finally:
+            try:
+                process.wait(timeout=1)
+            except Exception:  # pragma: no cover - defensive cleanup
+                _LOGGER.debug("Playback process did not exit cleanly", exc_info=True)
 
