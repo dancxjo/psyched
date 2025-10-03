@@ -7,7 +7,7 @@ name = "forebrain"
 
 [provision]
 # Declarative installers executed by psh
-installers = ["deno", "docker", "cuda"]
+installers = ["docker", "cuda"]
 
 [features]
 docker = true

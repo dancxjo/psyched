@@ -21,7 +21,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 | `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
 | `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
 | `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and launches the provisioning wizard. |
-| `hosts/*.toml` | Host manifests. Prefer `provision.installers = ["deno", "ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. |
+| `hosts/*.toml` | Host manifests. Prefer `provision.installers = ["ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. Deno is bootstrapped by `setup`. |
 
 ## Build & test checklist
 

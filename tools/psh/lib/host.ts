@@ -1,5 +1,6 @@
 import { join, resolve } from "$std/path/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
+import { DepGraph } from "$deps/dependency-graph";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
 import { hostsRoot, repoRoot } from "./paths.ts";
@@ -19,6 +20,7 @@ export interface ModuleDirective {
   setup?: boolean;
   launch?: boolean;
   env?: Record<string, string>;
+  depends_on?: string[];
 }
 
 export interface ServiceDirective {
@@ -26,6 +28,7 @@ export interface ServiceDirective {
   setup?: boolean;
   up?: boolean;
   env?: Record<string, string>;
+  depends_on?: string[];
 }
 
 function pathExists(path: string): boolean {
@@ -99,144 +102,89 @@ interface ProvisionRunOptions {
   showLogsOnSuccess: boolean;
 }
 
-async function runProvisionScripts(
+interface ProvisionTask {
+  id: string;
+  label: string;
+  dependencies: string[];
+  run: () => Promise<void>;
+}
+
+interface TaskRegistry {
+  tasks: ProvisionTask[];
+  aliasToId: Map<string, string>;
+}
+
+function createTaskRegistry(): TaskRegistry {
+  return {
+    tasks: [],
+    aliasToId: new Map<string, string>(),
+  };
+}
+
+function registerTask(
+  registry: TaskRegistry,
+  task: ProvisionTask,
+  aliases: string[] = [],
+): void {
+  if (!registry.aliasToId.has(task.id)) {
+    registry.aliasToId.set(task.id, task.id);
+  }
+  for (const alias of aliases) {
+    registry.aliasToId.set(alias, task.id);
+  }
+  registry.tasks.push(task);
+}
+
+function resolveDependencyAliases(
+  registry: TaskRegistry,
+  task: ProvisionTask,
+): void {
+  const resolved: string[] = [];
+  for (const dependency of task.dependencies) {
+    const target = registry.aliasToId.get(dependency) ??
+      registry.aliasToId.get(dependency.trim());
+    if (!target) {
+      throw new Error(
+        `Unknown dependency '${dependency}' referenced by task '${task.id}'.`,
+      );
+    }
+    if (target !== task.id && !resolved.includes(target)) {
+      resolved.push(target);
+    }
+  }
+  task.dependencies = resolved;
+}
+
+function mergeDependencies(
+  defaults: string[],
+  extras: string[] | undefined,
+): string[] {
+  const unique = new Set<string>();
+  for (const value of defaults) {
+    if (value) unique.add(value);
+  }
+  if (extras) {
+    for (const value of extras) {
+      if (value) unique.add(value);
+    }
+  }
+  return Array.from(unique);
+}
+
+async function executeProvisionScript(
   configPath: string,
-  scripts: string[] = [],
-): Promise<string[]> {
-  const failures: string[] = [];
-  for (const script of scripts) {
-    const resolved = resolveScriptPath(script, configPath);
-    if (!pathExists(resolved)) {
-      failures.push(`${script} (missing)`);
-      console.error(colors.red(`Script not found: ${resolved}`));
-      continue;
-    }
-    console.log(colors.cyan(`Running ${resolved} …`));
-    const result = await $`bash ${resolved}`.stdout("inherit").stderr("inherit")
-      .noThrow();
-    if (result.code !== 0) {
-      failures.push(`${script} (exit ${result.code})`);
-    }
+  script: string,
+): Promise<void> {
+  const resolved = resolveScriptPath(script, configPath);
+  if (!pathExists(resolved)) {
+    throw new Error(`script not found at ${resolved}`);
   }
-  return failures;
-}
-
-async function runProvisionInstallers(
-  installers: string[] = [],
-  options: ProvisionRunOptions,
-): Promise<string[]> {
-  if (!installers.length) return [];
-  const failures: string[] = [];
-  for (const id of installers) {
-    const installer = getInstaller(id);
-    if (!installer) {
-      failures.push(`${id} (unknown installer)`);
-      console.error(colors.red(`Unknown installer '${id}'.`));
-      continue;
-    }
-    console.log(colors.bold(colors.magenta(`\nInstaller: ${installer.label}`)));
-    try {
-      await runInstaller(id, {
-        verbose: options.verbose,
-        showLogsOnSuccess: options.showLogsOnSuccess,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(colors.red(`Installer '${id}' failed: ${message}`));
-      failures.push(`${id} (installer failed)`);
-    }
+  console.log(colors.cyan(`Running ${resolved} …`));
+  const result = await $`bash ${resolved}`.stdout("inherit").stderr("inherit")
+    .noThrow();
+  if (result.code !== 0) {
+    throw new Error(`exit ${result.code}`);
   }
-  return failures;
-}
-
-async function processModules(
-  host: string,
-  directives: ModuleDirective[] = [],
-): Promise<string[]> {
-  if (!directives.length) {
-    console.log(colors.yellow(`No modules configured for host '${host}'.`));
-    return [];
-  }
-  const failures: string[] = [];
-  for (const directive of directives) {
-    const { name, env = {}, setup = true, launch = false } = directive;
-    console.log(colors.bold(`Processing module '${name}'`));
-    const restore = applyEnv(env);
-    let setupOk = true;
-    try {
-      if (setup) {
-        const result = await $`true`.noThrow(); // placeholder for BDD (ensures async context)
-        void result;
-        try {
-          await setupModule(name);
-          console.log(colors.green(`[${name}] setup complete.`));
-        } catch (error) {
-          console.error(colors.red(`[${name}] setup failed: ${error}`));
-          failures.push(`${name} (setup: ${error})`);
-          setupOk = false;
-        }
-      }
-      if (launch && (setupOk || !setup)) {
-        try {
-          await bringModuleUp(name);
-        } catch (error) {
-          console.error(colors.red(`[${name}] launch failed: ${error}`));
-          failures.push(`${name} (launch: ${error})`);
-        }
-      } else if (launch && !setupOk) {
-        console.warn(
-          colors.yellow(`[${name}] skipping launch because setup failed.`),
-        );
-      }
-    } finally {
-      restore();
-    }
-  }
-  return failures;
-}
-
-async function processServices(
-  host: string,
-  directives: ServiceDirective[] = [],
-): Promise<string[]> {
-  if (!directives.length) {
-    console.log(colors.yellow(`No services configured for host '${host}'.`));
-    return [];
-  }
-  const failures: string[] = [];
-  for (const directive of directives) {
-    const { name, env = {}, setup = true, up = false } = directive;
-    console.log(colors.bold(`Processing service '${name}'`));
-    const restore = applyEnv(env);
-    let setupOk = true;
-    try {
-      if (setup) {
-        try {
-          await setupService(name);
-          console.log(colors.green(`[${name}] setup complete.`));
-        } catch (error) {
-          console.error(colors.red(`[${name}] setup failed: ${error}`));
-          failures.push(`${name} (setup: ${error})`);
-          setupOk = false;
-        }
-      }
-      if (up && (setupOk || !setup)) {
-        try {
-          await bringServiceUp(name);
-        } catch (error) {
-          console.error(colors.red(`[${name}] start failed: ${error}`));
-          failures.push(`${name} (up: ${error})`);
-        }
-      } else if (up && !setupOk) {
-        console.warn(
-          colors.yellow(`[${name}] skipping start because setup failed.`),
-        );
-      }
-    } finally {
-      restore();
-    }
-  }
-  return failures;
 }
 
 export interface ProvisionHostOptions {
@@ -257,19 +205,224 @@ export async function provisionHost(
   ) as unknown as HostConfig;
   const scripts = cfg.provision?.scripts ?? [];
   const installers = cfg.provision?.installers ?? [];
+  const modules = cfg.modules ?? [];
+  const services = cfg.services ?? [];
   const envVerbose = Deno.env.get("PSH_VERBOSE") === "1";
   const verbose = options.verbose ?? envVerbose;
   const showLogsOnSuccess = options.showLogsOnSuccess ?? verbose;
   const provisionOptions: ProvisionRunOptions = { verbose, showLogsOnSuccess };
-  const failures: string[] = [];
-  failures.push(...await runProvisionInstallers(installers, provisionOptions));
-  failures.push(...await runProvisionScripts(configPath, scripts));
-  failures.push(...await processModules(name, cfg.modules));
-  failures.push(...await processServices(name, cfg.services));
-  if (failures.length) {
+  const registry = createTaskRegistry();
+
+  const installerAliasDefaults = installers.map((id) => id);
+
+  for (const id of installers) {
+    const taskId = `installer:${id}`;
+    registerTask(registry, {
+      id: taskId,
+      label: `Installer '${id}'`,
+      dependencies: [],
+      run: async () => {
+        const installer = getInstaller(id);
+        if (!installer) {
+          throw new Error(`Unknown installer '${id}'.`);
+        }
+        console.log(
+          colors.bold(colors.magenta(`\nInstaller: ${installer.label}`)),
+        );
+        await runInstaller(id, {
+          verbose: provisionOptions.verbose,
+          showLogsOnSuccess: provisionOptions.showLogsOnSuccess,
+        });
+      },
+    }, [id]);
+  }
+
+  for (const script of scripts) {
+    const taskId = `script:${script}`;
+    registerTask(registry, {
+      id: taskId,
+      label: `Provision script '${script}'`,
+      dependencies: mergeDependencies(installerAliasDefaults, undefined),
+      run: async () => {
+        await executeProvisionScript(configPath, script);
+      },
+    }, [script]);
+  }
+
+  if (!modules.length) {
+    console.log(colors.yellow(`No modules configured for host '${name}'.`));
+  }
+
+  for (const directive of modules) {
+    const { name: moduleName, env = {}, setup = true, launch = false } =
+      directive;
+    const moduleDefaults = installers.includes("ros2") ? ["ros2"] : [];
+    const moduleDependencies = mergeDependencies(
+      moduleDefaults,
+      directive.depends_on,
+    );
+
+    let setupTaskId: string | undefined;
+    if (setup) {
+      setupTaskId = `module:${moduleName}:setup`;
+      registerTask(registry, {
+        id: setupTaskId,
+        label: `Module '${moduleName}' setup`,
+        dependencies: [...moduleDependencies],
+        run: async () => {
+          const restore = applyEnv(env);
+          try {
+            await setupModule(moduleName);
+            console.log(colors.green(`[${moduleName}] setup complete.`));
+          } finally {
+            restore();
+          }
+        },
+      });
+    }
+
+    if (launch) {
+      const launchTaskId = `module:${moduleName}:launch`;
+      const launchDeps = setupTaskId
+        ? mergeDependencies(moduleDependencies, [setupTaskId])
+        : [...moduleDependencies];
+      registerTask(registry, {
+        id: launchTaskId,
+        label: `Module '${moduleName}' launch`,
+        dependencies: launchDeps,
+        run: async () => {
+          const restore = applyEnv(env);
+          try {
+            await bringModuleUp(moduleName);
+          } finally {
+            restore();
+          }
+        },
+      });
+    }
+  }
+
+  if (!services.length) {
+    console.log(colors.yellow(`No services configured for host '${name}'.`));
+  }
+
+  for (const directive of services) {
+    const { name: serviceName, env = {}, setup = true, up = false } = directive;
+    const serviceDefaults = installers.includes("docker") ? ["docker"] : [];
+    const serviceDependencies = mergeDependencies(
+      serviceDefaults,
+      directive.depends_on,
+    );
+
+    let setupTaskId: string | undefined;
+    if (setup) {
+      setupTaskId = `service:${serviceName}:setup`;
+      registerTask(registry, {
+        id: setupTaskId,
+        label: `Service '${serviceName}' setup`,
+        dependencies: [...serviceDependencies],
+        run: async () => {
+          const restore = applyEnv(env);
+          try {
+            await setupService(serviceName);
+            console.log(colors.green(`[${serviceName}] setup complete.`));
+          } finally {
+            restore();
+          }
+        },
+      });
+    }
+
+    if (up) {
+      const startTaskId = `service:${serviceName}:start`;
+      const startDeps = setupTaskId
+        ? mergeDependencies(serviceDependencies, [setupTaskId])
+        : [...serviceDependencies];
+      registerTask(registry, {
+        id: startTaskId,
+        label: `Service '${serviceName}' start`,
+        dependencies: startDeps,
+        run: async () => {
+          const restore = applyEnv(env);
+          try {
+            await bringServiceUp(serviceName);
+          } finally {
+            restore();
+          }
+        },
+      });
+    }
+  }
+
+  for (const task of registry.tasks) {
+    resolveDependencyAliases(registry, task);
+  }
+
+  const graph = new DepGraph<ProvisionTask>();
+  const taskMap = new Map<string, ProvisionTask>();
+  for (const task of registry.tasks) {
+    if (!graph.hasNode(task.id)) {
+      graph.addNode(task.id, task);
+    }
+    taskMap.set(task.id, task);
+  }
+  for (const task of registry.tasks) {
+    for (const dependency of task.dependencies) {
+      graph.addDependency(task.id, dependency);
+    }
+  }
+
+  let orderedIds: string[];
+  try {
+    orderedIds = graph.overallOrder();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Task dependency cycle detected: ${message}`);
+  }
+
+  const failedTasks = new Set<string>();
+  const issues: string[] = [];
+
+  for (const taskId of orderedIds) {
+    const task = taskMap.get(taskId);
+    if (!task) continue;
+    const blockingDeps = task.dependencies.filter((dep) =>
+      failedTasks.has(dep)
+    );
+    if (blockingDeps.length) {
+      const blockedLabels = blockingDeps.map((dep) =>
+        taskMap.get(dep)?.label ?? dep
+      );
+      console.warn(
+        colors.yellow(
+          `${task.label} skipped due to failed dependency (${
+            blockedLabels.join(", ")
+          }).`,
+        ),
+      );
+      issues.push(
+        `${task.label} (skipped: ${blockedLabels.join(", ")})`,
+      );
+      failedTasks.add(taskId);
+      continue;
+    }
+
+    console.log(colors.bold(`\n→ ${task.label}`));
+    try {
+      await task.run();
+      console.log(colors.green(`✓ ${task.label}`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(colors.red(`✗ ${task.label}: ${message}`));
+      issues.push(`${task.label} (${message})`);
+      failedTasks.add(taskId);
+    }
+  }
+
+  if (issues.length) {
     console.warn(colors.yellow(`Host provisioning finished with issues:`));
-    for (const failure of failures) {
-      console.warn(colors.yellow(`  - ${failure}`));
+    for (const issue of issues) {
+      console.warn(colors.yellow(`  - ${issue}`));
     }
   } else {
     console.log(colors.green(`Host provisioning complete for '${name}'.`));

@@ -1,6 +1,5 @@
 import { ProvisionContext, ProvisionContextOptions } from "./context.ts";
 import { installCuda } from "./cuda.ts";
-import { installDeno } from "./deno.ts";
 import { installDocker } from "./docker.ts";
 import { installRos2 } from "./ros2.ts";
 
@@ -12,12 +11,6 @@ export interface InstallerDefinition {
 }
 
 const REGISTRY: Record<string, InstallerDefinition> = {
-  deno: {
-    id: "deno",
-    label: "Deno runtime",
-    description: "Installs the Deno CLI used by psh and module tooling.",
-    run: installDeno,
-  },
   ros2: {
     id: "ros2",
     label: "ROS 2 base",

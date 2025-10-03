@@ -7,7 +7,7 @@ name = "motherbrain"
 
 [provision]
 # Declarative installers executed by psh
-installers = ["deno", "ros2"]
+installers = ["ros2"]
 
 [features]
 docker = true

@@ -2,7 +2,8 @@
   "imports": {
     "$std/": "https://deno.land/std@0.206.0/",
     "$cliffy/": "https://deno.land/x/cliffy@v1.0.0-rc.4/",
-    "$dax": "https://deno.land/x/dax@0.38.0/mod.ts"
+    "$dax": "https://deno.land/x/dax@0.38.0/mod.ts",
+    "$deps/dependency-graph": "npm:dependency-graph@1.0.0"
   },
   "lock": "deno.lock",
   "tasks": {

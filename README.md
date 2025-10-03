@@ -22,6 +22,7 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
         - [Pilot frontend](#pilot-frontend)
         - [Using the `psh` CLI](#using-the-psh-cli)
         - [Workspace cleanup](#workspace-cleanup)
+- [Docker dev container](#docker-dev-container)
 - [Testing & validation](#testing--validation)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
@@ -88,6 +89,17 @@ psh mod up pilot      # start the cockpit backend + Fresh frontend
 ```
 
 Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. Shutdown with `psh mod down <name>`.
+
+## Docker dev container
+
+Prefer to run everything inside a ROS 2 container for tests? A ready‑to‑use dev image and Compose stack are included. Pick a hostname (matching `hosts/<name>.toml`), build, and start:
+
+```bash
+export PSY_HOSTNAME=motherbrain   # or forebrain
+docker compose -f docker/compose.yml up --build
+```
+
+The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes ports `8000` (pilot UI) and `8088` (cockpit backend). See `docs/docker.md` for details.
 
 ## Repository layout
 

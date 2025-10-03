@@ -1,0 +1,29 @@
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    # Dress the container as a chosen hostname so psh picks the matching hosts/<name>.toml
+    hostname: ${PSY_HOSTNAME:-motherbrain}
+    container_name: ${PSY_HOSTNAME:-motherbrain}
+    environment:
+      - ROS_DISTRO=humble
+      - DENO_TLS_CA_STORE=system
+      - PSYCHED_REPO_ROOT=/workspace/psyched
+      - PSYCHED_AUTO_ACTIVATE=0
+      - DEBIAN_FRONTEND=noninteractive
+    working_dir: /workspace/psyched
+    volumes:
+      - ..:/workspace/psyched:rw
+    ports:
+      # Fresh dev server (pilot UI)
+      - "8000:8000"
+      # Cockpit websocket bridge (pilot backend)
+      - "8088:8088"
+    tty: true
+    stdin_open: true
+    # Run the bootstrapper on start for an informative guided flow, then keep a shell open
+    command: ["bash", "-lc", "./setup || true; exec bash"]
+
+    # Default Linux network mode (bridge) is sufficient for tests; switch to host if needed
+    # network_mode: host
