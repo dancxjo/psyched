@@ -189,8 +189,19 @@ pub fn list_services() -> Result<()> {
     println!("Services under {}:", services_root.display());
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        match service_status(&name) {
-            Ok(status) => println!("- {:<20} {}", name, status),
+        let service_dir = entry.path();
+
+        match load_service_config(&service_dir, &name) {
+            Ok(config) => match service_status_with_config(&name, &service_dir, &config) {
+                Ok(status) => {
+                    let mut line = format!("- {:<20} {}", name, status);
+                    if let Some(desc) = config.description.as_deref() {
+                        line.push_str(&format!(" – {}", desc));
+                    }
+                    println!("{}", line);
+                }
+                Err(err) => println!("- {:<20} (error: {})", name, err),
+            },
             Err(err) => println!("- {:<20} (error: {})", name, err),
         }
     }
@@ -217,15 +228,15 @@ pub fn all_service_names() -> Result<Vec<String>> {
     Ok(names)
 }
 
-fn service_status(service: &str) -> Result<String> {
-    let service_dir = locate_service_dir(service)
-        .with_context(|| format!("service '{}' not found under services/", service))?;
-    let config = load_service_config(&service_dir, service)?;
-
+fn service_status_with_config(
+    service: &str,
+    service_dir: &Path,
+    config: &ServiceConfig,
+) -> Result<String> {
     which("docker").context("docker executable not found in PATH")?;
 
-    let compose_path = compose_file_path(&service_dir, &config)?;
-    let project = compose_project_name(service, &config);
+    let compose_path = compose_file_path(service_dir, config)?;
+    let project = compose_project_name(service, config);
 
     let mut expr = cmd!(
         "docker",
@@ -236,7 +247,7 @@ fn service_status(service: &str) -> Result<String> {
         &project,
         "ps"
     )
-    .dir(&service_dir)
+    .dir(service_dir)
     .stderr_to_stdout();
 
     for (key, value) in &config.env {

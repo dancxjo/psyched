@@ -19,8 +19,9 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 	- [ASR](#asr)
 - [Development workflows](#development-workflows)
         - [Python + ROS backend](#python--ros-backend)
-	- [Pilot frontend](#pilot-frontend)
-	- [Using the `psh` CLI](#using-the-psh-cli)
+        - [Pilot frontend](#pilot-frontend)
+        - [Using the `psh` CLI](#using-the-psh-cli)
+        - [Workspace cleanup](#workspace-cleanup)
 - [Testing & validation](#testing--validation)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
@@ -91,19 +92,20 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 ## Repository layout
 
 ```
-├── modules/           # Module definitions (pilot, foot, imu, …)
-├── modules/pilot/packages/pilot/  # Python ROS bridge providing the cockpit backend (symlinked into work/src/pilot)
-├── services/          # Containerised microservices (tts, language, graphs, vectors, …)
+├── modules/                       # Module definitions (pilot, foot, imu, …)
 │   └── <name>/
-│       ├── service.toml        # Manifest consumed by psh svc
-│       └── docker-compose.yml  # Compose stack plus supporting assets
-├── psh/               # Rust CLI for provisioning + module orchestration
-├── psyched-msgs/      # Placeholder crate for shared ROS message helpers
-├── tools/             # Host bootstrap & provisioning scripts
-├── hosts/             # Host configuration TOML files
-├── work/              # Colcon workspace (src/, build/, install/, log/) populated by tools/clean_workspace
-├── target/            # Cargo build outputs
-└── setup              # Top-level bootstrap script (see above)
+│       ├── module.toml            # Manifest consumed by psh
+│       ├── packages/              # ROS/Python packages linked into work/src/
+│       └── pilot/                 # Fresh overlays (components, routes, islands, …)
+├── services/                      # Containerised microservices (tts, language, graphs, vectors, …)
+│   └── <name>/
+│       ├── service.toml           # Manifest consumed by psh svc
+│       └── docker-compose.yml     # Compose stack plus supporting assets
+├── psh/                           # Rust CLI for provisioning + module orchestration
+├── tools/                         # Host bootstrap & provisioning scripts
+├── hosts/                         # Host configuration TOML files
+├── setup                          # Top-level bootstrap script (see above)
+└── work/                          # Colcon workspace (src/, build/, install/, log/) created by tools/clean_workspace
 ```
 
 ## Modules
@@ -175,17 +177,9 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ## Development workflows
 
-### Vendored ROS Rust bindings
+### Workspace cleanup
 
-Provisioning invokes `tools/bootstrap/generate_ros_rust_bindings.sh` after the ROS apt packages finish installing. The helper spins up a temporary Docker builder for `ros-${ROS_DISTRO:-kilted}-ros-base`, runs `colcon build` with `rosidl_generator_rs`, and copies the resulting crates into `vendor_msgs/`. Cargo is configured to patch common message crates (e.g. `std_msgs`, `sensor_msgs`) to those vendored copies so Rust builds no longer depend on a local colcon workspace.
-
-If Docker was unavailable during provisioning—or you switch `ROS_DISTRO` later—rerun the script manually:
-
-```bash
-ROS_DISTRO=${ROS_DISTRO:-kilted} tools/bootstrap/generate_ros_rust_bindings.sh
-```
-
-The command refreshes the crates in `vendor_msgs/` and prints warnings for any package that fails to build. Commit the updated directories when upstream interface definitions change.
+Use `psh clean` (or run `tools/clean_workspace` directly) to recreate the ROS workspace from scratch. The helper wipes `work/` and relinks every package declared under `modules/*/packages/`, catching ROS `package.xml` projects and pure-Python packages with `setup.py`/`pyproject.toml`. There is no `.cargo` configuration or vendored Rust message crate step anymore.
 
 ### Python + ROS backend
 
@@ -193,7 +187,7 @@ The command refreshes the crates in `vendor_msgs/` and prints warnings for any p
 - Run unit tests: `colcon test --packages-select pilot`
 - Launch the websocket bridge: `ros2 run pilot cockpit`
 
-ROS packages live under `src/` (mirrored into `packages/` for colcon). Use `psh build` to compile ROS nodes without invoking `colcon` directly:
+ROS packages live under `modules/*/packages/` and are symlinked into `work/src/` by `psh mod setup` or `psh clean`. Use `psh build` to compile ROS nodes without invoking `colcon` directly:
 
 ```bash
 psh build                 # builds the entire workspace
@@ -219,7 +213,7 @@ source install/setup.bash
 - `psh svc list` – inspect containerised services and their status
 - `psh svc setup|up|down <service>` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
 - `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
-- `psh clean` – reset `work/` and re-establish local ROS package symlinks (including module packages)
+- `psh clean` – reset `work/` and re-establish ROS/Python package symlinks (from `modules/*/packages/`)
 
 ## Testing & validation
 

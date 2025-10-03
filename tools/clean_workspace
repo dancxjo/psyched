@@ -29,15 +29,8 @@ fi
 
 mkdir -p "${SRC_DIR}" "${BUILD_DIR}" "${INSTALL_DIR}" "${LOG_DIR}"
 
-# Link the .cargo/config.toml to the workspace so that packages that are only linked to the workspace work.
-mkdir -p "${WORKSPACE_DIR}/.cargo"
-ln -sf "${REPO_ROOT}/.cargo/config.toml" "${WORKSPACE_DIR}/.cargo/config.toml"
-
 printf '*\n!.gitignore\n' > "${WORKSPACE_DIR}/.gitignore"
 printf '*\n!.gitignore\n' > "${SRC_DIR}/.gitignore"
-
-echo "==> Setting up ROS 2 Rust support"
-"${REPO_ROOT}/tools/bootstrap/setup_ros_rust_bindings.sh"
 
 # Remove deprecated top-level directories if they still exist.
 for legacy in "${REPO_ROOT}/src" "${REPO_ROOT}/build" "${REPO_ROOT}/install"; do
@@ -71,7 +64,10 @@ link_package() {
     return
   fi
 
-  if [[ ! -f "${target}/Cargo.toml" && ! -f "${target}/package.xml" ]]; then
+  if [[ ! -f "${target}/Cargo.toml" \
+        && ! -f "${target}/package.xml" \
+        && ! -f "${target}/setup.py" \
+        && ! -f "${target}/pyproject.toml" ]]; then
     return
   fi
 
@@ -99,24 +95,5 @@ for module_package in "${REPO_ROOT}"/modules/*/packages/*; do
   base="$(basename "${module_package}")"
   link_package "${base}" "${module_package}"
 done
-
-CONFIG_PATH="${REPO_ROOT}/.cargo/config.toml"
-if [[ -f "${CONFIG_PATH}" ]]; then
-  echo "==> Clearing existing Cargo patch configuration"
-  : > "${CONFIG_PATH}"
-else
-  mkdir -p "${REPO_ROOT}/.cargo"
-  touch "${CONFIG_PATH}"
-fi
-
-echo "==> Refreshing Cargo patch configuration"
-if command -v psh >/dev/null 2>&1; then
-  if ! psh cargo patch; then
-    echo "    psh cargo patch failed; falling back to cargo run" >&2
-    cargo run --quiet --manifest-path "${REPO_ROOT}/psh/Cargo.toml" -- cargo patch
-  fi
-else
-  cargo run --quiet --manifest-path "${REPO_ROOT}/psh/Cargo.toml" -- cargo patch
-fi
 
 echo "✓ Workspace ready at ${WORKSPACE_DIR}"
