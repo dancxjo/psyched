@@ -3,6 +3,8 @@
 # install_deno.sh - Install the Deno runtime on Debian/Ubuntu hosts.
 # Uses GitHub release archives so it works in offline/air-gapped CI mirrors
 # that proxy GitHub. Set DENO_VERSION to pin an alternate version.
+#
+# NOTE: Prefer running 'psh host setup' which now provides a Deno-based installer pipeline.
 
 set -euo pipefail
 

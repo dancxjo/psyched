@@ -10,6 +10,8 @@
 #   ROS_DISTRO=rolling ./install_ros2.sh
 #   ./install_ros2.sh            # uses ROS_DISTRO (defaults to kilted)
 #
+# NOTE: Prefer running 'psh host setup' which now provides a Deno-based installer pipeline.
+#
 set -euo pipefail
 
 ROS_DISTRO=${ROS_DISTRO:-kilted}

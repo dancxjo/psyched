@@ -53,12 +53,13 @@ async function main() {
   hostCommand
     .command("setup [hosts...:string]")
     .description("Provision the local or specified host(s)")
-    .action(async (_, ...hosts: string[]) => {
+    .option("-v, --verbose", "Show detailed provisioning logs")
+    .action(async ({ verbose }: { verbose?: boolean }, ...hosts: string[]) => {
       if (!hosts.length) {
-        await provisionHost();
+        await provisionHost(undefined, { verbose });
       } else {
         for (const host of hosts) {
-          await provisionHost(host);
+          await provisionHost(host, { verbose });
         }
       }
     });

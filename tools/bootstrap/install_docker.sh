@@ -3,6 +3,8 @@
 # install_docker.sh - Install Docker Engine and Docker Compose (plugin) on Debian/Ubuntu
 # Installs Docker from the official Docker apt repository and enables the service.
 # Usage: ./install_docker.sh
+#
+# NOTE: Prefer running 'psh host setup' which now provides a Deno-based installer pipeline.
 
 set -euo pipefail
 
