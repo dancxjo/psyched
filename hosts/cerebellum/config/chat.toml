@@ -1,5 +1,0 @@
-# Module configuration overrides for chat.
-# Provide [launch.arguments] entries keyed by launch argument name.
-
-[launch.arguments]
-

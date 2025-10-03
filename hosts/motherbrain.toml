@@ -1,0 +1,30 @@
+# Pete Rizzlington host config: motherbrain
+# Midbrain control layer that runs ROS 2 nodes.
+# Onboard rpi5
+
+[host]
+name = "motherbrain"
+
+[provision]
+# Bootstrap scripts to run on this host
+scripts = ["tools/bootstrap/install_deno.sh", "tools/bootstrap/install_ros2.sh"]
+
+[features]
+docker = true
+ros2 = true
+cuda = false
+
+[[modules]]
+name = "pilot"
+launch = false
+env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
+name = "imu"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
+name = "foot"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }

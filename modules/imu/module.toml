@@ -1,44 +1,26 @@
-name = "imu"
-description = "MPU6050 inertial measurement integration"
+[unit.imu]
+# Requirements (apt + pip)
+apt = [
+    "ros-${ROS_DISTRO}-ros2-control",
+    "ros-${ROS_DISTRO}-imu-filter-madgwick",
+    "ros-${ROS_DISTRO}-rosidl-default-generators",
+    "libi2c-dev",
+    "i2c-tools",
+]
+pip = []
 
-[pilot]
-display_name = "IMU"
-description = "Inertial measurement data from the MPU6050"
-regimes = ["perception"]
+# Scripts to apply patches to the driver before build
+patches = ["modules/imu/apply_patches.sh"]
 
-[[pilot.topics]]
-name = "/imu/data"
-type = "sensor_msgs/msg/Imu"
-access = "ro"
-presentation = "imu"
-qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+# Service control
+launch = "modules/imu/launch_unit.sh"
+shutdown = "modules/imu/shutdown_unit.sh"
+pilot_control = "modules/imu/pilot/components/ImuReadout.tsx"
 
-[[actions]]
-type = "git_clone"
-repo = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
-dest = "ros2_mpu6050_driver"
+[[unit.imu.git]]
+url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
+branch = "main"
 
-[[actions]]
-type = "run"
-description = "Ensure mpu6050 header includes <array>"
-script = "scripts/patch_header.sh"
-optional = true
-
-[[actions]]
-type = "run"
-description = "Change the topic name to /imu/data_raw"
-script = "scripts/patch_topic.sh"
-optional = true
-
-[[actions]]
-type = "apt_install"
-packages = ["libi2c-dev", "i2c-tools", "ros-kilted-imu-filter-madgwick"]
-update = false
-
-[systemd]
-description = "Psyched IMU Sensor"
-after = ["network.target"]
-restart = "on-failure"
-restart_sec = 4
-launch_command = "${MODULE_DIR}/imu.launch.sh"
-shutdown_command = "${MODULE_DIR}/imu.shutdown.sh"
+[unit.imu.ros]
+workspace = "."
+packages = ["mpu6050driver"]

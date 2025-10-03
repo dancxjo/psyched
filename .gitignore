@@ -1,59 +1,87 @@
-# ROS2 Build artifacts
-build/
-install/
-log/
-bin/
-lib/
-lib64
-pyvenv.cfg
+# ------------------------------
+# Rust / Cargo
+# ------------------------------
+target/
+**/target/
+Cargo.lock        # keep out of git if this is a library workspace
 
-log/*
+# Incremental build and profiling
+**/*.rs.bk
+**/*.pdb
+**/*.profraw
+**/*.profdata
 
-voices/
-output.wav
 
-launch_params_*
-models/*
-# External workspace sources (symlink-populated)
-# only on the top-level workspace
-/src/
-# Allow Rust crate sources under the ASR workspace
-!asr-service/src/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-
-# C++ build artifacts
-*.o
-*.so
-*.a
-*.exe
-
-# IDEs
+# ------------------------------
+# Editors / IDEs
+# ------------------------------
+# VSCode
 .vscode/
+*.code-workspace
+
+# JetBrains
 .idea/
+
+# Others
 *.swp
 *.swo
 *~
 
-# OS
+# ------------------------------
+# Logs / Dumps
+# ------------------------------
+*.log
+*.stderr
+*.stdout
+*.dmp
+core
 .DS_Store
-Thumbs.db
 
-# Temporary files
-/tmp/
+# ------------------------------
+# Python / ROS2 glue
+# ------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+!env/
+!env/AGENTS.md
+!env/psyched_env.sh
+venv/
+build/
+install/
+log/
+.colcon/
+
+# ------------------------------
+# System / bootstrap
+# ------------------------------
+/tools/bootstrap/*.bak
+*.old
 *.tmp
-*.temp
 
-# Rust
-target/
+# ------------------------------
+# Service asset caches
+# ------------------------------
+services/llm/models/*
+!services/llm/models/.gitkeep
+services/asr/models/*.bin
+!services/asr/models/.gitkeep
+services/tts/models/*
+!services/tts/models/.gitkeep
 
-models/
-.speech_setup_complete
+# ROS 2 workspace overlay
+/work/
+
+fresh.gen.ts
+
+# ------------------------------
+# Local machine configs
+# ------------------------------
+hosts/*.local.toml
+modules/pilot/frontend/fresh.gen.ts
+modules/pilot/frontend/components/ImuReadout.tsx
+modules/pilot/frontend/routes/modules/imu.tsx
+modules/pilot/frontend/fresh.gen.ts

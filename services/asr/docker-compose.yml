@@ -1,0 +1,21 @@
+services:
+  asr:
+    build:
+      context: ..
+      dockerfile: services/asr/docker/whisper-asr.Dockerfile
+    image: psyched-whisper-asr:local
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: "/models/ggml-base.en.bin"
+      ASR_SAMPLE_RATE: "16000"
+      ASR_STABILITY_HITS: "2"
+      ASR_HOP_MS: "750"
+      ASR_MIN_DURATION_MS: "2000"
+      LOG_LEVEL: "info"
+    ports:
+      - "5003:5003"
+    volumes:
+      - type: bind
+        source: ./models
+        target: /models
+        read_only: true

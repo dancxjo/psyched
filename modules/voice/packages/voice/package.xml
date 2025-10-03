@@ -1,22 +1,15 @@
 <?xml version="1.0"?>
 <package format="3">
-    <name>voice</name>
-    <version>0.1.0</version>
-    <description>ROS 2 ament_python package for TTS using espeak-ng with FIFO playback</description>
+  <name>voice</name>
+  <version>0.1.0</version>
+  <description>Voice module that serializes text-to-speech playback.</description>
+  <maintainer email="pete@psyched.local">Psyched Maintainers</maintainer>
+  <license>Apache-2.0</license>
 
-    <maintainer email="tdreed@gmail.com">Psyched</maintainer>
-    <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-    <buildtool_depend>ament_cmake</buildtool_depend>
-    <buildtool_depend>ament_python</buildtool_depend>
-
-    <depend>rclpy</depend>
-    <depend>std_msgs</depend>
-
-    <test_depend>ament_lint_auto</test_depend>
-    <test_depend>ament_lint_common</test_depend>
-
-    <export>
-        <build_type>ament_python</build_type>
-    </export>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>python3-websockets</exec_depend>
 </package>

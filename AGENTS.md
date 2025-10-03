@@ -1,201 +1,86 @@
-# Psyched – Agent Guide
+# Agent handbook
 
-This handbook is your quick-start reference when contributing to the
-**psyched** workspace. It consolidates prior guides and reflects the
-current architecture.
+Welcome to the Psyched workspace. This guide summarizes everything an automated assistant (humans benefit, too) should know before touching the codebase.
 
----
+## System snapshot
 
-## Instruction Precedence
-- System → developer → user → this guide → in-source comments.
-- Before editing, check for a more specific `AGENTS.md` deeper in the tree.
-- Keep this guide updated whenever you discover workflow quirks, fragile scripts,
-  or best practices.
+- **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a browser-based cockpit for operators.
+- **Languages & frameworks:** Python (`rclpy`, `websockets`), Deno/Fresh + Preact for the pilot UI and `psh` CLI, ROS 2 (colcon), Bash, optional Rust for certain services (e.g. ASR), and assorted Python/C++ ROS packages pulled in as git dependencies.
+- **Runtime topology:**
+  - `pilot` Python package hosts the cockpit websocket bridge (`ws://0.0.0.0:8088/ws`).
+  - Each module in `modules/<name>` declares lifecycle scripts and optional UI widgets under `pilot/`.
+  - The `psh` CLI provisions hosts (`hosts/*.toml`) and synchronizes module assets into the Fresh frontend.
 
----
+## Key directories and entry points
 
-## Repository Orientation
-- `modules/` – Canonical home for all modules. Each module defines:
-  - `module.toml` (actions, dependencies, systemd entries).
-  - `packages/` (ROS 2 packages, colcon-built).
-  - `launch/*.launch.py` (ROS 2 launch files).
-- `hosts/` – Host-specific configuration.
-  - `config/<module>.toml` → overrides launch arguments.
-  - `systemd/*.service` → unit files managed by `psh systemd`.
-- `tools/` – Provisioning helpers (ROS/Docker installers, env shims).
-- `compose/` – Docker Compose stacks (e.g. `speech-stack.compose.yml`).
-- `src/` – Workspace symlinks created during builds (remove before provisioning).
-- `packages/` (legacy) – Only used for older packages; new work belongs in `modules/*/packages/`.
+| Path | Purpose |
+| --- | --- |
+| `tools/psh/` | `psh` Deno CLI for provisioning and module orchestration. Entry: `main.ts`. |
+| `modules/pilot/packages/pilot/pilot_cockpit/` | ROS-aware Python backend serving the cockpit websocket. |
+| `modules/pilot/frontend/` | Deno Fresh app for the pilot console. |
+| `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
+| `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
+| `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and launches the provisioning wizard. |
 
----
+## Build & test checklist
 
-## System Architecture
+Always prefer running the smallest relevant command set.
 
-### Cerebellum (Motherbrain)
-- Hardware: Raspberry Pi 4/5 mounted on iRobot Create 1 base.
-- Runs ROS 2 Jazzy/Kilted.
-- Manages sensors/actuators and real-time loops.
-- Modules: `ear`, `voice`, `chat`, `pilot`, `foot`, `imu`, `eye`, `gps`, `wifi`, `will`.
+| Domain | Commands |
+| --- | --- |
+| Cockpit backend only | `colcon build --packages-select pilot && ros2 run pilot cockpit` |
+| ROS packages (colcon) | `colcon build --packages-select <pkg>` followed by `source install/setup.bash` |
+| Deno pilot UI | `deno fmt`, `deno check lib/cockpit.ts`, `deno task dev`, `deno test` |
+| `psh` CLI | `cd tools/psh && deno fmt && deno lint && deno task test` |
+| Shell scripts | `shellcheck modules/**/launch_*.sh modules/**/shutdown_*.sh setup` |
 
-### Forebrain
-- Hardware: headless laptop with GPU, also mounted onboard.
-- Runs ASR/LLM/TTS containers (no ROS 2).
-- Provisioning installs Docker, CUDA toolkit, and speech assets.
-- Invoked with `psh speech up`.
-- Offloads heavy compute from cerebellum.
-- Planned integration with **Neo4j** (graph memory) and **Qdrant** (vector memory).
+> ✅ **Definition of done:** code formatted, linted, and the smallest relevant test/build commands above succeed.
 
----
+## Coding guidelines
 
-## Working Style
-- Restate tasks and outline a plan before modifying files.
-- Use BDD/TDD where practical: capture expectations before implementing.
-- Additive commits; keep messages concise and meaningful.
-- Keep dependencies cached when possible.
-- Fix warnings as you go.
-- When editing ROS launch files, wrap `LaunchConfiguration` values in
-  `ParameterValue` with the appropriate type so nodes receive correctly-typed
-  parameters instead of strings.
+### Deno CLI
 
----
+- Use the shared import map in `tools/psh/deno.json` (run scripts with `deno run --config tools/psh/deno.json ...`).
+- Prefer [`dax`](https://deno.land/x/dax) for shell orchestration instead of bespoke bash snippets.
+- Add regression coverage with `deno test` for new helpers before wiring them into the CLI (TDD/BDD encouraged).
+- Document exported helpers with `/** ... */` JSDoc comments when behaviour isn’t self-evident.
 
-## Coding Standards
-- Python 3.12; type annotations preferred.
-- ROS 2 packages use `ament_python`.
-- Avoid `try/except` import guards; handle optional deps at call sites.
-- Add docstrings and usage examples for public APIs.
-- For Deno/TypeScript (`psh`), follow existing CLI patterns.
+### TypeScript / Fresh
 
----
+- Use ES modules with explicit file extensions (Deno requirement).
+- Stick to the hooks-based API exposed in `lib/cockpit.ts`. New topics should be declared in a single place so reconnect logic remains centralized.
+- Keep hooks SSR-safe: guard browser-only APIs (`window`, `WebSocket`) with `typeof` checks.
 
-## Build & Launch
+### Shell
 
-### Provisioning
-```bash
-rm -rf ./src
-psh provision cerebellum
-psh install
-psh systemd enable
-````
+- Every script should start with `#!/usr/bin/env bash` and `set -euo pipefail` unless a different shell is mandatory.
+- Use functions for repeated logic, log via `echo`/`printf` with context, and clean up background processes in `trap` handlers.
 
-### Running Core Stack
+## Workflow guardrails
 
-```bash
-# On forebrain
-psh speech up   # ASR/TTS/LLM containers
+1. **Collect context first.** Read the relevant `module.toml`, scripts, and associated docs before editing.
+2. **Prefer existing tooling.** Use `psh mod setup|up|down` rather than invoking lifecycle scripts manually.
+3. **Keep modules isolated.** Touch only the module(s) you intend to change; module folders shouldn’t depend on each other directly.
+4. **Update documentation.** When behavior changes, update `README.md`, module READMEs, or this handbook accordingly.
+5. **Log notable decisions.** Commit messages and PR descriptions should mention affected hosts/modules and manual steps if any.
 
-# On cerebellum
-psh launch ear
-psh launch voice
-psh launch chat
-psh launch pilot
-```
+## Known pitfalls
 
-### Pilot UI
+- **Lockfile drift:** `deno.lock` enforces lockfile version ≥5. Older Deno releases will fail with “unsupported lockfile version”. Upgrade Deno or regenerate the lock.
+- **ROS distro mismatch:** Scripts default to the custom `kilted` distro name. Override with `ROS_DISTRO=<distro>` before running `psh env` if you target `humble`/`jazzy`.
+- **Pilot backend is Python-first:** The `psh` CLI runs on Deno. Expect ROS nodes and cockpit bridges to live under Python packages and keep their dependencies declared in module manifests.
+- **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
+- **Background processes:** Launch scripts spawn long-lived processes (for example `deno task dev`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
+- **Workspace resets:** `tools/clean_workspace` wipes `work/` and relinks local ROS/Python packages. Run it (or `psh clean`) whenever package paths drift instead of tweaking build directories manually.
 
-Visit `http://<cerebellum-host>:8080`.
+## Useful references
 
-- When adding or updating Pilot controls, use the shared `.control-surface`,
-  `.metric-grid`, and `.metric-card` CSS helpers to keep styling consistent
-  across panels.
+- Fresh documentation: <https://fresh.deno.dev/docs>
+- Create robot stack: <https://github.com/autonomylab/create_robot>
+- MPU6050 ROS driver: <https://github.com/hiwad-aziz/ros2_mpu6050_driver>
 
----
+Happy hacking!
 
-## CLI Reference (`psh`)
-
-* `psh install` → system dependencies (apt, pip/uv).
-* `psh provision <host>` → apply host configs.
-* `psh models` → manage Ollama models.
-* `psh speech up|down` → manage Docker ASR/TTS/LLM stack.
-* `psh launch <module>` → run module launch file.
-* `psh systemd enable|disable` → manage units.
-* `psh build` → `colcon build` with symlink install.
-* `psh clean` → cleanup build artifacts/systemd leftovers.
-* `psh test` → run module/unit tests.
-
----
-
-## Testing & Validation
-
-* Prefer targeted tests (`pytest`, `colcon test`) over full builds.
-* Module smoke tests:
-
-  ```bash
-  psh launch ear   # check transcription
-  psh launch voice # check TTS output
-  psh launch pilot # web UI health
-  ```
-* Pilot backend unit tests rely on FastAPI and related dependencies. Set
-  `PYTHONPATH=modules/pilot/packages/pilot` before running `pytest` so the
-  `pilot` package resolves without installation.
-* Deno tests: run with `DENO_TLS_CA_STORE=system` and explicit permissions.
-* Pilot backend tests require `fastapi`, `httpx`, `uvicorn`.
-
----
-
-## Common Issues
-
-* **Network dependencies**:
-
-  * Ollama models (ollama.com) may fail behind firewall.
-  * Piper TTS models (huggingface.co) require access.
-  * ROS 2 installation may fail if GitHub API blocked.
-  * Development containers may not include the Deno runtime by default; install Deno locally to run `psh` CLI tests.
-* **Hardware deps**:
-
-  * `alsa-utils` (for `arecord`), `webrtcvad`, `faster-whisper` for `ear`.
-  * `libusb-1.0-dev` for `eye`.
-  * Kinect and Create 1 hardware required for full bring-up.
-* **Workarounds**:
-
-  * Develop modules in isolation when offline.
-  * Use local symlink installs (`colcon build --symlink-install`) to avoid duplicate packages.
-  * `tools/with_ros_env.sh` sources ROS 2 before colcon/ros2 invocations.
-  * Rust microservices such as `forebrain-llm` sit outside the root Cargo workspace; copy the crate to `/tmp` (or set
-    `CARGO_TARGET_DIR`) before running `cargo test` so the workspace manifest does not block the build.
-  * Remote ASR tiers may emit placeholder transcripts like `samples=<n> sum=<m>` when the fast/mid pipelines are misconfigured;
-    let the ear module fall back to onboard Whisper when that happens.
-  * The speech stack now loads whisper.cpp models from `asr-service/models/` (e.g. `ggml-tiny.en.bin`). Run
-    `tools/download_speech_models.sh` and ensure the compose volume mounts that directory before bringing the stack up.
-
----
-
-## Git Etiquette
-
-* Stay on default branch unless told otherwise.
-* Don’t amend; add new commits.
-* Keep tree clean before commits: format, lint, ensure tests pass.
-
----
-
-## Module Notes
-
-* `ear`: PyAudio microphone capture, VAD, Whisper transcription. Tiered
-  transcribers now live in `transcriber_*_node.py` and share helpers under
-  `transcription_*.py`; prefer extending those utilities instead of creating
-  bespoke threading logic.
-* `voice`: espeak-ng or Coqui/Piper via WebSocket, with playback.
-* `chat`: connects transcription → Ollama LLM → voice. Exposes a `pilot_base_url`
-  parameter that should point at the running Pilot backend so the chat system
-  prompt can include the text-only control surface summary. The Forebrain
-  websocket LLM is currently paused; the node always calls Ollama over HTTP via
-  `ollama_host`.
-* `pilot`: LCARS-style web frontend + health reporter.
-* `nav`: depth-to-scan pipeline + AMCL, vision LLM prompts.
-* Others (`eye`, `foot`, `imu`, `gps`, `wifi`, `will`) follow similar structure.
-
----
-
-## Status
-
-* ✅ ROS 2 stack runs on Pi (cerebellum).
-* ✅ GPU laptop (forebrain) runs heavy AI services.
-* ✅ `psh` orchestrates installs, builds, launches, and services.
-* 🔄 Graph + vector memory integration in progress.
-
-## Provisioning Notes
-* Speech provisioning leaves a sentinel file at `setup/.speech_setup_complete`.
-  When adding new required models or steps bump the version written in
-  `psh/speech_setup.ts` so hosts rerun the updated setup.
-* Use `psh models` to manage Ollama models; ensure required models are listed in
-  `psh/speech_setup.ts`.
+## Miscellaneous
+### Symlinks
+* Each module has its own pilot folder, which is linked into the main Fresh app by `psh mod setup <module>`. This allows modules to declare their own UI components and pages without merging everything into a single codebase.
