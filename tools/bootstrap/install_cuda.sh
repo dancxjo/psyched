@@ -11,6 +11,8 @@
 # * Requires root privileges (or sudo) and network access to NVIDIA's repositories.
 # * Automatically detects the Ubuntu version and selects the matching CUDA repo.
 # * Leaves the CUDA samples under /usr/local/cuda once complete.
+#
+# NOTE: Prefer running 'psh host setup' which now provides a Deno-based installer pipeline.
 
 set -euo pipefail
 

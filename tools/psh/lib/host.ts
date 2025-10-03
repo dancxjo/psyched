@@ -5,10 +5,11 @@ import { $ } from "$dax";
 import { hostsRoot, repoRoot } from "./paths.ts";
 import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
+import { getInstaller, runInstaller } from "./deps/installers.ts";
 
 export interface HostConfig {
   host: { name: string };
-  provision?: { scripts?: string[] };
+  provision?: { scripts?: string[]; installers?: string[] };
   modules?: ModuleDirective[];
   services?: ServiceDirective[];
 }
@@ -93,6 +94,11 @@ function resolveScriptPath(script: string, configPath: string): string {
   return resolve(join(configDir, script));
 }
 
+interface ProvisionRunOptions {
+  verbose: boolean;
+  showLogsOnSuccess: boolean;
+}
+
 async function runProvisionScripts(
   configPath: string,
   scripts: string[] = [],
@@ -110,6 +116,34 @@ async function runProvisionScripts(
       .noThrow();
     if (result.code !== 0) {
       failures.push(`${script} (exit ${result.code})`);
+    }
+  }
+  return failures;
+}
+
+async function runProvisionInstallers(
+  installers: string[] = [],
+  options: ProvisionRunOptions,
+): Promise<string[]> {
+  if (!installers.length) return [];
+  const failures: string[] = [];
+  for (const id of installers) {
+    const installer = getInstaller(id);
+    if (!installer) {
+      failures.push(`${id} (unknown installer)`);
+      console.error(colors.red(`Unknown installer '${id}'.`));
+      continue;
+    }
+    console.log(colors.bold(colors.magenta(`\nInstaller: ${installer.label}`)));
+    try {
+      await runInstaller(id, {
+        verbose: options.verbose,
+        showLogsOnSuccess: options.showLogsOnSuccess,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(colors.red(`Installer '${id}' failed: ${message}`));
+      failures.push(`${id} (installer failed)`);
     }
   }
   return failures;
@@ -205,7 +239,15 @@ async function processServices(
   return failures;
 }
 
-export async function provisionHost(hostname?: string): Promise<void> {
+export interface ProvisionHostOptions {
+  verbose?: boolean;
+  showLogsOnSuccess?: boolean;
+}
+
+export async function provisionHost(
+  hostname?: string,
+  options: ProvisionHostOptions = {},
+): Promise<void> {
   const name = hostname ?? Deno.hostname();
   console.log(colors.bold(`Detected hostname: ${name}`));
   const configPath = locateHostConfig(name);
@@ -214,7 +256,13 @@ export async function provisionHost(hostname?: string): Promise<void> {
     Deno.readTextFileSync(configPath),
   ) as unknown as HostConfig;
   const scripts = cfg.provision?.scripts ?? [];
+  const installers = cfg.provision?.installers ?? [];
+  const envVerbose = Deno.env.get("PSH_VERBOSE") === "1";
+  const verbose = options.verbose ?? envVerbose;
+  const showLogsOnSuccess = options.showLogsOnSuccess ?? verbose;
+  const provisionOptions: ProvisionRunOptions = { verbose, showLogsOnSuccess };
   const failures: string[] = [];
+  failures.push(...await runProvisionInstallers(installers, provisionOptions));
   failures.push(...await runProvisionScripts(configPath, scripts));
   failures.push(...await processModules(name, cfg.modules));
   failures.push(...await processServices(name, cfg.services));

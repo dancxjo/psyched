@@ -54,6 +54,11 @@ export async function runWizard(): Promise<void> {
     }
   }
 
+  const verbose = await Confirm.prompt({
+    message: "Show detailed logs during provisioning?",
+    default: false,
+  });
+
   const confirmed = await Confirm.prompt({
     message: `Proceed with provisioning for '${hostname}'?`,
     default: true,
@@ -64,7 +69,7 @@ export async function runWizard(): Promise<void> {
     return;
   }
 
-  await provisionHost(hostname);
+  await provisionHost(hostname, { verbose });
   console.log(colors.bold(colors.green("\nAll done!")));
   console.log(
     "Next steps: run 'deno task dev' in modules/pilot/frontend to launch the cockpit.",

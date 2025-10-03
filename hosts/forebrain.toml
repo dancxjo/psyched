@@ -6,12 +6,8 @@
 name = "forebrain"
 
 [provision]
-# Bootstrap scripts to run on this host
-scripts = [
-    "tools/bootstrap/install_deno.sh",
-    "tools/bootstrap/install_docker.sh",
-    "tools/bootstrap/install_cuda.sh",
-]
+# Declarative installers executed by psh
+installers = ["deno", "docker", "cuda"]
 
 [features]
 docker = true

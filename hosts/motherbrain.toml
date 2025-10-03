@@ -6,8 +6,8 @@
 name = "motherbrain"
 
 [provision]
-# Bootstrap scripts to run on this host
-scripts = ["tools/bootstrap/install_deno.sh", "tools/bootstrap/install_ros2.sh"]
+# Declarative installers executed by psh
+installers = ["deno", "ros2"]
 
 [features]
 docker = true
