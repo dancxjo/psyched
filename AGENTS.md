@@ -5,9 +5,9 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 ## System snapshot
 
 - **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a browser-based cockpit for operators.
-- **Languages & frameworks:** Rust (`cargo`), ROS 2 (colcon), Bash, Deno/Fresh + Preact for the pilot UI, and assorted Python/C++ ROS packages pulled in as git dependencies.
+- **Languages & frameworks:** Python (`rclpy`, `websockets`), Rust (`cargo` for `psh`), ROS 2 (colcon), Bash, Deno/Fresh + Preact for the pilot UI, and assorted Python/C++ ROS packages pulled in as git dependencies.
 - **Runtime topology:**
-  - `psyched` crate hosts the cockpit websocket bridge (`ws://0.0.0.0:8088/ws`).
+  - `pilot` Python package hosts the cockpit websocket bridge (`ws://0.0.0.0:8088/ws`).
   - Each module in `modules/<name>` declares lifecycle scripts and optional UI widgets under `pilot/`.
   - The `psh` CLI provisions hosts (`hosts/*.toml`) and synchronizes module assets into the Fresh frontend.
 
@@ -16,7 +16,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 | Path | Purpose |
 | --- | --- |
 | `psh/` | `psh` Rust CLI for provisioning and module orchestration. Entry: `src/main.rs`. |
-| `psyched/` | ROS-aware Rust backend serving the cockpit websocket (`src/bin/cockpit.rs`). |
+| `modules/pilot/packages/pilot/pilot_cockpit/` | ROS-aware Python backend serving the cockpit websocket. |
 | `modules/pilot/frontend/` | Deno Fresh app for the pilot console. |
 | `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
 | `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
@@ -29,7 +29,7 @@ Always prefer running the smallest relevant command set.
 | Domain | Commands |
 | --- | --- |
 | Rust workspace | `cargo fmt`, `cargo check --workspace`, `cargo clippy --workspace --all-targets`, `cargo test --workspace` |
-| Cockpit backend only | `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit` |
+| Cockpit backend only | `colcon build --packages-select pilot && ros2 run pilot cockpit` |
 | ROS packages (colcon) | `colcon build --packages-select <pkg>` followed by `source install/setup.bash` |
 | Deno pilot UI | `deno fmt`, `deno check lib/cockpit.ts`, `deno task dev`, `deno test` |
 | Shell scripts | `shellcheck modules/**/launch_*.sh modules/**/shutdown_*.sh setup` |

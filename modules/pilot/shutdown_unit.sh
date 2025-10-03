@@ -12,8 +12,6 @@ if [[ -f "${WORKSPACE_ENV}" ]]; then
 fi
 
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
-WORKSPACE_SRC="${PSYCHED_WORKSPACE_SRC:-${WORKSPACE_DIR}/src}"
-COCKPIT_MANIFEST="${WORKSPACE_SRC}/pilot/Cargo.toml"
 
 TIMEOUT=${TIMEOUT:-10}
 
@@ -62,9 +60,9 @@ terminate_process_group() {
 }
 
 terminate_process_group \
-	"Pilot cockpit backend" \
-	"cargo run --manifest-path ${COCKPIT_MANIFEST} --bin cockpit" \
-	"target/debug/cockpit"
+        "Pilot cockpit backend" \
+        "ros2 run pilot cockpit" \
+        "python3 -m pilot_cockpit.cli"
 
 terminate_process_group \
 	"Pilot Fresh dev server" \

@@ -2,11 +2,12 @@
 apt = [
     "ros-${ROS_DISTRO}-example-interfaces",
     "ros-${ROS_DISTRO}-test-msgs",
-    "ros-${ROS_DISTRO}-rosbridge-server",
     "ros-${ROS_DISTRO}-web-video-server",
     "ros-${ROS_DISTRO}-sensor-msgs",
 ]
-pip = []
+pip = [
+    "websockets>=10,<13",
+]
 
 # Pilot module does not require patch scripts
 patches = []

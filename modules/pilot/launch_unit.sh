@@ -11,8 +11,6 @@ if [[ -f "${WORKSPACE_ENV}" ]]; then
 fi
 
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
-WORKSPACE_SRC="${PSYCHED_WORKSPACE_SRC:-${WORKSPACE_DIR}/src}"
-COCKPIT_MANIFEST="${WORKSPACE_SRC}/pilot/Cargo.toml"
 
 # shellcheck disable=SC1090
 # Temporary disable nounset before sourcing scripts that expect unset vars.
@@ -45,28 +43,20 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo is not installed. Install Rust before launching the pilot module." >&2
-  exit 1
-fi
-
 if ! command -v deno >/dev/null 2>&1; then
   echo "deno is not installed. Install deno before launching the pilot module." >&2
   exit 1
 fi
 
-if [[ ! -f "${COCKPIT_MANIFEST}" ]]; then
-  cat >&2 <<EOF
-Pilot cockpit manifest not found at ${COCKPIT_MANIFEST}.
-Ensure you've prepared the workspace (e.g. run 'psh clean' or 'psh mod setup pilot').
-EOF
+if ! command -v ros2 >/dev/null 2>&1; then
+  echo "ros2 CLI not found. Source your ROS workspace before launching the pilot module." >&2
   exit 1
 fi
 
 echo "Starting Pilot cockpit backend..."
 (
   cd "${ROOT_DIR}" &&
-    cargo run --manifest-path "${COCKPIT_MANIFEST}" --bin cockpit
+    ros2 run pilot cockpit --log-level "${PILOT_LOG_LEVEL:-info}"
 ) &
 COCKPIT_PID=$!
 

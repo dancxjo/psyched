@@ -1,21 +1,22 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>pilot</name>
-  <version>0.1.0</version>
-  <description>Pilot module ROS 2 bridge (cockpit backend)</description>
-  <maintainer email="you@example.com">You</maintainer>
+  <version>0.2.0</version>
+  <description>Pilot module cockpit backend implemented with rclpy and websockets.</description>
+  <maintainer email="pete@psyched.local">Psyched Maintainers</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_cargo</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-  <depend>rclrs</depend>
-  <depend>std_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>create_msgs</depend>
-  <buildtool_depend>rosidl_generator_rs</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>create_msgs</exec_depend>
+  <exec_depend>python3-websockets</exec_depend>
+
   <export>
-    <build_type>ament_cargo</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>
