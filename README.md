@@ -36,7 +36,7 @@ Psyched is organized around three ideas:
 3. **A ROS 2 + Python bridge.** The `pilot` package (linked into `work/src/pilot`) exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using `rclpy` and `websockets`.
 4. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
 
-Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that provisions hosts, orchestrates modules, and maintains the Deno symlinks required by the pilot.
+Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orchestrator that provisions hosts, manages modules, and keeps the pilot frontend in sync.
 
 ## Quick start
 
@@ -45,10 +45,10 @@ Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that p
 ```bash
 git clone https://github.com/dancxjo/psyched.git
 cd psyched
-./setup  # installs system dependencies, builds psh, and drops you into psh setup
+./setup  # installs system dependencies, registers the Deno-based psh CLI, and opens the provisioning wizard
 ```
 
-`./setup` installs build toolchains (Rust, Python, ROS dependencies), configures mDNS, compiles the `psh` helper, and runs `psh setup` to execute the host-specific bootstrap scripts defined in `hosts/*.toml`.
+`./setup` installs build toolchains (Python, ROS dependencies), configures mDNS, prepares Deno, and launches the interactive `psh` wizard (equivalent to running `psh` with no arguments). From there you can apply the host profile that triggers any bootstrap scripts declared in `hosts/*.toml`.
 
 ### 2. Provision additional machines (optional)
 
@@ -101,7 +101,7 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 │   └── <name>/
 │       ├── service.toml           # Manifest consumed by psh svc
 │       └── docker-compose.yml     # Compose stack plus supporting assets
-├── psh/                           # Rust CLI for provisioning + module orchestration
+├── psh/                           # Deno CLI for provisioning + module orchestration
 ├── tools/                         # Host bootstrap & provisioning scripts
 ├── hosts/                         # Host configuration TOML files
 ├── setup                          # Top-level bootstrap script (see above)
@@ -206,14 +206,13 @@ source install/setup.bash
 
 `psh` wraps common workflows:
 
-- `psh host setup <host>` – executes the bootstrap scripts for a host defined in `hosts/<host>.toml`
+- `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.toml`
 - `psh mod list` – inspect module status
-- `psh mod setup|teardown <module>` – manage symlinks + prep work
-- `psh mod up|down <module>` – start/stop module services
-- `psh svc list` – inspect containerised services and their status
-- `psh svc setup|up|down <service>` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
-- `psh env` – injects a `psyched()` helper into your shell rc file so sourcing ROS + the local workspace is one command away
-- `psh clean` – reset `work/` and re-establish ROS/Python package symlinks (from `modules/*/packages/`)
+- `psh mod setup|teardown [module]` – manage symlinks + prep work
+- `psh mod up|down [module]` – start/stop module services
+- `psh srv list` – inspect containerised services and their status
+- `psh srv setup|up|down [service]` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
+- `psh sys setup|teardown|enable|disable|up|down <module>` – install and control user-level systemd units for module launch scripts
 
 ## Testing & validation
 
@@ -225,7 +224,7 @@ CI is currently manual; prefer running the commands above before pushing.
 
 ## Troubleshooting
 
-- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Re-run `psh env` after changing the distro.
+- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `workspace_env.sh` after changing the distro.
 - Cockpit websocket unreachable: verify `ros2 run pilot cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
