@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
 FRONTEND_DEV_TS="${FRONTEND_DIR}/dev.ts"
-WORKSPACE_ENV="${ROOT_DIR}/workspace_env.sh"
+WORKSPACE_ENV="${ROOT_DIR}/env/psyched_env.sh"
 
 if [[ -f "${WORKSPACE_ENV}" ]]; then
 	# shellcheck disable=SC1090

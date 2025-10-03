@@ -156,6 +156,46 @@ if ! "${deno_path}" cache --config "${repo_root}/tools/psh/deno.json" "${repo_ro
     echo "Warning: deno cache failed; dependencies will download on first run." >&2
 fi
 
+ensure_psyched_shell() {
+    local env_script="${repo_root}/env/psyched_env.sh"
+    local bashrc="${HOME}/.bashrc"
+    local marker="# >>> psyched workspace >>>"
+    local footer="# <<< psyched workspace <<<"
+
+    if [[ ! -f "${env_script}" ]]; then
+        return 0
+    fi
+
+    mkdir -p "${HOME}"
+    touch "${bashrc}"
+
+    if grep -Fq "${marker}" "${bashrc}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    {
+        printf '\n%s\n' "${marker}"
+        printf '%s\n' "if [ -f \"${env_script}\" ]; then"
+        printf '%s\n' '    # shellcheck disable=SC1091'
+        printf '%s\n' "    source \"${env_script}\""
+        printf '%s\n' '    psyched() {'
+        printf '%s\n' '        if declare -F psyched::activate >/dev/null 2>&1; then'
+        printf '%s\n' '            psyched::activate "$@"'
+        printf '%s\n' '        else'
+        printf '%s\n' '            echo "psyched::activate helper missing" >&2'
+        printf '%s\n' '            return 1'
+        printf '%s\n' '        fi'
+        printf '%s\n' '    }'
+        printf '%s\n' '    if [[ "${PSYCHED_AUTO_ACTIVATE:-1}" != "0" ]]; then'
+        printf '%s\n' '        psyched --quiet'
+        printf '%s\n' '    fi'
+        printf '%s\n' 'fi'
+        printf '%s\n' "${footer}"
+    } >> "${bashrc}"
+}
+
+ensure_psyched_shell
+
 # 8. Run the provisioning wizard
 echo "Launching psh wizard..."
 exec "${psh_wrapper}"

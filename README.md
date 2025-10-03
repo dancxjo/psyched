@@ -214,6 +214,11 @@ source install/setup.bash
 - `psh srv setup|up|down [service]` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
 - `psh sys setup|teardown|enable|disable|up|down <module>` – install and control user-level systemd units for module launch scripts
 
+## Shell environment helpers
+
+- `env/psyched_env.sh` centralises workspace variables and ROS fallbacks. Source it in automation and call `psyched::activate` to ensure the right setup script is loaded.
+- The bootstrapper injects a `psyched` function into `.bashrc` that sources the workspace (or your ROS distro when no workspace exists). Run `psyched --workspace-only` or `psyched --ros-only` to force a mode. Set `PSYCHED_AUTO_ACTIVATE=0` before login to skip the automatic call.
+
 ## Testing & validation
 
 - **Pilot backend:** `colcon test --packages-select pilot`
@@ -224,7 +229,7 @@ CI is currently manual; prefer running the commands above before pushing.
 
 ## Troubleshooting
 
-- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `workspace_env.sh` after changing the distro.
+- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `env/psyched_env.sh` and run `psyched --ros-only` after changing the distro.
 - Cockpit websocket unreachable: verify `ros2 run pilot cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
