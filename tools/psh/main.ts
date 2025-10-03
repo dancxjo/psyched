@@ -2,6 +2,7 @@ import { Command } from "$cliffy/command/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { runWizard } from "./lib/wizard.ts";
 import { provisionHost } from "./lib/host.ts";
+import { buildWorkspace } from "./lib/build.ts";
 import {
   bringModulesDown,
   bringModulesUp,
@@ -40,6 +41,14 @@ async function main() {
 
   const hostCommand = new Command()
     .description("Host provisioning commands");
+
+  root
+    .command("build")
+    .description("Run colcon build within the workspace")
+    .arguments("[targets...:string]")
+    .action(async (_, ...targets: string[]) => {
+      await buildWorkspace(targets);
+    });
 
   hostCommand
     .command("setup [hosts...:string]")
@@ -118,10 +127,11 @@ async function main() {
         const state = status.status === "running"
           ? colors.green("running")
           : status.status === "stopped"
-            ? colors.yellow("stopped")
-            : colors.red("error");
+          ? colors.yellow("stopped")
+          : colors.red("error");
         console.log(
-          `- ${status.name}: ${state}${status.description ? ` – ${status.description}` : ""
+          `- ${status.name}: ${state}${
+            status.description ? ` – ${status.description}` : ""
           }`,
         );
       }
