@@ -59,8 +59,6 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
   python3-colcon-common-extensions \
   python3-rosdep
 
-cargo install cargo-ament-build
-
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
   "${SUDO[@]}" rosdep init
 fi
@@ -80,8 +78,3 @@ PROFILE
 
 echo "ROS 2 ${ROS_DISTRO} installation completed with Cyclone DDS as the default RMW."
 echo "Source /opt/ros/${ROS_DISTRO}/setup.bash to begin using ROS 2."
-
-GENERATE_SCRIPT="${SCRIPT_DIR}/generate_ros_rust_bindings.sh"
-if ! "${GENERATE_SCRIPT}"; then
-  echo "Warning: failed to vendor ROS Rust message crates. Re-run ${GENERATE_SCRIPT} once Docker is available." >&2
-fi

@@ -18,9 +18,9 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 	- [Vectors](#vectors)
 	- [ASR](#asr)
 - [Development workflows](#development-workflows)
-	- [Rust + ROS backend](#rust--ros-backend)
-	- [Pilot frontend](#pilot-frontend)
-	- [Using the `psh` CLI](#using-the-psh-cli)
+        - [Python + ROS backend](#python--ros-backend)
+        - [Pilot frontend](#pilot-frontend)
+        - [Using the `psh` CLI](#using-the-psh-cli)
 - [Testing & validation](#testing--validation)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
@@ -32,7 +32,7 @@ Psyched is organized around three ideas:
 
 1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
 2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
-3. **A ROS 2 + Rust bridge.** The `pilot` crate (linked into `work/src/pilot`) exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using [`rclrs`](https://github.com/sequenceplanner/rclrs).
+3. **A Python ROS 2 bridge.** The pilot backend now leans on ROS 2 Python nodes (including [`rosbridge_server`](https://index.ros.org/p/rosbridge_suite/)) to expose a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics without compiling custom Rust message crates.
 4. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
 
 Supporting utilities live under `tools/` and the `psh` CLI: a Rust binary that provisions hosts, orchestrates modules, and maintains the Deno symlinks required by the pilot.
@@ -92,13 +92,12 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 ```
 ├── modules/           # Module definitions (pilot, foot, imu, …)
-├── modules/pilot/packages/pilot/  # Rust ROS bridge providing the cockpit backend (symlinked into work/src/pilot)
+├── modules/pilot/packages/        # Optional ROS 2 packages and launch assets contributed by the pilot module
 ├── services/          # Containerised microservices (tts, language, graphs, vectors, …)
 │   └── <name>/
 │       ├── service.toml        # Manifest consumed by psh svc
 │       └── docker-compose.yml  # Compose stack plus supporting assets
 ├── psh/               # Rust CLI for provisioning + module orchestration
-├── psyched-msgs/      # Placeholder crate for shared ROS message helpers
 ├── tools/             # Host bootstrap & provisioning scripts
 ├── hosts/             # Host configuration TOML files
 ├── work/              # Colcon workspace (src/, build/, install/, log/) populated by tools/clean_workspace
@@ -112,7 +111,7 @@ Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. S
 
 The pilot module provides a browser-based cockpit with two parts:
 
-- **Backend:** `modules/pilot/packages/pilot/src/bin/cockpit.rs` exposes a websocket at `ws://0.0.0.0:8088/ws`. Incoming messages are mapped to ROS topics (currently `/conversation`; more topics coming soon). Outbound broadcasts like `/audio/transcript/final` are streamed to every connected browser.
+- **Backend:** A Python-based ROS 2 stack powered by `rosbridge_server` and `web_video_server` exposes the cockpit websocket at `ws://0.0.0.0:8088/ws`, translating UI events into ROS topics and forwarding telemetry back to the browser.
 - **Frontend:** `modules/pilot/frontend` is a Fresh app. `lib/cockpit.ts` contains the websocket client (`CockpitClient`) and a `useCockpitTopic` hook that any component can reuse.
 
 Bring it up with:
@@ -175,30 +174,13 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ## Development workflows
 
-### Vendored ROS Rust bindings
+### Python + ROS backend
 
-Provisioning invokes `tools/bootstrap/generate_ros_rust_bindings.sh` after the ROS apt packages finish installing. The helper spins up a temporary Docker builder for `ros-${ROS_DISTRO:-kilted}-ros-base`, runs `colcon build` with `rosidl_generator_rs`, and copies the resulting crates into `vendor_msgs/`. Cargo is configured to patch common message crates (e.g. `std_msgs`, `sensor_msgs`) to those vendored copies so Rust builds no longer depend on a local colcon workspace.
-
-If Docker was unavailable during provisioning—or you switch `ROS_DISTRO` later—rerun the script manually:
+The cockpit backend now relies on ROS 2's Python ecosystem rather than custom Rust binaries. Core dependencies such as `rosbridge_server` and `web_video_server` are installed via the pilot module manifest, giving the Fresh frontend a websocket gateway into the ROS graph without compiling message crates. Use `psh mod setup pilot` to install those packages, then launch the stack with `psh mod up pilot`. For manual experimentation you can start the websocket bridge directly:
 
 ```bash
-ROS_DISTRO=${ROS_DISTRO:-kilted} tools/bootstrap/generate_ros_rust_bindings.sh
-```
-
-The command refreshes the crates in `vendor_msgs/` and prints warnings for any package that fails to build. Commit the updated directories when upstream interface definitions change.
-
-### Rust + ROS backend
-
-- Build everything: `cargo build --workspace`
-- Run the cockpit backend alone: `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit`
-- Format / lint: `cargo fmt`, `cargo clippy --workspace --all-targets`
-
-ROS packages live under `src/` (mirrored into `packages/` for colcon). Use `psh build` to compile ROS nodes without invoking `colcon` directly:
-
-```bash
-psh build                 # builds the entire workspace
-psh build mpu6050driver   # optionally target specific packages
-source install/setup.bash
+source /opt/ros/${ROS_DISTRO:-kilted}/setup.bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 ```
 
 ### Pilot frontend
@@ -223,7 +205,7 @@ source install/setup.bash
 
 ## Testing & validation
 
-- **Rust:** `cargo test --workspace`
+- **psh CLI:** `cargo test --manifest-path psh/Cargo.toml`
 - **Pilot Frontend:** `deno test` (add tests under `modules/pilot/frontend`). Use `deno check` to catch type errors.
 - **ROS nodes:** Build via `colcon build` then run `ros2 test` or module-specific launch files as needed.
 
@@ -232,7 +214,7 @@ CI is currently manual; prefer running the commands above before pushing.
 ## Troubleshooting
 
 - Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Re-run `psh env` after changing the distro.
-- Cockpit websocket unreachable: verify `cargo run --manifest-path work/src/pilot/Cargo.toml --bin cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
+- Cockpit websocket unreachable: ensure `rosbridge_server` is running (try `ros2 launch rosbridge_server rosbridge_websocket_launch.xml`) and confirm port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
 
@@ -241,7 +223,7 @@ CI is currently manual; prefer running the commands above before pushing.
 - Expand cockpit topics beyond `/conversation`
 - Ship IMU + drive base dashboards in the pilot UI
 - Add ear/eye/chat/voice modules (see `modules/` placeholders)
-- Automate CI for cargo, deno, and colcon builds
+- Automate CI for psh (cargo), deno, and colcon builds
 
 ## License
 

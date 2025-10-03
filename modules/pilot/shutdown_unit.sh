@@ -11,10 +11,6 @@ if [[ -f "${WORKSPACE_ENV}" ]]; then
 	source "${WORKSPACE_ENV}"
 fi
 
-WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
-WORKSPACE_SRC="${PSYCHED_WORKSPACE_SRC:-${WORKSPACE_DIR}/src}"
-COCKPIT_MANIFEST="${WORKSPACE_SRC}/pilot/Cargo.toml"
-
 TIMEOUT=${TIMEOUT:-10}
 
 terminate_process_group() {
@@ -62,12 +58,18 @@ terminate_process_group() {
 }
 
 terminate_process_group \
-	"Pilot cockpit backend" \
-	"cargo run --manifest-path ${COCKPIT_MANIFEST} --bin cockpit" \
-	"target/debug/cockpit"
+        "rosbridge websocket" \
+        "rosbridge_websocket_launch.xml" \
+        "ros2 launch rosbridge_server" \
+        "rosbridge_server"
 
 terminate_process_group \
-	"Pilot Fresh dev server" \
+        "web_video_server" \
+        "ros2 run web_video_server web_video_server" \
+        "web_video_server"
+
+terminate_process_group \
+        "Pilot Fresh dev server" \
 	"deno task dev" \
 	"deno run -A --watch=static/,routes/ dev.ts" \
 	"${FRONTEND_DEV_TS}"

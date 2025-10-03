@@ -11,7 +11,6 @@ pip = []
 
 # Scripts to apply patches to the driver before build
 patches = ["modules/imu/apply_patches.sh"]
-cargo_patches = []
 
 # Service control
 launch = "modules/imu/launch_unit.sh"

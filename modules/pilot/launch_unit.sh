@@ -11,8 +11,6 @@ if [[ -f "${WORKSPACE_ENV}" ]]; then
 fi
 
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
-WORKSPACE_SRC="${PSYCHED_WORKSPACE_SRC:-${WORKSPACE_DIR}/src}"
-COCKPIT_MANIFEST="${WORKSPACE_SRC}/pilot/Cargo.toml"
 
 # shellcheck disable=SC1090
 # Temporary disable nounset before sourcing scripts that expect unset vars.
@@ -30,10 +28,16 @@ elif [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
 fi
 
 cleanup() {
-  if [[ -n "${COCKPIT_PID:-}" ]] && kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
-    echo "Stopping Pilot cockpit backend (PID ${COCKPIT_PID})..."
-    kill "${COCKPIT_PID}" 2>/dev/null || true
-    wait "${COCKPIT_PID}" 2>/dev/null || true
+  if [[ -n "${ROSBRIDGE_PID:-}" ]] && kill -0 "${ROSBRIDGE_PID}" >/dev/null 2>&1; then
+    echo "Stopping rosbridge websocket (PID ${ROSBRIDGE_PID})..."
+    kill "${ROSBRIDGE_PID}" 2>/dev/null || true
+    wait "${ROSBRIDGE_PID}" 2>/dev/null || true
+  fi
+
+  if [[ -n "${VIDEO_PID:-}" ]] && kill -0 "${VIDEO_PID}" >/dev/null 2>&1; then
+    echo "Stopping web_video_server (PID ${VIDEO_PID})..."
+    kill "${VIDEO_PID}" 2>/dev/null || true
+    wait "${VIDEO_PID}" 2>/dev/null || true
   fi
 
   if [[ -n "${DENO_PID:-}" ]] && kill -0 "${DENO_PID}" >/dev/null 2>&1; then
@@ -45,35 +49,35 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo is not installed. Install Rust before launching the pilot module." >&2
-  exit 1
-fi
-
 if ! command -v deno >/dev/null 2>&1; then
   echo "deno is not installed. Install deno before launching the pilot module." >&2
   exit 1
 fi
 
-if [[ ! -f "${COCKPIT_MANIFEST}" ]]; then
-  cat >&2 <<EOF
-Pilot cockpit manifest not found at ${COCKPIT_MANIFEST}.
-Ensure you've prepared the workspace (e.g. run 'psh clean' or 'psh mod setup pilot').
-EOF
+if ! command -v ros2 >/dev/null 2>&1; then
+  echo "ros2 CLI is not installed. Install ROS 2 before launching the pilot module." >&2
   exit 1
 fi
 
-echo "Starting Pilot cockpit backend..."
-(
-  cd "${ROOT_DIR}" &&
-    cargo run --manifest-path "${COCKPIT_MANIFEST}" --bin cockpit
-) &
-COCKPIT_PID=$!
+echo "Starting rosbridge websocket server..."
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
+ROSBRIDGE_PID=$!
 
 sleep 2
-if ! kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
-  echo "Pilot cockpit backend failed to start." >&2
-  wait "${COCKPIT_PID}" || true
+if ! kill -0 "${ROSBRIDGE_PID}" >/dev/null 2>&1; then
+  echo "rosbridge websocket failed to start." >&2
+  wait "${ROSBRIDGE_PID}" || true
+  exit 1
+fi
+
+echo "Starting web_video_server..."
+ros2 run web_video_server web_video_server &
+VIDEO_PID=$!
+
+sleep 2
+if ! kill -0 "${VIDEO_PID}" >/dev/null 2>&1; then
+  echo "web_video_server failed to start." >&2
+  wait "${VIDEO_PID}" || true
   exit 1
 fi
 

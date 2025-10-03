@@ -94,7 +94,7 @@ if ! sudo apt install -y unzip 1>&2; then
     echo "Warning: failed to install unzip; continuing" >&2
 fi
 
-# 5. ROS colcon tooling + cargo bridge
+# 5. ROS colcon tooling
 sudo apt install -y python3-colcon-*
 
 install_colcon_ros_cargo() {

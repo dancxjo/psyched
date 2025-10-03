@@ -1,5 +1,4 @@
 mod build;
-mod cargo_patch;
 mod clean;
 mod cli;
 mod module_runner;
@@ -11,9 +10,8 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::build::build_workspace;
-use crate::cargo_patch::refresh_cargo_patches;
 use crate::clean::clean_workspace;
-use crate::cli::{CargoCommands, Cli, Commands, HostCommands, ModCommands, ServiceCommands};
+use crate::cli::{Cli, Commands, HostCommands, ModCommands, ServiceCommands};
 use crate::module_runner::{
     all_module_names, bring_module_down, bring_module_up, list_modules, setup_module,
     setup_modules, teardown_module,
@@ -147,11 +145,6 @@ fn main() -> Result<()> {
                     }
                 }
             }
-        },
-
-        // Backwards-compatible top-level commands map into the new subcommands
-        Some(Commands::Cargo { command }) => match command {
-            CargoCommands::Patch => refresh_cargo_patches()?,
         },
 
         Some(Commands::Build { packages }) => build_workspace(&packages)?,

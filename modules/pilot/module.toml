@@ -10,7 +10,6 @@ pip = []
 
 # Pilot module does not require patch scripts
 patches = []
-cargo_patches = []
 
 # Service control
 launch = "modules/pilot/launch_unit.sh"

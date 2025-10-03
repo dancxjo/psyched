@@ -5,7 +5,7 @@ These hints help GitHub Copilot generate higher-quality suggestions inside this 
 ## Project summary
 
 - Robotics control stack for the robot **Pete**.
-- Rust + ROS 2 backend (`psyched` crate) with a websocket cockpit bridge.
+- Python + ROS 2 backend (rosbridge/web_video_server) providing the cockpit websocket bridge.
 - Deno Fresh + Preact frontend (`modules/pilot/frontend`).
 - `psh` Rust CLI orchestrates host provisioning and module lifecycles.
 - Modules live in `modules/<name>` and may expose pilot UI overlays under `pilot/`.
@@ -26,7 +26,7 @@ These hints help GitHub Copilot generate higher-quality suggestions inside this 
 
 ## Testing expectations
 
-- Run `cargo fmt` + `cargo check --workspace` after Rust edits.
+- Run `cargo fmt --manifest-path psh/Cargo.toml` + `cargo check --manifest-path psh/Cargo.toml` after Rust edits to the `psh` CLI.
 - For Fresh components, run `deno fmt`, `deno check`, and (when available) `deno test`.
 - ROS changes typically require `colcon build` and sourcing `install/setup.bash`.
 

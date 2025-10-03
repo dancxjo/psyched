@@ -189,8 +189,22 @@ pub fn list_services() -> Result<()> {
     println!("Services under {}:", services_root.display());
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        match service_status(&name) {
-            Ok(status) => println!("- {:<20} {}", name, status),
+        let service_dir = entry.path();
+
+        match load_service_config(&service_dir, &name) {
+            Ok(config) => {
+                let description = config.description.clone();
+                match service_status(&name) {
+                    Ok(status) => {
+                        if let Some(desc) = description.as_ref().filter(|d| !d.trim().is_empty()) {
+                            println!("- {:<20} {:<8} {}", name, status, desc);
+                        } else {
+                            println!("- {:<20} {}", name, status);
+                        }
+                    }
+                    Err(err) => println!("- {:<20} (error: {})", name, err),
+                }
+            }
             Err(err) => println!("- {:<20} (error: {})", name, err),
         }
     }
