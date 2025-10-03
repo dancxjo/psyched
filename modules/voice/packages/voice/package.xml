@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>voice</name>
+  <version>0.1.0</version>
+  <description>Voice module that serializes text-to-speech playback.</description>
+  <maintainer email="pete@psyched.local">Psyched Maintainers</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+</package>

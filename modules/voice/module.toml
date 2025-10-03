@@ -1,0 +1,11 @@
+[unit.voice]
+apt = [
+    "espeak",
+]
+pip = []
+launch = "modules/voice/launch_unit.sh"
+shutdown = "modules/voice/shutdown_unit.sh"
+
+[unit.voice.ros]
+workspace = "."
+packages = ["voice"]
