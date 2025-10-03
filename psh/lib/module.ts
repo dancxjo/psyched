@@ -93,6 +93,84 @@ function ensureDirectory(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
+type AsyncFileWriter = {
+  write(chunk: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+};
+
+function createAsyncFileWriter(file: Deno.FsFile): AsyncFileWriter {
+  let pending: Promise<void> = Promise.resolve();
+  let closed = false;
+  return {
+    write(chunk: Uint8Array) {
+      if (closed) {
+        return Promise.resolve();
+      }
+      pending = pending.then(async () => {
+        await file.write(chunk);
+      });
+      return pending;
+    },
+    async close() {
+      if (closed) return;
+      closed = true;
+      try {
+        await pending;
+      } finally {
+        file.close();
+      }
+    },
+  };
+}
+
+async function streamOutput(
+  stream: ReadableStream<Uint8Array> | null,
+  logWriter: AsyncFileWriter,
+  module: string,
+  destination: "stdout" | "stderr",
+  colorize: (text: string) => string,
+): Promise<void> {
+  if (!stream) return;
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const consoleWriter =
+    (destination === "stdout" ? Deno.stdout.writable : Deno.stderr.writable)
+      .getWriter();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      await logWriter.write(value);
+      buffer += decoder.decode(value, { stream: true });
+      let newlineIndex: number;
+      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIndex).replace(/\r$/, "");
+        buffer = buffer.slice(newlineIndex + 1);
+        const formatted = `${colorize(`[${module}] ${line}`)}\n`;
+        await consoleWriter.write(encoder.encode(formatted));
+      }
+    }
+
+    buffer += decoder.decode(new Uint8Array(), { stream: false });
+    if (buffer.length > 0) {
+      const formatted = `${colorize(`[${module}] ${buffer}`)}\n`;
+      await consoleWriter.write(encoder.encode(formatted));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const fallback = `${colorize(`[${module}] log streaming failed: ${message}`)
+      }\n`;
+    await consoleWriter.write(encoder.encode(fallback));
+  } finally {
+    reader.releaseLock();
+    consoleWriter.releaseLock();
+  }
+}
+
 export function locateModuleDir(module: string): string {
   const candidate = join(modulesRoot(), module);
   if (!pathExists(candidate)) {
@@ -162,9 +240,9 @@ async function installAptPackages(
   console.log(
     colors.cyan(`[${label}] Installing apt packages: ${expanded.join(", ")}`),
   );
-  const useSudo = await $`which sudo`.noThrow().stdout("null").then((res: { code: number }) =>
-    res.code === 0
-  );
+  const useSudo = await $`which sudo`.noThrow().stdout("null").then((
+    res: { code: number },
+  ) => res.code === 0);
   const cmd = useSudo
     ? $`sudo apt-get install -y ${expanded}`
     : $`apt-get install -y ${expanded}`;
@@ -186,7 +264,9 @@ async function installPipPackages(
   );
   const pip = await $`which pip3`.noThrow().stdout("null");
   const pipCmd = pip.code === 0 ? "pip3" : "pip";
-  await $`${pipCmd} install --break-system-packages ${expanded}`.stdout("inherit").stderr("inherit");
+  await $`${pipCmd} install --break-system-packages ${expanded}`.stdout(
+    "inherit",
+  ).stderr("inherit");
 }
 
 function deriveRepoDirname(url: string): string {
@@ -266,9 +346,9 @@ export async function resolveModuleScript(
   for (const candidate of search) {
     const expanded = candidate.startsWith("/") ? candidate : resolve(candidate);
     if (
-      await $`which ${expanded}`.noThrow().stdout("null").then((r: { code: number }) =>
-        r.code === 0
-      )
+      await $`which ${expanded}`.noThrow().stdout("null").then((
+        r: { code: number },
+      ) => r.code === 0)
     ) {
       return expanded;
     }
@@ -516,14 +596,111 @@ export async function bringModuleUp(module: string): Promise<void> {
     throw new Error(`module '${module}' has no launch script configured`);
   }
   const launchScript = await resolveModuleScript(config.launch, moduleDir);
-  console.log(colors.green(`==> Launching module '${module}'`));
+  console.log(colors.green(`==> Launching module '${module}' in background`));
+
+  const logDir = join(repoRoot(), "log", "modules");
+  ensureDirectory(logDir);
+  const logFile = join(logDir, `${module}.log`);
+  console.log(colors.dim(`[${module}] writing logs to ${logFile}`));
+
+  // Build complete environment setup command
+  const workspaceEnv = join(repoRoot(), "workspace_env.sh");
+  const workspaceSetup = join(workspaceRoot(), "install", "setup.bash");
+
+  const envCommands: string[] = [];
+
+  // Source workspace_env.sh to set directory variables
+  if (pathExists(workspaceEnv)) {
+    envCommands.push(`source ${workspaceEnv}`);
+  }
+
+  // Source ROS workspace setup
+  if (pathExists(workspaceSetup)) {
+    envCommands.push(`source ${workspaceSetup}`);
+  } else {
+    // Fall back to system ROS if workspace not built
+    const rosDistro = Deno.env.get("ROS_DISTRO");
+    if (rosDistro) {
+      const systemSetup = `/opt/ros/${rosDistro}/setup.bash`;
+      if (pathExists(systemSetup)) {
+        envCommands.push(`source ${systemSetup}`);
+      }
+    }
+  }
+
+  // Combine environment setup with launch script execution
+  const launchCommand = envCommands.length > 0
+    ? `${envCommands.join(" && ")} && exec bash ${launchScript}`
+    : `exec bash ${launchScript}`;
+
+  // Launch the script in the background, streaming output into the log file
+  // while mirroring prefixed lines to the caller's console.
   const child = new Deno.Command("bash", {
-    args: [launchScript],
+    args: ["-c", launchCommand],
     cwd: moduleDir,
-    stdout: "inherit",
-    stderr: "inherit",
+    stdin: "null",
+    stdout: "piped",
+    stderr: "piped",
   }).spawn();
+  const logHandle = await Deno.open(logFile, {
+    create: true,
+    write: true,
+    append: true,
+  });
+  const logWriter = createAsyncFileWriter(logHandle);
+
+  const logPump = Promise.all([
+    streamOutput(
+      child.stdout,
+      logWriter,
+      module,
+      "stdout",
+      (text) => colors.dim(text),
+    ),
+    streamOutput(
+      child.stderr,
+      logWriter,
+      module,
+      "stderr",
+      (text) => colors.red(text),
+    ),
+  ]);
+
+  logPump
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(colors.red(`[${module}] log stream error: ${message}`));
+    })
+    .finally(() => {
+      void logWriter.close();
+    });
+
   writePid(module, child.pid);
+  console.log(
+    colors.green(
+      `==> Module '${module}' started with PID ${child.pid} (logs: ${logFile})`,
+    ),
+  );
+
+  child.status
+    .then((status) => {
+      const summary = status.success
+        ? colors.yellow(`[${module}] exited cleanly (code ${status.code ?? 0})`)
+        : colors.red(
+          `[${module}] exited with code ${status.code ?? "unknown"}` +
+          (status.signal ? ` (signal ${status.signal})` : ""),
+        );
+      console.log(summary);
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        colors.red(`[${module}] failed to read exit status: ${message}`),
+      );
+    });
+
+  // Unref to allow psh to continue without waiting
+  child.unref();
 }
 
 export async function bringModuleDown(module: string): Promise<void> {

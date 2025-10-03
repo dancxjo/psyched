@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import rclpy
 from geometry_msgs.msg import Twist
-from rclpy.executors import AsyncIOExecutor
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.subscription import Subscription
@@ -62,7 +62,7 @@ class CockpitBridgeNode(Node):
         super().__init__("cockpit")
         self._conversation_pub = self.create_publisher(String, "/conversation", 10)
         self._cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
-        self._subscriptions: Dict[str, SubscriptionEntry] = {}
+        self._topic_subscriptions: Dict[str, SubscriptionEntry] = {}
         self._clients: Set[ClientConnection] = set()
         self._broadcast_queue: asyncio.Queue[OutboundMessage] = asyncio.Queue(maxsize=512)
         self._broadcast_task: Optional[asyncio.Task[None]] = None
@@ -155,13 +155,13 @@ class CockpitBridgeNode(Node):
         if FootTelemetryBridge.handles_topic(topic):
             return self._foot_bridge.handle_subscribe(topic)
 
-        entry = self._subscriptions.get(topic)
+        entry = self._topic_subscriptions.get(topic)
         if entry is not None:
             entry.ref_count += 1
             return []
 
         subscription = self._create_subscription(topic)
-        self._subscriptions[topic] = SubscriptionEntry(ref_count=1, subscription=subscription)
+        self._topic_subscriptions[topic] = SubscriptionEntry(ref_count=1, subscription=subscription)
         return []
 
     def unsubscribe_topic(self, topic: str) -> None:
@@ -169,7 +169,7 @@ class CockpitBridgeNode(Node):
             self._foot_bridge.handle_unsubscribe(topic)
             return
 
-        entry = self._subscriptions.get(topic)
+        entry = self._topic_subscriptions.get(topic)
         if entry is None:
             raise CockpitError(f"unsupported topic '{topic}'")
         if entry.ref_count > 1:
@@ -177,7 +177,7 @@ class CockpitBridgeNode(Node):
             return
 
         self.destroy_subscription(entry.subscription)
-        del self._subscriptions[topic]
+        del self._topic_subscriptions[topic]
 
     def _create_subscription(self, topic: str) -> Subscription:
         if topic == "/audio/transcript/final":
@@ -358,10 +358,11 @@ class WebsocketServer:
 
 async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
     """Entry point that spins ROS alongside the websocket server."""
+    import threading
 
     rclpy.init()
     node = CockpitBridgeNode()
-    executor = AsyncIOExecutor()
+    executor = MultiThreadedExecutor()
     executor.add_node(node)
 
     loop = asyncio.get_running_loop()
@@ -377,8 +378,10 @@ async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
             loop.add_signal_handler(sig, request_shutdown)
 
     node.start_background_tasks()
-    ros_task = loop.create_task(executor.spin())
-    ros_task.add_done_callback(lambda _: stop_event.set())
+    
+    # Spin ROS executor in a separate thread
+    ros_thread = threading.Thread(target=executor.spin, daemon=True)
+    ros_thread.start()
 
     server = WebsocketServer(node, host=host, port=port)
     await server.start()
@@ -386,13 +389,14 @@ async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
     await stop_event.wait()
 
     await server.stop()
-    ros_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await ros_task
-
-    await node.shutdown()
+    
+    # Shutdown ROS
     executor.shutdown()
+    await node.shutdown()
     rclpy.shutdown()
+    
+    # Wait for ROS thread to finish
+    ros_thread.join(timeout=2.0)
 
 
 __all__ = ["run_bridge", "CockpitBridgeNode", "CockpitError"]

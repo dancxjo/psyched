@@ -1,31 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Environment is set up by psh before calling this script
+# PSYCHED_WORKSPACE_DIR and ROS environment should already be available
+
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
-WORKSPACE_ENV="${ROOT_DIR}/workspace_env.sh"
-
-if [[ -f "${WORKSPACE_ENV}" ]]; then
-  # shellcheck disable=SC1090
-  source "${WORKSPACE_ENV}"
-fi
-
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
-
-# shellcheck disable=SC1090
-# Temporary disable nounset before sourcing scripts that expect unset vars.
-source_with_nounset_guard() {
-  local script_path=$1
-  set +u
-  source "${script_path}"
-  set -u
-}
-
-if [[ -f "${ROOT_DIR}/install/setup.bash" ]]; then
-  source_with_nounset_guard "${ROOT_DIR}/install/setup.bash"
-elif [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
-  source_with_nounset_guard "/opt/ros/${ROS_DISTRO}/setup.bash"
-fi
 
 cleanup() {
   if [[ -n "${COCKPIT_PID:-}" ]] && kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
