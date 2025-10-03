@@ -14,6 +14,8 @@ pub fn build_workspace(packages: &[String]) -> Result<()> {
 
     println!("==> Building ROS workspace at {}", workspace_root.display());
 
+    refresh_cargo_patches()?;
+
     let mut args = vec!["build".to_string(), "--symlink-install".to_string()];
 
     if !packages.is_empty() {

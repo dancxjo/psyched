@@ -115,4 +115,11 @@ for pkg in "${PACKAGES[@]}"; do
   log "Vendored ${pkg} into vendor_msgs/${pkg}."
 done
 
+if command -v cargo >/dev/null 2>&1; then
+  log "Refreshing Cargo patch configuration for vendored messages..."
+  cargo run --quiet --manifest-path "${REPO_ROOT}/psh/Cargo.toml" -- cargo patch
+else
+  log "Cargo is not available; skipping Cargo patch refresh."
+fi
+
 log "ROS Rust bindings refreshed successfully."

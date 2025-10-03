@@ -868,3 +868,27 @@ name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
+
+[[patch.unused]]
+name = "diagnostic_msgs"
+version = "5.8.3"
+
+[[patch.unused]]
+name = "geometry_msgs"
+version = "5.8.3"
+
+[[patch.unused]]
+name = "nav_msgs"
+version = "5.8.3"
+
+[[patch.unused]]
+name = "sensor_msgs"
+version = "5.8.3"
+
+[[patch.unused]]
+name = "shape_msgs"
+version = "5.8.3"
+
+[[patch.unused]]
+name = "trajectory_msgs"
+version = "5.8.3"

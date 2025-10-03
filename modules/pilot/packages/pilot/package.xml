@@ -9,7 +9,12 @@
   <buildtool_depend>ament_cargo</buildtool_depend>
 
   <depend>rclrs</depend>
-    <buildtool_depend>rosidl_generator_rs</buildtool_depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>create_msgs</depend>
+  <buildtool_depend>rosidl_generator_rs</buildtool_depend>
   <export>
     <build_type>ament_cargo</build_type>
   </export>

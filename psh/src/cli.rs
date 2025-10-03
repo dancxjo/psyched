@@ -27,6 +27,12 @@ pub enum Commands {
         command: ServiceCommands,
     },
 
+    /// Cargo-related helpers
+    Cargo {
+        #[command(subcommand)]
+        command: CargoCommands,
+    },
+
     /// Build the ROS workspace (wraps `colcon build`)
     Build {
         /// Optional package names to limit the build (maps to `--packages-select`)
@@ -145,4 +151,10 @@ pub enum ServiceCommands {
         /// Optional service names to filter the list
         services: Vec<String>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum CargoCommands {
+    /// Refresh Cargo patch configuration for vendored ROS message crates
+    Patch,
 }

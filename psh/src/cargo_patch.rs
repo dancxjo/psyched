@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use toml::{Value, map::Map};
 
-use crate::workspace::{workspace_install, workspace_root};
+use crate::workspace::{repo_root, workspace_install, workspace_root};
 
 #[derive(Debug, Clone)]
 struct CratePatch {
@@ -14,10 +14,11 @@ struct CratePatch {
 
 pub fn refresh_cargo_patches() -> Result<()> {
     let workspace_root = workspace_root().context("failed to locate repository workspace root")?;
+    let repo_root = repo_root().context("failed to locate repository root")?;
     let install_dir =
         workspace_install().context("failed to locate workspace install directory")?;
-    let cargo_dir = workspace_root.join(".cargo");
 
+    let cargo_dir = workspace_root.join(".cargo");
     fs::create_dir_all(&cargo_dir).with_context(|| {
         format!(
             "failed to ensure Cargo config directory {} exists",
@@ -25,64 +26,180 @@ pub fn refresh_cargo_patches() -> Result<()> {
         )
     })?;
 
-    let patches = discover_rust_crate_patches(&install_dir)?;
-    let config_path = cargo_dir.join("config.toml");
+    let mut crates = BTreeMap::<String, PathBuf>::new();
 
+    let vendor_dir = repo_root.join("vendor_msgs");
+    crates.extend(discover_vendor_crate_patches(&vendor_dir)?);
+
+    let modules_dir = repo_root.join("modules");
+    let module_crates = discover_module_crate_patches(&modules_dir, &install_dir)?;
+    for (name, path) in module_crates {
+        crates.insert(name, path);
+    }
+
+    let patches: Vec<CratePatch> = crates
+        .into_iter()
+        .map(|(name, path)| CratePatch { name, path })
+        .collect();
+
+    let config_path = cargo_dir.join("config.toml");
     write_patch_config(&config_path, &patches)?;
 
     Ok(())
 }
 
-fn discover_rust_crate_patches(install_dir: &Path) -> Result<Vec<CratePatch>> {
-    if !install_dir.exists() {
-        return Ok(Vec::new());
+fn discover_module_crate_patches(
+    modules_dir: &Path,
+    install_dir: &Path,
+) -> Result<BTreeMap<String, PathBuf>> {
+    if !modules_dir.is_dir() {
+        return Ok(BTreeMap::new());
     }
 
     let mut crates = BTreeMap::<String, PathBuf>::new();
 
-    for package_entry in fs::read_dir(install_dir).with_context(|| {
-        format!(
-            "failed to read workspace install directory {}",
-            install_dir.display()
-        )
-    })? {
-        let package_entry = package_entry?;
-        let package_path = package_entry.path();
-        let share_dir = package_path.join("share");
-        if !share_dir.is_dir() {
+    for module_entry in fs::read_dir(modules_dir)
+        .with_context(|| format!("failed to read modules directory {}", modules_dir.display()))?
+    {
+        let module_entry = module_entry?;
+        let manifest_path = module_entry.path().join("module.toml");
+        if !manifest_path.is_file() {
             continue;
         }
 
-        for interface_entry in fs::read_dir(&share_dir)
-            .with_context(|| format!("failed to read share directory {}", share_dir.display()))?
-        {
-            let interface_entry = interface_entry?;
-            let interface_path = interface_entry.path();
-            let rust_dir = interface_path.join("rust");
-            let manifest_path = rust_dir.join("Cargo.toml");
-            if !manifest_path.is_file() {
+        let crate_names = collect_module_cargo_patches(&manifest_path)?;
+        for crate_name in crate_names {
+            if crates.contains_key(&crate_name) {
                 continue;
             }
 
-            match collect_crate_patch(&manifest_path) {
-                Ok((name, crate_path)) => {
-                    crates.insert(name, crate_path);
+            match resolve_workspace_crate_dir(install_dir, &crate_name) {
+                Ok(Some(crate_path)) => {
+                    crates.insert(crate_name, crate_path);
+                }
+                Ok(None) => {
+                    eprintln!(
+                        "[cargo-patch] Skipping module patch '{}': crate not found under {}",
+                        crate_name,
+                        install_dir.display()
+                    );
                 }
                 Err(err) => {
                     eprintln!(
-                        "[cargo-patch] Skipping {}: {}",
-                        manifest_path.display(),
-                        err
+                        "[cargo-patch] Skipping module patch '{}': {}",
+                        crate_name, err
                     );
                 }
             }
         }
     }
 
-    Ok(crates
-        .into_iter()
-        .map(|(name, path)| CratePatch { name, path })
-        .collect())
+    Ok(crates)
+}
+
+fn collect_module_cargo_patches(manifest_path: &Path) -> Result<Vec<String>> {
+    let manifest = fs::read_to_string(manifest_path)
+        .with_context(|| format!("failed to read module manifest {}", manifest_path.display()))?;
+
+    let parsed: Value = toml::from_str(&manifest).with_context(|| {
+        format!(
+            "failed to parse module manifest {}",
+            manifest_path.display()
+        )
+    })?;
+
+    let mut names = Vec::new();
+
+    if let Some(units) = parsed.get("unit").and_then(Value::as_table) {
+        for (unit_name, unit_value) in units {
+            let Some(unit_table) = unit_value.as_table() else {
+                continue;
+            };
+
+            if let Some(entries) = unit_table.get("cargo_patches").and_then(Value::as_array) {
+                for entry in entries {
+                    match entry.as_str() {
+                        Some(name) => names.push(name.to_string()),
+                        None => eprintln!(
+                            "[cargo-patch] Ignoring non-string cargo_patches entry in {}::{}",
+                            manifest_path.display(),
+                            unit_name
+                        ),
+                    }
+                }
+            }
+        }
+    }
+
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+fn resolve_workspace_crate_dir(install_dir: &Path, crate_name: &str) -> Result<Option<PathBuf>> {
+    if !install_dir.exists() {
+        return Ok(None);
+    }
+
+    let candidates = [
+        install_dir
+            .join(crate_name)
+            .join("share")
+            .join(crate_name)
+            .join("rust"),
+        install_dir.join("share").join(crate_name).join("rust"),
+    ];
+
+    for candidate in candidates {
+        let manifest_path = candidate.join("Cargo.toml");
+        if manifest_path.is_file() {
+            let canonical = candidate.canonicalize().with_context(|| {
+                format!(
+                    "failed to canonicalize Rust crate directory {}",
+                    candidate.display()
+                )
+            })?;
+            return Ok(Some(canonical));
+        }
+    }
+
+    Ok(None)
+}
+
+fn discover_vendor_crate_patches(vendor_dir: &Path) -> Result<BTreeMap<String, PathBuf>> {
+    if !vendor_dir.is_dir() {
+        return Ok(BTreeMap::new());
+    }
+
+    let mut crates = BTreeMap::<String, PathBuf>::new();
+
+    for vendor_entry in fs::read_dir(vendor_dir).with_context(|| {
+        format!(
+            "failed to read vendor messages directory {}",
+            vendor_dir.display()
+        )
+    })? {
+        let vendor_entry = vendor_entry?;
+        let manifest_path = vendor_entry.path().join("Cargo.toml");
+        if !manifest_path.is_file() {
+            continue;
+        }
+
+        match collect_crate_patch(&manifest_path) {
+            Ok((name, crate_path)) => {
+                crates.insert(name, crate_path);
+            }
+            Err(err) => {
+                eprintln!(
+                    "[cargo-patch] Skipping vendor crate manifest {}: {}",
+                    manifest_path.display(),
+                    err
+                );
+            }
+        }
+    }
+
+    Ok(crates)
 }
 
 fn collect_crate_patch(manifest_path: &Path) -> Result<(String, PathBuf)> {
