@@ -7,7 +7,12 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 
-from .backends import EspeakSpeechBackend, PrintSpeechBackend, SpeechBackend
+from .backends import (
+    EspeakSpeechBackend,
+    PrintSpeechBackend,
+    SpeechBackend,
+    WebsocketTTSSpeechBackend,
+)
 from .queue import SpeechQueue
 
 
@@ -68,10 +73,57 @@ class VoiceNode(Node):
                     error,
                 )
                 return PrintSpeechBackend()
+        if backend_name in {"websocket", "coqui"}:
+            backend = self._create_websocket_backend()
+            if backend is not None:
+                return backend
+            self.get_logger().warning(
+                "Falling back to print backend after websocket backend initialisation failure",
+            )
         self.get_logger().warning(
             "Unknown backend '%s'; defaulting to print backend", backend_name
         )
         return PrintSpeechBackend()
+
+    def _create_websocket_backend(self) -> SpeechBackend | None:
+        url_param = str(self.declare_parameter("tts_url", "").value).strip()
+        if url_param:
+            url = url_param
+        else:
+            scheme = str(self.declare_parameter("tts_scheme", "ws").value).strip() or "ws"
+            host = str(self.declare_parameter("tts_host", "127.0.0.1").value).strip() or "127.0.0.1"
+            port = int(self.declare_parameter("tts_port", 5002).value)
+            path = str(self.declare_parameter("tts_path", "/tts").value).strip() or "/tts"
+            if not path.startswith("/"):
+                path = "/" + path
+            url = f"{scheme}://{host}:{port}{path}"
+
+        speaker = str(self.declare_parameter("tts_speaker", "").value).strip() or None
+        language = str(self.declare_parameter("tts_language", "").value).strip() or None
+        player_param = self.declare_parameter("tts_player_command", []).value
+        player_command: list[str] | None = None
+        if isinstance(player_param, (list, tuple)):
+            player_command = [str(item) for item in player_param if str(item).strip()]
+        else:
+            command_text = str(player_param).strip()
+            if command_text:
+                player_command = command_text.split()
+        if player_command and not player_command[0].strip():
+            player_command = None
+
+        try:
+            return WebsocketTTSSpeechBackend(
+                url=url,
+                speaker=speaker,
+                language=language,
+                player_command=player_command,
+            )
+        except Exception as error:
+            self.get_logger().error(
+                "Failed to initialise websocket speech backend: %s",
+                error,
+            )
+            return None
 
     # ---------------------------------------------------------------- callbacks
     def _handle_text(self, msg: String) -> None:
