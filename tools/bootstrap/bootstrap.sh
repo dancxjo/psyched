@@ -20,8 +20,7 @@ if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
 fi
 local_path_export="export PATH=\"\$HOME/.local/bin:\$PATH\""
 if ! grep -Fx "$local_path_export" "$HOME/.bashrc" >/dev/null 2>&1; then
-    printf '%s
-' "$local_path_export" >> "$HOME/.bashrc"
+    printf '%s\n' "$local_path_export" >> "$HOME/.bashrc"
 fi
 
 # 3. mDNS support (Avahi)
@@ -94,53 +93,69 @@ if ! sudo apt install -y unzip 1>&2; then
     echo "Warning: failed to install unzip; continuing" >&2
 fi
 
-# 5. ROS colcon tooling + cargo bridge
+# 5. ROS colcon tooling
 sudo apt install -y python3-colcon-*
 
-install_colcon_ros_cargo() {
-    if python3 -m pip show colcon-ros-cargo >/dev/null 2>&1; then
-        local version
-        version=$(python3 -m pip show colcon-ros-cargo | awk '/^Version:/ {print $2}')
-        echo "colcon-ros-cargo already installed (version ${version:-unknown})"
+# 6. Deno runtime
+install_deno() {
+    if command -v deno >/dev/null 2>&1; then
+        echo "deno already installed: $(deno --version | head -n 1)"
         return 0
     fi
 
-    echo "Installing colcon-ros-cargo from GitHub..."
-    python3 -m pip install --user --upgrade --break-system-packages pip 
-    python3 -m pip install --user --upgrade --break-system-packages \
-        "git+https://github.com/colcon/colcon-ros-cargo.git"
+    echo "Installing deno runtime..."
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y
+    export DENO_INSTALL="${HOME}/.deno"
+    export PATH="${DENO_INSTALL}/bin:${PATH}"
+
+    deno_bin="${DENO_INSTALL}/bin/deno"
+    if [ ! -x "${deno_bin}" ]; then
+        echo "Error: deno installer did not produce ${deno_bin}" >&2
+        exit 1
+    fi
+
+    if ! command -v deno >/dev/null 2>&1; then
+        echo "Warning: deno not on PATH after install; adding to shell profile" >&2
+    fi
+
+    deno_export="export PATH=\"${DENO_INSTALL}/bin:\$PATH\""
+    if ! grep -Fx "${deno_export}" "${HOME}/.bashrc" >/dev/null 2>&1; then
+        printf '%s\n' "${deno_export}" >> "${HOME}/.bashrc"
+    fi
 }
 
-install_colcon_ros_cargo
+install_deno
 
-# 6. Rust toolchain (rustup + cargo)
-if ! command -v cargo >/dev/null 2>&1; then
-    echo "Installing Rust toolchain via rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    export PATH="$HOME/.cargo/bin:$PATH"
-else
-    echo "Rust already installed: $(cargo --version)"
-fi
-
-# 7. Build psh
-echo "Building psh crate..."
-cd "$(dirname "$0")/psh"
-cargo build --release --package psh
-cd -
-
-# Install globally as /usr/bin/psh (symlink to the freshly built binary)
-repo_root="$(cd "$(dirname "$0")" && pwd)"
-psh_binary="${repo_root}/psh/target/debug/psh"
-
-if [ ! -x "${psh_binary}" ]; then
-    echo "Error: expected psh binary at ${psh_binary} (did cargo build --release succeed?)" >&2
+deno_path="$(command -v deno || true)"
+if [ -z "${deno_path}" ]; then
+    echo "Error: deno not found on PATH after installation." >&2
     exit 1
 fi
 
-echo "Installing psh binary -> /usr/bin/psh"
-sudo ln -sf "${psh_binary}" /usr/bin/psh
-sudo chmod a+x /usr/bin/psh
+# 7. Install psh wrapper that executes the Deno CLI
+repo_root="$(cd "$(dirname "$0")" && pwd)"
+psh_wrapper="/usr/local/bin/psh"
 
-# 8. Run psh setup
-echo "Launching psh setup..."
-exec /usr/bin/psh setup
+tmp_wrapper="$(mktemp)"
+cat > "${tmp_wrapper}" <<'PSH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="__REPO_ROOT__"
+export PSYCHED_REPO_ROOT="${REPO_ROOT}"
+
+exec "__DENO_BIN__" run -A --config "${REPO_ROOT}/psh/deno.json" "${REPO_ROOT}/psh/main.ts" "$@"
+PSH
+
+sed -i "s#__REPO_ROOT__#${repo_root//\/\\/}#g" "${tmp_wrapper}"
+sed -i "s#__DENO_BIN__#${deno_path//\/\\/}#g" "${tmp_wrapper}"
+sudo install -m 0755 "${tmp_wrapper}" "${psh_wrapper}"
+rm -f "${tmp_wrapper}"
+
+if ! "${deno_path}" cache --config "${repo_root}/psh/deno.json" "${repo_root}/psh/main.ts" >/dev/null 2>&1; then
+    echo "Warning: deno cache failed; dependencies will download on first run." >&2
+fi
+
+# 8. Run the provisioning wizard
+echo "Launching psh wizard..."
+exec "${psh_wrapper}"
