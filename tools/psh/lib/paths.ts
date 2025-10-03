@@ -53,7 +53,7 @@ const repoRootCache = new Map<string, string>();
 function candidateIsRepoRoot(candidate: string): boolean {
   return (
     isDirectory(join(candidate, "modules")) &&
-    pathExistsSync(join(candidate, "psh", "deno.json"))
+    pathExistsSync(join(candidate, "tools", "psh", "deno.json"))
   );
 }
 
@@ -77,7 +77,7 @@ export function repoRoot(): string {
   const scriptDir = dirname(fromFileUrl(import.meta.url));
   const searchRoots = new Set<string>([
     Deno.cwd(),
-    resolve(join(scriptDir, "../..")),
+    resolve(join(scriptDir, "../../..")),
   ]);
 
   for (const root of Array.from(searchRoots)) {

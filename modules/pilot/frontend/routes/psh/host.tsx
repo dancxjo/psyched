@@ -1,6 +1,6 @@
 import PshHostProvisioner from "../../islands/PshHostProvisioner.tsx";
 import { define } from "../../utils.ts";
-import { availableHosts } from "../../../../../psh/lib/host.ts";
+import { availableHosts } from "../../../../../tools/psh/lib/host.ts";
 
 export const handler = {
   GET(_req: Request, ctx: any) {

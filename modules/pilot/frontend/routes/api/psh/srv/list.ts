@@ -1,5 +1,5 @@
 import { Handler } from "$fresh/server.ts";
-import { serviceStatuses } from "../../../../../../../psh/lib/service.ts";
+import { serviceStatuses } from "../../../../../../../tools/psh/lib/service.ts";
 
 export const handler: Handler = async () => {
   const statuses = await serviceStatuses();

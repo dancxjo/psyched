@@ -2,7 +2,7 @@ import { Handler } from "$fresh/server.ts";
 import {
   bringModulesDown,
   listModules,
-} from "../../../../../../../psh/lib/module.ts";
+} from "../../../../../../../tools/psh/lib/module.ts";
 
 interface RequestBody {
   modules?: string[];

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# psh/scripts/download_speech_models.sh
+# tools/psh/scripts/download_speech_models.sh
 # Legacy aggregator for speech-related model assets.
 # Prefer running the service-specific setup scripts in services/<name>/setup.sh.
 set -euo pipefail
 
 # Resolve repository root relative to this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # Directories
 LLM_MODEL_DIR="${REPO_ROOT}/services/llm/models"

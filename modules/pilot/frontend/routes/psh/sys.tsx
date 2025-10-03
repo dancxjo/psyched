@@ -1,6 +1,6 @@
 import PshSystemdManager from "../../islands/PshSystemdManager.tsx";
 import { define } from "../../utils.ts";
-import { listModules } from "../../../../../psh/lib/module.ts";
+import { listModules } from "../../../../../tools/psh/lib/module.ts";
 
 export const handler = {
   GET(_req: Request, ctx: any) {
