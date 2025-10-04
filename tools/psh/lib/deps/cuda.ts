@@ -15,13 +15,13 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
   });
 
   await context.step("Install CUDA prerequisites", async (step) => {
-    await step.exec(["apt", "update"], {
+    await step.exec(["apt-get", "update"], {
       sudo: true,
-      description: "apt update",
+      description: "apt-get update",
     });
     await step.exec(
       [
-        "apt",
+        "apt-get",
         "install",
         "-y",
         "ca-certificates",
@@ -75,9 +75,9 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
         sudo: true,
         description: "install cuda apt source",
       });
-      await step.exec(["apt", "update"], {
+      await step.exec(["apt-get", "update"], {
         sudo: true,
-        description: "apt update (cuda)",
+        description: "apt-get update (cuda)",
       });
     } finally {
       await safeRemove(tmpDir);
@@ -86,7 +86,7 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
 
   await context.step("Install CUDA packages", async (step) => {
     const packages = ["cuda-toolkit-12-4", "nvidia-driver-535"];
-    await step.exec(["apt", "install", "-y", ...packages], {
+    await step.exec(["apt-get", "install", "-y", ...packages], {
       sudo: true,
       description: "install cuda packages",
     });

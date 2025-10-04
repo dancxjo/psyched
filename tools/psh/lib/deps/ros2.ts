@@ -45,13 +45,13 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
   });
 
   await context.step("Install ROS 2 prerequisites", async (step) => {
-    await step.exec(["apt", "update"], {
+    await step.exec(["apt-get", "update"], {
       sudo: true,
-      description: "apt update",
+      description: "apt-get update",
     });
     await step.exec(
       [
-        "apt",
+        "apt-get",
         "install",
         "-y",
         "ca-certificates",
@@ -61,7 +61,7 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
         "locales",
         "software-properties-common",
       ],
-      { sudo: true, description: "apt install prerequisites" },
+      { sudo: true, description: "apt-get install prerequisites" },
     );
     await step.exec(["add-apt-repository", "-y", "universe"], {
       sudo: true,
@@ -124,9 +124,9 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
         sudo: true,
         description: "install ROS apt source",
       });
-      await step.exec(["apt", "update"], {
+      await step.exec(["apt-get", "update"], {
         sudo: true,
-        description: "apt update (ros2)",
+        description: "apt-get update (ros2)",
       });
     } finally {
       await safeRemove(tmpDir);
@@ -142,9 +142,9 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
         "python3-colcon-common-extensions",
         "python3-rosdep",
       ];
-      await step.exec(["apt", "install", "-y", ...packages], {
+      await step.exec(["apt-get", "install", "-y", ...packages], {
         sudo: true,
-        description: "apt install ros packages",
+        description: "apt-get install ros packages",
       });
     },
   );

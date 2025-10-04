@@ -29,17 +29,17 @@ echo "Provisioning ROS 2 ${ROS_DISTRO} using Debian packages..."
 
 export LANG=en_US.UTF-8
 
-"${SUDO[@]}" apt update
-"${SUDO[@]}" apt install -y locales
+"${SUDO[@]}" apt-get update
+"${SUDO[@]}" apt-get install -y locales
 "${SUDO[@]}" locale-gen en_US en_US.UTF-8
 "${SUDO[@]}" update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 locale
 
-"${SUDO[@]}" apt install -y software-properties-common
+"${SUDO[@]}" apt-get install -y software-properties-common
 "${SUDO[@]}" add-apt-repository -y universe
-"${SUDO[@]}" apt update
-"${SUDO[@]}" apt install -y curl ca-certificates
+"${SUDO[@]}" apt-get update
+"${SUDO[@]}" apt-get install -y curl ca-certificates
 
 echo "Setting up ROS 2 apt repository..."
 
@@ -52,10 +52,10 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 
 # Install only minimal ROS2 base (no desktop/GUI/Qt dependencies)
 "${SUDO[@]}" dpkg -i /tmp/ros2-apt-source.deb
-"${SUDO[@]}" apt update
-"${SUDO[@]}" apt upgrade -y
+"${SUDO[@]}" apt-get update
+"${SUDO[@]}" apt-get upgrade -y
 
-"${SUDO[@]}" apt install -y \
+"${SUDO[@]}" apt-get install -y \
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   python3-colcon-common-extensions \

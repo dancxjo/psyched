@@ -31,8 +31,8 @@ fi
 
 export LANG=en_US.UTF-8
 
-${SUDO[@]} apt update
-${SUDO[@]} apt install -y ca-certificates curl gnupg lsb-release software-properties-common
+${SUDO[@]} apt-get update
+${SUDO[@]} apt-get install -y ca-certificates curl gnupg lsb-release software-properties-common
 
 . /etc/os-release
 if [[ "${ID}" != "ubuntu" ]]; then
@@ -57,7 +57,7 @@ ${SUDO[@]} chmod a+r "${KEYRING_PATH}"
 echo "deb [signed-by=${KEYRING_PATH}] ${REPO_URL} /" | \
   ${SUDO[@]} tee /etc/apt/sources.list.d/cuda-${REPO_ID}.list >/dev/null
 
-${SUDO[@]} apt update
+${SUDO[@]} apt-get update
 
 CUDA_PACKAGES=(
   cuda-toolkit-12-4
@@ -65,7 +65,7 @@ CUDA_PACKAGES=(
 )
 
 echo "Installing CUDA packages: ${CUDA_PACKAGES[*]}"
-${SUDO[@]} apt install -y "${CUDA_PACKAGES[@]}"
+${SUDO[@]} apt-get install -y "${CUDA_PACKAGES[@]}"
 
 echo "CUDA installation complete. Recommended post-install steps:"
 echo "  - Reboot the system to load the NVIDIA kernel modules."

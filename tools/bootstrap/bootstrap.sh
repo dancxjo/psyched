@@ -6,10 +6,10 @@ set -euo pipefail
 # --------------------------------------------------------------------
 
 # 1. Update & upgrade
-sudo apt update && sudo apt upgrade -y
+sudo apt-get update && sudo apt-get upgrade -y
 
 # 2. Essentials: compiler, Python (for ROS tooling), editors
-sudo apt install -y \
+sudo apt-get install -y \
   curl git build-essential make \
   python3-full python3-pip python3-venv python-is-python3 \
   shellcheck micro mc ripgrep
@@ -24,7 +24,7 @@ if ! grep -Fx "$local_path_export" "$HOME/.bashrc" >/dev/null 2>&1; then
 fi
 
 # 3. mDNS support (Avahi)
-sudo apt install -y avahi-daemon avahi-utils libnss-mdns
+sudo apt-get install -y avahi-daemon avahi-utils libnss-mdns
 
 # Ensure /etc/nsswitch.conf has mdns entries
 ensure_mdns_hosts_entry() {
@@ -89,12 +89,12 @@ ensure_mdns_hosts_entry
 ensure_mdns_service
 
 # 4. Convenience tools
-if ! sudo apt install -y unzip 1>&2; then
+if ! sudo apt-get install -y unzip 1>&2; then
     echo "Warning: failed to install unzip; continuing" >&2
 fi
 
 # 5. ROS colcon tooling
-sudo apt install -y python3-colcon-*
+sudo apt-get install -y python3-colcon-*
 
 # 6. Deno runtime
 install_deno() {
