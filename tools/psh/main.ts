@@ -20,6 +20,7 @@ import {
   setupServices,
   teardownServices,
 } from "./lib/service.ts";
+import { resolveTargetBatches } from "./lib/target_resolver.ts";
 import {
   disableSystemd,
   enableSystemd,
@@ -42,6 +43,48 @@ async function main() {
 
   const hostCommand = new Command()
     .description("Host provisioning commands");
+
+  root
+    .command("up [targets...:string]")
+    .description("Launch modules and services")
+    .option("--service", "Prefer services when resolving ambiguous names")
+    .action(
+      async (
+        { service }: { service?: boolean },
+        ...targets: string[]
+      ) => {
+        const { modules, services } = resolveTargetBatches(targets, {
+          preferService: Boolean(service),
+        });
+        for (const svc of services) {
+          await bringServiceUp(svc);
+        }
+        if (modules.length) {
+          await bringModulesUp(modules);
+        }
+      },
+    );
+
+  root
+    .command("down [targets...:string]")
+    .description("Stop modules and services")
+    .option("--service", "Prefer services when resolving ambiguous names")
+    .action(
+      async (
+        { service }: { service?: boolean },
+        ...targets: string[]
+      ) => {
+        const { modules, services } = resolveTargetBatches(targets, {
+          preferService: Boolean(service),
+        });
+        if (modules.length) {
+          await bringModulesDown(modules);
+        }
+        for (const svc of services) {
+          await bringServiceDown(svc);
+        }
+      },
+    );
 
   root
     .command("build")

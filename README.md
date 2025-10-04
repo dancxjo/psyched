@@ -91,10 +91,10 @@ During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unles
 
 ```bash
 psh mod setup pilot   # prepare symlinks and dependencies
-psh mod up pilot      # start the cockpit backend + Fresh frontend
+psh up pilot          # start the cockpit backend + Fresh frontend
 ```
 
-Add other modules with `psh mod setup <name>` followed by `psh mod up <name>`. Shutdown with `psh mod down <name>`.
+Add other modules with `psh mod setup <name>` followed by `psh up <name>`. Use `psh down <name>` to stop a module or `psh down` to stop everything that is running. When you're ready for the full stack, `psh up` without arguments launches every module and service.
 
 ## Docker dev container
 
@@ -139,7 +139,7 @@ Bring it up with:
 
 ```bash
 psh mod setup pilot
-psh mod up pilot
+psh up pilot
 ```
 
 During development you can run the frontend directly:
@@ -151,11 +151,11 @@ deno task dev
 
 ### IMU
 
-Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver) and exposes pilot UI components under `modules/imu/pilot/`. Launch it with `psh mod up imu` once the hardware is attached.
+Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver) and exposes pilot UI components under `modules/imu/pilot/`. Launch it with `psh up imu` once the hardware is attached.
 
 ### Foot
 
-Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`) and provides cockpit controls in `modules/foot/pilot/`. Launch via `psh mod up foot`.
+Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`) and provides cockpit controls in `modules/foot/pilot/`. Launch via `psh up foot`.
 
 Modules can optionally contribute Fresh components or routes by placing files inside `modules/<name>/pilot/{components,routes,islands,static}`. `psh mod setup <name>` manages symlinks into the pilot frontend.
 
@@ -166,7 +166,7 @@ Services complement modules by packaging long-running capabilities (speech, perc
 Use the `psh svc` subcommands to interact with services:
 
 - `psh svc setup <service>` – run any declarative setup scripts (for example, download models)
-- `psh svc up <service>` / `psh svc down <service>` – start or stop the Compose stack
+- `psh up <service>` / `psh down <service>` – start or stop the Compose stack (add `--service` if a module shares the name). The legacy `psh svc up|down` commands continue to work.
 - `psh svc list` – inspect available services and their status
 - `psh svc shell <service> [command]` – ensure the Compose stack is up then open an interactive shell inside the container (defaults to `bash`)
 
@@ -174,29 +174,29 @@ Use the `psh svc` subcommands to interact with services:
 
 `services/tts` hosts a streaming text-to-speech websocket based on 🐸Coqui TTS. The Compose stack builds a slim Python image (`services/tts/docker/tts-websocket.Dockerfile`) that runs `tools/tts_websocket/websocket_server.py` and exposes port `5002`.
 
-Model assets live under `services/tts/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `services/tts/setup.sh` manually) to pull the default English voice. Once prepared, start the service with `psh svc up tts` and connect clients to `ws://<host>:5002/tts`.
+Model assets live under `services/tts/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `services/tts/setup.sh` manually) to pull the default English voice. Once prepared, start the service with `psh up tts` (or `psh svc up tts`) and connect clients to `ws://<host>:5002/tts`.
 
 ### Language
 
 `services/language` provides a GPU-enabled [Ollama](https://ollama.com/) runtime. The Compose stack binds Ollama's data directory from `/usr/share/ollama/.ollama` so models persist across container restarts and exposes the standard API on port `11434`.
 
-Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host (create it and grant write access to the Docker daemon user if needed). Bring the service online with `psh svc up language`; stop it via `psh svc down language`. GPU access requires Docker's NVIDIA runtime—verify that `nvidia-smi` works on the host and the Docker daemon has `default-runtime=nvidia` or an equivalent device mapping configured. After the first run, load desired models inside the container using `ollama run <model>` or the HTTP API.
+Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host (create it and grant write access to the Docker daemon user if needed). Bring the service online with `psh up language` (or `psh svc up language`); stop it via `psh down language`. GPU access requires Docker's NVIDIA runtime—verify that `nvidia-smi` works on the host and the Docker daemon has `default-runtime=nvidia` or an equivalent device mapping configured. After the first run, load desired models inside the container using `ollama run <model>` or the HTTP API.
 
 ### Graphs
 
-`services/graphs` runs a standalone [Neo4j](https://neo4j.com/) graph database. Ports `7474` (HTTP UI) and `7687` (Bolt) are exposed, and named volumes back `/data`, `/logs`, `/import`, and `/plugins` to persist graph state between restarts. Start and stop it with `psh svc up graphs` / `psh svc down graphs`. The `NEO4J_AUTH` environment variable defaults to `neo4j/password`; override this in production by editing the Compose file or passing environment overrides in your host configuration.
+`services/graphs` runs a standalone [Neo4j](https://neo4j.com/) graph database. Ports `7474` (HTTP UI) and `7687` (Bolt) are exposed, and named volumes back `/data`, `/logs`, `/import`, and `/plugins` to persist graph state between restarts. Start and stop it with `psh up graphs` / `psh down graphs` (or the legacy `psh svc up|down graphs`). The `NEO4J_AUTH` environment variable defaults to `neo4j/password`; override this in production by editing the Compose file or passing environment overrides in your host configuration.
 
 ### Vectors
 
-`services/vectors` offers a [Qdrant](https://qdrant.tech/) vector database useful for retrieval-augmented generation pipelines. It publishes HTTP and gRPC endpoints on `6333` and `6334` respectively and persists storage under the `vectors_data` named volume. Use `psh svc up vectors` to launch it and `psh svc down vectors` to stop. Populate the collection schema via Qdrant's REST API, the CLI, or any of the official client libraries.
+`services/vectors` offers a [Qdrant](https://qdrant.tech/) vector database useful for retrieval-augmented generation pipelines. It publishes HTTP and gRPC endpoints on `6333` and `6334` respectively and persists storage under the `vectors_data` named volume. Use `psh up vectors` to launch it and `psh down vectors` to stop (legacy `psh svc up|down vectors` still works). Populate the collection schema via Qdrant's REST API, the CLI, or any of the official client libraries.
 
 ### ASR
 
-`services/asr` exposes a custom Rust websocket server that streams speech-to-text using [`whisper-rs`](https://github.com/tazz4843/whisper-rs). Send 16-bit little-endian PCM frames (default `16 kHz`) to `/asr`; the service buffers audio, emits partial transcripts with token-level timings as the model converges, and publishes finalised chunks alongside a WAV payload once segments stabilise. Mount pretrained Whisper models into `services/asr/models` (run `psh svc setup asr` to download defaults) and bring the stack online with `psh svc up asr`.
+`services/asr` exposes a custom Rust websocket server that streams speech-to-text using [`whisper-rs`](https://github.com/tazz4843/whisper-rs). Send 16-bit little-endian PCM frames (default `16 kHz`) to `/asr`; the service buffers audio, emits partial transcripts with token-level timings as the model converges, and publishes finalised chunks alongside a WAV payload once segments stabilise. Mount pretrained Whisper models into `services/asr/models` (run `psh svc setup asr` to download defaults) and bring the stack online with `psh up asr`.
 
 ### ROS 2 (container shell)
 
-`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh svc up ros2` and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. Set `ROS_DOMAIN_ID` or `ROS_DISTRO` in your environment (or host manifest `env`) before launching to propagate DDS settings into the container.
+`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh up ros2` (or `psh svc up ros2`) and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. Set `ROS_DOMAIN_ID` or `ROS_DISTRO` in your environment (or host manifest `env`) before launching to propagate DDS settings into the container.
 
 ## Development workflows
 
@@ -232,7 +232,7 @@ source install/setup.bash
 - `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.toml`
 - `psh mod list` – inspect module status
 - `psh mod setup|teardown [module]` – manage symlinks + prep work
-- `psh mod up|down [module]` – start/stop module services
+- `psh up|down [target]` – start/stop modules and services (use `--service` to disambiguate names shared with modules)
 - `psh srv list` – inspect containerised services and their status
 - `psh srv setup|up|down [service]` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
 - `psh sys setup|teardown|enable|disable|up|down <module>` – install and control user-level systemd units for module launch scripts
