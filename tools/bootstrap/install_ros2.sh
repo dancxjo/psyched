@@ -55,6 +55,16 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" apt-get upgrade -y
 
+# Remove the legacy python3-catkin-pkg package if present. The ROS apt
+# repository ships python3-catkin-pkg-modules which owns the same files, and
+# leaving both installed triggers a dpkg conflict during provisioning.
+if dpkg -s python3-catkin-pkg >/dev/null 2>&1; then
+  echo "Removing conflicting python3-catkin-pkg package before installing ROS 2 base packages..."
+  "${SUDO[@]}" apt-get remove -y python3-catkin-pkg
+  "${SUDO[@]}" apt-get install -y -f
+  "${SUDO[@]}" dpkg --configure -a
+fi
+
 "${SUDO[@]}" apt-get install -y \
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
