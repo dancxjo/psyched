@@ -1,0 +1,12 @@
+[unit.ear]
+apt = [
+    "python3-websockets",
+    "python3-numpy",
+]
+pip = []
+launch = "modules/ear/launch_unit.sh"
+shutdown = "modules/ear/shutdown_unit.sh"
+
+[unit.ear.ros]
+workspace = "."
+packages = ["ear"]
