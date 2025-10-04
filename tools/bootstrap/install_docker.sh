@@ -20,8 +20,8 @@ echo "Provisioning Docker Engine and Docker Compose (plugin) from Docker's offic
 
 export LANG=en_US.UTF-8
 
-${SUDO[@]} apt update
-${SUDO[@]} apt install -y ca-certificates curl gnupg lsb-release
+${SUDO[@]} apt-get update
+${SUDO[@]} apt-get install -y ca-certificates curl gnupg lsb-release
 
 echo "Setting up Docker apt repository and GPG key..."
 
@@ -40,10 +40,10 @@ fi
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${OS_CODENAME} stable" \
   | ${SUDO[@]} tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-${SUDO[@]} apt update
+${SUDO[@]} apt-get update
 
 echo "Installing docker packages..."
-${SUDO[@]} apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+${SUDO[@]} apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 echo "Enabling and starting docker service..."
 ${SUDO[@]} systemctl enable --now docker

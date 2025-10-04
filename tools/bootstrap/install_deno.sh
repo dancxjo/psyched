@@ -39,8 +39,8 @@ fi
 
 if ! command -v unzip >/dev/null 2>&1; then
   echo "Installing unzip dependency..."
-  ${SUDO[@]} apt update
-  ${SUDO[@]} apt install -y unzip
+  ${SUDO[@]} apt-get update
+  ${SUDO[@]} apt-get install -y unzip
 fi
 
 TMPDIR=$(mktemp -d)

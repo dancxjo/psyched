@@ -4,13 +4,13 @@ import { detectUbuntuCodename, fetchBinary, safeRemove } from "./os.ts";
 
 export async function installDocker(context: ProvisionContext): Promise<void> {
   await context.step("Install Docker prerequisites", async (step) => {
-    await step.exec(["apt", "update"], {
+    await step.exec(["apt-get", "update"], {
       sudo: true,
-      description: "apt update",
+      description: "apt-get update",
     });
     await step.exec(
       [
-        "apt",
+        "apt-get",
         "install",
         "-y",
         "ca-certificates",
@@ -66,9 +66,9 @@ export async function installDocker(context: ProvisionContext): Promise<void> {
         sudo: true,
         description: "install docker apt source",
       });
-      await step.exec(["apt", "update"], {
+      await step.exec(["apt-get", "update"], {
         sudo: true,
-        description: "apt update (docker)",
+        description: "apt-get update (docker)",
       });
     } finally {
       await safeRemove(tmpDir);
@@ -78,7 +78,7 @@ export async function installDocker(context: ProvisionContext): Promise<void> {
   await context.step("Install Docker Engine", async (step) => {
     await step.exec(
       [
-        "apt",
+        "apt-get",
         "install",
         "-y",
         "docker-ce",
