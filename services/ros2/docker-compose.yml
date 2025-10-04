@@ -1,0 +1,15 @@
+services:
+  ros2:
+    image: osrf/ros:humble-desktop
+    container_name: psyched-ros2
+    command: ["bash", "-lc", "trap : TERM INT; sleep infinity & wait"]
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      DISPLAY: ${DISPLAY}
+    stdin_open: true
+    tty: true
+    network_mode: host
+    working_dir: /workspace/psyched
+    volumes:
+      - ../..:/workspace/psyched
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw

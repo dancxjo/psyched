@@ -1,7 +1,7 @@
 import { join, resolve } from "$std/path/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
-import { $ } from "$dax";
+import { $, CommandBuilder } from "$dax";
 import { repoRoot, servicesRoot } from "./paths.ts";
 
 export interface ServiceConfig {
@@ -11,6 +11,12 @@ export interface ServiceConfig {
   teardown_scripts?: string[];
   env?: Record<string, string>;
   description?: string;
+  /** Compose service name to target when spawning shells (defaults to the service id). */
+  shell_service?: string;
+  /** Default command executed by `psh svc shell` when no override is provided. */
+  shell_command?: string[];
+  /** Default user passed to `docker compose exec -u`. */
+  shell_user?: string;
 }
 
 interface ServiceManifest {
@@ -102,6 +108,48 @@ function composeProject(service: string, config: ServiceConfig): string {
   return config.project ?? `psyched-${service}`;
 }
 
+/** Options for `psh svc shell` and programmatic shell execution. */
+export interface ServiceShellOptions {
+  command?: string[];
+  service?: string;
+  user?: string;
+  interactive?: boolean;
+  tty?: boolean;
+}
+
+/**
+ * Construct the `docker compose exec` argument vector for a service shell.
+ * Exposed via `__test__` for deterministic unit coverage.
+ */
+function buildShellArgs(
+  service: string,
+  config: ServiceConfig,
+  composePath: string,
+  project: string,
+  options: ServiceShellOptions = {},
+): string[] {
+  const target = options.service ?? config.shell_service ?? service;
+  const interactive = options.interactive ?? true;
+  const tty = options.tty ?? true;
+  const command = options.command ?? config.shell_command ?? ["bash"];
+  const user = options.user ?? config.shell_user;
+
+  const args = [
+    "docker",
+    "compose",
+    "-f",
+    composePath,
+    "-p",
+    project,
+    "exec",
+  ];
+  if (interactive) args.push("-i");
+  if (tty) args.push("-t");
+  if (user) args.push("-u", user);
+  args.push(target, ...command);
+  return args;
+}
+
 export async function setupService(service: string): Promise<void> {
   const serviceDir = locateServiceDir(service);
   const config = loadServiceConfig(serviceDir, service);
@@ -161,6 +209,32 @@ export async function teardownServices(services: string[]): Promise<void> {
   }
 }
 
+export async function openServiceShell(
+  service: string,
+  options: ServiceShellOptions = {},
+): Promise<void> {
+  const serviceDir = locateServiceDir(service);
+  const config = loadServiceConfig(serviceDir, service);
+  const composePath = composeFilePath(serviceDir, config);
+  const project = composeProject(service, config);
+  const args = buildShellArgs(service, config, composePath, project, options);
+
+  let builder = new CommandBuilder().command(args)
+    .cwd(serviceDir)
+    .stdin("inherit")
+    .stdout("inherit")
+    .stderr("inherit")
+    .noThrow();
+  if (config.env) builder = builder.env(config.env);
+
+  const result = await builder.spawn();
+  if (result.code !== 0) {
+    throw new Error(
+      `docker compose exec exited with code ${result.code}`,
+    );
+  }
+}
+
 export interface ServiceStatus {
   name: string;
   status: "running" | "stopped" | "error";
@@ -207,3 +281,7 @@ export async function serviceStatus(name: string): Promise<ServiceStatus> {
     description: config.description,
   };
 }
+
+export const __test__ = {
+  buildShellArgs,
+};

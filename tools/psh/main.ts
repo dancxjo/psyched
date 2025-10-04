@@ -15,6 +15,7 @@ import {
   bringServiceDown,
   bringServiceUp,
   listServices,
+  openServiceShell,
   serviceStatuses,
   setupServices,
   teardownServices,
@@ -169,6 +170,43 @@ async function main() {
       const targets = services.length ? services : listServices();
       for (const svc of targets) await bringServiceDown(svc);
     });
+
+  serviceCommand
+    .command("shell <service:string> [cmd...:string]")
+    .description("Open an interactive shell inside a service container")
+    .option(
+      "-c, --container <name:string>",
+      "Override the compose service to exec into",
+    )
+    .option(
+      "-u, --user <user:string>",
+      "Run the shell as a specific user (e.g. 1000:1000)",
+    )
+    .option("--no-tty", "Disable TTY allocation")
+    .option("--no-stdin", "Do not attach stdin")
+    .action(
+      async (
+        options: {
+          container?: string;
+          user?: string;
+          noTty?: boolean;
+          noStdin?: boolean;
+        },
+        service: string,
+        ...cmd: string[]
+      ) => {
+        await bringServiceUp(service);
+        const tty = options.noTty ? false : true;
+        const interactive = options.noStdin ? false : true;
+        await openServiceShell(service, {
+          service: options.container,
+          user: options.user,
+          command: cmd.length ? cmd : undefined,
+          tty,
+          interactive,
+        });
+      },
+    );
 
   root.command("srv", serviceCommand).alias("service");
 

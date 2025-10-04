@@ -1,0 +1,5 @@
+[service.ros2]
+compose = "docker-compose.yml"
+description = "ROS 2 workspace container based on osrf/ros:humble-desktop"
+shell_service = "ros2"
+shell_command = ["/ros_entrypoint.sh", "bash"]
