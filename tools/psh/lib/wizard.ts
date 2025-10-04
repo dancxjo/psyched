@@ -72,6 +72,6 @@ export async function runWizard(): Promise<void> {
   await provisionHost(hostname, { verbose });
   console.log(colors.bold(colors.green("\nAll done!")));
   console.log(
-    "Next steps: bring up your modules and/or modules with `psh mod up` and `psh srv up`.",
+    "Next steps: launch everything with `psh up` (or scope it with `psh up <name>`). Use `psh down` to stop targets when you're done.",
   );
 }
