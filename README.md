@@ -60,7 +60,7 @@ psh host setup forebrain
 
 Each host file lists shell scripts under `tools/bootstrap/` (or `tools/provision/`) to install ROS 2, CUDA, Docker, and Deno.
 
-Host configs can also declare module directives so provisioning automatically installs and launches the right services. For example:
+Host configs can also declare module directives so provisioning automatically installs and launches the right services. `depends_on` fields let modules and services wait for other tasks – installers (`"docker"`), other services (`"service:ros2"`), or even module launches (`"module:pilot"`). For example:
 
 ```toml
 # hosts/motherbrain.toml
@@ -72,11 +72,17 @@ env = { ROS_DOMAIN_ID = "25" }
 [[modules]]
 name = "foot"
 launch = true
+depends_on = ["service:ros2"]
 
 [[services]]
 name = "tts"
 setup = true
 up = true
+
+[[services]]
+name = "ros2"
+up = true
+depends_on = ["docker"]
 ```
 
 During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unless `setup = false`) and optionally launches the module when `launch = true`. The optional `env` map supplies environment variables to those lifecycle steps. Likewise, `services` entries trigger `psh svc setup <name>` and start the Compose stack when `up = true`.
@@ -162,6 +168,7 @@ Use the `psh svc` subcommands to interact with services:
 - `psh svc setup <service>` – run any declarative setup scripts (for example, download models)
 - `psh svc up <service>` / `psh svc down <service>` – start or stop the Compose stack
 - `psh svc list` – inspect available services and their status
+- `psh svc shell <service> [command]` – ensure the Compose stack is up then open an interactive shell inside the container (defaults to `bash`)
 
 ### TTS
 
@@ -186,6 +193,10 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 ### ASR
 
 `services/asr` exposes a custom Rust websocket server that streams speech-to-text using [`whisper-rs`](https://github.com/tazz4843/whisper-rs). Send 16-bit little-endian PCM frames (default `16 kHz`) to `/asr`; the service buffers audio, emits partial transcripts with token-level timings as the model converges, and publishes finalised chunks alongside a WAV payload once segments stabilise. Mount pretrained Whisper models into `services/asr/models` (run `psh svc setup asr` to download defaults) and bring the stack online with `psh svc up asr`.
+
+### ROS 2 (container shell)
+
+`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh svc up ros2` and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. Set `ROS_DOMAIN_ID` or `ROS_DISTRO` in your environment (or host manifest `env`) before launching to propagate DDS settings into the container.
 
 ## Development workflows
 

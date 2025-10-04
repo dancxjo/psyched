@@ -102,14 +102,14 @@ interface ProvisionRunOptions {
   showLogsOnSuccess: boolean;
 }
 
-interface ProvisionTask {
+export interface ProvisionTask {
   id: string;
   label: string;
   dependencies: string[];
   run: () => Promise<void>;
 }
 
-interface TaskRegistry {
+export interface TaskRegistry {
   tasks: ProvisionTask[];
   aliasToId: Map<string, string>;
 }
@@ -130,6 +130,12 @@ function registerTask(
     registry.aliasToId.set(task.id, task.id);
   }
   for (const alias of aliases) {
+    const existing = registry.aliasToId.get(alias);
+    if (existing && existing !== task.id) {
+      throw new Error(
+        `Alias '${alias}' already registered for task '${existing}'`,
+      );
+    }
     registry.aliasToId.set(alias, task.id);
   }
   registry.tasks.push(task);
@@ -154,6 +160,12 @@ function resolveDependencyAliases(
   }
   task.dependencies = resolved;
 }
+
+export const __test__ = {
+  createTaskRegistry,
+  registerTask,
+  resolveDependencyAliases,
+};
 
 function mergeDependencies(
   defaults: string[],
@@ -263,6 +275,7 @@ export async function provisionHost(
     );
 
     let setupTaskId: string | undefined;
+    const moduleAliases = [`module:${moduleName}`, moduleName];
     if (setup) {
       setupTaskId = `module:${moduleName}:setup`;
       registerTask(registry, {
@@ -278,7 +291,7 @@ export async function provisionHost(
             restore();
           }
         },
-      });
+      }, launch ? [] : moduleAliases);
     }
 
     if (launch) {
@@ -298,7 +311,7 @@ export async function provisionHost(
             restore();
           }
         },
-      });
+      }, moduleAliases);
     }
   }
 
@@ -315,6 +328,7 @@ export async function provisionHost(
     );
 
     let setupTaskId: string | undefined;
+    const serviceAliases = [`service:${serviceName}`, serviceName];
     if (setup) {
       setupTaskId = `service:${serviceName}:setup`;
       registerTask(registry, {
@@ -330,7 +344,7 @@ export async function provisionHost(
             restore();
           }
         },
-      });
+      }, up ? [] : serviceAliases);
     }
 
     if (up) {
@@ -350,7 +364,7 @@ export async function provisionHost(
             restore();
           }
         },
-      });
+      }, serviceAliases);
     }
   }
 
