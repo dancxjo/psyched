@@ -31,6 +31,14 @@ export function renderRosProfile(distro: string): string {
   ].join("\n");
 }
 
+export function buildRosBasePackages(distro: string): string[] {
+  return [
+    `ros-${distro}-ros-base`,
+    `ros-${distro}-rmw-cyclonedds-cpp`,
+    "python3-rosdep",
+  ];
+}
+
 export async function installRos2(context: ProvisionContext): Promise<void> {
   const rosDistro = determineRosDistro({ env: Deno.env.toObject() });
   const rosRoot = `/opt/ros/${rosDistro}`;
@@ -136,12 +144,7 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
   await context.step(
     `Install ROS 2 ${rosDistro} base packages`,
     async (step) => {
-      const packages = [
-        `ros-${rosDistro}-ros-base`,
-        `ros-${rosDistro}-rmw-cyclonedds-cpp`,
-        "python3-colcon-common-extensions",
-        "python3-rosdep",
-      ];
+      const packages = buildRosBasePackages(rosDistro);
       await step.exec(["apt-get", "install", "-y", ...packages], {
         sudo: true,
         description: "apt-get install ros packages",

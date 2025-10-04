@@ -68,7 +68,6 @@ fi
 "${SUDO[@]}" apt-get install -y \
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-  python3-colcon-common-extensions \
   python3-rosdep
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then

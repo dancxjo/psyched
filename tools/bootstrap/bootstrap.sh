@@ -93,8 +93,7 @@ if ! sudo apt-get install -y unzip 1>&2; then
     echo "Warning: failed to install unzip; continuing" >&2
 fi
 
-# 5. ROS colcon tooling
-sudo apt-get install -y python3-colcon-*
+# 5. ROS tooling intentionally minimal; avoid installing python3-colcon-* to prevent catkin conflicts
 
 # 6. Deno runtime
 install_deno() {

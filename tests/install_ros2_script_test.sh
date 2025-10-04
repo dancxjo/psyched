@@ -32,3 +32,8 @@ if (( REMOVE_LINE >= INSTALL_LINE )); then
   echo "python3-catkin-pkg removal must happen before ros-base installation to avoid dpkg conflicts." >&2
   exit 1
 fi
+
+if grep -Fq 'python3-colcon' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must not install python3-colcon-* packages." >&2
+  exit 1
+fi
