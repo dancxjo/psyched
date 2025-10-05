@@ -8,9 +8,13 @@ SRC_DIR="${PSYCHED_WORKSPACE_SRC:-${REPO_ROOT}/work/src}"
 echo "==> Applying patches for foot module"
 
 PATCH_DIR="${SCRIPT_DIR}/patches"
-PATCH_FILES=(
-  "${PATCH_DIR}/create_msgs_add_rust_generator.patch"
-)
+mapfile -t PATCH_FILES < <(find "${PATCH_DIR}" -maxdepth 1 -type f -name '*.patch' | sort)
+
+if [[ ${#PATCH_FILES[@]} -eq 0 ]]; then
+  echo "--> No patches to apply"
+  echo "✓ Patches applied"
+  exit 0
+fi
 
 for patch_path in "${PATCH_FILES[@]}"; do
   echo "--> Applying $(basename "${patch_path}")"
@@ -21,7 +25,7 @@ for patch_path in "${PATCH_FILES[@]}"; do
     else
       exit ${status}
     fi
-  };
+  }
   rm -f "${SRC_DIR}/"*.rej
   rm -f "${SRC_DIR}/"*.orig
   echo "    Applied"
