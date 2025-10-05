@@ -30,16 +30,18 @@ echo "Provisioning ROS 2 ${ROS_DISTRO} using Debian packages..."
 export LANG=en_US.UTF-8
 
 "${SUDO[@]}" apt-get update
-"${SUDO[@]}" apt-get install -y locales
+"${SUDO[@]}" apt-get install -y --no-install-recommends \
+  ca-certificates \
+  curl \
+  locales \
+  software-properties-common
 "${SUDO[@]}" locale-gen en_US en_US.UTF-8
 "${SUDO[@]}" update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 locale
 
-"${SUDO[@]}" apt-get install -y software-properties-common
 "${SUDO[@]}" add-apt-repository -y universe
 "${SUDO[@]}" apt-get update
-"${SUDO[@]}" apt-get install -y curl ca-certificates
 
 echo "Setting up ROS 2 apt repository..."
 
@@ -53,7 +55,6 @@ echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 # Install only minimal ROS2 base (no desktop/GUI/Qt dependencies)
 "${SUDO[@]}" dpkg -i /tmp/ros2-apt-source.deb
 "${SUDO[@]}" apt-get update
-"${SUDO[@]}" apt-get upgrade -y
 
 # Remove the legacy python3-catkin-pkg package if present. The ROS apt
 # repository ships python3-catkin-pkg-modules which owns the same files, and
@@ -65,9 +66,8 @@ if dpkg -s python3-catkin-pkg >/dev/null 2>&1; then
   "${SUDO[@]}" dpkg --configure -a
 fi
 
-"${SUDO[@]}" apt-get install -y \
+"${SUDO[@]}" apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-ros-base \
-  ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   python3-rosdep
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
@@ -86,6 +86,38 @@ export ROS_LOCALHOST_ONLY=0
 PROFILE
 
 "${SUDO[@]}" chmod 644 /etc/profile.d/ros2-defaults.sh
+
+ensure_bashrc_sourcing() {
+  local target_user="$1" home_dir marker footer bashrc
+  if [[ -z "${target_user}" ]]; then
+    return 0
+  fi
+  if ! command -v getent >/dev/null 2>&1; then
+    return 0
+  fi
+  home_dir=$(getent passwd "${target_user}" | awk -F: '{print $6}')
+  if [[ -z "${home_dir}" || ! -d "${home_dir}" ]]; then
+    return 0
+  fi
+  bashrc="${home_dir}/.bashrc"
+  marker="# >>> ROS 2 ${ROS_DISTRO} environment >>>"
+  footer="# <<< ROS 2 ${ROS_DISTRO} environment <<<"
+  mkdir -p "${home_dir}"
+  touch "${bashrc}"
+  if grep -Fq "${marker}" "${bashrc}" >/dev/null 2>&1; then
+    return 0
+  fi
+  {
+    printf '\n%s\n' "${marker}"
+    printf '%s\n' "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then"
+    printf '%s\n' '    # shellcheck disable=SC1091'
+    printf '%s\n' "    source /opt/ros/${ROS_DISTRO}/setup.bash"
+    printf '%s\n' 'fi'
+    printf '%s\n' "${footer}"
+  } >> "${bashrc}"
+}
+
+ensure_bashrc_sourcing "${SUDO_USER:-${USER:-}}"
 
 echo "ROS 2 ${ROS_DISTRO} installation completed with Cyclone DDS as the default RMW."
 echo "Source /opt/ros/${ROS_DISTRO}/setup.bash to begin using ROS 2."

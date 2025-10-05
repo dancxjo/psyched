@@ -4,6 +4,7 @@ import { walkSync } from "$std/fs/walk.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
 import { modulesRoot, repoRoot, workspaceRoot, workspaceSrc } from "./paths.ts";
+import { ensureRebootCompleted } from "./reboot_guard.ts";
 
 const PID_DIR = join(workspaceRoot(), ".psh");
 const PILOT_MANIFEST = "fresh.gen.ts";
@@ -773,6 +774,7 @@ function isPidRunning(pid: number): boolean {
 }
 
 export async function setupModules(modules: string[]): Promise<void> {
+  ensureRebootCompleted();
   for (const module of modules) {
     await setupModule(module);
   }

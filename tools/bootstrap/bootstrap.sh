@@ -5,14 +5,28 @@ set -euo pipefail
 # Pete Rizzlington bootstrap setup
 # --------------------------------------------------------------------
 
-# 1. Update & upgrade
-sudo apt-get update && sudo apt-get upgrade -y
+# 1. Update package index and install core dependencies in a single transaction
+sudo apt-get update
 
-# 2. Essentials: compiler, Python (for ROS tooling), editors
-sudo apt-get install -y \
-  curl git build-essential make \
-  python3-full python3-pip python3-venv python-is-python3 \
-  shellcheck micro mc ripgrep
+CORE_PACKAGES=(
+  ca-certificates
+  build-essential
+  curl
+  git
+  make
+  python3
+  python3-pip
+  python3-venv
+  python-is-python3
+  shellcheck
+  ripgrep
+  unzip
+  avahi-daemon
+  avahi-utils
+  libnss-mdns
+)
+
+sudo apt-get install -y --no-install-recommends "${CORE_PACKAGES[@]}"
 
 # Ensure ~/.local/bin is on PATH for the current session and future logins
 if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
@@ -22,9 +36,6 @@ local_path_export="export PATH=\"\$HOME/.local/bin:\$PATH\""
 if ! grep -Fx "$local_path_export" "$HOME/.bashrc" >/dev/null 2>&1; then
     printf '%s\n' "$local_path_export" >> "$HOME/.bashrc"
 fi
-
-# 3. mDNS support (Avahi)
-sudo apt-get install -y avahi-daemon avahi-utils libnss-mdns
 
 # Ensure /etc/nsswitch.conf has mdns entries
 ensure_mdns_hosts_entry() {
@@ -88,12 +99,7 @@ ensure_mdns_service() {
 ensure_mdns_hosts_entry
 ensure_mdns_service
 
-# 4. Convenience tools
-if ! sudo apt-get install -y unzip 1>&2; then
-    echo "Warning: failed to install unzip; continuing" >&2
-fi
-
-# 5. ROS tooling intentionally minimal; avoid installing python3-colcon-* to prevent catkin conflicts
+# 4. ROS tooling intentionally minimal; avoid installing python3-colcon-* to prevent catkin conflicts
 
 # 6. Deno runtime
 install_deno() {
@@ -195,6 +201,28 @@ ensure_psyched_shell() {
 
 ensure_psyched_shell
 
+create_reboot_sentinel() {
+    local sentinel="${PSYCHED_REBOOT_SENTINEL:-}" boot_time
+    if [[ -z "${sentinel}" ]]; then
+        local xdg_state="${XDG_STATE_HOME:-}" home_state="${HOME:-}" default_state
+        if [[ -n "${xdg_state}" ]]; then
+            default_state="${xdg_state}/psyched"
+        elif [[ -n "${home_state}" ]]; then
+            default_state="${home_state}/.local/state/psyched"
+        else
+            default_state="${PWD}/.psyched"
+        fi
+        sentinel="${default_state}/reboot-required"
+    fi
+
+    boot_time="$(awk '/^btime/ {print $2}' /proc/stat 2>/dev/null || date +%s)"
+    mkdir -p "$(dirname "${sentinel}")"
+    printf '%s\n' "${boot_time}" > "${sentinel}"
+}
+
+create_reboot_sentinel
+
 # 8. Run the provisioning wizard
 echo "Launching psh wizard..."
+echo "A system reboot is required before running 'psh mod setup'."
 exec "${psh_wrapper}"

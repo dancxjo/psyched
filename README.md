@@ -46,10 +46,10 @@ Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orche
 ```bash
 git clone https://github.com/dancxjo/psyched.git
 cd psyched
-./setup  # installs system dependencies, registers the Deno-based psh CLI, and opens the provisioning wizard
+./setup  # installs core dependencies, registers the Deno-based psh CLI, and opens the provisioning wizard
 ```
 
-`./setup` installs build toolchains (Python, ROS dependencies), configures mDNS, prepares Deno, and launches the interactive `psh` wizard (equivalent to running `psh` with no arguments). From there you can apply the host profile that triggers any bootstrap scripts declared in `hosts/*.toml`.
+`./setup` installs just the tools required to run `psh`, configures mDNS, prepares Deno, and launches the interactive `psh` wizard (equivalent to running `psh` with no arguments). Once the wizard completes **reboot the machine before running `psh mod setup`**—the bootstrap writes a reboot sentinel that module setup respects to keep ROS tooling cleanly staged.
 
 ### 2. Provision additional machines (optional)
 
