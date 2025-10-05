@@ -66,8 +66,10 @@ if dpkg -s python3-catkin-pkg >/dev/null 2>&1; then
   "${SUDO[@]}" dpkg --configure -a
 fi
 
+# ros-dev-tools pulls in colcon and other build tooling required by the Psyched stack.
 "${SUDO[@]}" apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-ros-base \
+  ros-${ROS_DISTRO}-ros-dev-tools \
   python3-rosdep
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
