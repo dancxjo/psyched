@@ -103,6 +103,49 @@ export interface ComposeLaunchCommandOptions {
   launchScript: string;
   logFile: string;
   module: string;
+  ttyPath?: string | null;
+  callerPid?: number;
+}
+
+function stdoutRid(): number | null {
+  const candidate = (Deno.stdout as { rid?: number | undefined }).rid;
+  return typeof candidate === "number" ? candidate : null;
+}
+
+function stdoutIsTerminal(): boolean {
+  const stdout = Deno.stdout as { isTerminal?: () => boolean };
+  try {
+    if (typeof stdout.isTerminal === "function") {
+      return stdout.isTerminal();
+    }
+  } catch (_error) {
+    return false;
+  }
+  const rid = stdoutRid();
+  if (rid === null) return false;
+  const legacy =
+    (Deno as unknown as { isatty?: (rid: number) => boolean }).isatty;
+  if (typeof legacy === "function") {
+    try {
+      return legacy.call(Deno, rid);
+    } catch (_error) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function detectStdoutTty(): string | null {
+  if (!stdoutIsTerminal()) return null;
+  const rid = stdoutRid();
+  if (rid === null) return null;
+  if (Deno.build.os !== "linux") return null;
+  try {
+    const linkTarget = Deno.readLinkSync(`/proc/self/fd/${rid}`);
+    return linkTarget.startsWith("/dev/") ? linkTarget : null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 /**
@@ -110,21 +153,45 @@ export interface ComposeLaunchCommandOptions {
  *
  * The returned command performs environment setup, executes the module's
  * launch script, and mirrors stdout/stderr to both the console and log file
- * using a tee-based prefixing helper.
+ * via the prefixing helper.
  */
 export function composeLaunchCommand(
   options: ComposeLaunchCommandOptions,
 ): string {
   const { envCommands, launchScript, logFile, module } = options;
-  const prefixScript = join(repoRoot(), "tools", "psh", "scripts", "prefix_logs.sh");
-  const prefixedStdout =
-    `${shellEscape(prefixScript)} ${shellEscape(module)} ${shellEscape("stdout")}`;
-  const prefixedStderr =
-    `${shellEscape(prefixScript)} ${shellEscape(module)} ${shellEscape("stderr")}`;
-  const teeTarget = shellEscape(logFile);
+  const prefixScript = join(
+    repoRoot(),
+    "tools",
+    "psh",
+    "scripts",
+    "prefix_logs.sh",
+  );
+  const ttyPath = options.ttyPath === undefined
+    ? detectStdoutTty()
+    : options.ttyPath;
+  const callerPid = options.callerPid ?? (ttyPath ? Deno.pid : undefined);
+
+  const composeStreamCommand = (stream: "stdout" | "stderr") => {
+    const parts = [
+      shellEscape(prefixScript),
+      shellEscape(module),
+      shellEscape(stream),
+      shellEscape(logFile),
+    ];
+    if (ttyPath) {
+      parts.push(shellEscape(ttyPath));
+      if (callerPid !== undefined) {
+        parts.push(shellEscape(String(callerPid)));
+      }
+    }
+    return parts.join(" ");
+  };
+
   const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${prefixedStdout} | tee -a ${teeTarget}) ` +
-    `2> >(${prefixedStderr} | tee -a ${teeTarget} >&2)`;
+    `exec bash ${shellEscape(launchScript)} > >(${
+      composeStreamCommand("stdout")
+    }) ` +
+    `2> >(${composeStreamCommand("stderr")})`;
   const parts = [...envCommands, launch];
   return parts.join(" && ");
 }
