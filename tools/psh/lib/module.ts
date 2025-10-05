@@ -94,83 +94,39 @@ function ensureDirectory(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
-type AsyncFileWriter = {
-  write(chunk: Uint8Array): Promise<void>;
-  close(): Promise<void>;
-};
-
-function createAsyncFileWriter(file: Deno.FsFile): AsyncFileWriter {
-  let pending: Promise<void> = Promise.resolve();
-  let closed = false;
-  return {
-    write(chunk: Uint8Array) {
-      if (closed) {
-        return Promise.resolve();
-      }
-      pending = pending.then(async () => {
-        await file.write(chunk);
-      });
-      return pending;
-    },
-    async close() {
-      if (closed) return;
-      closed = true;
-      try {
-        await pending;
-      } finally {
-        file.close();
-      }
-    },
-  };
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
-async function streamOutput(
-  stream: ReadableStream<Uint8Array> | null,
-  logWriter: AsyncFileWriter,
-  module: string,
-  destination: "stdout" | "stderr",
-  colorize: (text: string) => string,
-): Promise<void> {
-  if (!stream) return;
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  const consoleWriter =
-    (destination === "stdout" ? Deno.stdout.writable : Deno.stderr.writable)
-      .getWriter();
-  let buffer = "";
+export interface ComposeLaunchCommandOptions {
+  envCommands: string[];
+  launchScript: string;
+  logFile: string;
+  module: string;
+}
 
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      await logWriter.write(value);
-      buffer += decoder.decode(value, { stream: true });
-      let newlineIndex: number;
-      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, newlineIndex).replace(/\r$/, "");
-        buffer = buffer.slice(newlineIndex + 1);
-        const formatted = `${colorize(`[${module}] ${line}`)}\n`;
-        await consoleWriter.write(encoder.encode(formatted));
-      }
-    }
-
-    buffer += decoder.decode(new Uint8Array(), { stream: false });
-    if (buffer.length > 0) {
-      const formatted = `${colorize(`[${module}] ${buffer}`)}\n`;
-      await consoleWriter.write(encoder.encode(formatted));
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const fallback = `${
-      colorize(`[${module}] log streaming failed: ${message}`)
-    }\n`;
-    await consoleWriter.write(encoder.encode(fallback));
-  } finally {
-    reader.releaseLock();
-    consoleWriter.releaseLock();
-  }
+/**
+ * Build the shell pipeline used to bootstrap a module launch.
+ *
+ * The returned command performs environment setup, executes the module's
+ * launch script, and mirrors stdout/stderr to both the console and log file
+ * using a tee-based prefixing helper.
+ */
+export function composeLaunchCommand(
+  options: ComposeLaunchCommandOptions,
+): string {
+  const { envCommands, launchScript, logFile, module } = options;
+  const prefixScript = join(repoRoot(), "tools", "psh", "scripts", "prefix_logs.sh");
+  const prefixedStdout =
+    `${shellEscape(prefixScript)} ${shellEscape(module)} ${shellEscape("stdout")}`;
+  const prefixedStderr =
+    `${shellEscape(prefixScript)} ${shellEscape(module)} ${shellEscape("stderr")}`;
+  const teeTarget = shellEscape(logFile);
+  const launch =
+    `exec bash ${shellEscape(launchScript)} > >(${prefixedStdout} | tee -a ${teeTarget}) ` +
+    `2> >(${prefixedStderr} | tee -a ${teeTarget} >&2)`;
+  const parts = [...envCommands, launch];
+  return parts.join(" && ");
 }
 
 export function locateModuleDir(module: string): string {
@@ -631,51 +587,23 @@ export async function bringModuleUp(module: string): Promise<void> {
   }
 
   // Combine environment setup with launch script execution
-  const launchCommand = envCommands.length > 0
-    ? `${envCommands.join(" && ")} && exec bash ${launchScript}`
-    : `exec bash ${launchScript}`;
+  const launchCommand = composeLaunchCommand({
+    envCommands,
+    launchScript,
+    logFile,
+    module,
+  });
 
-  // Launch the script in the background, streaming output into the log file
-  // while mirroring prefixed lines to the caller's console.
+  // Launch the script in the background, letting bash handle output
+  // duplication to the module log while keeping stdout/stderr attached to the
+  // terminal so the process keeps running after psh exits.
   const child = new Deno.Command("bash", {
     args: ["-c", launchCommand],
     cwd: moduleDir,
     stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
+    stdout: "inherit",
+    stderr: "inherit",
   }).spawn();
-  const logHandle = await Deno.open(logFile, {
-    create: true,
-    write: true,
-    append: true,
-  });
-  const logWriter = createAsyncFileWriter(logHandle);
-
-  const logPump = Promise.all([
-    streamOutput(
-      child.stdout,
-      logWriter,
-      module,
-      "stdout",
-      (text) => colors.dim(text),
-    ),
-    streamOutput(
-      child.stderr,
-      logWriter,
-      module,
-      "stderr",
-      (text) => colors.red(text),
-    ),
-  ]);
-
-  logPump
-    .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(colors.red(`[${module}] log stream error: ${message}`));
-    })
-    .finally(() => {
-      void logWriter.close();
-    });
 
   writePid(module, child.pid);
   console.log(
