@@ -33,6 +33,12 @@ if (( REMOVE_LINE >= INSTALL_LINE )); then
   exit 1
 fi
 
+if ! grep -Fq 'ros-${ROS_DISTRO:-\${ROS_DISTRO}}-ros-dev-tools' "${ROS_INSTALLER}" && \
+   ! grep -Fq 'ros-${ROS_DISTRO}-ros-dev-tools' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must install ros-<distro>-ros-dev-tools alongside ros-base." >&2
+  exit 1
+fi
+
 if grep -Fq 'python3-colcon' "${ROS_INSTALLER}"; then
   echo "install_ros2.sh must not install python3-colcon-* packages." >&2
   exit 1
