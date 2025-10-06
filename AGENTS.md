@@ -20,7 +20,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 | `modules/pilot/frontend/` | Deno Fresh app for the pilot console. |
 | `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
 | `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
-| `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and launches the provisioning wizard. |
+| `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and instructs you to reboot before running `psh`. |
 | `hosts/*.toml` | Host manifests. Prefer `provision.installers = ["ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. Deno is bootstrapped by `setup`. |
 
 ## Build & test checklist
