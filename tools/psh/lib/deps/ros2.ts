@@ -39,6 +39,31 @@ export function buildRosBasePackages(distro: string): string[] {
   ];
 }
 
+export interface ColconProvisionPlan {
+  venvPath: string;
+  pythonBin: string;
+  pipBin: string;
+  colconBin: string;
+  symlinkPath: string;
+  packages: string[];
+}
+
+export function buildColconProvisionPlan(distro: string): ColconProvisionPlan {
+  const venvPath = `/opt/ros/${distro}/colcon-venv`;
+  const binDir = `${venvPath}/bin`;
+  return {
+    venvPath,
+    pythonBin: `${binDir}/python`,
+    pipBin: `${binDir}/pip`,
+    colconBin: `${binDir}/colcon`,
+    symlinkPath: "/usr/local/bin/colcon",
+    packages: [
+      "colcon-core",
+      "colcon-common-extensions",
+    ],
+  };
+}
+
 export async function installRos2(context: ProvisionContext): Promise<void> {
   const rosDistro = determineRosDistro({ env: Deno.env.toObject() });
   const rosRoot = `/opt/ros/${rosDistro}`;
@@ -151,6 +176,59 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
       });
     },
   );
+
+  const colconPlan = buildColconProvisionPlan(rosDistro);
+  await context.step("Provision colcon build toolchain", async (step) => {
+    await step.exec(["mkdir", "-p", colconPlan.venvPath], {
+      sudo: true,
+      description: "prepare colcon venv directory",
+    });
+    await step.exec([
+      "bash",
+      "-c",
+      `[ -f "${colconPlan.venvPath}/pyvenv.cfg" ] || python3 -m venv "${colconPlan.venvPath}"`,
+    ], {
+      sudo: true,
+      description: "initialise colcon virtualenv",
+    });
+    await step.exec([
+      "bash",
+      "-c",
+      `[ -x "${colconPlan.pipBin}" ] || "${colconPlan.pythonBin}" -m ensurepip --upgrade`,
+    ], {
+      sudo: true,
+      description: "bootstrap pip for colcon",
+    });
+    await step.exec([
+      colconPlan.pipBin,
+      "install",
+      "--no-cache-dir",
+      "--upgrade",
+      "pip",
+    ], {
+      sudo: true,
+      description: "upgrade pip inside colcon venv",
+    });
+    await step.exec([
+      colconPlan.pipBin,
+      "install",
+      "--no-cache-dir",
+      "--upgrade",
+      ...colconPlan.packages,
+    ], {
+      sudo: true,
+      description: "install colcon tooling",
+    });
+    await step.exec([
+      "ln",
+      "-sf",
+      colconPlan.colconBin,
+      colconPlan.symlinkPath,
+    ], {
+      sudo: true,
+      description: "link colcon binary",
+    });
+  });
 
   await context.step("Initialise rosdep", async (step) => {
     const rosdepSources = "/etc/ros/rosdep/sources.list.d/20-default.list";

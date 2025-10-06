@@ -24,12 +24,22 @@ psyched_bootstrap__resolve_script_dir() {
 script_dir="$(psyched_bootstrap__resolve_script_dir "${BASH_SOURCE[0]}")"
 # shellcheck source=tools/bootstrap/profile_helpers.sh
 source "${script_dir}/profile_helpers.sh"
+# shellcheck source=tools/bootstrap/reboot_helpers.sh
+source "${script_dir}/reboot_helpers.sh"
 unset -f psyched_bootstrap__resolve_script_dir
 
 # Recompute using the shared helper so downstream scripts can reference it as
 # well, keeping `script_dir` stable even when invoked through additional
 # symlink layers.
 script_dir="$(psyched_bootstrap::script_dir "${BASH_SOURCE[0]}")"
+
+if ! psyched_bootstrap::require_reboot_if_pending; then
+    cat >&2 <<'MSG'
+A previous bootstrap run requested a system reboot. Please restart the
+machine before rerunning the bootstrap or provisioning ROS modules.
+MSG
+    exit 2
+fi
 sudo apt-get update
 
 CORE_PACKAGES=(
@@ -219,28 +229,8 @@ ensure_psyched_shell() {
 
 ensure_psyched_shell
 
-create_reboot_sentinel() {
-    local sentinel="${PSYCHED_REBOOT_SENTINEL:-}" boot_time
-    if [[ -z "${sentinel}" ]]; then
-        local xdg_state="${XDG_STATE_HOME:-}" home_state="${HOME:-}" default_state
-        if [[ -n "${xdg_state}" ]]; then
-            default_state="${xdg_state}/psyched"
-        elif [[ -n "${home_state}" ]]; then
-            default_state="${home_state}/.local/state/psyched"
-        else
-            default_state="${PWD}/.psyched"
-        fi
-        sentinel="${default_state}/reboot-required"
-    fi
+psyched_bootstrap::write_reboot_sentinel
 
-    boot_time="$(awk '/^btime/ {print $2}' /proc/stat 2>/dev/null || date +%s)"
-    mkdir -p "$(dirname "${sentinel}")"
-    printf '%s\n' "${boot_time}" > "${sentinel}"
-}
-
-create_reboot_sentinel
-
-# 8. Run the provisioning wizard
-echo "Launching psh wizard..."
-echo "A system reboot is required before running 'psh mod setup'."
-exec "${psh_wrapper}"
+echo "Bootstrap complete."
+echo "Please reboot the system before running 'psh host setup' or 'psh mod setup'."
+echo "After reboot, run 'psh' to continue provisioning modules and services."

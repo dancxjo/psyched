@@ -1,5 +1,6 @@
 import { assertEquals } from "$std/testing/asserts.ts";
 import {
+  buildColconProvisionPlan,
   buildRosBasePackages,
   determineRosDistro,
   renderRosProfile,
@@ -29,4 +30,14 @@ Deno.test("ROS base package set excludes colcon tooling", () => {
     "ros-jazzy-rmw-cyclonedds-cpp",
     "python3-rosdep",
   ]);
+});
+
+Deno.test("colcon provisioning plan mirrors install script", () => {
+  const plan = buildColconProvisionPlan("jazzy");
+  assertEquals(plan.venvPath, "/opt/ros/jazzy/colcon-venv");
+  assertEquals(plan.pythonBin, "/opt/ros/jazzy/colcon-venv/bin/python");
+  assertEquals(plan.pipBin, "/opt/ros/jazzy/colcon-venv/bin/pip");
+  assertEquals(plan.colconBin, "/opt/ros/jazzy/colcon-venv/bin/colcon");
+  assertEquals(plan.symlinkPath, "/usr/local/bin/colcon");
+  assertEquals(plan.packages, ["colcon-core", "colcon-common-extensions"]);
 });
