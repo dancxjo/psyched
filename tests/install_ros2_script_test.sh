@@ -51,3 +51,13 @@ if grep -Fq 'python3-colcon' "${ROS_INSTALLER}"; then
   echo "install_ros2.sh must not install python3-colcon-* packages." >&2
   exit 1
 fi
+
+if ! grep -Fq 'colcon-common-extensions' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must provision colcon via pip-installed common extensions." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'colcon-venv' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must isolate colcon into a dedicated virtual environment to avoid package conflicts." >&2
+  exit 1
+fi

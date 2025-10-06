@@ -34,6 +34,8 @@ export LANG=en_US.UTF-8
   ca-certificates \
   curl \
   locales \
+  python3-pip \
+  python3-venv \
   software-properties-common
 "${SUDO[@]}" locale-gen en_US en_US.UTF-8
 "${SUDO[@]}" update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
@@ -71,6 +73,28 @@ fi
   ros-${ROS_DISTRO}-ros-base \
   ros-${ROS_DISTRO}-ros-dev-tools \
   python3-rosdep
+
+COLCON_VENV="/opt/ros/${ROS_DISTRO}/colcon-venv"
+COLCON_BIN="${COLCON_VENV}/bin/colcon"
+
+echo "Installing colcon into dedicated virtual environment at ${COLCON_VENV}..."
+"${SUDO[@]}" mkdir -p "${COLCON_VENV}"
+if [[ ! -f "${COLCON_VENV}/pyvenv.cfg" ]]; then
+  "${SUDO[@]}" python3 -m venv "${COLCON_VENV}"
+fi
+
+if [[ ! -x "${COLCON_VENV}/bin/pip" ]]; then
+  "${SUDO[@]}" "${COLCON_VENV}/bin/python" -m ensurepip --upgrade
+fi
+
+"${SUDO[@]}" "${COLCON_VENV}/bin/pip" install --no-cache-dir --upgrade pip
+"${SUDO[@]}" "${COLCON_VENV}/bin/pip" install --no-cache-dir --upgrade \
+  colcon-core \
+  colcon-common-extensions
+
+if [[ ! -L /usr/local/bin/colcon ]] || [[ "$(readlink -f /usr/local/bin/colcon 2>/dev/null)" != "${COLCON_BIN}" ]]; then
+  "${SUDO[@]}" ln -sf "${COLCON_BIN}" /usr/local/bin/colcon
+fi
 
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
   "${SUDO[@]}" rosdep init
