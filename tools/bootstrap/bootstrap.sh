@@ -6,9 +6,30 @@ set -euo pipefail
 # --------------------------------------------------------------------
 
 # 1. Update package index and install core dependencies in a single transaction
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+psyched_bootstrap__resolve_script_dir() {
+    local source="$1"
+
+    while [[ -h "${source}" ]]; do
+        local dir
+        dir="$(cd -P "$(dirname "${source}")" && pwd)"
+        source="$(readlink "${source}")"
+        if [[ "${source}" != /* ]]; then
+            source="${dir}/${source}"
+        fi
+    done
+
+    (cd -P "$(dirname "${source}")" && pwd)
+}
+
+script_dir="$(psyched_bootstrap__resolve_script_dir "${BASH_SOURCE[0]}")"
 # shellcheck source=tools/bootstrap/profile_helpers.sh
 source "${script_dir}/profile_helpers.sh"
+unset -f psyched_bootstrap__resolve_script_dir
+
+# Recompute using the shared helper so downstream scripts can reference it as
+# well, keeping `script_dir` stable even when invoked through additional
+# symlink layers.
+script_dir="$(psyched_bootstrap::script_dir "${BASH_SOURCE[0]}")"
 sudo apt-get update
 
 CORE_PACKAGES=(

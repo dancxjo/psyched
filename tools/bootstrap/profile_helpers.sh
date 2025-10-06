@@ -32,3 +32,39 @@ psyched_bootstrap::append_profile_line() {
     psyched_bootstrap::ensure_trailing_newline "${profile}"
     printf '%s\n' "${line}" >> "${profile}"
 }
+
+##
+# Resolve the directory that contains a script, following any symbolic links.
+#
+# This helper mirrors the logic used by `setup`/`bootstrap.sh` so that other
+# scripts can reliably locate sibling resources even when they are invoked via
+# symlinks.
+#
+# ```bash
+# script_dir="$(psyched_bootstrap::script_dir "$0")"
+# source "${script_dir}/profile_helpers.sh"
+# ```
+#
+# @param $1 Path to the script to inspect. Relative paths are resolved against
+#           the directory containing the path reference.
+# @return Absolute path to the directory that stores the script target.
+psyched_bootstrap::script_dir() {
+    local source_path="${1:-}"
+
+    if [[ -z "${source_path}" ]]; then
+        printf 'Error: psyched_bootstrap::script_dir requires a script path\n' >&2
+        return 1
+    fi
+
+    local source="${source_path}"
+    while [[ -h "${source}" ]]; do
+        local dir
+        dir="$(cd -P "$(dirname "${source}")" && pwd)"
+        source="$(readlink "${source}")"
+        if [[ "${source}" != /* ]]; then
+            source="${dir}/${source}"
+        fi
+    done
+
+    (cd -P "$(dirname "${source}")" && pwd)
+}
