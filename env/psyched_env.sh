@@ -54,6 +54,14 @@ fi
 export PSYCHED_ROS_DISTRO
 export PSYCHED_ROS_SETUP
 
+# Ensure ROS tooling invoked from non-interactive shells (like the Deno-based
+# psh CLI) inherits the active ROS distribution even when the caller did not
+# export ROS_DISTRO explicitly. This mirrors the defaults installed into
+# /etc/profile.d/ros2-defaults.sh by the provisioning scripts.
+if [[ -z "${ROS_DISTRO:-}" ]]; then
+  export ROS_DISTRO="${PSYCHED_ROS_DISTRO}"
+fi
+
 psyched::log() {
   local level="$1"
   shift || true

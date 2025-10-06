@@ -85,6 +85,7 @@ export LANG=en_US.UTF-8
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=0
 export ROS_LOCALHOST_ONLY=0
+export ROS_DISTRO=${ROS_DISTRO}
 PROFILE
 
 "${SUDO[@]}" chmod 644 /etc/profile.d/ros2-defaults.sh

@@ -17,7 +17,10 @@ if ! grep -Fq 'apt-get remove -y python3-catkin-pkg' "${ROS_INSTALLER}"; then
 fi
 
 REMOVE_LINE=$(grep -Fn 'apt-get remove -y python3-catkin-pkg' "${ROS_INSTALLER}" | head -n1 | cut -d: -f1)
+
+set +o pipefail
 INSTALL_LINE=$(grep -Fn 'ros-${ROS_DISTRO:-\${ROS_DISTRO}}-ros-base' "${ROS_INSTALLER}" | head -n1 | cut -d: -f1)
+set -o pipefail
 
 if [[ -z "${INSTALL_LINE}" ]]; then
   INSTALL_LINE=$(grep -Fn 'ros-${ROS_DISTRO}-ros-base' "${ROS_INSTALLER}" | head -n1 | cut -d: -f1)
@@ -36,6 +39,11 @@ fi
 if ! grep -Fq 'ros-${ROS_DISTRO:-\${ROS_DISTRO}}-ros-dev-tools' "${ROS_INSTALLER}" && \
    ! grep -Fq 'ros-${ROS_DISTRO}-ros-dev-tools' "${ROS_INSTALLER}"; then
   echo "install_ros2.sh must install ros-<distro>-ros-dev-tools alongside ros-base." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'export ROS_DISTRO=${ROS_DISTRO}' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must export ROS_DISTRO in the default profile to support module provisioning." >&2
   exit 1
 fi
 
