@@ -61,6 +61,19 @@ SCRIPT
   [[ "${PSYCHED_TEST_MARKER}" == "workspace" ]]
 }
 
+test_sets_ros_distro_default() {
+  unset ROS_DISTRO || true
+  source "${ENV_SCRIPT}"
+  [[ "${ROS_DISTRO:-}" == "kilted" ]]
+}
+
+test_preserves_existing_ros_distro() {
+  export ROS_DISTRO="jazzy"
+  source "${ENV_SCRIPT}"
+  [[ "${ROS_DISTRO:-}" == "jazzy" ]]
+  [[ "${PSYCHED_ROS_DISTRO}" == "jazzy" ]]
+}
+
 test_activate_falls_back_to_ros() {
   source "${ENV_SCRIPT}"
   unset PSYCHED_TEST_MARKER || true
@@ -95,6 +108,8 @@ WORKSPACE
 scenario "exports default workspace paths" test_exports_defaults
 scenario "detects workspace setup file" test_workspace_setup_detection
 scenario "sources workspace setup script" test_source_workspace_exports_variables
+scenario "sets ROS_DISTRO when unset" test_sets_ros_distro_default
+scenario "preserves caller-provided ROS_DISTRO" test_preserves_existing_ros_distro
 scenario "falls back to ROS setup" test_activate_falls_back_to_ros
 scenario "prefers workspace over ROS when available" test_activate_prefers_workspace
 
