@@ -3,6 +3,7 @@ import { colors } from "$cliffy/ansi/colors.ts";
 import { runWizard } from "./lib/wizard.ts";
 import { provisionHost } from "./lib/host.ts";
 import { buildWorkspace } from "./lib/build.ts";
+import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
   bringModulesDown,
   bringModulesUp,
@@ -43,6 +44,19 @@ async function main() {
 
   const hostCommand = new Command()
     .description("Host provisioning commands");
+
+  root
+    .command("docker")
+    .description(
+      "Launch an Ubuntu 24.04 container with the workspace mounted",
+    )
+    .option(
+      "--workspace <path:string>",
+      "Override the workspace directory mounted at /home/pete/psyched",
+    )
+    .action(async ({ workspace }: { workspace?: string }) => {
+      await launchDockerSimulation({ workspace });
+    });
 
   root
     .command("up [targets...:string]")
