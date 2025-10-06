@@ -6,6 +6,9 @@ set -euo pipefail
 # --------------------------------------------------------------------
 
 # 1. Update package index and install core dependencies in a single transaction
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tools/bootstrap/profile_helpers.sh
+source "${script_dir}/profile_helpers.sh"
 sudo apt-get update
 
 CORE_PACKAGES=(
@@ -33,9 +36,7 @@ if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
     export PATH="${HOME}/.local/bin:${PATH}"
 fi
 local_path_export="export PATH=\"\$HOME/.local/bin:\$PATH\""
-if ! grep -Fx "$local_path_export" "$HOME/.bashrc" >/dev/null 2>&1; then
-    printf '%s\n' "$local_path_export" >> "$HOME/.bashrc"
-fi
+psyched_bootstrap::append_profile_line "$HOME/.bashrc" "$local_path_export"
 
 # Ensure /etc/nsswitch.conf has mdns entries
 ensure_mdns_hosts_entry() {
@@ -123,10 +124,6 @@ install_deno() {
         echo "Warning: deno not on PATH after install; adding to shell profile" >&2
     fi
 
-    deno_export="export PATH=\"${DENO_INSTALL}/bin:\$PATH\""
-    if ! grep -Fx "${deno_export}" "${HOME}/.bashrc" >/dev/null 2>&1; then
-        printf '%s\n' "${deno_export}" >> "${HOME}/.bashrc"
-    fi
 }
 
 install_deno
