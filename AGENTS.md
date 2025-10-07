@@ -74,6 +74,7 @@ Always prefer running the smallest relevant command set.
 - **Background processes:** Launch scripts spawn long-lived processes (for example `deno task dev`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
 - **Workspace resets:** `tools/clean_workspace` wipes `work/` and relinks local ROS/Python packages. Run it (or `psh clean`) whenever package paths drift instead of tweaking build directories manually.
 - **Deno TLS certificates:** When fetching dependencies during `deno task test`, set `DENO_TLS_CA_STORE=system` if you encounter TLS certificate errors in restricted environments.
+- **Deno permissions:** Prefer `deno task test` (which wraps `deno test --allow-all`) so permission-gated tests can read env vars and temp directories without manual flags.
 - **Deno test harness:** Use `Deno.test(...)` when authoring unit tests—`deno test` is the CLI command and will not compile inside source files.
 - **APT CLI stability:** Provisioning scripts must use `apt-get` (not `apt`) to avoid behaviour changes and interactive warnings during automation.
 - **ROS tooling packages:** Avoid installing `python3-colcon-*` or other catkin/colcon Debian packages; rely on ros-base and rosdep instead to prevent dpkg conflicts on Pete's hosts.

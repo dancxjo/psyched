@@ -113,7 +113,7 @@ Deno.test("formatLaunchDiagnostics summarises the launch plan", () => {
 
 Deno.test("formatExitSummary highlights success and failure", () => {
   const success = colors.stripColor(
-    formatExitSummary("imu", { success: true, code: 0 }),
+    formatExitSummary("imu", { success: true, code: 0, signal: null }),
   );
   assertStringIncludes(success, "exited cleanly (code 0)");
 
