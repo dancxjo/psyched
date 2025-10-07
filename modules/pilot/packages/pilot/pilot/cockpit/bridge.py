@@ -14,12 +14,13 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.subscription import Subscription
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Image, Imu
 from std_msgs.msg import String
 from websockets.exceptions import ConnectionClosed
 from websockets.server import WebSocketServerProtocol, serve
 
 from .foot import FootTelemetryBridge
+from .image import ImageEncoder
 from .protocol import (
     InboundMessage,
     OutboundMessage,
@@ -67,6 +68,8 @@ class CockpitBridgeNode(Node):
         self._broadcast_queue: asyncio.Queue[OutboundMessage] = asyncio.Queue(maxsize=512)
         self._broadcast_task: Optional[asyncio.Task[None]] = None
         self._foot_bridge = FootTelemetryBridge(self, self.enqueue_broadcast)
+        self._image_encoder = ImageEncoder(self.get_logger())
+        self._image_topics = {"/image_raw", "/camera/depth/image_raw"}
 
     # -- client lifecycle -------------------------------------------------
     def register_client(self, websocket: WebSocketServerProtocol) -> ClientConnection:
@@ -184,6 +187,13 @@ class CockpitBridgeNode(Node):
             return self.create_subscription(String, topic, self._on_transcript, 10)
         if topic == "/imu/data":
             return self.create_subscription(Imu, topic, self._on_imu, qos_profile_sensor_data)
+        if topic in self._image_topics:
+            return self.create_subscription(
+                Image,
+                topic,
+                lambda msg, bound_topic=topic: self._on_image(bound_topic, msg),
+                qos_profile_sensor_data,
+            )
         raise CockpitError(f"unsupported topic '{topic}'")
 
     def _on_transcript(self, msg: String) -> None:
@@ -213,6 +223,12 @@ class CockpitBridgeNode(Node):
             },
         }
         self.enqueue_broadcast(make_message("/imu/data", payload))
+
+    def _on_image(self, topic: str, msg: Image) -> None:
+        result = self._image_encoder.encode(topic, msg)
+        if result is None:
+            return
+        self.enqueue_broadcast(make_message(topic, result.payload))
 
     # -- publishers ------------------------------------------------------
     def publish_message(self, inbound: InboundMessage) -> None:

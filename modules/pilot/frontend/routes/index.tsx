@@ -25,6 +25,12 @@ const modules: ModuleLink[] = [
     description:
       "Send manual commands and monitor Create drive base telemetry and faults.",
   },
+  {
+    slug: "eye",
+    name: "Eye Module",
+    description:
+      "Stream Kinect RGB-D telemetry for situational awareness.",
+  },
 ];
 
 export default define.route(() => {

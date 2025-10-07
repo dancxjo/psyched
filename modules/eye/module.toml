@@ -1,0 +1,33 @@
+[unit.eye]
+apt = [
+    "libopencv-dev",
+    "python3-opencv",
+    "libusb-1.0-0-dev",
+    "pkg-config",
+    "libglu1-mesa-dev",
+    "freeglut3-dev",
+    "mesa-common-dev",
+]
+pip = []
+patches = [
+    "modules/eye/scripts/install_kinect_deps.sh",
+    "modules/eye/scripts/patch_kinect_cv_bridge.sh",
+    "modules/eye/scripts/replace_cv_bridge_headers.sh",
+    "modules/eye/scripts/build_libfreenect.sh",
+]
+launch = "modules/eye/launch_unit.sh"
+shutdown = "modules/eye/shutdown_unit.sh"
+pilot_control = "modules/eye/pilot/components/KinectStreamPanel.tsx"
+
+[[unit.eye.git]]
+url = "https://github.com/bribribriambriguy/kinect_ros2.git"
+branch = "frame_correction"
+path = "kinect_ros2"
+
+[[unit.eye.git]]
+url = "https://github.com/OpenKinect/libfreenect"
+path = "libfreenect"
+
+[unit.eye.ros]
+workspace = "."
+packages = ["kinect_ros2"]

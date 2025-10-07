@@ -263,7 +263,7 @@ CI is currently manual; prefer running the commands above before pushing.
 
 - Expand cockpit topics beyond `/conversation`
 - Ship IMU + drive base dashboards in the pilot UI
-- Add ear/eye/chat/voice modules (see `modules/` placeholders)
+- Add ear/chat/voice modules (see `modules/` placeholders)
 - Automate CI for cargo, deno, and colcon builds
 
 ## License

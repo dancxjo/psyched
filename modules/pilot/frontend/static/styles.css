@@ -730,3 +730,105 @@ body {
   padding: 0.75rem 1rem;
   border-radius: 0.75rem;
 }
+
+.kinect-stream {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: #161d28;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.kinect-stream__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.kinect-stream__header h2 {
+  margin: 0;
+}
+
+.kinect-stream__status {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.875rem;
+  opacity: 0.85;
+}
+
+.kinect-stream__grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 960px) {
+  .kinect-stream__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kinect-stream__frame {
+  background: rgba(10, 14, 20, 0.6);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.kinect-stream__frame header {
+  padding: 1rem 1.25rem 0.5rem;
+}
+
+.kinect-stream__frame header h3 {
+  margin: 0 0 0.5rem;
+}
+
+.kinect-stream__frame dl {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.kinect-stream__frame dt {
+  opacity: 0.7;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kinect-stream__frame dd {
+  margin: 0;
+  font-family:
+    "Fira Mono", "SFMono-Regular", ui-monospace, "SFMono-Regular", Menlo,
+    Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.kinect-stream__image {
+  background: radial-gradient(circle at center, rgba(113, 201, 248, 0.08), rgba(0, 0, 0, 0.6));
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+}
+
+.kinect-stream__image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.kinect-stream__placeholder {
+  margin: 0;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.95rem;
+  opacity: 0.8;
+}

@@ -22,6 +22,7 @@ export default define.app((_req: Request, ctx: RouteContext) => {
             <a href="/modules/pilot">Pilot</a>
             <a href="/modules/imu">IMU</a>
             <a href="/modules/foot">Foot</a>
+            <a href="/modules/eye">Eye</a>
             <a href="/psh/host">Host</a>
             <a href="/psh/mod">Modules</a>
             <a href="/psh/srv">Services</a>

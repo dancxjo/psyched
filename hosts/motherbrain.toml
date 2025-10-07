@@ -28,3 +28,8 @@ env = { ROS_DOMAIN_ID = "25" }
 name = "foot"
 launch = true
 env = { ROS_DOMAIN_ID = "25" }
+
+[[modules]]
+name = "eye"
+launch = true
+env = { ROS_DOMAIN_ID = "25" }
