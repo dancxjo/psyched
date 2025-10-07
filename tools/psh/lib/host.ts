@@ -41,6 +41,16 @@ export interface ServiceDirective {
   depends_on?: string[];
 }
 
+export class HostConfigNotFoundError extends Error {
+  hostname: string;
+
+  constructor(hostname: string) {
+    super(`No host config found for '${hostname}'.`);
+    this.name = "HostConfigNotFoundError";
+    this.hostname = hostname;
+  }
+}
+
 function pathExists(path: string): boolean {
   try {
     Deno.statSync(path);
@@ -54,14 +64,23 @@ function pathExists(path: string): boolean {
 export function locateHostConfig(hostname: string): string {
   const candidate = join(hostsRoot(), `${hostname}.toml`);
   if (!pathExists(candidate)) {
-    throw new Error(`no host config found for ${hostname}`);
+    throw new HostConfigNotFoundError(hostname);
   }
   return candidate;
 }
 
 export function readHostConfig(hostname: string): HostConfig {
+  return loadHostConfig(hostname).config;
+}
+
+export function loadHostConfig(
+  hostname: string,
+): { path: string; config: HostConfig } {
   const path = locateHostConfig(hostname);
-  return parseToml(Deno.readTextFileSync(path)) as unknown as HostConfig;
+  const config = parseToml(
+    Deno.readTextFileSync(path),
+  ) as unknown as HostConfig;
+  return { path, config };
 }
 
 export function availableHosts(): string[] {
@@ -230,13 +249,45 @@ export async function provisionHost(
   hostname?: string,
   options: ProvisionHostOptions = {},
 ): Promise<void> {
-  const name = hostname ?? Deno.hostname();
-  console.log(colors.bold(`Detected hostname: ${name}`));
-  const configPath = locateHostConfig(name);
+  const detected = hostname ?? Deno.hostname();
+  const { path, config } = loadHostConfig(detected);
+  await provisionHostProfile({
+    detectedHostname: detected,
+    profileName: detected,
+    configPath: path,
+    config,
+    options,
+  });
+}
+
+export interface ProvisionHostProfileParams {
+  detectedHostname: string;
+  profileName: string;
+  configPath: string;
+  config: HostConfig;
+  options?: ProvisionHostOptions;
+}
+
+export async function provisionHostProfile(
+  params: ProvisionHostProfileParams,
+): Promise<void> {
+  const {
+    detectedHostname,
+    profileName,
+    configPath,
+    config,
+    options = {},
+  } = params;
+  console.log(colors.bold(`Detected hostname: ${detectedHostname}`));
+  if (profileName !== detectedHostname) {
+    console.log(
+      colors.bold(
+        colors.magenta(`Applying host profile '${profileName}'.`),
+      ),
+    );
+  }
   console.log(colors.cyan(`Loading host config: ${configPath}`));
-  const cfg = parseToml(
-    Deno.readTextFileSync(configPath),
-  ) as unknown as HostConfig;
+  const cfg = config;
   const scripts = cfg.provision?.scripts ?? [];
   const installers = cfg.provision?.installers ?? [];
   const modules = cfg.modules ?? [];
@@ -286,7 +337,9 @@ export async function provisionHost(
   }
 
   if (!modules.length) {
-    console.log(colors.yellow(`No modules configured for host '${name}'.`));
+    console.log(
+      colors.yellow(`No modules configured for host '${profileName}'.`),
+    );
   } else if (!includeModules) {
     console.log(
       colors.yellow(
@@ -347,7 +400,9 @@ export async function provisionHost(
   }
 
   if (!services.length) {
-    console.log(colors.yellow(`No services configured for host '${name}'.`));
+    console.log(
+      colors.yellow(`No services configured for host '${profileName}'.`),
+    );
   } else if (!includeServices) {
     console.log(
       colors.yellow(
@@ -478,6 +533,8 @@ export async function provisionHost(
       console.warn(colors.yellow(`  - ${issue}`));
     }
   } else {
-    console.log(colors.green(`Host provisioning complete for '${name}'.`));
+    console.log(
+      colors.green(`Host provisioning complete for '${profileName}'.`),
+    );
   }
 }

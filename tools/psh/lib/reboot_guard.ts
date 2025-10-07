@@ -83,7 +83,7 @@ export function ensureRebootCompleted(
   const currentBootTime = options.readBootTime?.() ?? detectBootTime();
   if (currentBootTime <= sentinelBootTime) {
     throw new RebootRequiredError(
-      "Reboot required before running module setup. Please restart the system and rerun this command.",
+      "Reboot required before running module setup. Please reboot the system and rerun this command.",
     );
   }
   removeSentinel(sentinelPath);
