@@ -1,0 +1,9 @@
+[unit.viscera]
+apt = []
+pip = []
+launch = "modules/viscera/launch_unit.sh"
+shutdown = "modules/viscera/shutdown_unit.sh"
+
+[unit.viscera.ros]
+workspace = "."
+packages = ["viscera"]
