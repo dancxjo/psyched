@@ -20,7 +20,8 @@ export PSY_HOSTNAME=motherbrain   # or forebrain
 docker compose -f docker/compose.yml up --build
 
 # The setup script will install tools (inside the container), register the psh wrapper,
-# and then ask you to reboot before running `psh` to continue provisioning. It’s OK if some steps fail in tests.
+# and run `psh host setup`. After it finishes, open a new shell (or `source ~/.bashrc`)
+# before running `psh mod setup` / `psh svc setup` to finish provisioning.
 ```
 
 To run interactively without tailing logs:

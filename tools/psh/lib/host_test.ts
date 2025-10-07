@@ -1,4 +1,5 @@
 import { assertEquals, assertThrows } from "$std/testing/asserts.ts";
+import { join } from "$std/path/mod.ts";
 import * as host from "./host.ts";
 
 const { createTaskRegistry, registerTask, resolveDependencyAliases } =
@@ -33,6 +34,62 @@ type TestTask = {
   dependencies: string[];
   run: () => Promise<void>;
 };
+
+async function withTempRepo(
+  hostName: string,
+  hostToml: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const hostsDir = join(Deno.cwd(), "hosts");
+  const hostPath = join(hostsDir, `${hostName}.toml`);
+  try {
+    await Deno.lstat(hostPath);
+    throw new Error(`host config already exists at ${hostPath}`);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      throw error;
+    }
+  }
+
+  await Deno.writeTextFile(hostPath, hostToml);
+  try {
+    await fn();
+  } finally {
+    await Deno.remove(hostPath);
+  }
+}
+
+type ModuleOps = {
+  setup: (module: string) => Promise<void>;
+  launch: (module: string) => Promise<void>;
+};
+
+type ServiceOps = {
+  setup: (service: string) => Promise<void>;
+  start: (service: string) => Promise<void>;
+};
+
+const internals = (host as unknown as {
+  __internals__: { moduleOps: ModuleOps; serviceOps: ServiceOps };
+}).__internals__;
+
+function patchOps<T extends Record<string, unknown>>(
+  target: T,
+  updates: Partial<T>,
+): () => void {
+  const originals = new Map<keyof T, T[keyof T]>();
+  for (const key of Object.keys(updates) as (keyof T)[]) {
+    const value = updates[key];
+    if (value === undefined) continue;
+    originals.set(key, target[key]);
+    target[key] = value;
+  }
+  return () => {
+    for (const [key, value] of originals.entries()) {
+      target[key] = value;
+    }
+  };
+}
 
 Deno.test("resolves service alias to start task id", () => {
   const registry = createTaskRegistry();
@@ -85,12 +142,140 @@ Deno.test("registerTask rejects conflicting aliases", () => {
     run: async () => {},
   } as TestTask, ["pilot"]);
 
-  assertThrows(() => {
-    registerTask(registry, {
-      id: "service:pilot:start",
-      label: "Pilot service",
-      dependencies: [],
-      run: async () => {},
-    } as TestTask, ["pilot"]);
-  }, Error, "Alias 'pilot' already registered for task 'module:pilot:launch'");
+  assertThrows(
+    () => {
+      registerTask(registry, {
+        id: "service:pilot:start",
+        label: "Pilot service",
+        dependencies: [],
+        run: async () => {},
+      } as TestTask, ["pilot"]);
+    },
+    Error,
+    "Alias 'pilot' already registered for task 'module:pilot:launch'",
+  );
 });
+
+Deno.test(
+  "provisionHost skips module provisioning unless explicitly requested",
+  async () => {
+    const hostToml = `
+[host]
+name = "demo"
+
+[[modules]]
+name = "alpha"
+`;
+    await withTempRepo("demo", hostToml, async () => {
+      let setupCalls = 0;
+      let launchCalls = 0;
+      const restore = patchOps(internals.moduleOps, {
+        setup: (_module: string) => {
+          setupCalls += 1;
+          return Promise.resolve();
+        },
+        launch: (_module: string) => {
+          launchCalls += 1;
+          return Promise.resolve();
+        },
+      });
+      try {
+        await host.provisionHost("demo");
+        assertEquals(setupCalls, 0);
+        assertEquals(launchCalls, 0);
+      } finally {
+        restore();
+      }
+    });
+  },
+);
+
+Deno.test(
+  "provisionHost runs module provisioning when includeModules is true",
+  async () => {
+    const hostToml = `
+[host]
+name = "demo"
+
+[[modules]]
+name = "alpha"
+`;
+    await withTempRepo("demo", hostToml, async () => {
+      let setupCalls = 0;
+      const restore = patchOps(internals.moduleOps, {
+        setup: (_module: string) => {
+          setupCalls += 1;
+          return Promise.resolve();
+        },
+      });
+      try {
+        await host.provisionHost("demo", { includeModules: true });
+        assertEquals(setupCalls, 1);
+      } finally {
+        restore();
+      }
+    });
+  },
+);
+
+Deno.test(
+  "provisionHost skips service provisioning unless includeServices is true",
+  async () => {
+    const hostToml = `
+[host]
+name = "demo"
+
+[[services]]
+name = "telemetry"
+`;
+    await withTempRepo("demo", hostToml, async () => {
+      let setupCalls = 0;
+      let startCalls = 0;
+      const restore = patchOps(internals.serviceOps, {
+        setup: (_service: string) => {
+          setupCalls += 1;
+          return Promise.resolve();
+        },
+        start: (_service: string) => {
+          startCalls += 1;
+          return Promise.resolve();
+        },
+      });
+      try {
+        await host.provisionHost("demo");
+        assertEquals(setupCalls, 0);
+        assertEquals(startCalls, 0);
+      } finally {
+        restore();
+      }
+    });
+  },
+);
+
+Deno.test(
+  "provisionHost runs service provisioning when includeServices is true",
+  async () => {
+    const hostToml = `
+[host]
+name = "demo"
+
+[[services]]
+name = "telemetry"
+`;
+    await withTempRepo("demo", hostToml, async () => {
+      let setupCalls = 0;
+      const restore = patchOps(internals.serviceOps, {
+        setup: (_service: string) => {
+          setupCalls += 1;
+          return Promise.resolve();
+        },
+      });
+      try {
+        await host.provisionHost("demo", { includeServices: true });
+        assertEquals(setupCalls, 1);
+      } finally {
+        restore();
+      }
+    });
+  },
+);

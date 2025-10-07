@@ -78,7 +78,8 @@ Always prefer running the smallest relevant command set.
 - **APT CLI stability:** Provisioning scripts must use `apt-get` (not `apt`) to avoid behaviour changes and interactive warnings during automation.
 - **ROS tooling packages:** Avoid installing `python3-colcon-*` or other catkin/colcon Debian packages; rely on ros-base and rosdep instead to prevent dpkg conflicts on Pete's hosts.
 - **Colcon virtualenv:** The ROS installers create `/opt/ros/<distro>/colcon-venv` and symlink `/usr/local/bin/colcon` into it. Reuse that environment instead of layering additional pip/apt colcon installs.
-- **Post-bootstrap reboot:** `./setup` now writes a reboot-required sentinel. `psh mod setup` refuses to run until the machine is restarted, so plan to reboot immediately after the bootstrap completes.
+- **Post-bootstrap shell refresh:** `./setup` now runs `psh host setup` automatically while skipping module/service provisioning. Open a fresh shell (or `source ~/.bashrc`) before running `psh mod setup` / `psh svc setup` so the ROS environment is available.
+- **Host setup scope:** `psh host setup` only runs installers/scripts by default. Pass `--include-modules` / `--include-services` (or run `psh mod setup` / `psh svc setup` afterward) when you need lifecycle steps.
 - **Profile newline gotchas:** Deno's installer may append `source ~/.deno/env` without a trailing newline. Use `tools/bootstrap/profile_helpers.sh` to add exports to shell profiles so new lines aren't merged into the previous command.
 
 ## Useful references
