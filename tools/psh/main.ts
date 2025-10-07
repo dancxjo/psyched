@@ -7,7 +7,6 @@ import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
   bringModulesDown,
   bringModulesUp,
-  listModules,
   moduleStatuses,
   setupModules,
   teardownModules,
@@ -15,12 +14,17 @@ import {
 import {
   bringServiceDown,
   bringServiceUp,
-  listServices,
   openServiceShell,
   serviceStatuses,
   setupServices,
   teardownServices,
 } from "./lib/service.ts";
+import {
+  defaultModuleTargets,
+  defaultServiceTargets,
+  resolveModuleTargets,
+  resolveServiceTargets,
+} from "./lib/host_targets.ts";
 import { resolveTargetBatches } from "./lib/target_resolver.ts";
 import {
   disableSystemd,
@@ -122,6 +126,10 @@ async function main() {
       ) => {
         const { modules, services } = resolveTargetBatches(targets, {
           preferService: Boolean(service),
+          defaults: {
+            modules: defaultModuleTargets("launch"),
+            services: defaultServiceTargets("up"),
+          },
         });
         for (const svc of services) {
           await bringServiceUp(svc);
@@ -143,6 +151,10 @@ async function main() {
       ) => {
         const { modules, services } = resolveTargetBatches(targets, {
           preferService: Boolean(service),
+          defaults: {
+            modules: defaultModuleTargets("launch"),
+            services: defaultServiceTargets("up"),
+          },
         });
         if (modules.length) {
           await bringModulesDown(modules);
@@ -213,7 +225,7 @@ async function main() {
     .command("setup [modules...:string]")
     .description("Run setup lifecycle for modules")
     .action(async (_, ...modules: string[]) => {
-      const targets = modules.length ? modules : listModules();
+      const targets = resolveModuleTargets("setup", modules);
       await setupModules(targets);
     });
 
@@ -221,7 +233,7 @@ async function main() {
     .command("teardown [modules...:string]")
     .description("Run teardown lifecycle for modules")
     .action(async (_, ...modules: string[]) => {
-      const targets = modules.length ? modules : listModules();
+      const targets = resolveModuleTargets("teardown", modules);
       await teardownModules(targets);
     });
 
@@ -231,7 +243,7 @@ async function main() {
     .option("-v, --verbose", "Show detailed launch diagnostics")
     .action(
       async ({ verbose }: { verbose?: boolean }, ...modules: string[]) => {
-        const targets = modules.length ? modules : listModules();
+        const targets = resolveModuleTargets("launch", modules);
         await bringModulesUp(targets, { verbose });
       },
     );
@@ -240,7 +252,7 @@ async function main() {
     .command("down [modules...:string]")
     .description("Stop module processes")
     .action(async (_, ...modules: string[]) => {
-      const targets = modules.length ? modules : listModules();
+      const targets = resolveModuleTargets("launch", modules);
       await bringModulesDown(targets);
     });
 
@@ -272,7 +284,7 @@ async function main() {
     .command("setup [services...:string]")
     .description("Run setup for services")
     .action(async (_, ...services: string[]) => {
-      const targets = services.length ? services : listServices();
+      const targets = resolveServiceTargets("setup", services);
       await setupServices(targets);
     });
 
@@ -280,7 +292,7 @@ async function main() {
     .command("teardown [services...:string]")
     .description("Run teardown for services")
     .action(async (_, ...services: string[]) => {
-      const targets = services.length ? services : listServices();
+      const targets = resolveServiceTargets("teardown", services);
       await teardownServices(targets);
     });
 
@@ -288,7 +300,7 @@ async function main() {
     .command("up [services...:string]")
     .description("Start services")
     .action(async (_, ...services: string[]) => {
-      const targets = services.length ? services : listServices();
+      const targets = resolveServiceTargets("up", services);
       for (const svc of targets) await bringServiceUp(svc);
     });
 
@@ -296,7 +308,7 @@ async function main() {
     .command("down [services...:string]")
     .description("Stop services")
     .action(async (_, ...services: string[]) => {
-      const targets = services.length ? services : listServices();
+      const targets = resolveServiceTargets("up", services);
       for (const svc of targets) await bringServiceDown(svc);
     });
 

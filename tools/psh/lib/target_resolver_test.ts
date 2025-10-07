@@ -1,14 +1,24 @@
-import {
-  assertEquals,
-  assertThrows,
-} from "$std/testing/asserts.ts";
+import { assertEquals, assertThrows } from "$std/testing/asserts.ts";
 import { resolveTargetBatches } from "./target_resolver.ts";
 
 denoTest("returns all targets when none specified", () => {
-  const catalog = { modules: ["alpha", "shared"], services: ["beta", "shared"] };
+  const catalog = {
+    modules: ["alpha", "shared"],
+    services: ["beta", "shared"],
+  };
   const result = resolveTargetBatches([], { catalog });
   assertEquals(result.modules, ["alpha", "shared"]);
   assertEquals(result.services, ["beta", "shared"]);
+});
+
+denoTest("uses provided defaults when available", () => {
+  const catalog = { modules: ["alpha"], services: ["beta"] };
+  const result = resolveTargetBatches([], {
+    catalog,
+    defaults: { modules: ["alpha"], services: [] },
+  });
+  assertEquals(result.modules, ["alpha"]);
+  assertEquals(result.services, []);
 });
 
 function denoTest(name: string, fn: () => void | Promise<void>) {
@@ -16,14 +26,20 @@ function denoTest(name: string, fn: () => void | Promise<void>) {
 }
 
 denoTest("prefers modules when names overlap by default", () => {
-  const catalog = { modules: ["alpha", "shared"], services: ["beta", "shared"] };
+  const catalog = {
+    modules: ["alpha", "shared"],
+    services: ["beta", "shared"],
+  };
   const result = resolveTargetBatches(["shared"], { catalog });
   assertEquals(result.modules, ["shared"]);
   assertEquals(result.services, []);
 });
 
 denoTest("can prefer services when flag enabled", () => {
-  const catalog = { modules: ["alpha", "shared"], services: ["beta", "shared"] };
+  const catalog = {
+    modules: ["alpha", "shared"],
+    services: ["beta", "shared"],
+  };
   const result = resolveTargetBatches(["shared"], {
     catalog,
     preferService: true,

@@ -18,6 +18,10 @@ export interface ResolveOptions {
    * Override the discovered module/service names for testing.
    */
   catalog?: TargetCatalog;
+  /**
+   * Override the default module/service batches when no targets are provided.
+   */
+  defaults?: Partial<TargetBatches>;
 }
 
 export interface TargetBatches {
@@ -48,8 +52,8 @@ export function resolveTargetBatches(
 
   if (!targets.length) {
     return {
-      modules,
-      services,
+      modules: options.defaults?.modules ?? modules,
+      services: options.defaults?.services ?? services,
     };
   }
 
