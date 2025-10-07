@@ -1,3 +1,4 @@
+import { delay } from "$std/async/delay.ts";
 import { dirname, join, relative, resolve } from "$std/path/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
 import { walkSync } from "$std/fs/walk.ts";
@@ -37,6 +38,10 @@ export interface UnitConfig {
 
 export interface ModuleManifest {
   unit: Record<string, UnitConfig>;
+}
+
+export interface BringModuleUpOptions {
+  verbose?: boolean;
 }
 
 function ensurePidDir(): void {
@@ -94,6 +99,16 @@ function ensureDirectory(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
+function ensureLogFile(path: string): void {
+  ensureDirectory(dirname(path));
+  const file = Deno.openSync(path, {
+    create: true,
+    write: true,
+    append: true,
+  });
+  file.close();
+}
+
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
@@ -105,6 +120,48 @@ export interface ComposeLaunchCommandOptions {
   module: string;
   ttyPath?: string | null;
   callerPid?: number;
+}
+
+const EARLY_EXIT_WINDOW_MS = 500;
+
+export interface LaunchDiagnosticsContext {
+  module: string;
+  launchScript: string;
+  envCommands: string[];
+  logFile: string;
+  command: string;
+}
+
+export function formatLaunchDiagnostics(
+  context: LaunchDiagnosticsContext,
+): string[] {
+  const lines = [
+    `module: ${context.module}`,
+    `launch script: ${context.launchScript}`,
+    `log file: ${context.logFile}`,
+  ];
+  if (context.envCommands.length) {
+    lines.push(`environment bootstrap: ${context.envCommands.join(" && ")}`);
+  } else {
+    lines.push("environment bootstrap: (none)");
+  }
+  lines.push(`spawn command: ${context.command}`);
+  return lines;
+}
+
+export function formatExitSummary(
+  module: string,
+  status: Deno.CommandStatus,
+): string {
+  const summary = status.success
+    ? `[${module}] exited cleanly (code ${status.code ?? 0})`
+    : `[${module}] exited with code ${status.code ?? "unknown"}` +
+      (status.signal ? ` (signal ${status.signal})` : "");
+  return status.success ? colors.yellow(summary) : colors.red(summary);
+}
+
+function logExitSummary(module: string, status: Deno.CommandStatus): void {
+  console.log(formatExitSummary(module, status));
 }
 
 function stdoutRid(): number | null {
@@ -615,7 +672,10 @@ async function unlinkPilotAssets(
   await rebuildPilotManifest(overlayRoot);
 }
 
-export async function bringModuleUp(module: string): Promise<void> {
+export async function bringModuleUp(
+  module: string,
+  options: BringModuleUpOptions = {},
+): Promise<void> {
   const moduleDir = locateModuleDir(module);
   const config = loadModuleManifest(moduleDir, module);
   if (!config.launch) {
@@ -624,9 +684,8 @@ export async function bringModuleUp(module: string): Promise<void> {
   const launchScript = await resolveModuleScript(config.launch, moduleDir);
   console.log(colors.green(`==> Launching module '${module}' in background`));
 
-  const logDir = join(repoRoot(), "log", "modules");
-  ensureDirectory(logDir);
-  const logFile = join(logDir, `${module}.log`);
+  const logFile = join(repoRoot(), "log", "modules", `${module}.log`);
+  ensureLogFile(logFile);
   console.log(colors.dim(`[${module}] writing logs to ${logFile}`));
 
   // Build complete environment setup command
@@ -661,6 +720,18 @@ export async function bringModuleUp(module: string): Promise<void> {
     module,
   });
 
+  if (options.verbose) {
+    for (const line of formatLaunchDiagnostics({
+      module,
+      launchScript,
+      envCommands,
+      logFile,
+      command: launchCommand,
+    })) {
+      console.log(colors.dim(`[${module}] ${line}`));
+    }
+  }
+
   // Launch the script in the background, letting bash handle output
   // duplication to the module log while keeping stdout/stderr attached to the
   // terminal so the process keeps running after psh exits.
@@ -679,15 +750,23 @@ export async function bringModuleUp(module: string): Promise<void> {
     ),
   );
 
-  child.status
+  const statusPromise = child.status;
+
+  const earlyStatus = await Promise.race([
+    statusPromise.then((status) => ({ status })),
+    delay(EARLY_EXIT_WINDOW_MS).then(() => null),
+  ]);
+
+  if (earlyStatus) {
+    clearPid(module);
+    logExitSummary(module, earlyStatus.status);
+    return;
+  }
+
+  statusPromise
     .then((status) => {
-      const summary = status.success
-        ? colors.yellow(`[${module}] exited cleanly (code ${status.code ?? 0})`)
-        : colors.red(
-          `[${module}] exited with code ${status.code ?? "unknown"}` +
-            (status.signal ? ` (signal ${status.signal})` : ""),
-        );
-      console.log(summary);
+      clearPid(module);
+      logExitSummary(module, status);
     })
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -781,9 +860,12 @@ export async function teardownModules(modules: string[]): Promise<void> {
   }
 }
 
-export async function bringModulesUp(modules: string[]): Promise<void> {
+export async function bringModulesUp(
+  modules: string[],
+  options: BringModuleUpOptions = {},
+): Promise<void> {
   for (const module of modules) {
-    await bringModuleUp(module);
+    await bringModuleUp(module, options);
   }
 }
 

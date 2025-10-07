@@ -1,10 +1,18 @@
 import {
   assert,
   assertArrayIncludes,
+  assertEquals,
   assertStringIncludes,
 } from "$std/testing/asserts.ts";
 import { join } from "$std/path/mod.ts";
-import { composeLaunchCommand, listModules, moduleStatuses } from "./module.ts";
+import { colors } from "$cliffy/ansi/colors.ts";
+import {
+  composeLaunchCommand,
+  formatExitSummary,
+  formatLaunchDiagnostics,
+  listModules,
+  moduleStatuses,
+} from "./module.ts";
 import { repoRoot } from "./paths.ts";
 
 Deno.test("listModules discovers known modules", () => {
@@ -84,4 +92,37 @@ Deno.test("composeLaunchCommand escapes single quotes", () => {
     module: "rocky's rig",
   });
   assertStringIncludes(command, `'rocky'"'"'s rig'`);
+});
+
+Deno.test("formatLaunchDiagnostics summarises the launch plan", () => {
+  const lines = formatLaunchDiagnostics({
+    module: "imu",
+    launchScript: "/tmp/launch.sh",
+    envCommands: ["source /env", "psyched::activate --quiet"],
+    logFile: "/logs/imu.log",
+    command: "exec launch --test",
+  });
+  assertEquals(lines, [
+    "module: imu",
+    "launch script: /tmp/launch.sh",
+    "log file: /logs/imu.log",
+    "environment bootstrap: source /env && psyched::activate --quiet",
+    "spawn command: exec launch --test",
+  ]);
+});
+
+Deno.test("formatExitSummary highlights success and failure", () => {
+  const success = colors.stripColor(
+    formatExitSummary("imu", { success: true, code: 0 }),
+  );
+  assertStringIncludes(success, "exited cleanly (code 0)");
+
+  const failure = colors.stripColor(
+    formatExitSummary("imu", {
+      success: false,
+      code: 1,
+      signal: "SIGTERM",
+    }),
+  );
+  assertStringIncludes(failure, "exited with code 1 (signal SIGTERM)");
 });
