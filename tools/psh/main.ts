@@ -30,6 +30,7 @@ import {
   stopSystemd,
   teardownSystemd,
 } from "./lib/systemd.ts";
+import { runSetupWorkflow, runTeardownWorkflow } from "./lib/workflow.ts";
 
 const version = "0.2.0";
 
@@ -41,6 +42,57 @@ async function main() {
     .action(async () => {
       await runWizard();
     });
+
+  root
+    .command("setup")
+    .description("Provision host, modules, and services")
+    .option("--host <hostname:string>", "Host profile to apply")
+    .option("-v, --verbose", "Show detailed provisioning logs")
+    .option("--host-only", "Only run host provisioning")
+    .option("--skip-modules", "Skip module setup stage")
+    .option("--skip-services", "Skip service setup stage")
+    .action(
+      async (
+        options: {
+          host?: string;
+          verbose?: boolean;
+          hostOnly?: boolean;
+          skipModules?: boolean;
+          skipServices?: boolean;
+        },
+      ) => {
+        const skipModules = Boolean(options.hostOnly || options.skipModules);
+        const skipServices = Boolean(options.hostOnly || options.skipServices);
+        await runSetupWorkflow({
+          host: options.host,
+          verbose: options.verbose,
+          skipModules,
+          skipServices,
+        });
+      },
+    );
+
+  root
+    .command("teardown")
+    .description("Tear down modules/services and reset the workspace")
+    .option("--skip-modules", "Skip module teardown stage")
+    .option("--skip-services", "Skip service teardown stage")
+    .option("--skip-clean", "Skip workspace cleanup")
+    .action(
+      async (
+        options: {
+          skipModules?: boolean;
+          skipServices?: boolean;
+          skipClean?: boolean;
+        },
+      ) => {
+        await runTeardownWorkflow({
+          skipModules: Boolean(options.skipModules),
+          skipServices: Boolean(options.skipServices),
+          skipClean: Boolean(options.skipClean),
+        });
+      },
+    );
 
   const hostCommand = new Command()
     .description("Host provisioning commands");
@@ -177,10 +229,12 @@ async function main() {
     .command("up [modules...:string]")
     .description("Launch module processes")
     .option("-v, --verbose", "Show detailed launch diagnostics")
-    .action(async ({ verbose }: { verbose?: boolean }, ...modules: string[]) => {
-      const targets = modules.length ? modules : listModules();
-      await bringModulesUp(targets, { verbose });
-    });
+    .action(
+      async ({ verbose }: { verbose?: boolean }, ...modules: string[]) => {
+        const targets = modules.length ? modules : listModules();
+        await bringModulesUp(targets, { verbose });
+      },
+    );
 
   moduleCommand
     .command("down [modules...:string]")

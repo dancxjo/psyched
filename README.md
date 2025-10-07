@@ -49,7 +49,7 @@ cd psyched
 ./setup  # installs core dependencies, registers the Deno-based psh CLI, and provisions host prerequisites
 ```
 
-`./setup` installs the tooling required to run `psh`, configures mDNS, prepares Deno, and runs `psh host setup` for the current machine. Host provisioning skips module and service lifecycle steps so you can finish configuration once your shell sources the ROS environment. When the script completes, open a new terminal (or `source ~/.bashrc`) before running `psh mod setup` / `psh svc setup`.
+`./setup` installs the tooling required to run `psh`, configures mDNS, prepares Deno, and runs `psh host setup` for the current machine. Host provisioning skips module and service lifecycle steps so you can finish configuration once your shell sources the ROS environment. When the script completes, open a new terminal (or `source ~/.bashrc`) before running `psh setup` to orchestrate `host`, `mod`, and `srv` provisioning (or fall back to `psh mod setup` / `psh srv setup` if you only need part of the workflow).
 
 ### 2. Provision additional machines (optional)
 
@@ -230,6 +230,8 @@ source install/setup.bash
 `psh` wraps common workflows:
 
 - `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.toml`
+- `psh setup` – provision the host, modules, and services in one shot
+- `psh teardown` – tear down modules/services and reset the ROS workspace
 - `psh mod list` – inspect module status
 - `psh mod setup|teardown [module]` – manage symlinks + prep work
 - `psh up|down [target]` – start/stop modules and services (use `--service` to disambiguate names shared with modules)
