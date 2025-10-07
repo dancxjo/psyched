@@ -8,6 +8,16 @@ import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
 
+const moduleOps = {
+  setup: setupModule,
+  launch: bringModuleUp,
+};
+
+const serviceOps = {
+  setup: setupService,
+  start: bringServiceUp,
+};
+
 export interface HostConfig {
   host: { name: string };
   provision?: { scripts?: string[]; installers?: string[] };
@@ -167,6 +177,11 @@ export const __test__ = {
   resolveDependencyAliases,
 };
 
+export const __internals__ = {
+  moduleOps,
+  serviceOps,
+};
+
 function mergeDependencies(
   defaults: string[],
   extras: string[] | undefined,
@@ -199,9 +214,16 @@ async function executeProvisionScript(
   }
 }
 
+/** Options that adjust host provisioning behaviour. */
 export interface ProvisionHostOptions {
+  /** Enable verbose logging for installers and scripts. */
   verbose?: boolean;
+  /** Show installer logs even on success when true. */
   showLogsOnSuccess?: boolean;
+  /** Include module setup/launch tasks when true. */
+  includeModules?: boolean;
+  /** Include service setup/start tasks when true. */
+  includeServices?: boolean;
 }
 
 export async function provisionHost(
@@ -222,6 +244,8 @@ export async function provisionHost(
   const envVerbose = Deno.env.get("PSH_VERBOSE") === "1";
   const verbose = options.verbose ?? envVerbose;
   const showLogsOnSuccess = options.showLogsOnSuccess ?? verbose;
+  const includeModules = options.includeModules ?? false;
+  const includeServices = options.includeServices ?? false;
   const provisionOptions: ProvisionRunOptions = { verbose, showLogsOnSuccess };
   const registry = createTaskRegistry();
 
@@ -263,108 +287,123 @@ export async function provisionHost(
 
   if (!modules.length) {
     console.log(colors.yellow(`No modules configured for host '${name}'.`));
-  }
-
-  for (const directive of modules) {
-    const { name: moduleName, env = {}, setup = true, launch = false } =
-      directive;
-    const moduleDefaults = installers.includes("ros2") ? ["ros2"] : [];
-    const moduleDependencies = mergeDependencies(
-      moduleDefaults,
-      directive.depends_on,
+  } else if (!includeModules) {
+    console.log(
+      colors.yellow(
+        "Module provisioning skipped during host bootstrap. " +
+          "Open a new shell session before running 'psh mod setup' to configure modules.",
+      ),
     );
+  } else {
+    for (const directive of modules) {
+      const { name: moduleName, env = {}, setup = true, launch = false } =
+        directive;
+      const moduleDefaults = installers.includes("ros2") ? ["ros2"] : [];
+      const moduleDependencies = mergeDependencies(
+        moduleDefaults,
+        directive.depends_on,
+      );
 
-    let setupTaskId: string | undefined;
-    const moduleAliases = [`module:${moduleName}`, moduleName];
-    if (setup) {
-      setupTaskId = `module:${moduleName}:setup`;
-      registerTask(registry, {
-        id: setupTaskId,
-        label: `Module '${moduleName}' setup`,
-        dependencies: [...moduleDependencies],
-        run: async () => {
-          const restore = applyEnv(env);
-          try {
-            await setupModule(moduleName);
-            console.log(colors.green(`[${moduleName}] setup complete.`));
-          } finally {
-            restore();
-          }
-        },
-      }, launch ? [] : moduleAliases);
-    }
+      let setupTaskId: string | undefined;
+      const moduleAliases = [`module:${moduleName}`, moduleName];
+      if (setup) {
+        setupTaskId = `module:${moduleName}:setup`;
+        registerTask(registry, {
+          id: setupTaskId,
+          label: `Module '${moduleName}' setup`,
+          dependencies: [...moduleDependencies],
+          run: async () => {
+            const restore = applyEnv(env);
+            try {
+              await moduleOps.setup(moduleName);
+              console.log(colors.green(`[${moduleName}] setup complete.`));
+            } finally {
+              restore();
+            }
+          },
+        }, launch ? [] : moduleAliases);
+      }
 
-    if (launch) {
-      const launchTaskId = `module:${moduleName}:launch`;
-      const launchDeps = setupTaskId
-        ? mergeDependencies(moduleDependencies, [setupTaskId])
-        : [...moduleDependencies];
-      registerTask(registry, {
-        id: launchTaskId,
-        label: `Module '${moduleName}' launch`,
-        dependencies: launchDeps,
-        run: async () => {
-          const restore = applyEnv(env);
-          try {
-            await bringModuleUp(moduleName);
-          } finally {
-            restore();
-          }
-        },
-      }, moduleAliases);
+      if (launch) {
+        const launchTaskId = `module:${moduleName}:launch`;
+        const launchDeps = setupTaskId
+          ? mergeDependencies(moduleDependencies, [setupTaskId])
+          : [...moduleDependencies];
+        registerTask(registry, {
+          id: launchTaskId,
+          label: `Module '${moduleName}' launch`,
+          dependencies: launchDeps,
+          run: async () => {
+            const restore = applyEnv(env);
+            try {
+              await moduleOps.launch(moduleName);
+            } finally {
+              restore();
+            }
+          },
+        }, moduleAliases);
+      }
     }
   }
 
   if (!services.length) {
     console.log(colors.yellow(`No services configured for host '${name}'.`));
-  }
-
-  for (const directive of services) {
-    const { name: serviceName, env = {}, setup = true, up = false } = directive;
-    const serviceDefaults = installers.includes("docker") ? ["docker"] : [];
-    const serviceDependencies = mergeDependencies(
-      serviceDefaults,
-      directive.depends_on,
+  } else if (!includeServices) {
+    console.log(
+      colors.yellow(
+        "Service provisioning skipped during host bootstrap. " +
+          "Run 'psh svc setup' after refreshing your shell if services require setup.",
+      ),
     );
+  } else {
+    for (const directive of services) {
+      const { name: serviceName, env = {}, setup = true, up = false } =
+        directive;
+      const serviceDefaults = installers.includes("docker") ? ["docker"] : [];
+      const serviceDependencies = mergeDependencies(
+        serviceDefaults,
+        directive.depends_on,
+      );
 
-    let setupTaskId: string | undefined;
-    const serviceAliases = [`service:${serviceName}`, serviceName];
-    if (setup) {
-      setupTaskId = `service:${serviceName}:setup`;
-      registerTask(registry, {
-        id: setupTaskId,
-        label: `Service '${serviceName}' setup`,
-        dependencies: [...serviceDependencies],
-        run: async () => {
-          const restore = applyEnv(env);
-          try {
-            await setupService(serviceName);
-            console.log(colors.green(`[${serviceName}] setup complete.`));
-          } finally {
-            restore();
-          }
-        },
-      }, up ? [] : serviceAliases);
-    }
+      let setupTaskId: string | undefined;
+      const serviceAliases = [`service:${serviceName}`, serviceName];
+      if (setup) {
+        setupTaskId = `service:${serviceName}:setup`;
+        registerTask(registry, {
+          id: setupTaskId,
+          label: `Service '${serviceName}' setup`,
+          dependencies: [...serviceDependencies],
+          run: async () => {
+            const restore = applyEnv(env);
+            try {
+              await serviceOps.setup(serviceName);
+              console.log(colors.green(`[${serviceName}] setup complete.`));
+            } finally {
+              restore();
+            }
+          },
+        }, up ? [] : serviceAliases);
+      }
 
-    if (up) {
-      const startTaskId = `service:${serviceName}:start`;
-      const startDeps = setupTaskId
-        ? mergeDependencies(serviceDependencies, [setupTaskId])
-        : [...serviceDependencies];
-      registerTask(registry, {
-        id: startTaskId,
-        label: `Service '${serviceName}' start`,
-        dependencies: startDeps,
-        run: async () => {
-          const restore = applyEnv(env);
-          try {
-            await bringServiceUp(serviceName);
-          } finally {
-            restore();
-          }
-        },
-      }, serviceAliases);
+      if (up) {
+        const startTaskId = `service:${serviceName}:start`;
+        const startDeps = setupTaskId
+          ? mergeDependencies(serviceDependencies, [setupTaskId])
+          : [...serviceDependencies];
+        registerTask(registry, {
+          id: startTaskId,
+          label: `Service '${serviceName}' start`,
+          dependencies: startDeps,
+          run: async () => {
+            const restore = applyEnv(env);
+            try {
+              await serviceOps.start(serviceName);
+            } finally {
+              restore();
+            }
+          },
+        }, serviceAliases);
+      }
     }
   }
 

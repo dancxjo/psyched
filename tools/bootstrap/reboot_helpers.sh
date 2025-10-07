@@ -120,3 +120,15 @@ psyched_bootstrap::write_reboot_sentinel() {
     mkdir -p "$(dirname "${sentinel_path}")"
     printf '%s\n' "${boot_time}" > "${sentinel_path}"
 }
+
+# Remove the reboot sentinel so subsequent provisioning commands proceed
+# without requiring a full system restart. Safe to call even when the sentinel
+# does not exist.
+psyched_bootstrap::clear_reboot_sentinel() {
+    local sentinel_path="${1:-}"
+    if [[ -z "${sentinel_path}" ]]; then
+        sentinel_path="$(psyched_bootstrap::reboot_sentinel_path)"
+    fi
+
+    rm -f "${sentinel_path}" || true
+}

@@ -112,15 +112,31 @@ async function main() {
     .command("setup [hosts...:string]")
     .description("Provision the local or specified host(s)")
     .option("-v, --verbose", "Show detailed provisioning logs")
-    .action(async ({ verbose }: { verbose?: boolean }, ...hosts: string[]) => {
-      if (!hosts.length) {
-        await provisionHost(undefined, { verbose });
-      } else {
-        for (const host of hosts) {
-          await provisionHost(host, { verbose });
+    .option("--include-modules", "Include module provisioning tasks")
+    .option("--include-services", "Include service provisioning tasks")
+    .action(
+      async (
+        {
+          verbose,
+          includeModules,
+          includeServices,
+        }: {
+          verbose?: boolean;
+          includeModules?: boolean;
+          includeServices?: boolean;
+        },
+        ...hosts: string[]
+      ) => {
+        const options = { verbose, includeModules, includeServices };
+        if (!hosts.length) {
+          await provisionHost(undefined, options);
+        } else {
+          for (const host of hosts) {
+            await provisionHost(host, options);
+          }
         }
-      }
-    });
+      },
+    );
 
   root.command("host", hostCommand);
 

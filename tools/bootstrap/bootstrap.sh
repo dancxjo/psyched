@@ -33,13 +33,9 @@ unset -f psyched_bootstrap__resolve_script_dir
 # symlink layers.
 script_dir="$(psyched_bootstrap::script_dir "${BASH_SOURCE[0]}")"
 
-if ! psyched_bootstrap::require_reboot_if_pending; then
-    cat >&2 <<'MSG'
-A previous bootstrap run requested a system reboot. Please restart the
-machine before rerunning the bootstrap or provisioning ROS modules.
-MSG
-    exit 2
-fi
+# Clear any legacy reboot sentinel so the new bootstrap flow can continue
+# without forcing a system restart.
+psyched_bootstrap::clear_reboot_sentinel
 sudo apt-get update
 
 CORE_PACKAGES=(
@@ -229,8 +225,14 @@ ensure_psyched_shell() {
 
 ensure_psyched_shell
 
-psyched_bootstrap::write_reboot_sentinel
+echo
+echo "Running 'psh host setup' to provision host prerequisites..."
+(
+    cd "${repo_root}" >/dev/null 2>&1
+    psh host setup
+)
 
-echo "Bootstrap complete."
-echo "Please reboot the system before running 'psh host setup' or 'psh mod setup'."
-echo "After reboot, run 'psh' to continue provisioning modules and services."
+echo
+echo "Bootstrap and host provisioning complete."
+echo "Open a new terminal (or source ~/.bashrc) before running 'psh mod setup' and 'psh svc setup' to finish provisioning."
+echo "To rerun everything in one pass later, use 'psh host setup --include-modules --include-services'."

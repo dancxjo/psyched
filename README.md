@@ -46,10 +46,10 @@ Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orche
 ```bash
 git clone https://github.com/dancxjo/psyched.git
 cd psyched
-./setup  # installs core dependencies, registers the Deno-based psh CLI, then asks you to reboot
+./setup  # installs core dependencies, registers the Deno-based psh CLI, and provisions host prerequisites
 ```
 
-`./setup` installs just the tools required to run `psh`, configures mDNS, prepares Deno, and writes a reboot sentinel. **Reboot immediately after the bootstrap finishes, then run `psh` to continue provisioning.** The sentinel keeps ROS tooling cleanly staged by blocking module setup until the system has restarted.
+`./setup` installs the tooling required to run `psh`, configures mDNS, prepares Deno, and runs `psh host setup` for the current machine. Host provisioning skips module and service lifecycle steps so you can finish configuration once your shell sources the ROS environment. When the script completes, open a new terminal (or `source ~/.bashrc`) before running `psh mod setup` / `psh svc setup`.
 
 ### 2. Provision additional machines (optional)
 
@@ -85,7 +85,7 @@ up = true
 depends_on = ["docker"]
 ```
 
-During `psh host setup`, each `modules` entry runs `psh mod setup <name>` (unless `setup = false`) and optionally launches the module when `launch = true`. The optional `env` map supplies environment variables to those lifecycle steps. Likewise, `services` entries trigger `psh svc setup <name>` and start the Compose stack when `up = true`.
+When you add `--include-modules` or `--include-services`, `psh host setup` will run the corresponding lifecycle commands (`psh mod setup <name>` or `psh svc setup <name>`) and optionally launch/start the targets. Without those flags the command only runs installers and scripts, printing reminders to finish provisioning later.
 
 ### 3. Bring modules online
 
