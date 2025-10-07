@@ -62,9 +62,10 @@ async function main() {
     .command("up [targets...:string]")
     .description("Launch modules and services")
     .option("--service", "Prefer services when resolving ambiguous names")
+    .option("-v, --verbose", "Show detailed launch diagnostics")
     .action(
       async (
-        { service }: { service?: boolean },
+        { service, verbose }: { service?: boolean; verbose?: boolean },
         ...targets: string[]
       ) => {
         const { modules, services } = resolveTargetBatches(targets, {
@@ -74,7 +75,7 @@ async function main() {
           await bringServiceUp(svc);
         }
         if (modules.length) {
-          await bringModulesUp(modules);
+          await bringModulesUp(modules, { verbose });
         }
       },
     );
@@ -175,9 +176,10 @@ async function main() {
   moduleCommand
     .command("up [modules...:string]")
     .description("Launch module processes")
-    .action(async (_, ...modules: string[]) => {
+    .option("-v, --verbose", "Show detailed launch diagnostics")
+    .action(async ({ verbose }: { verbose?: boolean }, ...modules: string[]) => {
       const targets = modules.length ? modules : listModules();
-      await bringModulesUp(targets);
+      await bringModulesUp(targets, { verbose });
     });
 
   moduleCommand
