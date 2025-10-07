@@ -22,16 +22,33 @@ if ! grep -Eq 'find_package\(cv_bridge' "${CMAKE_FILE}"; then
   fi
 fi
 
-for target in kinect_ros2_component kinect_ros2_node; do
-  if ! grep -E "ament_target_dependencies\(${target}" "${CMAKE_FILE}" | grep -q cv_bridge; then
-    awk -v tgt="ament_target_dependencies(${target}" '
-      BEGIN{in_block=0}
-      index($0,tgt){print;in_block=1;next}
-      in_block&&/\)/{print "  cv_bridge";print;in_block=0;next}
-      {print}
-    ' "${CMAKE_FILE}" >"${CMAKE_FILE}.tmp"
-    mv "${CMAKE_FILE}.tmp" "${CMAKE_FILE}"
+ensure_target_links_with_cv_bridge() {
+  local target="$1"
+  if grep -E "target_link_libraries *\\(${target}" "${CMAKE_FILE}" >/dev/null; then
+    if ! sed -n "/target_link_libraries\\(${target}/,/)/p" "${CMAKE_FILE}" | grep -q "cv_bridge"; then
+      awk -v tgt="target_link_libraries(${target}" '
+        BEGIN{in_block=0}
+        index($0,tgt){print;in_block=1;next}
+        in_block&&/\)/{print "    cv_bridge::cv_bridge";print;in_block=0;next}
+        {print}
+      ' "${CMAKE_FILE}" >"${CMAKE_FILE}.tmp"
+      mv "${CMAKE_FILE}.tmp" "${CMAKE_FILE}"
+    fi
+  elif grep -E "ament_target_dependencies *\\(${target}" "${CMAKE_FILE}" >/dev/null; then
+    if ! grep -E "ament_target_dependencies\(${target}" "${CMAKE_FILE}" | grep -q cv_bridge; then
+      awk -v tgt="ament_target_dependencies(${target}" '
+        BEGIN{in_block=0}
+        index($0,tgt){print;in_block=1;next}
+        in_block&&/\)/{print "  cv_bridge";print;in_block=0;next}
+        {print}
+      ' "${CMAKE_FILE}" >"${CMAKE_FILE}.tmp"
+      mv "${CMAKE_FILE}.tmp" "${CMAKE_FILE}"
+    fi
   fi
+}
+
+for target in kinect_ros2_component kinect_ros2_node; do
+  ensure_target_links_with_cv_bridge "${target}"
 done
 
 HEADER_FILE="${SRC_DIR}/kinect_ros2/include/kinect_ros2/kinect_ros2_component.hpp"
