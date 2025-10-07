@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-nocheck -- Telemetry parsing depends on loosely-typed cockpit topic payloads.
 import { useMemo } from "https://esm.sh/preact@10.22.0/hooks";
 import {
   type ConnectionStatus,

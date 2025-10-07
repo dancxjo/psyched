@@ -28,12 +28,11 @@ const modules: ModuleLink[] = [
   {
     slug: "eye",
     name: "Eye Module",
-    description:
-      "Stream Kinect RGB-D telemetry for situational awareness.",
+    description: "Stream Kinect RGB-D telemetry for situational awareness.",
   },
 ];
 
-export default define.route(() => {
+export default define.page(() => {
   return (
     <section class="content">
       <h1>Psyched Pilot</h1>

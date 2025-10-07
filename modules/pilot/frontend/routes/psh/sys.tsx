@@ -1,16 +1,21 @@
+import { page } from "fresh";
 import PshSystemdManager from "../../islands/PshSystemdManager.tsx";
 import { define } from "../../utils.ts";
 import { listModules } from "../../../../../tools/psh/lib/module.ts";
 
-export const handler = {
-  GET(_req: Request, ctx: any) {
-    const modules = listModules();
-    return ctx.render({ modules });
-  },
-};
+interface Data {
+  modules: string[];
+}
 
-export default define.route((_, ctx) => {
-  const { modules } = ctx.data as { modules: string[] };
+export const handler = define.handlers<Data>({
+  GET(_ctx) {
+    const modules = listModules();
+    return page<Data>({ modules });
+  },
+});
+
+export default define.page<typeof handler>(({ data }) => {
+  const { modules } = data;
   return (
     <section class="content">
       <h1>Systemd Integration</h1>

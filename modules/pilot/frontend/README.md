@@ -1,38 +1,20 @@
-# Psyched Pilot UI (Fresh)
+# Psyched Pilot UI
 
-This directory hosts the operator interface for Psyched powered by [Fresh](https://fresh.deno.dev/) and [Deno](https://deno.land/).
+This Fresh 2 + Vite workspace hosts the operator console for Psyched. The
+cockpit pulls ROS telemetry over the websocket bridge served by the
+`pilot_cockpit` Python package and reuses PSH helpers for orchestration tasks.
 
-## Getting started
+## Commands
 
-Install Deno (the PSH setup flow now installs it automatically on provision). Then run the development server:
+- `deno task dev` – run the Vite-powered dev server with hot reloading
+- `deno task build` – create a production bundle in `.fresh`
+- `deno task check` – format check, lint, and type-check the codebase
 
-```bash
-deno task dev
-```
+## Module overlays
 
-Open http://localhost:8000 to explore the pilot console.
+Use `psh mod setup <name>` to link a module's `pilot/` directory into this
+frontend. The CLI automatically regenerates Fresh manifests after linking or
+tearing down overlays, so you rarely need manual intervention.
 
-## Project layout
-
-- `main.ts` – Fresh server entry point.
-- `routes/` – HTTP route handlers and page components.
-	- `modules/imu.tsx` – Read-only IMU telemetry view (also exposed under `/modules/imu`).
-- `components/` – Shared UI components such as `ImuReadout`.
-- `modules/<module>/components|routes|static|islands` – Symlinked entry points per module for pilot integration.
-- `static/` – Static assets served as-is.
-
-## Linking modules to pilot UI
-
-Each module can expose pilot controls by placing files under `modules/<name>/pilot/{components,routes,static,islands}`. Prepare the overlay with:
-
-```bash
-psh setup-module <name>
-```
-
-When a module is torn down, run:
-
-```bash
-psh teardown-module <name>
-```
-
-These commands manage the symlinks into the Fresh project so the assets are available to the pilot runtime without touching the launch/shutdown lifecycle.
+Symlinks land under `components/`, `islands/`, `routes/`, and `static/`. Avoid
+creating real files that would conflict with those paths—let `psh` manage them.

@@ -52,7 +52,9 @@ function toDataUrl(message: EncodedImageMessage | undefined) {
   if (!message?.data || !message?.format) {
     return null;
   }
-  const mime = message.format === "jpeg" ? "image/jpeg" : message.format === "png"
+  const mime = message.format === "jpeg"
+    ? "image/jpeg"
+    : message.format === "png"
     ? "image/png"
     : "application/octet-stream";
   return `data:${mime};base64,${message.data}`;
@@ -102,8 +104,14 @@ export default function KinectStreamPanel({
     initialValue: DEFAULT_DEPTH,
   });
 
-  const colorUrl = useMemo(() => toDataUrl(color.data), [color.data?.data, color.data?.format]);
-  const depthUrl = useMemo(() => toDataUrl(depth.data), [depth.data?.data, depth.data?.format]);
+  const colorUrl = useMemo(() => toDataUrl(color.data), [
+    color.data?.data,
+    color.data?.format,
+  ]);
+  const depthUrl = useMemo(() => toDataUrl(depth.data), [
+    depth.data?.data,
+    depth.data?.format,
+  ]);
 
   return (
     <section class="kinect-stream">
@@ -131,7 +139,8 @@ export default function KinectStreamPanel({
               <div>
                 <dt>Size</dt>
                 <dd>
-                  {color.data?.width ?? 0}×{color.data?.height ?? 0} · {color.data?.encoding ?? "unknown"}
+                  {color.data?.width ?? 0}×{color.data?.height ?? 0} ·{" "}
+                  {color.data?.encoding ?? "unknown"}
                 </dd>
               </div>
               <div>
@@ -140,16 +149,22 @@ export default function KinectStreamPanel({
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd>{formatTimestamp(color.data?.timestamp ?? color.data?.received_at)}</dd>
+                <dd>
+                  {formatTimestamp(
+                    color.data?.timestamp ?? color.data?.received_at,
+                  )}
+                </dd>
               </div>
             </dl>
           </header>
           <div class="kinect-stream__image">
-            {colorUrl ? (
-              <img alt="Kinect RGB" src={colorUrl} />
-            ) : (
-              <p class="kinect-stream__placeholder">Waiting for RGB frames…</p>
-            )}
+            {colorUrl
+              ? <img alt="Kinect RGB" src={colorUrl} />
+              : (
+                <p class="kinect-stream__placeholder">
+                  Waiting for RGB frames…
+                </p>
+              )}
           </div>
         </figure>
 
@@ -164,7 +179,8 @@ export default function KinectStreamPanel({
               <div>
                 <dt>Size</dt>
                 <dd>
-                  {depth.data?.width ?? 0}×{depth.data?.height ?? 0} · {depth.data?.encoding ?? "unknown"}
+                  {depth.data?.width ?? 0}×{depth.data?.height ?? 0} ·{" "}
+                  {depth.data?.encoding ?? "unknown"}
                 </dd>
               </div>
               <div>
@@ -177,16 +193,22 @@ export default function KinectStreamPanel({
               </div>
               <div>
                 <dt>Updated</dt>
-                <dd>{formatTimestamp(depth.data?.timestamp ?? depth.data?.received_at)}</dd>
+                <dd>
+                  {formatTimestamp(
+                    depth.data?.timestamp ?? depth.data?.received_at,
+                  )}
+                </dd>
               </div>
             </dl>
           </header>
           <div class="kinect-stream__image">
-            {depthUrl ? (
-              <img alt="Kinect depth" src={depthUrl} />
-            ) : (
-              <p class="kinect-stream__placeholder">Waiting for depth frames…</p>
-            )}
+            {depthUrl
+              ? <img alt="Kinect depth" src={depthUrl} />
+              : (
+                <p class="kinect-stream__placeholder">
+                  Waiting for depth frames…
+                </p>
+              )}
           </div>
         </figure>
       </div>

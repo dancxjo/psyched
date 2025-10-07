@@ -1,16 +1,18 @@
-import {
-    defineApp,
-    defineConfig,
-    defineLayout,
-    defineRoute,
-} from "$fresh/server.ts";
+import { createDefine } from "fresh";
 
-export const define = {
-    app: defineApp,
-    layout: defineLayout,
-    route: defineRoute,
-    page: defineRoute,
-    config: defineConfig,
+export interface BuildInfo {
+  version?: string;
+}
+
+export interface State {
+  buildInfo?: BuildInfo;
+}
+
+const baseDefine = createDefine<State>();
+
+export const define: typeof baseDefine & {
+  route: typeof baseDefine.page;
+} = {
+  ...baseDefine,
+  route: baseDefine.page,
 };
-
-export type DefineHelpers = typeof define;

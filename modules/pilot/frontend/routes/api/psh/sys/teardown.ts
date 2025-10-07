@@ -1,17 +1,14 @@
-import { Handler } from "$fresh/server.ts";
+import { define } from "../../../../utils.ts";
 import { teardownSystemd } from "../../../../../../../tools/psh/lib/systemd.ts";
 
 interface RequestBody {
   module: string;
 }
 
-export const handler: Handler = (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
-
-  return req.json().then((body: RequestBody) => {
-    if (!body.module) {
+export const handler = define.handlers({
+  async POST(ctx) {
+    const body = await ctx.req.json().catch(() => null) as RequestBody | null;
+    if (!body?.module) {
       return new Response(
         JSON.stringify({ ok: false, error: "module required" }),
         {
@@ -32,10 +29,5 @@ export const handler: Handler = (req) => {
         headers: { "content-type": "application/json" },
       });
     }
-  }).catch(() =>
-    new Response(JSON.stringify({ ok: false, error: "invalid body" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    })
-  );
-};
+  },
+});

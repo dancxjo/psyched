@@ -102,7 +102,9 @@ export default function FootControlPanel() {
     ? telemetryStatus
     : "idle";
   const cmdVelLabel = STATUS_LABELS[cmdVelStatus] ?? "Unknown";
-  const cmdVelBadgeVariant = STATUS_LABELS[cmdVelStatus] ? cmdVelStatus : "idle";
+  const cmdVelBadgeVariant = STATUS_LABELS[cmdVelStatus]
+    ? cmdVelStatus
+    : "idle";
 
   const batteryPercentage = telemetry?.battery?.percentage ?? null;
   const batteryRatio = useMemo(() => {
@@ -110,7 +112,10 @@ export default function FootControlPanel() {
     if (typeof ratio === "number" && Number.isFinite(ratio)) {
       return clamp(ratio, 0, 1);
     }
-    if (typeof batteryPercentage === "number" && Number.isFinite(batteryPercentage)) {
+    if (
+      typeof batteryPercentage === "number" &&
+      Number.isFinite(batteryPercentage)
+    ) {
       return clamp(batteryPercentage / 100, 0, 1);
     }
     return null;
@@ -125,12 +130,16 @@ export default function FootControlPanel() {
         value: formatNumber(telemetry?.battery?.temperature_c, 0),
       },
     ],
-    [telemetry?.battery?.voltage_v, telemetry?.battery?.current_a, telemetry?.battery?.temperature_c],
+    [
+      telemetry?.battery?.voltage_v,
+      telemetry?.battery?.current_a,
+      telemetry?.battery?.temperature_c,
+    ],
   );
 
   const modeLabel = telemetry?.status?.mode ?? "—";
-  const chargingLabel =
-    telemetry?.status?.charging_state ?? telemetry?.battery?.charging_state ?? "—";
+  const chargingLabel = telemetry?.status?.charging_state ??
+    telemetry?.battery?.charging_state ?? "—";
   const lastCommandLabel = formatRelativeMillis(
     telemetry?.status?.last_command_ms,
   );
@@ -142,7 +151,10 @@ export default function FootControlPanel() {
 
   type StickPosition = { x: number; y: number };
   const joystickRef = useRef<HTMLDivElement | null>(null);
-  const [stickPosition, setStickPosition] = useState<StickPosition>({ x: 0, y: 0 });
+  const [stickPosition, setStickPosition] = useState<StickPosition>({
+    x: 0,
+    y: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const activePointerId = useRef<number | null>(null);
 
@@ -287,15 +299,20 @@ export default function FootControlPanel() {
           <div>
             <h1 class="foot-panel__title">Create base</h1>
             <p class="foot-panel__description">
-              Compact drive, power, and hazard console for Pete&apos;s drivetrain.
+              Compact drive, power, and hazard console for Pete&apos;s
+              drivetrain.
             </p>
           </div>
         </div>
         <div class="foot-panel__status-chips">
-          <span class={`foot-panel__badge foot-panel__badge--${telemetryBadgeVariant}`}>
+          <span
+            class={`foot-panel__badge foot-panel__badge--${telemetryBadgeVariant}`}
+          >
             {connectionLabel}
           </span>
-          <span class={`foot-panel__badge foot-panel__badge--${cmdVelBadgeVariant}`}>
+          <span
+            class={`foot-panel__badge foot-panel__badge--${cmdVelBadgeVariant}`}
+          >
             {cmdVelLabel}
           </span>
         </div>
@@ -409,7 +426,10 @@ export default function FootControlPanel() {
             <div class="foot-panel__hazard-group">
               <h3>Cliffs</h3>
               <div class="foot-panel__hazard-dots">
-                <span class={hazardClass(hazards.cliff_left)} title="Left cliff">
+                <span
+                  class={hazardClass(hazards.cliff_left)}
+                  title="Left cliff"
+                >
                   L
                 </span>
                 <span
@@ -424,7 +444,10 @@ export default function FootControlPanel() {
                 >
                   FR
                 </span>
-                <span class={hazardClass(hazards.cliff_right)} title="Right cliff">
+                <span
+                  class={hazardClass(hazards.cliff_right)}
+                  title="Right cliff"
+                >
                   R
                 </span>
               </div>
@@ -450,8 +473,8 @@ export default function FootControlPanel() {
           </button>
         </header>
         <p class="foot-panel__joystick-description">
-          Drag the pad to command velocities (±{MAX_LINEAR_X.toFixed(2)} m/s,
-          ±{MAX_ANGULAR_Z.toFixed(2)} rad/s). Release to halt.
+          Drag the pad to command velocities (±{MAX_LINEAR_X.toFixed(2)}{" "}
+          m/s, ±{MAX_ANGULAR_Z.toFixed(2)} rad/s). Release to halt.
         </p>
         <div
           ref={joystickRef}
@@ -621,5 +644,7 @@ function formatRelativeMillis(value?: number) {
 }
 
 function hazardClass(active?: boolean) {
-  return `foot-panel__hazard-dot${active ? " foot-panel__hazard-dot--active" : ""}`;
+  return `foot-panel__hazard-dot${
+    active ? " foot-panel__hazard-dot--active" : ""
+  }`;
 }

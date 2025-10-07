@@ -1,16 +1,21 @@
+import { page } from "fresh";
 import PshHostProvisioner from "../../islands/PshHostProvisioner.tsx";
 import { define } from "../../utils.ts";
 import { availableHosts } from "../../../../../tools/psh/lib/host.ts";
 
-export const handler = {
-  GET(_req: Request, ctx: any) {
-    const hosts = availableHosts();
-    return ctx.render({ hosts });
-  },
-};
+interface Data {
+  hosts: string[];
+}
 
-export default define.route((_, ctx) => {
-  const { hosts } = ctx.data as { hosts: string[] };
+export const handler = define.handlers<Data>({
+  GET(_ctx) {
+    const hosts = availableHosts();
+    return page<Data>({ hosts });
+  },
+});
+
+export default define.page<typeof handler>(({ data }) => {
+  const { hosts } = data;
   return (
     <section class="content">
       <h1>Host Setup Wizard</h1>

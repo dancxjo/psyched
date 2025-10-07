@@ -2,6 +2,7 @@
 
 import dev from "$fresh/dev.ts";
 import config from "./fresh.config.ts";
-import manifest from "./fresh.gen.ts";
 
-await dev(import.meta.url, "./main.ts", config, manifest);
+import "$std/dotenv/load.ts";
+
+await dev(import.meta.url, "./main.ts", config);
