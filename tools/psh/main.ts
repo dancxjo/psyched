@@ -1,7 +1,7 @@
 import { Command } from "$cliffy/command/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { runWizard } from "./lib/wizard.ts";
-import { provisionHost } from "./lib/host.ts";
+import { HostConfigNotFoundError, provisionHost } from "./lib/host.ts";
 import { buildWorkspace } from "./lib/build.ts";
 import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
@@ -333,6 +333,44 @@ async function main() {
   await root.parse(Deno.args);
 }
 
+async function handleTopLevelError(error: unknown): Promise<void> {
+  const reason = error instanceof Error ? error : new Error(String(error));
+  if (reason instanceof HostConfigNotFoundError) {
+    console.error(colors.red(reason.message));
+    console.log();
+    try {
+      await runWizard({
+        detectedHostname: reason.hostname,
+        interactiveToggles: true,
+      });
+    } catch (wizardError) {
+      const wizardReason = wizardError instanceof Error
+        ? wizardError
+        : new Error(String(wizardError));
+      console.error(
+        colors.red(
+          `Failed to launch provisioning wizard: ${wizardReason.message}`,
+        ),
+      );
+      if (wizardReason.stack) {
+        console.error(colors.dim(wizardReason.stack));
+      }
+      Deno.exit(1);
+    }
+    return;
+  }
+
+  console.error(colors.red(`Unexpected error: ${reason.message}`));
+  if (reason.stack) {
+    console.error(colors.dim(reason.stack));
+  }
+  Deno.exit(1);
+}
+
 if (import.meta.main) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    await handleTopLevelError(error);
+  }
 }

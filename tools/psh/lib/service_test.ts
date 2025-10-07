@@ -1,5 +1,10 @@
 import { assert, assertEquals } from "$std/testing/asserts.ts";
-import { ServiceConfig, ServiceShellOptions, __test__, listServices } from "./service.ts";
+import {
+  __test__,
+  listServices,
+  ServiceConfig,
+  ServiceShellOptions,
+} from "./service.ts";
 
 const { buildShellArgs } = __test__;
 
@@ -61,6 +66,8 @@ Deno.test("buildShellArgs honors overrides", () => {
     "-p",
     "ros2-dev",
     "exec",
+    "-u",
+    "2000:2000",
     "workspace",
     "bash",
     "-lc",

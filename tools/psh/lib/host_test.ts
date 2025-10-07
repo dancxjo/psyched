@@ -1,6 +1,11 @@
-import { assertEquals, assertThrows } from "$std/testing/asserts.ts";
+import {
+  assertEquals,
+  assertInstanceOf,
+  assertThrows,
+} from "$std/testing/asserts.ts";
 import { join } from "$std/path/mod.ts";
 import * as host from "./host.ts";
+import { hostsRoot } from "./paths.ts";
 
 const { createTaskRegistry, registerTask, resolveDependencyAliases } =
   (host as unknown as {
@@ -40,7 +45,7 @@ async function withTempRepo(
   hostToml: string,
   fn: () => Promise<void>,
 ): Promise<void> {
-  const hostsDir = join(Deno.cwd(), "hosts");
+  const hostsDir = hostsRoot();
   const hostPath = join(hostsDir, `${hostName}.toml`);
   try {
     await Deno.lstat(hostPath);
@@ -154,6 +159,18 @@ Deno.test("registerTask rejects conflicting aliases", () => {
     Error,
     "Alias 'pilot' already registered for task 'module:pilot:launch'",
   );
+});
+
+Deno.test("locateHostConfig throws HostConfigNotFoundError for unknown host", () => {
+  const error = assertThrows(
+    () => {
+      host.locateHostConfig("definitely_missing_host");
+    },
+    Error,
+    "No host config found",
+  );
+  assertInstanceOf(error, host.HostConfigNotFoundError);
+  assertEquals(error.hostname, "definitely_missing_host");
 });
 
 Deno.test(
