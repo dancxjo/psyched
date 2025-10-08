@@ -12,6 +12,88 @@ export const globalWindow = typeof globalThis === "object" &&
 
 export const isBrowser = Boolean(globalWindow?.WebSocket);
 
+function normaliseProtocol(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalised = value.toLowerCase().replace(/:$/, "");
+  if (normalised === "ws" || normalised === "wss") return normalised;
+  if (normalised === "https") return "wss";
+  if (normalised === "http") return "ws";
+  return normalised;
+}
+
+function tryParseUrl(value: string): URL | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const attempts = new Set<string>();
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+  if (hasScheme) {
+    attempts.add(trimmed);
+  } else {
+    attempts.add(`http://${trimmed}`);
+    attempts.add(`ws://${trimmed}`);
+  }
+
+  const colonCount = (trimmed.match(/:/g) ?? []).length;
+  if (!trimmed.includes("[") && colonCount > 1) {
+    attempts.add(`http://[${trimmed}]`);
+    attempts.add(`ws://[${trimmed}]`);
+
+    const lastColon = trimmed.lastIndexOf(":");
+    if (lastColon !== -1) {
+      const hostPart = trimmed.slice(0, lastColon);
+      const portPart = trimmed.slice(lastColon + 1);
+      if (/^\d+$/.test(portPart)) {
+        attempts.add(`http://[${hostPart}]:${portPart}`);
+        attempts.add(`ws://[${hostPart}]:${portPart}`);
+      }
+    }
+  }
+
+  for (const candidate of attempts) {
+    try {
+      return new URL(candidate);
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
+}
+
+function parseHostPort(value: string): { host?: string; port?: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return {};
+  }
+
+  if (trimmed.startsWith("[") && trimmed.includes("]")) {
+    const end = trimmed.indexOf("]");
+    const host = trimmed.slice(1, end);
+    const rest = trimmed.slice(end + 1);
+    const port = rest.startsWith(":") ? rest.slice(1) : undefined;
+    return { host, port };
+  }
+
+  const colonCount = (trimmed.match(/:/g) ?? []).length;
+  if (colonCount === 1) {
+    const [host, port] = trimmed.split(":");
+    if (host) {
+      return { host, port: port?.trim() ? port : undefined };
+    }
+  }
+
+  return { host: trimmed };
+}
+
+function wrapIpv6Host(host: string): string {
+  if (host.startsWith("[") && host.endsWith("]")) {
+    return host;
+  }
+  return host.includes(":") ? `[${host}]` : host;
+}
+
 export function readBootstrappedConfig(): CockpitBootstrapConfig | undefined {
   if (!isBrowser || !globalWindow?.document?.body?.dataset) {
     return undefined;
@@ -41,23 +123,43 @@ export function defaultCockpitUrl(): string {
   if (bootstrap?.url) {
     return bootstrap.url;
   }
-  const normalisedProtocol = (() => {
-    const raw = bootstrap?.protocol?.toLowerCase();
-    if (!raw) return protocol === "https:" ? "wss" : "ws";
-    if (raw === "ws" || raw === "wss") return raw;
-    if (raw === "https" || raw === "https:") return "wss";
-    if (raw === "http" || raw === "http:") return "ws";
-    return raw;
-  })();
-  const inferredPort = (() => {
-    if (bootstrap?.port) return bootstrap.port;
-    if (port === "" || port === undefined) return "8088";
-    if (port === "8000") return "8088";
-    return port;
-  })();
-  const targetHost = bootstrap?.host ?? hostname;
-  const portSegment = inferredPort ? `:${inferredPort}` : "";
-  return `${normalisedProtocol}://${targetHost}${portSegment}/ws`;
+  const sanitizedHost = bootstrap?.host?.trim();
+  const parsedHost = sanitizedHost ? tryParseUrl(sanitizedHost) : undefined;
+  const manualHost = sanitizedHost
+    ? parseHostPort(sanitizedHost)
+    : { host: undefined, port: undefined };
+
+  const locationProtocol = normaliseProtocol(protocol) ?? "ws";
+  const hostProtocol = normaliseProtocol(parsedHost?.protocol);
+  const configuredProtocol = normaliseProtocol(bootstrap?.protocol);
+  const finalProtocol = configuredProtocol ?? hostProtocol ?? locationProtocol;
+
+  let finalPort = bootstrap?.port?.trim() || parsedHost?.port || manualHost.port;
+  if (finalPort) {
+    finalPort = finalPort.trim();
+    if (finalPort === "") {
+      finalPort = undefined;
+    }
+  }
+  if (!finalPort) {
+    if (port === "" || port === undefined) {
+      finalPort = "8088";
+    } else if (port === "8000") {
+      finalPort = "8088";
+    } else {
+      finalPort = port;
+    }
+  }
+
+  const hostCandidate = parsedHost?.hostname ?? manualHost.host ?? sanitizedHost ?? hostname;
+  const trimmedHost = hostCandidate?.trim() || hostname;
+  const safeHost = wrapIpv6Host(trimmedHost);
+  const cockpitUrl = new URL(`${finalProtocol}://${safeHost}`);
+  if (finalPort) {
+    cockpitUrl.port = finalPort;
+  }
+  cockpitUrl.pathname = "/ws";
+  return cockpitUrl.href;
 }
 
 export const __test__ = {

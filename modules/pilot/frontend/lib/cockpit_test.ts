@@ -80,6 +80,39 @@ Deno.test("uses bootstrapped cockpit port when provided", async () => {
   });
 });
 
+Deno.test("uses bootstrapped host when it includes an explicit port", async () => {
+  await withBrowserEnv({
+    port: "8000",
+    dataset: { cockpitHost: "cockpit.motherbrain.local:9443" },
+  }, async () => {
+    const { __test__ } = await importCockpitModule();
+    const url = __test__.defaultCockpitUrl();
+    assertEquals(url, "ws://cockpit.motherbrain.local:9443/ws");
+  });
+});
+
+Deno.test("derives secure protocol hints from bootstrapped host urls", async () => {
+  await withBrowserEnv({
+    port: "8000",
+    dataset: { cockpitHost: "https://cockpit.motherbrain.local:9443" },
+  }, async () => {
+    const { __test__ } = await importCockpitModule();
+    const url = __test__.defaultCockpitUrl();
+    assertEquals(url, "wss://cockpit.motherbrain.local:9443/ws");
+  });
+});
+
+Deno.test("normalises IPv6 cockpit hosts exposed by the bootstrap data", async () => {
+  await withBrowserEnv({
+    port: "8000",
+    dataset: { cockpitHost: "[fd00::1]:9090" },
+  }, async () => {
+    const { __test__ } = await importCockpitModule();
+    const url = __test__.defaultCockpitUrl();
+    assertEquals(url, "ws://[fd00::1]:9090/ws");
+  });
+});
+
 Deno.test("prefers explicit cockpit URL overrides", async () => {
   await withBrowserEnv({
     port: "8000",
