@@ -1,4 +1,5 @@
-import { assertEquals } from "$std/testing/asserts.ts";
+import { assertEquals, assertThrows } from "$std/testing/asserts.ts";
+import { join } from "$std/path/mod.ts";
 import {
   __internals__,
   defaultModuleTargets,
@@ -7,6 +8,8 @@ import {
   resolveModuleTargets,
   resolveServiceTargets,
 } from "./host_targets.ts";
+import { HostConfigFormatError } from "./host.ts";
+import { hostsRoot } from "./paths.ts";
 
 function denoTest(
   name: string,
@@ -34,7 +37,7 @@ denoTest("defaultModuleTargets respects host launch directives", () => {
     resetHostTargetCache();
     __internals__.reset();
     const modules = defaultModuleTargets("launch");
-    assertEquals(modules, ["imu", "foot", "eye"]);
+    assertEquals(modules, ["imu", "foot", "eye", "ear", "voice", "viscera"]);
   });
   resetHostTargetCache();
   __internals__.reset();
@@ -44,8 +47,10 @@ denoTest("defaultServiceTargets respects host service directives", () => {
   withEnv("PSH_HOST", "forebrain", () => {
     resetHostTargetCache();
     __internals__.reset();
-    const services = defaultServiceTargets("up");
-    assertEquals(services, ["tts", "llm", "graphs", "vectors", "asr"]);
+    const servicesForSetup = defaultServiceTargets("setup");
+    assertEquals(servicesForSetup, ["asr", "tts", "llm", "graphs", "vectors"]);
+    const servicesForUp = defaultServiceTargets("up");
+    assertEquals(servicesForUp, []);
   });
   resetHostTargetCache();
   __internals__.reset();
@@ -75,4 +80,36 @@ denoTest("resolve helpers honour explicit selections", () => {
   assertEquals(services, ["gamma"]);
   __internals__.reset();
   resetHostTargetCache();
+});
+
+denoTest("invalid host configuration surfaces a helpful error", () => {
+  const hostName = "__invalid__";
+  const path = join(hostsRoot(), `${hostName}.toml`);
+  const config = `
+[host]
+name = "${hostName}"
+
+[modules]
+oops = "bad shape"
+`;
+  Deno.writeTextFileSync(path, config.trim());
+  try {
+    withEnv("PSH_HOST", hostName, () => {
+      resetHostTargetCache();
+      __internals__.reset();
+      assertThrows(
+        () => defaultModuleTargets("setup"),
+        HostConfigFormatError,
+        "modules.oops",
+      );
+    });
+  } finally {
+    resetHostTargetCache();
+    __internals__.reset();
+    try {
+      Deno.removeSync(path);
+    } catch (_error) {
+      // ignore removal errors
+    }
+  }
 });

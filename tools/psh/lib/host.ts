@@ -19,7 +19,7 @@ const serviceOps = {
 };
 
 export interface HostConfig {
-  host: { name: string };
+  host: { name: string; roles?: string[] };
   provision?: { scripts?: string[]; installers?: string[] };
   modules?: ModuleDirective[];
   services?: ServiceDirective[];
@@ -41,6 +41,16 @@ export interface ServiceDirective {
   depends_on?: string[];
 }
 
+export class HostConfigFormatError extends Error {
+  path: string;
+
+  constructor(path: string, message: string) {
+    super(`Host config ${path}: ${message}`);
+    this.name = "HostConfigFormatError";
+    this.path = path;
+  }
+}
+
 export class HostConfigNotFoundError extends Error {
   hostname: string;
 
@@ -49,6 +59,206 @@ export class HostConfigNotFoundError extends Error {
     this.name = "HostConfigNotFoundError";
     this.hostname = hostname;
   }
+}
+
+type RawHostConfig = Omit<HostConfig, "modules" | "services"> & {
+  modules?: unknown;
+  services?: unknown;
+};
+
+interface NormalizationContext {
+  path: string;
+}
+
+function describeType(value: unknown): string {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function coerceName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+}
+
+function normalizeModuleDirective(
+  raw: unknown,
+  context: NormalizationContext,
+  location: string,
+  fallbackName?: string,
+): ModuleDirective {
+  if (!isRecord(raw)) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected ${location} to be a table, received ${describeType(raw)}.`,
+    );
+  }
+
+  const explicit = coerceName(raw.name);
+  const name = explicit ?? coerceName(fallbackName ?? "");
+  if (!name) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Module entry ${location} is missing a name.`,
+    );
+  }
+
+  return { ...raw, name } as ModuleDirective;
+}
+
+function normalizeModuleDirectives(
+  raw: unknown,
+  context: NormalizationContext,
+): ModuleDirective[] {
+  if (raw === undefined || raw === null) return [];
+
+  const result: ModuleDirective[] = [];
+  if (Array.isArray(raw)) {
+    raw.forEach((entry, index) => {
+      result.push(
+        normalizeModuleDirective(entry, context, `modules[${index}]`),
+      );
+    });
+    return result;
+  }
+
+  if (isRecord(raw)) {
+    for (const [moduleName, value] of Object.entries(raw)) {
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        if (!value.length) continue;
+        value.forEach((entry, index) => {
+          result.push(
+            normalizeModuleDirective(
+              entry,
+              context,
+              `modules.${moduleName}[${index}]`,
+              moduleName,
+            ),
+          );
+        });
+      } else {
+        result.push(
+          normalizeModuleDirective(
+            value,
+            context,
+            `modules.${moduleName}`,
+            moduleName,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  throw new HostConfigFormatError(
+    context.path,
+    `Expected 'modules' to be an array or table, received ${
+      describeType(raw)
+    }.`,
+  );
+}
+
+function normalizeServiceDirective(
+  raw: unknown,
+  context: NormalizationContext,
+  location: string,
+  fallbackName?: string,
+): ServiceDirective {
+  if (!isRecord(raw)) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected ${location} to be a table, received ${describeType(raw)}.`,
+    );
+  }
+
+  const explicit = coerceName(raw.name);
+  const name = explicit ?? coerceName(fallbackName ?? "");
+  if (!name) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Service entry ${location} is missing a name.`,
+    );
+  }
+
+  return { ...raw, name } as ServiceDirective;
+}
+
+function normalizeServiceDirectives(
+  raw: unknown,
+  context: NormalizationContext,
+): ServiceDirective[] {
+  if (raw === undefined || raw === null) return [];
+
+  const result: ServiceDirective[] = [];
+  if (Array.isArray(raw)) {
+    raw.forEach((entry, index) => {
+      result.push(
+        normalizeServiceDirective(entry, context, `services[${index}]`),
+      );
+    });
+    return result;
+  }
+
+  if (isRecord(raw)) {
+    for (const [serviceName, value] of Object.entries(raw)) {
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        value.forEach((entry, index) => {
+          result.push(
+            normalizeServiceDirective(
+              entry,
+              context,
+              `services.${serviceName}[${index}]`,
+              serviceName,
+            ),
+          );
+        });
+      } else {
+        result.push(
+          normalizeServiceDirective(
+            value,
+            context,
+            `services.${serviceName}`,
+            serviceName,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  throw new HostConfigFormatError(
+    context.path,
+    `Expected 'services' to be an array or table, received ${
+      describeType(raw)
+    }.`,
+  );
+}
+
+function normalizeHostConfig(
+  hostname: string,
+  path: string,
+  raw: RawHostConfig,
+): HostConfig {
+  const { modules: rawModules, services: rawServices, ...rest } = raw;
+  const context = { path };
+  const modules = normalizeModuleDirectives(rawModules, context);
+  const services = normalizeServiceDirectives(rawServices, context);
+  const config: HostConfig = {
+    ...rest,
+    modules,
+    services,
+  } as HostConfig;
+  if (!config.host?.name) {
+    config.host = { ...(config.host ?? {}), name: hostname };
+  }
+  return config;
 }
 
 function pathExists(path: string): boolean {
@@ -77,9 +287,10 @@ export function loadHostConfig(
   hostname: string,
 ): { path: string; config: HostConfig } {
   const path = locateHostConfig(hostname);
-  const config = parseToml(
+  const raw = parseToml(
     Deno.readTextFileSync(path),
-  ) as unknown as HostConfig;
+  ) as unknown as RawHostConfig;
+  const config = normalizeHostConfig(hostname, path, raw);
   return { path, config };
 }
 
