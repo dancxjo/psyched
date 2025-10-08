@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>memory</name>
+  <version>0.1.0</version>
+  <description>Memory node that coordinates Qdrant and Neo4j storage.</description>
+  <maintainer email="pete@psyched.local">Psyched Maintainers</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>ament_cmake_python</build_depend>
+  <build_depend>memory_interfaces</build_depend>
+
+  <exec_depend>memory_interfaces</exec_depend>
+  <exec_depend>neo4j</exec_depend>
+  <exec_depend>qdrant-client</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <test_depend>pytest</test_depend>
+</package>

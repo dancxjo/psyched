@@ -1,0 +1,6 @@
+string source_id
+string target_id
+string relation_type
+string json_properties
+---
+bool success

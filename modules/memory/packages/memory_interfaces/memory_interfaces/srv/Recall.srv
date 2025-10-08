@@ -1,0 +1,6 @@
+string kind
+float32[] embedding
+string text
+int32 limit
+---
+memory_interfaces/MemoryRecall[] results
