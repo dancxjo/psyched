@@ -1,7 +1,7 @@
 import { colors } from "$cliffy/ansi/colors.ts";
-import { join } from "$std/path/mod.ts";
 import { provisionHost, type ProvisionHostOptions } from "./host.ts";
 import { repoRoot } from "./paths.ts";
+import { resetWorkspace } from "./workspace.ts";
 
 export interface SetupWorkflowOptions {
   host?: string;
@@ -37,7 +37,7 @@ let pshInvoker: PshInvoker = async (args: string[]) => {
 };
 
 let workspaceCleaner: WorkspaceCleaner = async () => {
-  await runWorkspaceCleaner();
+  await resetWorkspace();
 };
 
 function shellQuote(value: string): string {
@@ -66,42 +66,6 @@ async function runPshSubcommandInBash(args: string[]): Promise<void> {
     const suffix = signal ? ` (signal ${signal})` : "";
     throw new Error(
       `Command '${commandLine}' failed with exit code ${code}${suffix}.`,
-    );
-  }
-}
-
-function pathExists(path: string): boolean {
-  try {
-    Deno.statSync(path);
-    return true;
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
-    throw error;
-  }
-}
-
-async function runWorkspaceCleaner(): Promise<void> {
-  const scriptPath = join(repoRoot(), "tools", "clean_workspace");
-  if (!pathExists(scriptPath)) {
-    console.log(colors.yellow(
-      `Workspace cleaner not found at ${scriptPath}; skipping reset step.`,
-    ));
-    return;
-  }
-  const script = `set -euo pipefail\n${shellQuote(scriptPath)}`;
-  const process = new Deno.Command("bash", {
-    args: ["-lc", script],
-    cwd: repoRoot(),
-    stdout: "inherit",
-    stderr: "inherit",
-  }).spawn();
-  const status = await process.status;
-  if (!status.success) {
-    const code = status.code ?? "unknown";
-    const signal = status.signal ?? "";
-    const suffix = signal ? ` (signal ${signal})` : "";
-    throw new Error(
-      `Workspace cleanup failed with exit code ${code}${suffix}.`,
     );
   }
 }
@@ -191,7 +155,7 @@ function resetInternals(): void {
     await runPshSubcommandInBash(args);
   };
   workspaceCleaner = async () => {
-    await runWorkspaceCleaner();
+    await resetWorkspace();
   };
 }
 

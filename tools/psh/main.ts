@@ -3,6 +3,7 @@ import { colors } from "$cliffy/ansi/colors.ts";
 import { runWizard } from "./lib/wizard.ts";
 import { HostConfigNotFoundError, provisionHost } from "./lib/host.ts";
 import { buildWorkspace } from "./lib/build.ts";
+import { cleanEnvironment } from "./lib/clean.ts";
 import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
   bringModulesDown,
@@ -172,6 +173,28 @@ async function main() {
     .action(async (_, ...targets: string[]) => {
       await buildWorkspace(targets);
     });
+
+  root
+    .command("clean")
+    .description("Tear down modules/services and reset the workspace")
+    .option("--skip-modules", "Skip module teardown stage")
+    .option("--skip-services", "Skip service teardown stage")
+    .option("--skip-workspace", "Skip workspace reset stage")
+    .action(
+      async (
+        options: {
+          skipModules?: boolean;
+          skipServices?: boolean;
+          skipWorkspace?: boolean;
+        },
+      ) => {
+        await cleanEnvironment({
+          skipModules: Boolean(options.skipModules),
+          skipServices: Boolean(options.skipServices),
+          skipWorkspace: Boolean(options.skipWorkspace),
+        });
+      },
+    );
 
   hostCommand
     .command("setup [hosts...:string]")

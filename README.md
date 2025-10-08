@@ -204,7 +204,7 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ### Workspace cleanup
 
-Use `psh clean` (or run `tools/clean_workspace` directly) to recreate the ROS workspace from scratch. The helper wipes `work/` and relinks every package declared under `modules/*/packages/`, catching ROS `package.xml` projects and pure-Python packages with `setup.py`/`pyproject.toml`. There is no `.cargo` configuration or vendored Rust message crate step anymore.
+Use `psh clean` (or run `tools/clean_workspace` directly) to stop active modules and services before recreating the ROS workspace from scratch. The helper wipes `work/`, relinks every package declared under `modules/*/packages/`, and leaves the repository ready for a fresh `psh mod setup`. Pass `--skip-modules`, `--skip-services`, or `--skip-workspace` to tailor the reset when you only need part of the cleanup.
 
 ### Python + ROS backend
 
@@ -234,6 +234,7 @@ source install/setup.bash
 - `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.toml`
 - `psh setup` – provision the host, modules, and services in one shot
 - `psh teardown` – tear down modules/services and reset the ROS workspace
+- `psh clean` – aggressively tear down modules/services and rebuild the ROS workspace in one step
 - `psh mod list` – inspect module status
 - `psh mod setup|teardown [module]` – manage symlinks + prep work
 - `psh up|down [target]` – start/stop modules and services (use `--service` to disambiguate names shared with modules)
