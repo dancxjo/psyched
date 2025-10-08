@@ -77,6 +77,14 @@ fi
 echo "Going to frontend directory: ${FRONTEND_DIR}"
 cd "${FRONTEND_DIR}"
 
+if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
+  # Ensure npm dependencies fetched via deno respect the system trust store.
+  # Without this, corporate and lab networks that rely on custom root CAs can
+  # cause "invalid peer certificate: UnknownIssuer" failures when the dev
+  # server resolves NPM packages on first launch (see workspace handbook).
+  export DENO_TLS_CA_STORE=system
+fi
+
 echo "Starting Pilot frontend via deno task dev..."
 deno task dev --host $(hostname -s).local &
 DENO_PID=$!
