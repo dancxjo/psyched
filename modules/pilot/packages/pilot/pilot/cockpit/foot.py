@@ -327,7 +327,6 @@ class FootTelemetryBridge:
     """ROS-aware facade that feeds :class:`FootTelemetryStateMachine`."""
 
     def __init__(self, node, broadcast: Callable[[OutboundMessage], None], now: Optional[Callable[[], int]] = None) -> None:
-        from create_msgs.msg import Bumper, ChargingState, Cliff, Mode
         from geometry_msgs.msg import Twist
         from nav_msgs.msg import Odometry
         from std_msgs.msg import Float32, Int16
@@ -335,26 +334,40 @@ class FootTelemetryBridge:
         self._node = node
         self._broadcast = broadcast
         clock_now = now or self._clock_millis
-        charging_labels = {
-            int(ChargingState.CHARGE_NONE): "Idle",
-            int(ChargingState.CHARGE_RECONDITION): "Recondition",
-            int(ChargingState.CHARGE_FULL): "Full",
-            int(ChargingState.CHARGE_TRICKLE): "Trickle",
-            int(ChargingState.CHARGE_WAITING): "Waiting",
-            int(ChargingState.CHARGE_FAULT): "Fault",
-        }
-        charging_active = {
-            int(ChargingState.CHARGE_RECONDITION),
-            int(ChargingState.CHARGE_FULL),
-            int(ChargingState.CHARGE_TRICKLE),
-            int(ChargingState.CHARGE_WAITING),
-        }
-        mode_labels = {
-            int(Mode.MODE_OFF): "Off",
-            int(Mode.MODE_PASSIVE): "Passive",
-            int(Mode.MODE_SAFE): "Safe",
-            int(Mode.MODE_FULL): "Full",
-        }
+        logger = node.get_logger() if hasattr(node, "get_logger") else None
+        charging_labels: Dict[int, str] = dict(_DEFAULT_CHARGING_LABELS)
+        charging_active: Set[int] = set(_DEFAULT_CHARGING_ACTIVE)
+        mode_labels: Dict[int, str] = dict(_DEFAULT_MODE_LABELS)
+        create_msgs_available = True
+        try:
+            from create_msgs.msg import Bumper, ChargingState, Cliff, Mode  # type: ignore[import-not-found]
+        except ModuleNotFoundError:
+            create_msgs_available = False
+            if logger is not None:
+                logger.warning(
+                    "create_msgs package missing; foot telemetry will skip bumper, cliff, charging state, and mode topics."
+                )
+        else:
+            charging_labels = {
+                int(ChargingState.CHARGE_NONE): "Idle",
+                int(ChargingState.CHARGE_RECONDITION): "Recondition",
+                int(ChargingState.CHARGE_FULL): "Full",
+                int(ChargingState.CHARGE_TRICKLE): "Trickle",
+                int(ChargingState.CHARGE_WAITING): "Waiting",
+                int(ChargingState.CHARGE_FAULT): "Fault",
+            }
+            charging_active = {
+                int(ChargingState.CHARGE_RECONDITION),
+                int(ChargingState.CHARGE_FULL),
+                int(ChargingState.CHARGE_TRICKLE),
+                int(ChargingState.CHARGE_WAITING),
+            }
+            mode_labels = {
+                int(Mode.MODE_OFF): "Off",
+                int(Mode.MODE_PASSIVE): "Passive",
+                int(Mode.MODE_SAFE): "Safe",
+                int(Mode.MODE_FULL): "Full",
+            }
         self._state = FootTelemetryStateMachine(
             now=clock_now,
             charging_labels=charging_labels,
@@ -369,27 +382,42 @@ class FootTelemetryBridge:
             node.create_subscription(Float32, "/battery/current", lambda msg: self._dispatch(self._state.update_current, float(msg.data)), qos),
             node.create_subscription(Float32, "/battery/voltage", lambda msg: self._dispatch(self._state.update_voltage, float(msg.data)), qos),
             node.create_subscription(Int16, "/battery/temperature", lambda msg: self._dispatch(self._state.update_temperature, float(msg.data)), qos),
-            node.create_subscription(ChargingState, "/battery/charging_state", lambda msg: self._dispatch(self._state.update_charging_state, int(msg.state)), qos),
-            node.create_subscription(Mode, "/mode", lambda msg: self._dispatch(self._state.update_mode, int(msg.mode)), qos),
-            node.create_subscription(Bumper, "/bumper", lambda msg: self._dispatch(
-                self._state.update_bumper,
-                bool(msg.is_left_pressed),
-                bool(msg.is_right_pressed),
-                bool(msg.is_light_front_left),
-                bool(msg.is_light_front_right),
-                bool(msg.is_light_center_left),
-                bool(msg.is_light_center_right),
-            ), qos),
-            node.create_subscription(Cliff, "/cliff", lambda msg: self._dispatch(
-                self._state.update_cliff,
-                bool(msg.is_cliff_left),
-                bool(msg.is_cliff_front_left),
-                bool(msg.is_cliff_right),
-                bool(msg.is_cliff_front_right),
-            ), qos),
             node.create_subscription(Twist, "/cmd_vel", lambda msg: self._dispatch(self._state.record_command, summary_from_twist(msg)), qos),
             node.create_subscription(Odometry, "/odom", lambda msg: self._dispatch(self._state.update_odometry, summary_from_odometry(msg)), qos),
         ]
+        if create_msgs_available:
+            self._subscriptions.extend(
+                [
+                    node.create_subscription(ChargingState, "/battery/charging_state", lambda msg: self._dispatch(self._state.update_charging_state, int(msg.state)), qos),
+                    node.create_subscription(Mode, "/mode", lambda msg: self._dispatch(self._state.update_mode, int(msg.mode)), qos),
+                    node.create_subscription(
+                        Bumper,
+                        "/bumper",
+                        lambda msg: self._dispatch(
+                            self._state.update_bumper,
+                            bool(msg.is_left_pressed),
+                            bool(msg.is_right_pressed),
+                            bool(msg.is_light_front_left),
+                            bool(msg.is_light_front_right),
+                            bool(msg.is_light_center_left),
+                            bool(msg.is_light_center_right),
+                        ),
+                        qos,
+                    ),
+                    node.create_subscription(
+                        Cliff,
+                        "/cliff",
+                        lambda msg: self._dispatch(
+                            self._state.update_cliff,
+                            bool(msg.is_cliff_left),
+                            bool(msg.is_cliff_front_left),
+                            bool(msg.is_cliff_right),
+                            bool(msg.is_cliff_front_right),
+                        ),
+                        qos,
+                    ),
+                ]
+            )
 
     @staticmethod
     def handles_topic(topic: str) -> bool:

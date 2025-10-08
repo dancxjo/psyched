@@ -4,6 +4,7 @@ apt = [
     "ros-${ROS_DISTRO}-test-msgs",
     "ros-${ROS_DISTRO}-web-video-server",
     "ros-${ROS_DISTRO}-sensor-msgs",
+    "python3-numpy",
     "python3-typing-extensions",
 ]
 pip = [
