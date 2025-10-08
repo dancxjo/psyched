@@ -271,18 +271,6 @@ function normalizeModuleDirectives(
     }
   }
 
-  for (const [moduleName, value] of byName.entries()) {
-    if (value === undefined || value === null) continue;
-    result.push(
-      normalizeModuleDirective(
-        value,
-        context,
-        `modules.${moduleName}`,
-        moduleName,
-      ),
-    );
-  }
-
   return result;
 }
 
@@ -359,18 +347,6 @@ function normalizeServiceDirectives(
         ),
       );
     }
-  }
-
-  for (const [serviceName, value] of byName.entries()) {
-    if (value === undefined || value === null) continue;
-    result.push(
-      normalizeServiceDirective(
-        value,
-        context,
-        `services.${serviceName}`,
-        serviceName,
-      ),
-    );
   }
 
   return result;

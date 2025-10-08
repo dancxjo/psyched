@@ -32,12 +32,14 @@ function withEnv<T>(key: string, value: string, fn: () => T): T {
   }
 }
 
-denoTest("defaultModuleTargets respects host launch directives", () => {
+denoTest("defaultModuleTargets ignore undeclared modules", () => {
   withEnv("PSH_HOST", "motherbrain", () => {
     resetHostTargetCache();
     __internals__.reset();
-    const modules = defaultModuleTargets("launch");
-    assertEquals(modules, ["imu", "foot", "eye", "ear", "voice", "viscera"]);
+    const setupModules = defaultModuleTargets("setup");
+    assertEquals(setupModules, ["pilot"]);
+    const launchModules = defaultModuleTargets("launch");
+    assertEquals(launchModules, []);
   });
   resetHostTargetCache();
   __internals__.reset();
@@ -54,6 +56,45 @@ denoTest("defaultServiceTargets respects host service directives", () => {
   });
   resetHostTargetCache();
   __internals__.reset();
+});
+
+denoTest("defaultServiceTargets ignore undeclared services", () => {
+  const hostName = "__services_ignore__";
+  const path = join(hostsRoot(), `${hostName}.toml`);
+  const config = `
+[host]
+name = "${hostName}"
+services = ["alpha"]
+
+[services.alpha]
+intent = "test"
+runtime = "container"
+up = true
+
+[services.beta]
+intent = "test"
+runtime = "container"
+up = true
+`;
+  Deno.writeTextFileSync(path, config.trim());
+  try {
+    withEnv("PSH_HOST", hostName, () => {
+      resetHostTargetCache();
+      __internals__.reset();
+      const setupServices = defaultServiceTargets("setup");
+      assertEquals(setupServices, ["alpha"]);
+      const upServices = defaultServiceTargets("up");
+      assertEquals(upServices, ["alpha"]);
+    });
+  } finally {
+    resetHostTargetCache();
+    __internals__.reset();
+    try {
+      Deno.removeSync(path);
+    } catch (_error) {
+      // ignore
+    }
+  }
 });
 
 denoTest("falls back to discovered targets when host is unknown", () => {

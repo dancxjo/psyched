@@ -6,17 +6,17 @@ name = "motherbrain"
 installers = ["ros2", "docker"]
 modules = [
   "pilot",
-  "imu",
-  "foot",
-  "eye",
-  "ear",
-  "faces",
-  "gps",
-  "nav",
-  "wifi",
-  "will",
-  "voice",
-  "viscera",
+  # "imu",
+  # "foot",
+  # "eye",
+  # "ear",
+  # "faces",
+  # "gps",
+  # "nav",
+  # "wifi",
+  # "will",
+  # "voice",
+  # "viscera",
 ]
 services = []
 
@@ -38,7 +38,9 @@ launch = true
 [modules.ear]
 env = { ROS_DOMAIN_ID = "25", EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
 launch = true
-dependencies = [{ service = "forebrain.asr", port = "ws", via = "ws://forebrain.local:5003/asr", bind_env = "EAR_SERVICE_URI", summary = "Consumes Whisper websocket for speech recognition" }]
+dependencies = [
+  { service = "forebrain.asr", port = "ws", via = "ws://forebrain.local:5003/asr", bind_env = "EAR_SERVICE_URI", summary = "Consumes Whisper websocket for speech recognition" },
+]
 
 [modules.faces]
 env = { ROS_DOMAIN_ID = "25" }
@@ -61,7 +63,9 @@ env = { ROS_DOMAIN_ID = "25", WILL_DEFAULT_REGIME = "idle" }
 [modules.voice]
 env = { ROS_DOMAIN_ID = "25", VOICE_BACKEND = "websocket", VOICE_TTS_URL = "ws://forebrain.local:5002/tts" }
 launch = true
-dependencies = [{ service = "forebrain.tts", port = "ws", via = "ws://forebrain.local:5002/tts", bind_env = "VOICE_TTS_URL", summary = "Streams synthesized speech from the forebrain TTS service" }]
+dependencies = [
+  { service = "forebrain.tts", port = "ws", via = "ws://forebrain.local:5002/tts", bind_env = "VOICE_TTS_URL", summary = "Streams synthesized speech from the forebrain TTS service" },
+]
 
 [modules.viscera]
 env = { ROS_DOMAIN_ID = "25" }
