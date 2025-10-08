@@ -1,14 +1,24 @@
-# Pete Rizzlington host config: motherbrain
 # Midbrain control layer that runs ROS 2 nodes.
 # Onboard rpi5
 
 [host]
 name = "motherbrain"
-roles = ["midbrain", "ros2-control"]
-
-[provision]
-# Declarative installers executed by psh
-installers = ["ros2"]
+installers = ["ros2", "docker"]
+modules = [
+  "pilot",
+  "imu",
+  "foot",
+  "eye",
+  "ear",
+  "faces",
+  "gps",
+  "nav",
+  "wifi",
+  "will",
+  "voice",
+  "viscera"
+]
+services = []
 
 [modules.pilot]
 
