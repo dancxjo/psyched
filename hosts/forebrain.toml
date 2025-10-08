@@ -1,14 +1,11 @@
-# Pete Rizzlington host config: forebrain
 # Heavyweight compute node for LLMs, ASR, TTS.
 # Onboard headless laptop with GPU (no screen).
 
 [host]
 name = "forebrain"
-roles = ["compute", "inference"]
-
-[provision]
-# Declarative installers executed by psh
 installers = ["docker", "cuda"]
+modules=[]
+services=["asr", "tts", "llm", "graphs", "vectors"]
 
 [[services.asr]]
 intent = "speech-to-text"
