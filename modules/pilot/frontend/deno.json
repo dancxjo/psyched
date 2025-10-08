@@ -26,6 +26,7 @@
     "$dax": "https://deno.land/x/dax@0.38.0/mod.ts",
     "$deps/dependency-graph": "npm:dependency-graph@1.0.0",
     "@pilot/lib/": "./lib/",
+    "@pilot/components/": "../pilot/components/",
     "preact": "npm:preact@^10.27.2",
     "@preact/signals": "npm:@preact/signals@^2.3.1",
     "@fresh/plugin-vite": "jsr:@fresh/plugin-vite@^1.0.4",

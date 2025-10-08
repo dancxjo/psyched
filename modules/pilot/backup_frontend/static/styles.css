@@ -258,7 +258,7 @@ body {
   overflow: hidden;
 }
 
-.foot-panel--lcars::before {
+.foot-panel--themed::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -270,7 +270,7 @@ body {
   pointer-events: none;
 }
 
-.foot-panel--lcars > * {
+.foot-panel--themed > * {
   position: relative;
   z-index: 1;
 }

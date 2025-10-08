@@ -3,10 +3,10 @@ import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
 
 import {
   CONNECTION_STATUS_LABELS,
-  LcarsCard,
-  LcarsPanel,
+  Card,
+  Panel,
   toneFromConnection,
-} from "../../../pilot/frontend/components/lcars.tsx";
+} from "@pilot/components/dashboard.tsx";
 import {
   formatBytes,
   formatRelativeTime,
@@ -114,7 +114,7 @@ export default function KinectStreamPanel({
   ));
 
   return (
-    <LcarsPanel
+    <Panel
       title="Kinect Eye"
       subtitle="RGB-D telemetry stream"
       accent="cyan"
@@ -129,69 +129,69 @@ export default function KinectStreamPanel({
         },
       ]}
     >
-      <div class="lcars-grid lcars-grid--stretch">
-        <LcarsCard title="RGB stream" tone="cyan">
-          <dl class="lcars-list">
-            <div class="lcars-list__item">
+      <div class="panel-grid panel-grid--stretch">
+        <Card title="RGB stream" tone="cyan">
+          <dl class="stat-list">
+            <div class="stat-list__item">
               <dt>Frame</dt>
               <dd>{color.data?.frame_id ?? "—"}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Resolution</dt>
               <dd>
                 {color.data?.width ?? 0}×{color.data?.height ?? 0} ·{" "}
                 {color.data?.encoding ?? "unknown"}
               </dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Payload</dt>
               <dd>{formatBytes(color.data?.size_bytes)}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Updated</dt>
               <dd>{colorUpdated}</dd>
             </div>
           </dl>
-          <div class="lcars-frame">
+          <div class="video-frame">
             {colorUrl
               ? <img alt="Kinect RGB" src={colorUrl} />
-              : <p class="lcars-placeholder">Waiting for RGB frames…</p>}
+              : <p class="placeholder">Waiting for RGB frames…</p>}
           </div>
-        </LcarsCard>
+        </Card>
 
-        <LcarsCard title="Depth stream" tone="violet">
-          <dl class="lcars-list">
-            <div class="lcars-list__item">
+        <Card title="Depth stream" tone="violet">
+          <dl class="stat-list">
+            <div class="stat-list__item">
               <dt>Frame</dt>
               <dd>{depth.data?.frame_id ?? "—"}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Resolution</dt>
               <dd>
                 {depth.data?.width ?? 0}×{depth.data?.height ?? 0} ·{" "}
                 {depth.data?.encoding ?? "unknown"}
               </dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Payload</dt>
               <dd>{formatBytes(depth.data?.size_bytes)}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Statistics</dt>
               <dd>{formatStatistics(depth.data?.statistics)}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Updated</dt>
               <dd>{depthUpdated}</dd>
             </div>
           </dl>
-          <div class="lcars-frame">
+          <div class="video-frame">
             {depthUrl
               ? <img alt="Kinect depth" src={depthUrl} />
-              : <p class="lcars-placeholder">Waiting for depth frames…</p>}
+              : <p class="placeholder">Waiting for depth frames…</p>}
           </div>
-        </LcarsCard>
+        </Card>
       </div>
-    </LcarsPanel>
+    </Panel>
   );
 }

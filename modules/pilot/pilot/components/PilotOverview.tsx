@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "preact/hooks";
 import {
   type ConnectionStatus,
   useCockpitTopic,
-} from "../../frontend/lib/cockpit.ts";
+} from "@pilot/lib/cockpit.ts";
 
 interface PilotStatus {
   timestamp?: string;

@@ -2,7 +2,7 @@ import { useMemo } from "preact/hooks";
 
 import {
   CONNECTION_STATUS_LABELS,
-} from "../../../pilot/frontend/components/lcars.tsx";
+} from "@pilot/components/dashboard.tsx";
 import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
 import ImuReadout, { type ImuSample } from "../components/ImuReadout.tsx";
 

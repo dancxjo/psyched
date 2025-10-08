@@ -2,10 +2,10 @@ import { useMemo } from "preact/hooks";
 
 import {
   CONNECTION_STATUS_LABELS,
-  LcarsCard,
-  LcarsPanel,
+  Card,
+  Panel,
   toneFromConnection,
-} from "../../../pilot/frontend/components/lcars.tsx";
+} from "@pilot/components/dashboard.tsx";
 import {
   formatNullableNumber,
   formatRelativeTime,
@@ -127,7 +127,7 @@ export function ImuReadout({
   ]);
 
   return (
-    <LcarsPanel
+    <Panel
       title={title}
       subtitle="Live inertial telemetry"
       accent="magenta"
@@ -136,20 +136,20 @@ export function ImuReadout({
         tone: toneFromConnection(connectionStatus),
       }]}
     >
-      <div class="lcars-grid">
-        <LcarsCard title="Identity" tone="magenta">
-          <dl class="lcars-list">
-            <div class="lcars-list__item">
+      <div class="panel-grid">
+        <Card title="Identity" tone="magenta">
+          <dl class="stat-list">
+            <div class="stat-list__item">
               <dt>Frame</dt>
               <dd>{sensor.frameId ?? "—"}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Updated</dt>
               <dd>{formatRelativeTime(lastUpdate)}</dd>
             </div>
             {sensor.temperatureC !== undefined &&
               sensor.temperatureC !== null && (
-              <div class="lcars-list__item">
+              <div class="stat-list__item">
                 <dt>Temperature</dt>
                 <dd>
                   {formatNullableNumber(sensor.temperatureC, {
@@ -159,55 +159,55 @@ export function ImuReadout({
               </div>
             )}
           </dl>
-          {sensor.status && <p class="lcars-note">{sensor.status}</p>}
-        </LcarsCard>
+          {sensor.status && <p class="note">{sensor.status}</p>}
+        </Card>
 
         {eulerRows.length > 0 && (
-          <LcarsCard title="Euler" subtitle="degrees" tone="violet">
-            <dl class="lcars-list lcars-list--columns">
+          <Card title="Euler" subtitle="degrees" tone="violet">
+            <dl class="stat-list stat-list--columns">
               {eulerRows.map(({ label, value }) => (
-                <div class="lcars-list__item" key={`euler-${label}`}>
+                <div class="stat-list__item" key={`euler-${label}`}>
                   <dt>{label}</dt>
                   <dd>{value}</dd>
                 </div>
               ))}
             </dl>
-          </LcarsCard>
+          </Card>
         )}
 
         {quaternion && (
-          <LcarsCard title="Quaternion" tone="violet">
-            <p class="lcars-readout">{formatQuaternion(quaternion)}</p>
-          </LcarsCard>
+          <Card title="Quaternion" tone="violet">
+            <p class="sensor-readout">{formatQuaternion(quaternion)}</p>
+          </Card>
         )}
 
         {angularVelocityRows.length > 0 && (
-          <LcarsCard title="Angular velocity" subtitle="rad/s" tone="cyan">
-            <dl class="lcars-list lcars-list--columns">
+          <Card title="Angular velocity" subtitle="rad/s" tone="cyan">
+            <dl class="stat-list stat-list--columns">
               {angularVelocityRows.map(({ label, value }) => (
-                <div class="lcars-list__item" key={`angVel-${label}`}>
+                <div class="stat-list__item" key={`angVel-${label}`}>
                   <dt>{label}</dt>
                   <dd>{value}</dd>
                 </div>
               ))}
             </dl>
-          </LcarsCard>
+          </Card>
         )}
 
         {linearAccelerationRows.length > 0 && (
-          <LcarsCard title="Linear acceleration" subtitle="m/s²" tone="teal">
-            <dl class="lcars-list lcars-list--columns">
+          <Card title="Linear acceleration" subtitle="m/s²" tone="teal">
+            <dl class="stat-list stat-list--columns">
               {linearAccelerationRows.map(({ label, value }) => (
-                <div class="lcars-list__item" key={`linAcc-${label}`}>
+                <div class="stat-list__item" key={`linAcc-${label}`}>
                   <dt>{label}</dt>
                   <dd>{value}</dd>
                 </div>
               ))}
             </dl>
-          </LcarsCard>
+          </Card>
         )}
       </div>
-    </LcarsPanel>
+    </Panel>
   );
 }
 
