@@ -4,32 +4,68 @@
 
 [host]
 name = "motherbrain"
+roles = ["midbrain", "ros2-control"]
 
 [provision]
 # Declarative installers executed by psh
 installers = ["ros2"]
 
-[features]
-docker = true
-ros2 = true
-cuda = false
-
-[[modules]]
-name = "pilot"
+[modules.pilot]
 launch = false
-env = { ROS_DOMAIN_ID = "25" }
 
-[[modules]]
-name = "imu"
-launch = true
-env = { ROS_DOMAIN_ID = "25" }
+  [modules.pilot.env]
+  ROS_DOMAIN_ID = "25"
 
-[[modules]]
-name = "foot"
+[modules.imu]
 launch = true
-env = { ROS_DOMAIN_ID = "25" }
 
-[[modules]]
-name = "eye"
+  [modules.imu.env]
+  ROS_DOMAIN_ID = "25"
+
+[modules.foot]
 launch = true
-env = { ROS_DOMAIN_ID = "25" }
+
+  [modules.foot.env]
+  ROS_DOMAIN_ID = "25"
+
+[modules.eye]
+launch = true
+
+  [modules.eye.env]
+  ROS_DOMAIN_ID = "25"
+
+[modules.ear]
+launch = true
+
+  [modules.ear.env]
+  ROS_DOMAIN_ID = "25"
+  EAR_BACKEND = "service"
+  EAR_SERVICE_URI = "ws://forebrain.local:5003/asr"
+
+  [[modules.ear.dependencies]]
+  service = "forebrain.asr"
+  port = "ws"
+  via = "ws://forebrain.local:5003/asr"
+  bind_env = "EAR_SERVICE_URI"
+  summary = "Consumes Whisper websocket for speech recognition"
+
+[modules.voice]
+launch = true
+
+  [modules.voice.env]
+  ROS_DOMAIN_ID = "25"
+  VOICE_BACKEND = "websocket"
+  VOICE_TTS_URL = "ws://forebrain.local:5002/tts"
+
+  [[modules.voice.dependencies]]
+  service = "forebrain.tts"
+  port = "ws"
+  via = "ws://forebrain.local:5002/tts"
+  bind_env = "VOICE_TTS_URL"
+  summary = "Streams synthesized speech from the forebrain TTS service"
+
+[modules.viscera]
+launch = true
+
+  [modules.viscera.env]
+  ROS_DOMAIN_ID = "25"

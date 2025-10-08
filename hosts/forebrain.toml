@@ -4,37 +4,101 @@
 
 [host]
 name = "forebrain"
+roles = ["compute", "inference"]
 
 [provision]
 # Declarative installers executed by psh
 installers = ["docker", "cuda"]
 
-[features]
-docker = true
-ros2 = false
-cuda = true
+[[services.asr]]
+intent = "speech-to-text"
+summary = "Streaming Whisper-based ASR over websockets"
+runtime = "container"
+ports = [5003]
 
-[[services]]
-name = "tts"
-setup = true
-up = true
+  [[services.asr.ports]]
+  name = "ws"
+  protocol = "ws"
+  bind = "0.0.0.0"
+  port = 5003
+  target = 5003
+  advertise = "ws://forebrain.local:5003/asr"
+  description = "Websocket endpoint consumed by motherbrain.ear"
 
-[[services]]
-name = "llm"
-setup = false
-up = true
+[[services.tts]]
+intent = "text-to-speech"
+summary = "Streaming Coqui-driven TTS websocket"
+runtime = "container"
+ports = [5002]
 
-[[services]]
-name = "graphs"
-setup = false
-up = true
+  [[services.tts.ports]]
+  name = "ws"
+  protocol = "ws"
+  bind = "0.0.0.0"
+  port = 5002
+  target = 5002
+  advertise = "ws://forebrain.local:5002/tts"
+  description = "Websocket endpoint consumed by motherbrain.voice"
 
-[[services]]
-name = "vectors"
-setup = false
-up = true
+[[services.llm]]
+intent = "language-model"
+summary = "Ollama LLM runtime for Pete's dialogue system"
+runtime = "container"
+ports = [11434]
 
-[[services]]
-name = "asr"
-setup = true
-up = true
+  [[services.llm.ports]]
+  name = "http"
+  protocol = "http"
+  bind = "0.0.0.0"
+  port = 11434
+  target = 11434
+  advertise = "http://forebrain.local:11434"
+  description = "HTTP inference API exposed to orchestration tooling"
+
+[[services.graphs]]
+intent = "knowledge-graph"
+summary = "Neo4j graph store powering relationship lookups"
+runtime = "container"
+ports = [7474, 7687]
+
+  [[services.graphs.ports]]
+  name = "http"
+  protocol = "http"
+  bind = "0.0.0.0"
+  port = 7474
+  target = 7474
+  advertise = "http://forebrain.local:7474"
+  description = "Neo4j Browser"
+
+  [[services.graphs.ports]]
+  name = "bolt"
+  protocol = "bolt"
+  bind = "0.0.0.0"
+  port = 7687
+  target = 7687
+  advertise = "bolt://forebrain.local:7687"
+  description = "Bolt protocol endpoint for graph queries"
+
+[[services.vectors]]
+intent = "vector-store"
+summary = "Qdrant semantic search backend"
+runtime = "container"
+ports = [6333, 6334]
+
+  [[services.vectors.ports]]
+  name = "http"
+  protocol = "http"
+  bind = "0.0.0.0"
+  port = 6333
+  target = 6333
+  advertise = "http://forebrain.local:6333"
+  description = "REST API for vector collections"
+
+  [[services.vectors.ports]]
+  name = "grpc"
+  protocol = "grpc"
+  bind = "0.0.0.0"
+  port = 6334
+  target = 6334
+  advertise = "grpc://forebrain.local:6334"
+  description = "gRPC endpoint for high-throughput similarity search"
