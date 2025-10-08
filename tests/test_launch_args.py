@@ -82,3 +82,48 @@ model = "gpt-oss"
     )
 
     assert toml_to_launch_arguments(config, module="does_not_exist") == []
+
+
+def test_duplicate_tables_do_not_block_other_modules(tmp_path: Path) -> None:
+    """A duplicate table for an unrelated module should not prevent parsing."""
+
+    config = write(
+        tmp_path,
+        """
+[modules.faces.launch.arguments]
+camera_topic = "/camera/old"
+
+[modules.faces.launch.arguments]
+camera_topic = "/camera/new"
+
+[modules.nav.launch.arguments]
+kinect_rgb_topic = "/camera/color/image_raw"
+kinect_depth_topic = "/camera/depth/image_rect_raw"
+camera_frame = "camera_link"
+""",
+    )
+
+    assert toml_to_launch_arguments(config, module="nav") == [
+        "kinect_rgb_topic:=\"/camera/color/image_raw\"",
+        "kinect_depth_topic:=\"/camera/depth/image_rect_raw\"",
+        "camera_frame:=\"camera_link\"",
+    ]
+
+
+def test_duplicate_module_table_prefers_last_definition(tmp_path: Path) -> None:
+    """When the module itself is duplicated the newest values should win."""
+
+    config = write(
+        tmp_path,
+        """
+[modules.nav.launch.arguments]
+kinect_rgb_topic = "/camera/old"
+
+[modules.nav.launch.arguments]
+kinect_rgb_topic = "/camera/new"
+""",
+    )
+
+    assert toml_to_launch_arguments(config, module="nav") == [
+        "kinect_rgb_topic:=\"/camera/new\"",
+    ]
