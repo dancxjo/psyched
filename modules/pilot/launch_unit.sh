@@ -28,10 +28,8 @@ add_pythonpath_dir() {
 USER_SITE_DIR="$(python3 -c 'import site; print(site.getusersitepackages())' 2>/dev/null || true)"
 add_pythonpath_dir "${USER_SITE_DIR}"
 add_pythonpath_dir "/usr/lib/python3/dist-packages"
-echo "Pilot backend PYTHONPATH: ${PYTHONPATH:-<empty>}"
 
 cleanup() {
-  echo "Pilot backend PYTHONPATH: ${PYTHONPATH:-<empty>}"
   if [[ -n "${COCKPIT_PID:-}" ]] && kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
     echo "Stopping Pilot cockpit backend (PID ${COCKPIT_PID})..."
     kill "${COCKPIT_PID}" 2>/dev/null || true
@@ -62,10 +60,8 @@ echo "Starting Pilot cockpit backend..."
   cd "${ROOT_DIR}" &&
     ros2 run pilot cockpit --log-level "${PILOT_LOG_LEVEL:-info}"
 ) &
-echo "Pilot backend PYTHONPATH: ${PYTHONPATH:-<empty>}"
 COCKPIT_PID=$!
 
-echo "Pilot backend PYTHONPATH: ${PYTHONPATH:-<empty>}"
 sleep 2
 if ! kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
   echo "Pilot cockpit backend failed to start." >&2
