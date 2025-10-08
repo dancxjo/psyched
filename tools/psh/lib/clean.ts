@@ -3,6 +3,9 @@ import { listModules, teardownModules } from "./module.ts";
 import { listServices, teardownServices } from "./service.ts";
 import { resetWorkspace } from "./workspace.ts";
 
+const PROTECTED_MODULES = new Set(["wifi", "ssh", "mdns"]);
+const PROTECTED_SERVICES = new Set(["ssh", "mdns"]);
+
 export interface CleanOptions {
   skipModules?: boolean;
   skipServices?: boolean;
@@ -20,6 +23,32 @@ let moduleTeardown: ModuleTeardown = (modules) => teardownModules(modules);
 let serviceLister: ServiceLister = () => listServices();
 let serviceTeardown: ServiceTeardown = (services) => teardownServices(services);
 let workspaceReset: WorkspaceReset = () => resetWorkspace();
+
+function partitionProtected(
+  items: string[],
+  protectedSet: ReadonlySet<string>,
+): { teardown: string[]; preserved: string[] } {
+  const teardown: string[] = [];
+  const preserved: string[] = [];
+  for (const item of items) {
+    if (protectedSet.has(item)) {
+      preserved.push(item);
+    } else {
+      teardown.push(item);
+    }
+  }
+  return { teardown, preserved };
+}
+
+function logPreserved(kind: "module" | "service", names: string[]): void {
+  if (!names.length) return;
+  const suffix = names.length === 1
+    ? `${kind} '${names[0]}'`
+    : `${kind}s ${names.join(", ")}`;
+  console.log(
+    colors.dim(`Preserving protected ${suffix}; skipping teardown.`),
+  );
+}
 
 function summarizeError(scope: string, error: unknown): string {
   if (error instanceof Error) return `[${scope}] ${error.message}`;
@@ -43,12 +72,17 @@ export async function cleanEnvironment(
 
   if (!skipModules) {
     const modules = moduleLister();
-    if (modules.length) {
+    const { teardown, preserved } = partitionProtected(
+      modules,
+      PROTECTED_MODULES,
+    );
+    logPreserved("module", preserved);
+    if (teardown.length) {
       console.log(
-        colors.cyan(`==> Tearing down ${modules.length} module(s)`),
+        colors.cyan(`==> Tearing down ${teardown.length} module(s)`),
       );
       try {
-        await moduleTeardown(modules);
+        await moduleTeardown(teardown);
       } catch (error) {
         errors.push({ scope: "modules", cause: error });
         console.error(colors.red(summarizeError("modules", error)));
@@ -62,12 +96,17 @@ export async function cleanEnvironment(
 
   if (!skipServices) {
     const services = serviceLister();
-    if (services.length) {
+    const { teardown, preserved } = partitionProtected(
+      services,
+      PROTECTED_SERVICES,
+    );
+    logPreserved("service", preserved);
+    if (teardown.length) {
       console.log(
-        colors.cyan(`==> Tearing down ${services.length} service(s)`),
+        colors.cyan(`==> Tearing down ${teardown.length} service(s)`),
       );
       try {
-        await serviceTeardown(services);
+        await serviceTeardown(teardown);
       } catch (error) {
         errors.push({ scope: "services", cause: error });
         console.error(colors.red(summarizeError("services", error)));
