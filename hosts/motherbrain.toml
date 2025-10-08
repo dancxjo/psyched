@@ -11,31 +11,26 @@ roles = ["midbrain", "ros2-control"]
 installers = ["ros2"]
 
 [modules.pilot]
-launch = false
 
   [modules.pilot.env]
   ROS_DOMAIN_ID = "25"
 
 [modules.imu]
-launch = true
 
   [modules.imu.env]
   ROS_DOMAIN_ID = "25"
 
 [modules.foot]
-launch = true
 
   [modules.foot.env]
   ROS_DOMAIN_ID = "25"
 
 [modules.eye]
-launch = true
 
   [modules.eye.env]
   ROS_DOMAIN_ID = "25"
 
 [modules.ear]
-launch = true
 
   [modules.ear.env]
   ROS_DOMAIN_ID = "25"
@@ -50,8 +45,8 @@ launch = true
   summary = "Consumes Whisper websocket for speech recognition"
 
 [modules.faces]
-launch = { enabled = true }
 
+  [modules.faces.launch]
   [modules.faces.env]
   ROS_DOMAIN_ID = "25"
 
@@ -61,8 +56,8 @@ launch = { enabled = true }
   face_detected_topic = "/vision/face_detected"
 
 [modules.gps]
-launch = { enabled = true }
 
+  [modules.gps.launch]
   [modules.gps.env]
   ROS_DOMAIN_ID = "25"
 
@@ -70,8 +65,8 @@ launch = { enabled = true }
   frame_id = "gps_link"
 
 [modules.nav]
-launch = { enabled = true }
 
+  [modules.nav.launch]
   [modules.nav.env]
   ROS_DOMAIN_ID = "25"
 
@@ -81,7 +76,6 @@ launch = { enabled = true }
   camera_frame = "camera_link"
 
 [modules.wifi]
-launch = false
 
   [modules.wifi.env]
   WIFI_INTERFACE = "wlan0"
@@ -92,14 +86,12 @@ launch = false
   WIFI_UPLINK_INTERFACE = "eth0"
 
 [modules.will]
-launch = true
 
   [modules.will.env]
   ROS_DOMAIN_ID = "25"
   WILL_DEFAULT_REGIME = "idle"
 
 [modules.voice]
-launch = true
 
   [modules.voice.env]
   ROS_DOMAIN_ID = "25"
@@ -114,7 +106,6 @@ launch = true
   summary = "Streams synthesized speech from the forebrain TTS service"
 
 [modules.viscera]
-launch = true
 
   [modules.viscera.env]
   ROS_DOMAIN_ID = "25"
