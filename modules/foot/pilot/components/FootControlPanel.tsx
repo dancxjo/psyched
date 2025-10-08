@@ -5,7 +5,18 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { type ConnectionStatus, useCockpitTopic } from "@pilot/lib/cockpit.ts";
+import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
+
+import {
+  CONNECTION_STATUS_LABELS,
+  LcarsCard,
+  LcarsPanel,
+  toneFromConnection,
+} from "../../../pilot/frontend/components/lcars.tsx";
+import {
+  formatNullableNumber,
+  formatRelativeTime,
+} from "../../../pilot/frontend/lib/format.ts";
 
 type Vector3 = { x: number; y: number; z: number };
 
@@ -59,14 +70,6 @@ type FootTelemetrySnapshot = {
   last_update_ms?: number;
 };
 
-const STATUS_LABELS: Record<ConnectionStatus, string> = {
-  idle: "Idle",
-  connecting: "Connecting",
-  open: "Connected",
-  closed: "Disconnected",
-  error: "Error",
-};
-
 const ZERO_TWIST: TwistPayload = {
   linear: { x: 0, y: 0, z: 0 },
   angular: { x: 0, y: 0, z: 0 },
@@ -97,14 +100,14 @@ export default function FootControlPanel() {
     initialValue: ZERO_TWIST,
   });
 
-  const connectionLabel = STATUS_LABELS[telemetryStatus] ?? "Unknown";
-  const telemetryBadgeVariant = STATUS_LABELS[telemetryStatus]
-    ? telemetryStatus
-    : "idle";
-  const cmdVelLabel = STATUS_LABELS[cmdVelStatus] ?? "Unknown";
-  const cmdVelBadgeVariant = STATUS_LABELS[cmdVelStatus]
-    ? cmdVelStatus
-    : "idle";
+  const telemetryBadge = {
+    label: CONNECTION_STATUS_LABELS[telemetryStatus] ?? "Unknown",
+    tone: toneFromConnection(telemetryStatus),
+  };
+  const cmdVelBadge = {
+    label: CONNECTION_STATUS_LABELS[cmdVelStatus] ?? "Unknown",
+    tone: toneFromConnection(cmdVelStatus),
+  };
 
   const batteryPercentage = telemetry?.battery?.percentage ?? null;
   const batteryRatio = useMemo(() => {
@@ -123,11 +126,23 @@ export default function FootControlPanel() {
 
   const batteryStats = useMemo(
     () => [
-      { label: "V", value: formatNumber(telemetry?.battery?.voltage_v, 1) },
-      { label: "A", value: formatNumber(telemetry?.battery?.current_a, 2) },
+      {
+        label: "V",
+        value: formatNullableNumber(telemetry?.battery?.voltage_v, {
+          fractionDigits: 1,
+        }),
+      },
+      {
+        label: "A",
+        value: formatNullableNumber(telemetry?.battery?.current_a, {
+          fractionDigits: 2,
+        }),
+      },
       {
         label: "°C",
-        value: formatNumber(telemetry?.battery?.temperature_c, 0),
+        value: formatNullableNumber(telemetry?.battery?.temperature_c, {
+          fractionDigits: 0,
+        }),
       },
     ],
     [
@@ -140,10 +155,10 @@ export default function FootControlPanel() {
   const modeLabel = telemetry?.status?.mode ?? "—";
   const chargingLabel = telemetry?.status?.charging_state ??
     telemetry?.battery?.charging_state ?? "—";
-  const lastCommandLabel = formatRelativeMillis(
+  const lastCommandLabel = formatRelativeTime(
     telemetry?.status?.last_command_ms,
   );
-  const lastUpdateLabel = formatRelativeMillis(telemetry?.last_update_ms);
+  const lastUpdateLabel = formatRelativeTime(telemetry?.last_update_ms);
 
   const commanded = telemetry?.motion?.command;
   const odometry = telemetry?.motion?.odometry;
@@ -291,112 +306,98 @@ export default function FootControlPanel() {
     [stickPosition],
   );
 
+  const batteryPercentageLabel = batteryPercentage === null ||
+      batteryPercentage === undefined
+    ? "—"
+    : `${Math.round(batteryPercentage)}%`;
+
   return (
-    <article class="foot-panel foot-panel--lcars">
-      <header class="foot-panel__header">
-        <div class="foot-panel__heading">
-          <span class="foot-panel__heading-accent" aria-hidden="true" />
-          <div>
-            <h1 class="foot-panel__title">Create base</h1>
-            <p class="foot-panel__description">
-              Compact drive, power, and hazard console for Pete&apos;s
-              drivetrain.
-            </p>
+    <LcarsPanel
+      title="Create base"
+      subtitle="Compact drive, power, and hazard console for Pete's drivetrain."
+      accent="amber"
+      badges={[telemetryBadge, cmdVelBadge]}
+    >
+      <div class="lcars-grid lcars-grid--stretch">
+        <LcarsCard
+          title="Power"
+          tone="amber"
+          icon={<BatteryIcon level={batteryRatio} />}
+        >
+          <div class="lcars-metric">
+            <span class="lcars-metric__value">{batteryPercentageLabel}</span>
+            <span class="lcars-metric__caption">Charge</span>
           </div>
-        </div>
-        <div class="foot-panel__status-chips">
-          <span
-            class={`foot-panel__badge foot-panel__badge--${telemetryBadgeVariant}`}
-          >
-            {connectionLabel}
-          </span>
-          <span
-            class={`foot-panel__badge foot-panel__badge--${cmdVelBadgeVariant}`}
-          >
-            {cmdVelLabel}
-          </span>
-        </div>
-      </header>
+          <dl class="lcars-list lcars-list--columns">
+            {batteryStats.map(({ label, value }) => (
+              <div class="lcars-list__item" key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p class="lcars-note">
+            {chargingLabel}
+            {telemetry?.battery?.is_charging ? " • charging" : ""}
+          </p>
+        </LcarsCard>
 
-      <section class="foot-panel__grid">
-        <div class="foot-panel__tile foot-panel__tile--battery">
-          <div class="foot-panel__tile-header">
-            <BatteryIcon level={batteryRatio} />
-            <span>Power</span>
-          </div>
-          <div class="foot-panel__tile-body">
-            <strong class="foot-panel__tile-value">
-              {batteryPercentage === null || batteryPercentage === undefined
-                ? "—"
-                : `${batteryPercentage.toFixed(0)}%`}
-            </strong>
-            <ul class="foot-panel__mini-list">
-              {batteryStats.map(({ label, value }) => (
-                <li key={label}>
-                  <span>{label}</span>
-                  <strong>{value}</strong>
-                </li>
-              ))}
-            </ul>
-            <p class="foot-panel__tile-meta">
-              {chargingLabel}
-              {telemetry?.battery?.is_charging ? " • charging" : ""}
-            </p>
-          </div>
-        </div>
+        <LcarsCard title="Status" tone="teal" icon={<StatusIcon />}>
+          <dl class="lcars-list">
+            <div class="lcars-list__item">
+              <dt>Mode</dt>
+              <dd>{modeLabel}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Last command</dt>
+              <dd>{lastCommandLabel}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Telemetry</dt>
+              <dd>{lastUpdateLabel}</dd>
+            </div>
+          </dl>
+          {telemetryError && (
+            <p class="lcars-note lcars-note--alert">{telemetryError}</p>
+          )}
+        </LcarsCard>
 
-        <div class="foot-panel__tile foot-panel__tile--status">
-          <div class="foot-panel__tile-header">
-            <StatusIcon />
-            <span>Status</span>
+        <LcarsCard title="Motion" tone="cyan" icon={<MotionIcon />}>
+          <div class="lcars-matrix">
+            <div class="lcars-matrix__row">
+              <span class="lcars-chip">cmd</span>
+              <span>
+                {formatNullableNumber(commanded?.linear_x, {
+                  fractionDigits: 2,
+                })} m/s
+              </span>
+              <span>
+                {formatNullableNumber(commanded?.angular_z, {
+                  fractionDigits: 2,
+                })} rad/s
+              </span>
+            </div>
+            <div class="lcars-matrix__row">
+              <span class="lcars-chip">odom</span>
+              <span>
+                {formatNullableNumber(odometry?.linear_x, {
+                  fractionDigits: 2,
+                })} m/s
+              </span>
+              <span>
+                {formatNullableNumber(odometry?.angular_z, {
+                  fractionDigits: 2,
+                })} rad/s
+              </span>
+            </div>
           </div>
-          <div class="foot-panel__tile-body">
-            <div class="foot-panel__chip-row">
-              <span class="foot-panel__chip">Mode</span>
-              <strong>{modeLabel}</strong>
-            </div>
-            <div class="foot-panel__chip-row">
-              <span class="foot-panel__chip">Cmd</span>
-              <strong>{lastCommandLabel}</strong>
-            </div>
-            <div class="foot-panel__chip-row">
-              <span class="foot-panel__chip">Telemetry</span>
-              <strong>{lastUpdateLabel}</strong>
-            </div>
-            {telemetryError && (
-              <p class="foot-panel__status-note">{telemetryError}</p>
-            )}
-          </div>
-        </div>
+        </LcarsCard>
 
-        <div class="foot-panel__tile foot-panel__tile--motion">
-          <div class="foot-panel__tile-header">
-            <MotionIcon />
-            <span>Motion</span>
-          </div>
-          <div class="foot-panel__tile-body foot-panel__motion">
-            <div class="foot-panel__motion-row">
-              <span class="foot-panel__chip">cmd</span>
-              <span>{formatNumber(commanded?.linear_x, 2)} m/s</span>
-              <span>{formatNumber(commanded?.angular_z, 2)} rad/s</span>
-            </div>
-            <div class="foot-panel__motion-row">
-              <span class="foot-panel__chip">odom</span>
-              <span>{formatNumber(odometry?.linear_x, 2)} m/s</span>
-              <span>{formatNumber(odometry?.angular_z, 2)} rad/s</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="foot-panel__tile foot-panel__tile--hazards">
-          <div class="foot-panel__tile-header">
-            <HazardIcon />
-            <span>Hazards</span>
-          </div>
-          <div class="foot-panel__tile-body foot-panel__hazards">
-            <div class="foot-panel__hazard-group">
-              <h3>Bumpers</h3>
-              <div class="foot-panel__hazard-dots">
+        <LcarsCard title="Hazards" tone="magenta" icon={<HazardIcon />}>
+          <div class="lcars-hazard-grid">
+            <div>
+              <h3 class="lcars-hazard__title">Bumpers</h3>
+              <div class="lcars-dots">
                 <span
                   class={hazardClass(hazards.bumper_left)}
                   title="Left bumper"
@@ -423,9 +424,9 @@ export default function FootControlPanel() {
                 </span>
               </div>
             </div>
-            <div class="foot-panel__hazard-group">
-              <h3>Cliffs</h3>
-              <div class="foot-panel__hazard-dots">
+            <div>
+              <h3 class="lcars-hazard__title">Cliffs</h3>
+              <div class="lcars-dots">
                 <span
                   class={hazardClass(hazards.cliff_left)}
                   title="Left cliff"
@@ -453,64 +454,64 @@ export default function FootControlPanel() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </LcarsCard>
+      </div>
 
-      <section class="foot-panel__joystick">
-        <header class="foot-panel__joystick-header">
-          <div class="foot-panel__tile-header">
-            <JoystickIcon />
-            <span>Manual control</span>
-          </div>
+      <LcarsCard
+        title="Manual control"
+        tone="teal"
+        icon={<JoystickIcon />}
+        footer={
+          <dl class="lcars-list lcars-list--columns">
+            <div class="lcars-list__item">
+              <dt>linear.x</dt>
+              <dd>{currentTwist.linear.x.toFixed(2)} m/s</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>angular.z</dt>
+              <dd>{currentTwist.angular.z.toFixed(2)} rad/s</dd>
+            </div>
+          </dl>
+        }
+        actions={
           <button
             type="button"
-            class="foot-panel__chip foot-panel__chip--action"
+            class="lcars-button"
             onClick={resetStick}
             title="Stop"
           >
             <StopIcon />
             <span class="sr-only">Stop</span>
           </button>
-        </header>
-        <p class="foot-panel__joystick-description">
+        }
+      >
+        <p class="lcars-note">
           Drag the pad to command velocities (±{MAX_LINEAR_X.toFixed(2)}{" "}
           m/s, ±{MAX_ANGULAR_Z.toFixed(2)} rad/s). Release to halt.
         </p>
         <div
           ref={joystickRef}
-          class={`foot-panel__joystick-pad${
-            isDragging ? " foot-panel__joystick-pad--active" : ""
-          }`}
+          class={`lcars-joystick${isDragging ? " lcars-joystick--active" : ""}`}
           aria-label="Drive joystick"
           role="application"
         >
           <div
-            class={`foot-panel__joystick-thumb${
-              isDragging ? " foot-panel__joystick-thumb--active" : ""
+            class={`lcars-joystick__thumb${
+              isDragging ? " lcars-joystick__thumb--active" : ""
             }`}
             style={joystickThumbStyle}
           />
           <div
-            class="foot-panel__joystick-axis foot-panel__joystick-axis--x"
+            class="lcars-joystick__axis lcars-joystick__axis--x"
             aria-hidden="true"
           />
           <div
-            class="foot-panel__joystick-axis foot-panel__joystick-axis--y"
+            class="lcars-joystick__axis lcars-joystick__axis--y"
             aria-hidden="true"
           />
         </div>
-        <dl class="foot-panel__joystick-readout">
-          <div>
-            <dt>linear.x</dt>
-            <dd>{currentTwist.linear.x.toFixed(2)} m/s</dd>
-          </div>
-          <div>
-            <dt>angular.z</dt>
-            <dd>{currentTwist.angular.z.toFixed(2)} rad/s</dd>
-          </div>
-        </dl>
-      </section>
-    </article>
+      </LcarsCard>
+    </LcarsPanel>
   );
 }
 
@@ -518,14 +519,14 @@ function BatteryIcon({ level }: { level: number | null }) {
   const clamped = level === null ? 0 : Math.min(1, Math.max(0, level));
   const width = 36 * clamped;
   return (
-    <svg viewBox="0 0 48 24" class="foot-panel__icon" aria-hidden="true">
+    <svg viewBox="0 0 48 24" class="lcars-icon" aria-hidden="true">
       <rect
         x="1"
         y="4"
         width="40"
         height="16"
         rx="3"
-        class="foot-panel__icon-outline"
+        class="lcars-icon__outline"
       />
       <rect
         x="42"
@@ -533,7 +534,7 @@ function BatteryIcon({ level }: { level: number | null }) {
         width="5"
         height="6"
         rx="1"
-        class="foot-panel__icon-outline"
+        class="lcars-icon__outline"
       />
       <rect
         x="3"
@@ -541,7 +542,7 @@ function BatteryIcon({ level }: { level: number | null }) {
         width={width}
         height="12"
         rx="2"
-        class="foot-panel__icon-fill"
+        class="lcars-icon__fill"
       />
     </svg>
   );
@@ -549,8 +550,8 @@ function BatteryIcon({ level }: { level: number | null }) {
 
 function StatusIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="foot-panel__icon" aria-hidden="true">
-      <circle cx="12" cy="12" r="8" class="foot-panel__icon-outline" />
+    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" class="lcars-icon__outline" />
       <path
         d="M12 6v6l4 2"
         fill="none"
@@ -565,7 +566,7 @@ function StatusIcon() {
 
 function MotionIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="foot-panel__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
       <path
         d="M4 12h16M12 4v16M16 8l4 4-4 4M8 16l-4-4 4-4"
         fill="none"
@@ -580,7 +581,7 @@ function MotionIcon() {
 
 function HazardIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="foot-panel__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
       <path
         d="M12 3 2.5 20.5h19L12 3z"
         fill="none"
@@ -588,7 +589,7 @@ function HazardIcon() {
         stroke-width="2"
         stroke-linejoin="round"
       />
-      <circle cx="12" cy="16" r="1.5" class="foot-panel__icon-fill" />
+      <circle cx="12" cy="16" r="1.5" class="lcars-icon__fill" />
       <path
         d="M12 9v5"
         stroke="currentColor"
@@ -601,8 +602,8 @@ function HazardIcon() {
 
 function JoystickIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="foot-panel__icon" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" class="foot-panel__icon-fill" />
+    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" class="lcars-icon__fill" />
       <path
         d="M12 3v6M12 15v6M3 12h6M15 12h6"
         stroke="currentColor"
@@ -615,36 +616,12 @@ function JoystickIcon() {
 
 function StopIcon() {
   return (
-    <svg viewBox="0 0 16 16" class="foot-panel__icon" aria-hidden="true">
+    <svg viewBox="0 0 16 16" class="lcars-icon" aria-hidden="true">
       <rect x="3" y="3" width="10" height="10" rx="2" />
     </svg>
   );
 }
 
-function formatNumber(value?: number | null, fractionDigits = 2) {
-  if (value === undefined || value === null || Number.isNaN(value)) {
-    return "—";
-  }
-  return value.toFixed(fractionDigits);
-}
-
-function formatRelativeMillis(value?: number) {
-  if (!value) return "—";
-  const delta = Date.now() - value;
-  if (delta < 0) return "0s";
-  const seconds = Math.floor(delta / 1000);
-  if (seconds < 1) return "<1s";
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
 function hazardClass(active?: boolean) {
-  return `foot-panel__hazard-dot${
-    active ? " foot-panel__hazard-dot--active" : ""
-  }`;
+  return `lcars-dot${active ? " lcars-dot--active" : ""}`;
 }
