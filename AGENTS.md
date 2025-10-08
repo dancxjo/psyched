@@ -52,6 +52,7 @@ Always prefer running the smallest relevant command set.
 - Stick to the hooks-based API exposed in `lib/cockpit.ts`. New topics should be declared in a single place so reconnect logic remains centralized.
 - Keep hooks SSR-safe: guard browser-only APIs (`window`, `WebSocket`) with `typeof` checks.
 - Use the shared `Panel`, `Card`, and `Badge` helpers from `@pilot/components/dashboard.tsx` so cockpit pages and utilities share one styling system.
+- Base cockpit styling layers [Pico.css](https://picocss.com/) with the design tokens defined in `modules/pilot/frontend/static/styles.css`. Reuse the `--brand-*` and `--accent-*` variables instead of introducing one-off colours.
 
 ### Shell
 
