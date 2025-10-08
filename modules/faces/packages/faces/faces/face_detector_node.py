@@ -4,12 +4,15 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Optional
+from types import ModuleType
+from typing import Optional, TYPE_CHECKING
+
 from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
+from rclpy.logging import get_logger
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
@@ -17,7 +20,13 @@ from std_msgs.msg import String
 from faces_msgs.msg import FaceDetections
 
 from .message_builder import build_face_detections_msg
-from .processing import BasicEmbeddingExtractor, FaceProcessor, HaarCascadeDetector
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .processing import (  # type: ignore[attr-defined]
+        BasicEmbeddingExtractor,
+        FaceProcessor,
+        HaarCascadeDetector,
+    )
 
 try:  # pragma: no cover - requires ROS 2 runtime
     from rclpy.qos import (
@@ -51,17 +60,53 @@ def _best_effort_qos(*, depth: int = 10):
         reliability=QoSReliabilityPolicy.BEST_EFFORT,
         durability=QoSDurabilityPolicy.VOLATILE,
     )
+_PROCESSING_MODULE: ModuleType | None = None
+_PROCESSING_IMPORT_ERROR: ModuleNotFoundError | None = None
+
+
+class MissingDependencyError(RuntimeError):
+    """Raised when the faces module is missing runtime dependencies."""
+
+
+def _missing_dependency_message(missing: str) -> str:
+    human_readable = "OpenCV (cv2)" if missing == "cv2" else missing
+    return (
+        "faces module requires the '{}' dependency. "
+        "Run `psh mod setup faces` or install the appropriate system packages.".format(human_readable)
+    )
+
+
+def _get_processing_module() -> ModuleType:
+    """Return the cached ``faces.processing`` module or raise with guidance."""
+
+    global _PROCESSING_MODULE, _PROCESSING_IMPORT_ERROR
+
+    if _PROCESSING_MODULE is not None:
+        return _PROCESSING_MODULE
+    if _PROCESSING_IMPORT_ERROR is not None:
+        missing = getattr(_PROCESSING_IMPORT_ERROR, "name", "cv2")
+        raise MissingDependencyError(_missing_dependency_message(missing)) from _PROCESSING_IMPORT_ERROR
+    try:
+        from . import processing as _processing  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:  # pragma: no cover - dependency resolution
+        _PROCESSING_IMPORT_ERROR = exc
+        missing = getattr(exc, "name", "cv2")
+        raise MissingDependencyError(_missing_dependency_message(missing)) from exc
+    _PROCESSING_MODULE = _processing
+    return _processing
 
 
 class FaceDetectorNode(Node):
     """Detect faces from camera frames and publish crops and embeddings."""
 
     def __init__(self) -> None:
+        processing = _get_processing_module()
+
         super().__init__("psyched_faces")
         self._bridge = CvBridge()
-        self._processor = FaceProcessor(
-            detector=HaarCascadeDetector(),
-            embedder=BasicEmbeddingExtractor(),
+        self._processor = processing.FaceProcessor(
+            detector=processing.HaarCascadeDetector(),
+            embedder=processing.BasicEmbeddingExtractor(),
         )
 
         # prefer the generic /image_raw topic (and its children) by default
@@ -191,7 +236,12 @@ class FaceDetectorNode(Node):
 
 def main(args: Optional[list[str]] = None) -> None:
     rclpy.init(args=args)
-    node = FaceDetectorNode()
+    try:
+        node = FaceDetectorNode()
+    except MissingDependencyError as exc:
+        get_logger("psyched_faces").error(str(exc))
+        rclpy.shutdown()
+        raise SystemExit(1) from exc
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:  # pragma: no cover - manual shutdown path
