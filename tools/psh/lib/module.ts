@@ -365,6 +365,18 @@ async function installPipPackages(
   console.log(
     colors.cyan(`[${label}] Installing pip packages: ${expanded.join(", ")}`),
   );
+  const rosDistro = (Deno.env.get("ROS_DISTRO") ?? "kilted").trim();
+  const colconPip = `/opt/ros/${rosDistro}/colcon-venv/bin/pip`;
+  if (pathExists(colconPip)) {
+    const useSudo = await $`which sudo`.noThrow().stdout("null").then((
+      res: { code: number },
+    ) => res.code === 0);
+    const installer = useSudo
+      ? $`sudo ${colconPip} install --no-cache-dir --upgrade ${expanded}`
+      : $`${colconPip} install --no-cache-dir --upgrade ${expanded}`;
+    await installer.stdout("inherit").stderr("inherit");
+    return;
+  }
   const pip = await $`which pip3`.noThrow().stdout("null");
   const pipCmd = pip.code === 0 ? "pip3" : "pip";
   await $`${pipCmd} install --break-system-packages ${expanded}`.stdout(
