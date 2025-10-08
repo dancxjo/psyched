@@ -6,6 +6,7 @@
     "jsr:@deno/loader@~0.3.3": "0.3.6",
     "jsr:@fresh/build-id@1": "1.0.1",
     "jsr:@fresh/core@2": "2.1.1",
+    "jsr:@fresh/core@2.1.1": "2.1.1",
     "jsr:@fresh/core@^2.1.1": "2.1.1",
     "jsr:@fresh/plugin-vite@^1.0.4": "1.0.4",
     "jsr:@std/bytes@^1.0.6": "1.0.6",
@@ -28,8 +29,10 @@
     "npm:@babel/preset-react@^7.27.1": "7.27.1_@babel+core@7.28.4",
     "npm:@mjackson/node-fetch-server@0.7": "0.7.0",
     "npm:@opentelemetry/api@^1.9.0": "1.9.0",
+    "npm:@preact/signals@^2.2.1": "2.3.2_preact@10.27.2",
     "npm:@preact/signals@^2.3.1": "2.3.2_preact@10.27.2",
     "npm:@prefresh/vite@^2.4.8": "2.4.10_preact@10.27.2_vite@7.1.9__picomatch@4.0.3",
+    "npm:dependency-graph@1.0.0": "1.0.0",
     "npm:esbuild-wasm@0.25.7": "0.25.7",
     "npm:esbuild@0.25.7": "0.25.7",
     "npm:preact-render-to-string@^6.5.11": "6.6.2_preact@10.27.2",
@@ -71,6 +74,7 @@
         "jsr:@std/semver",
         "jsr:@std/uuid",
         "npm:@opentelemetry/api",
+        "npm:@preact/signals@^2.2.1",
         "npm:esbuild",
         "npm:esbuild-wasm",
         "npm:preact-render-to-string",
@@ -800,6 +804,9 @@
         "ms"
       ]
     },
+    "dependency-graph@1.0.0": {
+      "integrity": "sha512-cW3gggJ28HZ/LExwxP2B++aiKxhJXMSIt9K48FOXQkm+vuG5gyatXnLsONRJdzO/7VfjDIiaOOa/bs4l464Lwg=="
+    },
     "electron-to-chromium@1.5.232": {
       "integrity": "sha512-ENirSe7wf8WzyPCibqKUG1Cg43cPaxH4wRR7AJsX7MCABCHBIOFqvaYODSLKUuZdraxUTHRE/0A2Aq8BYKEHOg=="
     },
@@ -1023,11 +1030,18 @@
       "integrity": "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="
     }
   },
+  "remote": {
+    "https://deno.land/std@0.216.0/dotenv/load.ts": "587b342f0f6a3df071331fe6ba1c823729ab68f7d53805809475e486dd4161d7",
+    "https://deno.land/std@0.216.0/dotenv/mod.ts": "0180eaeedaaf88647318811cdaa418cc64dc51fb08354f91f5f480d0a1309f7d",
+    "https://deno.land/std@0.216.0/dotenv/parse.ts": "a49ed243bd62ec26f38614042cda4e5e3a47b18337c93b0f9f8556a5c918884b",
+    "https://deno.land/std@0.216.0/dotenv/stringify.ts": "0047ad7068289735d08964046aea267a750c141b494ca0e38831b89be6c020c2"
+  },
   "workspace": {
     "dependencies": [
       "jsr:@fresh/core@2.1.1",
       "jsr:@fresh/plugin-vite@^1.0.4",
       "npm:@preact/signals@^2.3.1",
+      "npm:dependency-graph@1.0.0",
       "npm:preact@^10.27.2",
       "npm:vite@^7.1.3"
     ]
