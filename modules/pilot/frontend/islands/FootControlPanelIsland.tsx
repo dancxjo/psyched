@@ -1,1 +1,1 @@
-../../../foot/pilot/islands/FootControlPanelIsland.tsx
+/home/pete/psyched/modules/foot/pilot/islands/FootControlPanelIsland.tsx

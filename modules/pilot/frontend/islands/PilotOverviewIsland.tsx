@@ -1,1 +1,1 @@
-../../pilot/islands/PilotOverviewIsland.tsx
+/home/pete/psyched/modules/pilot/pilot/islands/PilotOverviewIsland.tsx

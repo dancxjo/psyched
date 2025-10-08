@@ -1,1 +1,1 @@
-../../../imu/pilot/islands/ImuTelemetryIsland.tsx
+/home/pete/psyched/modules/imu/pilot/islands/ImuTelemetryIsland.tsx

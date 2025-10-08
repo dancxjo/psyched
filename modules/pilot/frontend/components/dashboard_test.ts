@@ -1,1 +1,1 @@
-../../pilot/components/dashboard_test.ts
+/home/pete/psyched/modules/pilot/pilot/components/dashboard_test.ts

@@ -1,1 +1,1 @@
-../../../../foot/pilot/routes/modules/foot.tsx
+/home/pete/psyched/modules/foot/pilot/routes/modules/foot.tsx
