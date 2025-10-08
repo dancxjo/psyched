@@ -11,6 +11,15 @@ export interface FormatNumberOptions {
   fallback?: string;
 }
 
+export interface FormatTemperaturePairOptions {
+  /** Number of fractional digits to display for the Celsius value. */
+  celsiusDigits?: number;
+  /** Number of fractional digits to display for the Fahrenheit value. */
+  fahrenheitDigits?: number;
+  /** Placeholder used when the payload is nullish or not a finite number. */
+  fallback?: string;
+}
+
 const DEFAULT_NUMBER_OPTIONS: Required<
   Pick<FormatNumberOptions, "fractionDigits" | "fallback">
 > = {
@@ -41,6 +50,35 @@ export function formatNullableNumber(
     return fallback;
   }
   return value.toFixed(fractionDigits);
+}
+
+/**
+ * Formats a Celsius temperature so the readout also exposes the Fahrenheit
+ * equivalent. The cockpit dashboard frequently presents sensor data as
+ * side-by-side tables, so the helper keeps the output short and symmetrical.
+ *
+ * @example
+ * ```ts
+ * formatTemperaturePair(23.1); // "23.1 °C / 73.6 °F"
+ * formatTemperaturePair(undefined); // "—"
+ * ```
+ */
+export function formatTemperaturePair(
+  celsius: number | null | undefined,
+  options: FormatTemperaturePairOptions = {},
+): string {
+  const {
+    celsiusDigits = 1,
+    fahrenheitDigits = 1,
+    fallback = "—",
+  } = options;
+  if (celsius === undefined || celsius === null || !Number.isFinite(celsius)) {
+    return fallback;
+  }
+  const fahrenheit = (celsius * 9) / 5 + 32;
+  return `${celsius.toFixed(celsiusDigits)} °C / ${
+    fahrenheit.toFixed(fahrenheitDigits)
+  } °F`;
 }
 
 export interface FormatRelativeTimeOptions {
