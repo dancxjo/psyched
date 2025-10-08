@@ -2,7 +2,7 @@ import { define } from "../../../../utils.ts";
 import {
   bringModulesDown,
   listModules,
-} from "../../../../../../../tools/psh/lib/module.ts";
+} from "../../../../lib/server/modules.ts";
 
 interface RequestBody {
   modules?: string[];

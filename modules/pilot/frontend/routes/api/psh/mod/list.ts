@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { moduleStatuses } from "../../../../lib/server/module_status.ts";
+import { moduleStatuses } from "../../../../lib/server/modules.ts";
 
 export const handler = define.handlers({
   GET() {

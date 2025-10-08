@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { setupSystemd } from "../../../../../../../tools/psh/lib/systemd.ts";
+import { setupSystemd } from "../../../../lib/server/systemd.ts";
 
 interface RequestBody {
   module: string;

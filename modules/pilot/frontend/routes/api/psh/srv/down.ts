@@ -2,7 +2,7 @@ import { define } from "../../../../utils.ts";
 import {
   bringServiceDown,
   listServices,
-} from "../../../../../../../tools/psh/lib/service.ts";
+} from "../../../../lib/server/services.ts";
 
 interface RequestBody {
   services?: string[];

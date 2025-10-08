@@ -1,7 +1,7 @@
 import { page } from "fresh";
 import PshSystemdManager from "../../islands/PshSystemdManager.tsx";
 import { define } from "../../utils.ts";
-import { listModules } from "../../../../../tools/psh/lib/module.ts";
+import { listModules } from "../../lib/server/modules.ts";
 
 interface Data {
   modules: string[];

@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { teardownSystemd } from "../../../../../../../tools/psh/lib/systemd.ts";
+import { teardownSystemd } from "../../../../lib/server/systemd.ts";
 
 interface RequestBody {
   module: string;

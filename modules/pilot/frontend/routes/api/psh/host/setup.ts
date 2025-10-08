@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { provisionHost } from "../../../../../../../tools/psh/lib/host.ts";
+import { provisionHosts } from "../../../../lib/server/hosts.ts";
 
 interface RequestBody {
   hosts?: string[];
@@ -13,13 +13,7 @@ export const handler = define.handlers({
     const hosts = body.hosts?.length ? body.hosts : undefined;
 
     try {
-      if (!hosts) {
-        await provisionHost();
-      } else {
-        for (const host of hosts) {
-          await provisionHost(host);
-        }
-      }
+      await provisionHosts(hosts);
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { "content-type": "application/json" },

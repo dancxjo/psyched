@@ -1,8 +1,5 @@
 import { define } from "../../../../utils.ts";
-import {
-  bringModulesUp,
-  listModules,
-} from "../../../../../../../tools/psh/lib/module.ts";
+import { bringModulesUp, listModules } from "../../../../lib/server/modules.ts";
 
 interface RequestBody {
   modules?: string[];

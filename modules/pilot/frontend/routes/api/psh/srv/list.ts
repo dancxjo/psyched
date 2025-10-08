@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { serviceStatuses } from "../../../../../../../tools/psh/lib/service.ts";
+import { serviceStatuses } from "../../../../lib/server/services.ts";
 
 export const handler = define.handlers({
   async GET() {

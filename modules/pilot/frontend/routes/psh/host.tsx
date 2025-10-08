@@ -1,7 +1,7 @@
 import { page } from "fresh";
 import PshHostProvisioner from "../../islands/PshHostProvisioner.tsx";
 import { define } from "../../utils.ts";
-import { availableHosts } from "../../../../../tools/psh/lib/host.ts";
+import { availableHosts } from "../../lib/server/hosts.ts";
 
 interface Data {
   hosts: string[];

@@ -1,5 +1,5 @@
 import { define } from "../../../../utils.ts";
-import { disableSystemd } from "../../../../../../../tools/psh/lib/systemd.ts";
+import { disableSystemd } from "../../../../lib/server/systemd.ts";
 
 interface RequestBody {
   module: string;
