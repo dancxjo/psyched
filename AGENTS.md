@@ -9,7 +9,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 - **Runtime topology:**
   - `pilot` Python package hosts the cockpit websocket bridge (`ws://0.0.0.0:8088/ws`).
   - Each module in `modules/<name>` declares lifecycle scripts and optional UI widgets under `pilot/`.
-  - The `psh` CLI provisions hosts (`hosts/*.toml`) and synchronizes module assets into the Fresh frontend.
+- The `psh` CLI provisions hosts (`hosts/*.json`) and synchronizes module assets into the Fresh frontend.
 
 ## Key directories and entry points
 
@@ -21,7 +21,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 | `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
 | `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
 | `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and instructs you to reboot before running `psh`. |
-| `hosts/*.toml` | Host manifests. Prefer `provision.installers = ["ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. Deno is bootstrapped by `setup`. |
+| `hosts/*.json` | Host manifests. Prefer `provision.installers = ["ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. Deno is bootstrapped by `setup`. |
 
 ## Build & test checklist
 

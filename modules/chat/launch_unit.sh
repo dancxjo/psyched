@@ -15,9 +15,22 @@ if [[ -f "${LEGACY_TOML}" ]]; then
   fi
 fi
 
-DEFAULT_HOST_TOML="${REPO_DIR}/hosts/${HOST_SHORT}.toml"
-if [[ -f "${DEFAULT_HOST_TOML}" ]]; then
-  mapfile -t HOST_ARGS < <(python3 "${REPO_DIR}/tools/launch_args.py" --module chat "${DEFAULT_HOST_TOML}" || true)
+DEFAULT_HOST_CONFIG=""
+for candidate in \
+  "${REPO_DIR}/hosts/${HOST_SHORT}.json" \
+  "${REPO_DIR}/hosts/${HOST_SHORT}.jsonc" \
+  "${REPO_DIR}/hosts/${HOST_SHORT}.yaml" \
+  "${REPO_DIR}/hosts/${HOST_SHORT}.yml" \
+  "${REPO_DIR}/hosts/${HOST_SHORT}.toml"
+do
+  if [[ -f "${candidate}" ]]; then
+    DEFAULT_HOST_CONFIG="${candidate}"
+    break
+  fi
+done
+
+if [[ -n "${DEFAULT_HOST_CONFIG}" ]]; then
+  mapfile -t HOST_ARGS < <(python3 "${REPO_DIR}/tools/launch_args.py" --module chat "${DEFAULT_HOST_CONFIG}" || true)
   if [[ ${#HOST_ARGS[@]} -gt 0 ]]; then
     ARGS+=("${HOST_ARGS[@]}")
   fi

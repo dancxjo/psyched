@@ -40,13 +40,13 @@ type TestTask = {
   run: () => Promise<void>;
 };
 
-async function withTempRepo(
+async function withTempHostConfig(
   hostName: string,
-  hostToml: string,
+  config: Record<string, unknown>,
   fn: () => Promise<void>,
 ): Promise<void> {
   const hostsDir = hostsRoot();
-  const hostPath = join(hostsDir, `${hostName}.toml`);
+  const hostPath = join(hostsDir, `${hostName}.json`);
   try {
     await Deno.lstat(hostPath);
     throw new Error(`host config already exists at ${hostPath}`);
@@ -56,7 +56,8 @@ async function withTempRepo(
     }
   }
 
-  await Deno.writeTextFile(hostPath, hostToml);
+  const text = `${JSON.stringify(config, null, 2)}\n`;
+  await Deno.writeTextFile(hostPath, text);
   try {
     await fn();
   } finally {
@@ -176,13 +177,13 @@ Deno.test("locateHostConfig throws HostConfigNotFoundError for unknown host", ()
 Deno.test(
   "provisionHost skips module provisioning unless explicitly requested",
   async () => {
-    const hostToml = `
-[host]
-name = "demo"
-
-modules = ["alpha"]
-`;
-    await withTempRepo("demo", hostToml, async () => {
+    const config = {
+      host: {
+        name: "demo",
+        modules: ["alpha"],
+      },
+    };
+    await withTempHostConfig("demo", config, async () => {
       let setupCalls = 0;
       let launchCalls = 0;
       const restore = patchOps(internals.moduleOps, {
@@ -209,13 +210,13 @@ modules = ["alpha"]
 Deno.test(
   "provisionHost runs module provisioning when includeModules is true",
   async () => {
-    const hostToml = `
-[host]
-name = "demo"
-
-modules = ["alpha"]
-`;
-    await withTempRepo("demo", hostToml, async () => {
+    const config = {
+      host: {
+        name: "demo",
+        modules: ["alpha"],
+      },
+    };
+    await withTempHostConfig("demo", config, async () => {
       let setupCalls = 0;
       const restore = patchOps(internals.moduleOps, {
         setup: (_module: string) => {
@@ -236,13 +237,13 @@ modules = ["alpha"]
 Deno.test(
   "provisionHost skips service provisioning unless includeServices is true",
   async () => {
-    const hostToml = `
-[host]
-name = "demo"
-
-services = ["telemetry"]
-`;
-    await withTempRepo("demo", hostToml, async () => {
+    const config = {
+      host: {
+        name: "demo",
+        services: ["telemetry"],
+      },
+    };
+    await withTempHostConfig("demo", config, async () => {
       let setupCalls = 0;
       let startCalls = 0;
       const restore = patchOps(internals.serviceOps, {
@@ -269,13 +270,13 @@ services = ["telemetry"]
 Deno.test(
   "provisionHost runs service provisioning when includeServices is true",
   async () => {
-    const hostToml = `
-[host]
-name = "demo"
-
-services = ["telemetry"]
-`;
-    await withTempRepo("demo", hostToml, async () => {
+    const config = {
+      host: {
+        name: "demo",
+        services: ["telemetry"],
+      },
+    };
+    await withTempHostConfig("demo", config, async () => {
       let setupCalls = 0;
       const restore = patchOps(internals.serviceOps, {
         setup: (_service: string) => {

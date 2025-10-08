@@ -1,5 +1,7 @@
-import { join, resolve } from "$std/path/mod.ts";
+import { extname, join, resolve } from "$std/path/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
+import { parse as parseJsonc } from "$std/jsonc/mod.ts";
+import { parse as parseYaml } from "$std/yaml/mod.ts";
 import { DepGraph } from "$deps/dependency-graph";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
@@ -8,6 +10,16 @@ import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
 import { buildRosEnv } from "./ros_env.ts";
+
+/**
+ * Supported host manifest file extensions ordered by preference.
+ *
+ * JSON is the new default, but we continue to accept YAML and TOML so existing
+ * deployments keep working while they migrate.
+ */
+const HOST_CONFIG_EXTENSIONS = [".json", ".jsonc", ".yaml", ".yml", ".toml"] as const;
+
+type HostConfigExtension = typeof HOST_CONFIG_EXTENSIONS[number];
 
 const moduleOps = {
   setup: setupModule,
@@ -466,12 +478,56 @@ function pathExists(path: string): boolean {
   }
 }
 
+function findConfigPath(hostname: string): string | undefined {
+  const root = hostsRoot();
+  for (const extension of HOST_CONFIG_EXTENSIONS) {
+    const candidate = join(root, `${hostname}${extension}`);
+    if (pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function parseHostConfig(path: string): RawHostConfig {
+  const text = Deno.readTextFileSync(path);
+  const extension = extname(path).toLowerCase() as HostConfigExtension;
+  switch (extension) {
+    case ".json":
+    case ".jsonc": {
+      const parsed = parseJsonc(text);
+      if (!isRecord(parsed)) {
+        throw new HostConfigFormatError(
+          path,
+          `Expected JSON host config to produce an object but received ${describeType(parsed)}.`,
+        );
+      }
+      return parsed as RawHostConfig;
+    }
+    case ".yaml":
+    case ".yml": {
+      const parsed = parseYaml(text);
+      if (!isRecord(parsed)) {
+        throw new HostConfigFormatError(
+          path,
+          `Expected YAML host config to produce an object but received ${describeType(parsed)}.`,
+        );
+      }
+      return parsed as RawHostConfig;
+    }
+    case ".toml":
+    default: {
+      return parseToml(text) as unknown as RawHostConfig;
+    }
+  }
+}
+
 export function locateHostConfig(hostname: string): string {
-  const candidate = join(hostsRoot(), `${hostname}.toml`);
-  if (!pathExists(candidate)) {
+  const path = findConfigPath(hostname);
+  if (!path) {
     throw new HostConfigNotFoundError(hostname);
   }
-  return candidate;
+  return path;
 }
 
 export function readHostConfig(hostname: string): HostConfig {
@@ -482,22 +538,23 @@ export function loadHostConfig(
   hostname: string,
 ): { path: string; config: HostConfig } {
   const path = locateHostConfig(hostname);
-  const raw = parseToml(
-    Deno.readTextFileSync(path),
-  ) as unknown as RawHostConfig;
+  const raw = parseHostConfig(path);
   const config = normalizeHostConfig(hostname, path, raw);
   return { path, config };
 }
 
 export function availableHosts(): string[] {
-  const names: string[] = [];
+  const names = new Set<string>();
   for (const entry of Deno.readDirSync(hostsRoot())) {
-    if (entry.isFile && entry.name.endsWith(".toml")) {
-      names.push(entry.name.replace(/\.toml$/, ""));
+    if (!entry.isFile) continue;
+    for (const extension of HOST_CONFIG_EXTENSIONS) {
+      if (entry.name.endsWith(extension)) {
+        names.add(entry.name.slice(0, -extension.length));
+        break;
+      }
     }
   }
-  names.sort();
-  return names;
+  return Array.from(names).sort();
 }
 
 function applyEnv(overrides: Record<string, string> = {}): () => void {

@@ -1,4 +1,4 @@
-"""Utilities for translating TOML configuration into ``ros2 launch`` arguments."""
+"""Utilities for translating configuration files into ``ros2 launch`` arguments."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,13 +10,15 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - fallback for Python <3.11
     import tomli as tomllib  # type: ignore[no-redef]
 
+import json
 
-TomlMapping = Mapping[str, object]
+
+ConfigMapping = Mapping[str, object]
 
 
 @dataclass(slots=True)
 class _FormatContext:
-    """Shared state for formatting TOML values into launch arguments."""
+    """Shared state for formatting configuration values into launch arguments."""
 
     key: str
     value: object
@@ -40,13 +42,13 @@ class _FormatContext:
         raise TypeError(f"Unsupported launch argument type: {type(value)!r}")
 
 
-def _is_flat_mapping(candidate: TomlMapping) -> bool:
+def _is_flat_mapping(candidate: ConfigMapping) -> bool:
     """Return ``True`` when ``candidate`` only contains scalar-compatible values."""
 
     return all(not isinstance(value, Mapping) for value in candidate.values())
 
 
-def _extract_arguments(candidate: object) -> TomlMapping | None:
+def _extract_arguments(candidate: object) -> ConfigMapping | None:
     """Return the launch argument mapping from ``candidate`` when available."""
 
     if not isinstance(candidate, Mapping):
@@ -172,7 +174,7 @@ def _parse_toml(text: str, module: str | None) -> MutableMapping[str, object]:
     return data
 
 
-def _resolve_argument_table(raw: TomlMapping, module: str | None) -> TomlMapping:
+def _resolve_argument_table(raw: ConfigMapping, module: str | None) -> ConfigMapping:
     """Return the mapping of launch arguments from a parsed TOML object."""
 
     if module:
@@ -210,8 +212,52 @@ def _resolve_argument_table(raw: TomlMapping, module: str | None) -> TomlMapping
     return {}
 
 
+def _parse_config(
+    path: Path,
+    module: str | None,
+    text: str,
+) -> MutableMapping[str, object]:
+    """Parse ``path`` into a configuration mapping regardless of format."""
+
+    suffix = path.suffix.lower()
+    if suffix in {".json", ".jsonc"}:
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"Invalid JSON configuration in {path}: {error}",
+            ) from error
+        if isinstance(data, MutableMapping):
+            return data
+        raise TypeError(
+            f"Expected JSON configuration {path} to decode to a mapping, got {type(data)!r}",
+        )
+    if suffix in {".yaml", ".yml"}:
+        try:
+            import yaml  # type: ignore[import-not-found]
+        except ModuleNotFoundError as error:  # pragma: no cover - optional dep
+            raise RuntimeError(
+                "YAML configuration requested but PyYAML is not installed; "
+                "install 'pyyaml' or provide a JSON/TOML file.",
+            ) from error
+        data = yaml.safe_load(text)  # type: ignore[no-any-unimported]
+        if data is None:
+            return {}
+        if isinstance(data, MutableMapping):
+            return data
+        raise TypeError(
+            f"Expected YAML configuration {path} to decode to a mapping, got {type(data)!r}",
+        )
+    return _parse_toml(text, module)
+
+
 def toml_to_launch_arguments(path: Path, module: str | None = None) -> list[str]:
-    """Convert ``path`` to a list of ``name:=value`` launch argument strings."""
+    """Convert ``path`` to ``name:=value`` launch arguments.
+
+    The helper understands TOML, JSON, and YAML manifests.  JSON (or JSON with
+    comments) is preferred for new host files so the wider toolchain can parse
+    them without extra dependencies.
+    """
 
     path = Path(path)
     if not path.exists():
@@ -219,7 +265,7 @@ def toml_to_launch_arguments(path: Path, module: str | None = None) -> list[str]
     text = path.read_text(encoding="utf-8")
     if not text.strip():
         return []
-    data = _parse_toml(text, module)
+    data = _parse_config(path, module, text)
     arguments = _resolve_argument_table(data, module)
     result: list[str] = []
     for key, value in arguments.items():
@@ -234,9 +280,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Render ros2 launch arguments from a TOML configuration file.",
+        description="Render ros2 launch arguments from a configuration file.",
     )
-    parser.add_argument("toml_path", help="Path to the configuration TOML file")
+    parser.add_argument("toml_path", help="Path to the configuration file")
     parser.add_argument(
         "--module",
         help="Optional module scope; when provided the tool inspects modules.<module>",

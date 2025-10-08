@@ -62,28 +62,34 @@ Each host file lists shell scripts under `tools/bootstrap/` (or `tools/provision
 
 Host configs can also declare module directives so provisioning automatically installs and launches the right services. `depends_on` fields let modules and services wait for other tasks – installers (`"docker"`), other services (`"service:ros2"`), or even module launches (`"module:pilot"`). For example:
 
-```toml
-# hosts/motherbrain.toml
-[host]
-name = "motherbrain"
-installers = ["ros2", "docker"]
-modules = ["imu", "foot"]
-services = ["tts", "ros2"]
-
-[modules.imu]
-launch = true
-
-[modules.foot]
-launch = true
-depends_on = ["service:ros2"]
-
-[services.tts]
-setup = true
-up = true
-
-[services.ros2]
-up = true
-depends_on = ["docker"]
+```json
+{
+  "host": {
+    "name": "motherbrain",
+    "installers": ["ros2", "docker"],
+    "modules": ["imu", "foot"],
+    "services": ["tts", "ros2"]
+  },
+  "modules": {
+    "imu": {
+      "launch": true
+    },
+    "foot": {
+      "launch": true,
+      "depends_on": ["service:ros2"]
+    }
+  },
+  "services": {
+    "tts": {
+      "setup": true,
+      "up": true
+    },
+    "ros2": {
+      "up": true,
+      "depends_on": ["docker"]
+    }
+  }
+}
 ```
 
 When you add `--include-modules` or `--include-services`, `psh host setup` will run the corresponding lifecycle commands (`psh mod setup <name>` or `psh svc setup <name>`) and optionally launch/start the targets. Without those flags the command only runs installers and scripts, printing reminders to finish provisioning later.
@@ -101,7 +107,7 @@ Add other modules with `psh mod setup <name>` followed by `psh up <name>`. Use `
 
 ## Docker dev container
 
-Prefer to run everything inside a ROS 2 container for tests? A ready‑to‑use dev image and Compose stack are included. Pick a hostname (matching `hosts/<name>.toml`), build, and start:
+Prefer to run everything inside a ROS 2 container for tests? A ready‑to‑use dev image and Compose stack are included. Pick a hostname (matching `hosts/<name>.json`), build, and start:
 
 ```bash
 export PSY_HOSTNAME=motherbrain   # or forebrain
@@ -124,7 +130,7 @@ The container sets its hostname so `psh` applies the selected host profile, runs
 │       └── docker-compose.yml     # Compose stack plus supporting assets
 ├── tools/                         # Host bootstrap & provisioning scripts
 │   └── psh/                       # Deno CLI for provisioning + module orchestration
-├── hosts/                         # Host configuration TOML files
+├── hosts/                         # Host configuration JSON/YAML files
 ├── setup                          # Top-level bootstrap script (see above)
 └── work/                          # Colcon workspace (src/, build/, install/, log/) created by tools/clean_workspace
 ```
@@ -232,7 +238,7 @@ source install/setup.bash
 
 `psh` wraps common workflows:
 
-- `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.toml`
+- `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.json`
 - `psh setup` – provision the host, modules, and services in one shot
 - `psh teardown` – tear down modules/services and reset the ROS workspace
 - `psh clean` – aggressively tear down modules/services and rebuild the ROS workspace in one step

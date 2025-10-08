@@ -60,23 +60,26 @@ denoTest("defaultServiceTargets respects host service directives", () => {
 
 denoTest("defaultServiceTargets ignore undeclared services", () => {
   const hostName = "__services_ignore__";
-  const path = join(hostsRoot(), `${hostName}.toml`);
-  const config = `
-[host]
-name = "${hostName}"
-services = ["alpha"]
-
-[services.alpha]
-intent = "test"
-runtime = "container"
-up = true
-
-[services.beta]
-intent = "test"
-runtime = "container"
-up = true
-`;
-  Deno.writeTextFileSync(path, config.trim());
+  const path = join(hostsRoot(), `${hostName}.json`);
+  const config = {
+    host: {
+      name: hostName,
+      services: ["alpha"],
+    },
+    services: {
+      alpha: {
+        intent: "test",
+        runtime: "container",
+        up: true,
+      },
+      beta: {
+        intent: "test",
+        runtime: "container",
+        up: true,
+      },
+    },
+  };
+  Deno.writeTextFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
   try {
     withEnv("PSH_HOST", hostName, () => {
       resetHostTargetCache();
@@ -125,16 +128,17 @@ denoTest("resolve helpers honour explicit selections", () => {
 
 denoTest("invalid host configuration surfaces a helpful error", () => {
   const hostName = "__invalid__";
-  const path = join(hostsRoot(), `${hostName}.toml`);
-  const config = `
-[host]
-name = "${hostName}"
-modules = ["oops"]
-
-[modules]
-oops = "bad shape"
-`;
-  Deno.writeTextFileSync(path, config.trim());
+  const path = join(hostsRoot(), `${hostName}.json`);
+  const config = {
+    host: {
+      name: hostName,
+      modules: ["oops"],
+    },
+    modules: {
+      oops: "bad shape",
+    },
+  };
+  Deno.writeTextFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
   try {
     withEnv("PSH_HOST", hostName, () => {
       resetHostTargetCache();

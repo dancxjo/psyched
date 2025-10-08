@@ -1,9 +1,16 @@
 # Host manifest guidelines
 
-- Keep manifests declarative: list `installers`, `modules`, and `services` directly under `[host]` so it is obvious what runs where.
-- Populate `roles` to describe what each host is responsible for (e.g. `compute`, `ros2-control`).
-- Describe services with `[services.<name>]` tables; include `intent`, `summary`, `runtime`, a quick `ports = [...]` list, and enumerate socket metadata under an `endpoints = [{ ... }]` array.
-- Declare modules with `[modules.<name>]`, store runtime configuration in `env = { ... }`, and capture launch arguments via `launch = { ... }` inline tables.
-- Record cross-host wiring with `dependencies = [{ ... }]` arrays (reference dependencies as `<host>.<service>` and bind env vars with `bind_env`).
-- Keep module launch argument blocks unique; update existing tables instead of duplicating values so configuration remains easy to diff.
-- Draft updates in an editor before overwriting files—redirects (`cat <<'EOF'`) won’t forgive stray placeholders.
+- Host profiles now live in JSON (or YAML) files. Populate the top-level `host`
+  object with `name`, `roles`, `installers`, `modules`, and `services` so it is
+  obvious what runs where.
+- Capture service metadata under `services.<name>` objects. Include `intent`,
+  `summary`, `runtime`, `ports`, and any socket data in an `endpoints` array.
+- Module overrides live under `modules.<name>`. Store runtime configuration in
+  an `env` object and capture launch arguments under `launch.arguments` when
+  possible.
+- Record cross-host wiring with `dependencies` arrays (reference dependencies as
+  `<host>.<service>` and bind env vars with `bind_env`).
+- Keep module launch argument blocks unique; update existing objects instead of
+  duplicating values so configuration remains easy to diff.
+- Draft updates in an editor before overwriting files—redirects (`cat <<'EOF'`)
+  won’t forgive stray placeholders.

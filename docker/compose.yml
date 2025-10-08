@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    # Dress the container as a chosen hostname so psh picks the matching hosts/<name>.toml
+    # Dress the container as a chosen hostname so psh picks the matching hosts/<name>.json
     hostname: ${PSY_HOSTNAME:-motherbrain}
     container_name: ${PSY_HOSTNAME:-motherbrain}
     environment:

@@ -1,46 +1,62 @@
 # Host manifest schema
 
-Host manifests live in `hosts/*.toml` and describe how Pete's distributed stack
-is orchestrated. The layout is intentionally declarative so tooling can reason
-about installers, runtime roles, and cross-host wiring without relying on
-bespoke shell scripts.
+Host manifests live in `hosts/*.json` (or `.yaml`) and describe how Pete's
+distributed stack is orchestrated. The layout is intentionally declarative so
+tooling can reason about installers, runtime roles, and cross-host wiring
+without relying on bespoke shell scripts.
 
-## Top-level tables
+## Top-level objects
 
-| Table | Purpose |
-| ----- | ------- |
-| `[host]` | Identifies the machine, lists the `installers`, `modules`, and `services` it owns, and summarizes responsibilities via `roles`. |
-| `[services.<name>]` | Declares a service (HTTP API, websocket, etc.) hosted on the machine. |
-| `[modules.<name>]` | Configures a ROS module or other workload that should run locally. |
+| Key | Purpose |
+| --- | ------- |
+| `host` | Identifies the machine, lists the `installers`, `modules`, and `services` it owns, and summarizes responsibilities via `roles`. |
+| `services.<name>` | Declares a service (HTTP API, websocket, etc.) hosted on the machine. |
+| `modules.<name>` | Configures a ROS module or other workload that should run locally. |
 
 ## Host metadata
 
-Keep the host table compact and explicit:
+Keep the host object compact and explicit:
 
-```toml
-[host]
-name = "motherbrain"
-roles = ["ros2"]
-installers = ["ros2", "docker"]
-modules = ["pilot", "ear"]
-services = ["asr"]
+```json
+{
+  "host": {
+    "name": "motherbrain",
+    "roles": ["ros2"],
+    "installers": ["ros2", "docker"],
+    "modules": ["pilot", "ear"],
+    "services": ["asr"]
+  }
+}
 ```
 
 ## Services
 
-Describe each service under a single table. Capture a quick port summary and
+Describe each service under a single object. Capture a quick port summary and
 the detailed socket metadata in an `endpoints` array so orchestration tooling
 can map dependencies without chasing nested tables.
 
-```toml
-[services.asr]
-intent = "speech-to-text"
-summary = "Streaming Whisper-based ASR over websockets"
-runtime = "container"
-ports = [5003]
-endpoints = [
-  { name = "ws", protocol = "ws", bind = "0.0.0.0", port = 5003, target = 5003, advertise = "ws://forebrain.local:5003/asr", description = "Websocket endpoint consumed by motherbrain.ear" },
-]
+```json
+{
+  "services": {
+    "asr": {
+      "intent": "speech-to-text",
+      "summary": "Streaming Whisper-based ASR over websockets",
+      "runtime": "container",
+      "ports": [5003],
+      "endpoints": [
+        {
+          "name": "ws",
+          "protocol": "ws",
+          "bind": "0.0.0.0",
+          "port": 5003,
+          "target": 5003,
+          "advertise": "ws://forebrain.local:5003/asr",
+          "description": "Websocket endpoint consumed by motherbrain.ear"
+        }
+      ]
+    }
+  }
+}
 ```
 
 - `intent` captures what role the service plays in the overall stack.
@@ -62,35 +78,68 @@ endpoints = [
 ## Modules
 
 Modules run on hosts that provision ROS 2 nodes or other local workloads. Define
-each module under its own table, `[modules.<name>]`, and place module-specific
-configuration in inline tables so the manifest stays flat.
+each module under `modules.<name>` and place module-specific configuration under
+compact objects so the manifest stays flat.
 
-```toml
-[modules.ear]
-launch = { enabled = true }
-env = { EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
+```json
+{
+  "modules": {
+    "ear": {
+      "launch": { "enabled": true },
+      "env": {
+        "EAR_BACKEND": "service",
+        "EAR_SERVICE_URI": "ws://forebrain.local:5003/asr"
+      }
+    }
+  }
+}
 ```
 
 ROS 2 domain IDs are configured globally via `config/ros_domain_id`, so individual modules typically do not need to set `ROS_DOMAIN_ID`.
 
 When you need to provide module-specific launch arguments, embed an `arguments`
-table so nested tables remain unnecessary:
+object so deeply nested structures remain unnecessary:
 
-```toml
-[modules.nav]
-launch = { arguments = { kinect_rgb_topic = "/camera/color/image_raw", kinect_depth_topic = "/camera/depth/image_rect_raw", camera_frame = "camera_link" } }
+```json
+{
+  "modules": {
+    "nav": {
+      "launch": {
+        "arguments": {
+          "kinect_rgb_topic": "/camera/color/image_raw",
+          "kinect_depth_topic": "/camera/depth/image_rect_raw",
+          "camera_frame": "camera_link"
+        }
+      }
+    }
+  }
+}
 ```
 
 ### Declaring dependencies
 
-When a module relies on a remote service, add `dependencies = [{ ... }]` entries.
+When a module relies on a remote service, add entries to the `dependencies`
+array.
 Reference the dependency by `<host>.<service>` and bind each module-specific
 environment variable so orchestration can audit wiring without guessing
 endpoints.
 
-```toml
-[modules.ear]
-dependencies = [{ service = "forebrain.asr", port = "ws", via = "ws://forebrain.local:5003/asr", bind_env = "EAR_SERVICE_URI", summary = "Consumes Whisper websocket for speech recognition" }]
+```json
+{
+  "modules": {
+    "ear": {
+      "dependencies": [
+        {
+          "service": "forebrain.asr",
+          "port": "ws",
+          "via": "ws://forebrain.local:5003/asr",
+          "bind_env": "EAR_SERVICE_URI",
+          "summary": "Consumes Whisper websocket for speech recognition"
+        }
+      ]
+    }
+  }
+}
 ```
 
 Tooling can now join module dependencies with service exports to validate port

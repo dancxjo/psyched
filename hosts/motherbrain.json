@@ -1,0 +1,100 @@
+{
+  "host": {
+    "name": "motherbrain",
+    "installers": [
+      "ros2",
+      "docker"
+    ],
+    "modules": [
+      "pilot"
+    ],
+    "services": []
+  },
+  "modules": {
+    "pilot": {},
+    "imu": {
+      "launch": true
+    },
+    "foot": {
+      "launch": true
+    },
+    "eye": {
+      "launch": true
+    },
+    "ear": {
+      "env": {
+        "EAR_BACKEND": "service",
+        "EAR_SERVICE_URI": "ws://forebrain.local:5003/asr"
+      },
+      "launch": true,
+      "dependencies": [
+        {
+          "service": "forebrain.asr",
+          "port": "ws",
+          "via": "ws://forebrain.local:5003/asr",
+          "bind_env": "EAR_SERVICE_URI",
+          "summary": "Consumes Whisper websocket for speech recognition"
+        }
+      ]
+    },
+    "faces": {
+      "launch": {
+        "arguments": {
+          "camera_topic": "/camera/color/image_raw",
+          "faces_topic": "/vision/faces",
+          "face_detected_topic": "/vision/face_detected"
+        }
+      }
+    },
+    "gps": {
+      "launch": {
+        "arguments": {
+          "frame_id": "gps_link"
+        }
+      }
+    },
+    "nav": {
+      "launch": {
+        "arguments": {
+          "kinect_rgb_topic": "/camera/color/image_raw",
+          "kinect_depth_topic": "/camera/depth/image_rect_raw",
+          "camera_frame": "camera_link"
+        }
+      }
+    },
+    "wifi": {
+      "env": {
+        "WIFI_INTERFACE": "wlan1",
+        "WIFI_CHANNEL": "11",
+        "WIFI_COUNTRY_CODE": "US",
+        "WIFI_SSID": "Pete-Net",
+        "WIFI_ENABLE_NAT": "true",
+        "WIFI_UPLINK_INTERFACE": "wlan0"
+      }
+    },
+    "will": {
+      "env": {
+        "WILL_DEFAULT_REGIME": "idle"
+      }
+    },
+    "voice": {
+      "env": {
+        "VOICE_BACKEND": "websocket",
+        "VOICE_TTS_URL": "ws://forebrain.local:5002/tts"
+      },
+      "launch": true,
+      "dependencies": [
+        {
+          "service": "forebrain.tts",
+          "port": "ws",
+          "via": "ws://forebrain.local:5002/tts",
+          "bind_env": "VOICE_TTS_URL",
+          "summary": "Streams synthesized speech from the forebrain TTS service"
+        }
+      ]
+    },
+    "viscera": {
+      "launch": true
+    }
+  }
+}

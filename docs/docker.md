@@ -6,14 +6,14 @@ This repo includes a simple ROS 2 development container you can use to run the 
 - Exposed ports:
   - `8000`: Fresh dev server for the pilot UI
   - `8088`: Cockpit websocket bridge (`ws://0.0.0.0:8088/ws`)
-- The container “dresses” itself as a hostname you choose so `psh` applies the matching profile from `hosts/<name>.toml`.
+- The container “dresses” itself as a hostname you choose so `psh` applies the matching profile from `hosts/<name>.json`.
 
 ## Quick start
 
 From the repo root:
 
 ```bash
-# 1) Choose a host profile by name (matches hosts/<name>.toml)
+# 1) Choose a host profile by name (matches hosts/<name>.json)
 export PSY_HOSTNAME=motherbrain   # or forebrain
 
 # 2) Build and start the dev container, running ./setup inside
@@ -39,7 +39,7 @@ docker compose -f docker/compose.yml run --rm dev bash
 
 ## Notes
 
-- Hostname selection: `docker/compose.yml` sets `hostname: ${PSY_HOSTNAME:-motherbrain}`; `psh` reads `Deno.hostname()` and loads `hosts/<name>.toml` accordingly.
+- Hostname selection: `docker/compose.yml` sets `hostname: ${PSY_HOSTNAME:-motherbrain}`; `psh` reads `Deno.hostname()` and loads `hosts/<name>.json` accordingly.
 - ROS distro: provisioning defaults to a custom `kilted` name, so the Compose stack exports `ROS_DISTRO=humble` to match the base image.
 - Networking: bridge mode is sufficient for local tests. If you need ROS discovery across host ↔ container, consider `network_mode: host` on Linux.
 - Deno: the bootstrapper installs Deno inside the container; the `DENO_TLS_CA_STORE=system` env is set for restricted environments.

@@ -8,12 +8,15 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
+import json
+
 from tools.launch_args import toml_to_launch_arguments
 
 
-def write(tmp_path: Path, content: str) -> Path:
-    path = tmp_path / "config.toml"
-    path.write_text(content, encoding="utf-8")
+def write(tmp_path: Path, content: str, *, suffix: str = ".toml") -> Path:
+    path = tmp_path / f"config{suffix}"
+    text = content if content.endswith("\n") else f"{content}\n"
+    path.write_text(text, encoding="utf-8")
     return path
 
 
@@ -64,6 +67,24 @@ launch = true
         "interface:=\"wlan1\"",
         "channel:=11",
         "launch:=true",
+    ]
+
+
+def test_json_launch_arguments(tmp_path: Path) -> None:
+    payload = {
+        "host": {"modules": ["voice"]},
+        "modules": {
+            "voice": {
+                "arguments": {
+                    "voice_topic": "/voice",
+                }
+            }
+        },
+    }
+    config = write(tmp_path, json.dumps(payload, indent=2), suffix=".json")
+
+    assert toml_to_launch_arguments(config, module="voice") == [
+        "voice_topic:=\"/voice\"",
     ]
 
 

@@ -24,10 +24,18 @@ fi
 HOST_ARGS=()
 CONFIG_FILE="${WIFI_CONFIG_FILE:-}"
 if [[ -z "${CONFIG_FILE}" ]]; then
-  DEFAULT_HOST_TOML="${REPO_DIR}/hosts/${HOST_SHORT}.toml"
-  if [[ -f "${DEFAULT_HOST_TOML}" ]]; then
-    CONFIG_FILE="${DEFAULT_HOST_TOML}"
-  fi
+  for candidate in \
+    "${REPO_DIR}/hosts/${HOST_SHORT}.json" \
+    "${REPO_DIR}/hosts/${HOST_SHORT}.jsonc" \
+    "${REPO_DIR}/hosts/${HOST_SHORT}.yaml" \
+    "${REPO_DIR}/hosts/${HOST_SHORT}.yml" \
+    "${REPO_DIR}/hosts/${HOST_SHORT}.toml"
+  do
+    if [[ -f "${candidate}" ]]; then
+      CONFIG_FILE="${candidate}"
+      break
+    fi
+  done
 fi
 
 if [[ -n "${CONFIG_FILE}" ]]; then
