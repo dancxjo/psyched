@@ -50,7 +50,7 @@ launch = true
   summary = "Consumes Whisper websocket for speech recognition"
 
 [modules.faces]
-launch = true
+launch = { enabled = true }
 
   [modules.faces.env]
   ROS_DOMAIN_ID = "25"
@@ -61,7 +61,7 @@ launch = true
   face_detected_topic = "/vision/face_detected"
 
 [modules.gps]
-launch = true
+launch = { enabled = true }
 
   [modules.gps.env]
   ROS_DOMAIN_ID = "25"
@@ -70,7 +70,7 @@ launch = true
   frame_id = "gps_link"
 
 [modules.nav]
-launch = true
+launch = { enabled = true }
 
   [modules.nav.env]
   ROS_DOMAIN_ID = "25"

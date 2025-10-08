@@ -25,12 +25,19 @@ export interface HostConfig {
   services?: ServiceDirective[];
 }
 
+export interface ModuleLaunchConfig {
+  enabled?: boolean;
+  arguments?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface ModuleDirective {
   name: string;
   setup?: boolean;
   launch?: boolean;
   env?: Record<string, string>;
   depends_on?: string[];
+  launchConfig?: ModuleLaunchConfig;
 }
 
 export interface ServiceDirective {
@@ -86,6 +93,80 @@ function coerceName(value: unknown): string | undefined {
   return trimmed.length ? trimmed : undefined;
 }
 
+function coerceBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["true", "yes", "on", "1"].includes(normalized)) return true;
+    if (["false", "no", "off", "0"].includes(normalized)) return false;
+    return undefined;
+  }
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) return undefined;
+    return value !== 0;
+  }
+  return undefined;
+}
+
+function normalizeModuleLaunchConfig(
+  raw: unknown,
+  context: NormalizationContext,
+  location: string,
+): { launch?: boolean; launchConfig?: ModuleLaunchConfig } {
+  if (raw === undefined || raw === null) return {};
+
+  if (typeof raw === "boolean") {
+    return { launch: raw };
+  }
+
+  if (isRecord(raw)) {
+    const config: ModuleLaunchConfig = { ...raw } as ModuleLaunchConfig;
+    const enabledRaw = config.enabled;
+    let enabled = coerceBoolean(enabledRaw);
+    if (enabledRaw !== undefined && enabled === undefined) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected ${location}.enabled to be a boolean, received ${describeType(enabledRaw)
+        }.`,
+      );
+    }
+
+    if (config.arguments !== undefined && !isRecord(config.arguments)) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected ${location}.arguments to be a table, received ${describeType(config.arguments)
+        }.`,
+      );
+    }
+
+    if (enabled === undefined && config.arguments !== undefined) {
+      enabled = true;
+    }
+
+    const normalizedConfig: ModuleLaunchConfig = { ...config };
+    if (enabled !== undefined) {
+      normalizedConfig.enabled = enabled;
+    }
+
+    return {
+      launch: enabled,
+      launchConfig: normalizedConfig,
+    };
+  }
+
+  const coerced = coerceBoolean(raw);
+  if (coerced !== undefined) {
+    return { launch: coerced };
+  }
+
+  throw new HostConfigFormatError(
+    context.path,
+    `Expected ${location} to be a boolean or table, received ${describeType(raw)
+    }.`,
+  );
+}
+
 function normalizeModuleDirective(
   raw: unknown,
   context: NormalizationContext,
@@ -108,7 +189,26 @@ function normalizeModuleDirective(
     );
   }
 
-  return { ...raw, name } as ModuleDirective;
+  const normalized = { ...raw } as Record<string, unknown>;
+  const { launch, launchConfig } = normalizeModuleLaunchConfig(
+    normalized["launch"],
+    context,
+    `${location}.launch`,
+  );
+
+  if (launch === undefined) {
+    delete normalized["launch"];
+  } else {
+    normalized["launch"] = launch;
+  }
+
+  if (launchConfig) {
+    normalized["launchConfig"] = launchConfig;
+  } else {
+    delete normalized["launchConfig"];
+  }
+
+  return { ...normalized, name } as ModuleDirective;
 }
 
 function normalizeModuleDirectives(
@@ -158,8 +258,7 @@ function normalizeModuleDirectives(
 
   throw new HostConfigFormatError(
     context.path,
-    `Expected 'modules' to be an array or table, received ${
-      describeType(raw)
+    `Expected 'modules' to be an array or table, received ${describeType(raw)
     }.`,
   );
 }
@@ -235,8 +334,7 @@ function normalizeServiceDirectives(
 
   throw new HostConfigFormatError(
     context.path,
-    `Expected 'services' to be an array or table, received ${
-      describeType(raw)
+    `Expected 'services' to be an array or table, received ${describeType(raw)
     }.`,
   );
 }
@@ -555,7 +653,7 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Module provisioning skipped during host bootstrap. " +
-          "Open a new shell session before running 'psh mod setup' to configure modules.",
+        "Open a new shell session before running 'psh mod setup' to configure modules.",
       ),
     );
   } else {
@@ -618,7 +716,7 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Service provisioning skipped during host bootstrap. " +
-          "Run 'psh svc setup' after refreshing your shell if services require setup.",
+        "Run 'psh svc setup' after refreshing your shell if services require setup.",
       ),
     );
   } else {
@@ -714,8 +812,7 @@ export async function provisionHostProfile(
       );
       console.warn(
         colors.yellow(
-          `${task.label} skipped due to failed dependency (${
-            blockedLabels.join(", ")
+          `${task.label} skipped due to failed dependency (${blockedLabels.join(", ")
           }).`,
         ),
       );
