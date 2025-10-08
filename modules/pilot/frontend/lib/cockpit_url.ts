@@ -12,6 +12,8 @@ export const globalWindow = typeof globalThis === "object" &&
 
 export const isBrowser = Boolean(globalWindow?.WebSocket);
 
+const DEV_SERVER_PORTS = new Set(["8000", "5173"]);
+
 function normaliseProtocol(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const normalised = value.toLowerCase().replace(/:$/, "");
@@ -134,21 +136,33 @@ export function defaultCockpitUrl(): string {
   const configuredProtocol = normaliseProtocol(bootstrap?.protocol);
   const finalProtocol = configuredProtocol ?? hostProtocol ?? locationProtocol;
 
-  let finalPort = bootstrap?.port?.trim() || parsedHost?.port || manualHost.port;
-  if (finalPort) {
-    finalPort = finalPort.trim();
-    if (finalPort === "") {
-      finalPort = undefined;
+  const locationPort = typeof port === "string" ? port.trim() : "";
+  type PortSource = "bootstrap" | "host" | "location" | "default";
+  let finalPortSource: PortSource = "default";
+  let finalPort: string | undefined;
+
+  const portCandidates: Array<{ value?: string; source: PortSource }> = [
+    { value: bootstrap?.port, source: "bootstrap" },
+    { value: parsedHost?.port, source: "host" },
+    { value: manualHost.port, source: "host" },
+    { value: locationPort, source: "location" },
+  ];
+
+  for (const candidate of portCandidates) {
+    const trimmed = candidate.value?.trim();
+    if (trimmed) {
+      finalPort = trimmed;
+      finalPortSource = candidate.source;
+      break;
     }
   }
-  if (!finalPort) {
-    if (port === "" || port === undefined) {
-      finalPort = "8088";
-    } else if (port === "8000") {
-      finalPort = "8088";
-    } else {
-      finalPort = port;
-    }
+
+  if (
+    !finalPort ||
+    (finalPortSource === "location" && DEV_SERVER_PORTS.has(finalPort))
+  ) {
+    finalPort = "8088";
+    finalPortSource = "default";
   }
 
   const hostCandidate = parsedHost?.hostname ?? manualHost.host ?? sanitizedHost ?? hostname;
