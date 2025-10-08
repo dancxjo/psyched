@@ -165,7 +165,7 @@ fi
 echo "Starting Pilot frontend via deno task dev..."
 (
   cd "${FRONTEND_DIR}"
-  deno task dev --host "$(hostname -s).local"
+  deno task dev #--host "$(hostname -s).local"
 ) &
 DENO_PID=$!
 

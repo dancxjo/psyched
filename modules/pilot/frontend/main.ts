@@ -2,6 +2,7 @@ import "$std/dotenv/load.ts";
 
 import { App, staticFiles } from "fresh";
 import type { CockpitConfig, State } from "./utils.ts";
+import { primaryNavigationLinks } from "./lib/server/navigation.ts";
 
 function readCockpitConfigFromEnv(): CockpitConfig | undefined {
   const sanitize = (value: string | undefined): string | undefined => {
@@ -40,6 +41,9 @@ app.use(async (ctx) => {
     if (config) {
       ctx.state.cockpit = config;
     }
+  }
+  if (!ctx.state.navigation) {
+    ctx.state.navigation = primaryNavigationLinks();
   }
   return await ctx.next();
 });

@@ -3,6 +3,7 @@ import type {
   MiddlewareHandler,
   RouteConfig,
 } from "$fresh/server.ts";
+import type { NavigationLink } from "./lib/navigation_types.ts";
 
 /**
  * Connection details for the cockpit websocket bridge that powers the pilot UI.
@@ -41,6 +42,7 @@ export interface BuildInfo {
 export interface State {
   buildInfo?: BuildInfo;
   cockpit?: CockpitConfig;
+  navigation?: NavigationLink[];
 }
 
 /**
