@@ -8,12 +8,6 @@ export default define.page(function App({ Component, state }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Psyched Pilot</title>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
-          integrity="sha256-3V/VWRr9ge4h3MEXrYXAFNw/HxncLXt9EB6grMKSdMI="
-          crossOrigin="anonymous"
-        />
         <link rel="stylesheet" href="/styles.css" />
       </head>
       <body
