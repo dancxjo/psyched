@@ -14,7 +14,7 @@ for _ in {1..10}; do
     exit 0
   fi
   sleep 1
-fi
+done
 
 pkill -KILL -f "$PATTERN" || true
 echo "[viscera/shutdown] Forced kill"
