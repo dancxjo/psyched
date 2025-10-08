@@ -52,7 +52,7 @@ echo "Going to frontend directory: ${FRONTEND_DIR}"
 cd "${FRONTEND_DIR}"
 
 echo "Starting Pilot frontend via deno task dev..."
-deno task dev &
+deno task dev --host 0.0.0.0:9000 &
 DENO_PID=$!
 
 sleep 2

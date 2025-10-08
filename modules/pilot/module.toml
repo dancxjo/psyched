@@ -4,9 +4,11 @@ apt = [
     "ros-${ROS_DISTRO}-test-msgs",
     "ros-${ROS_DISTRO}-web-video-server",
     "ros-${ROS_DISTRO}-sensor-msgs",
+    "python3-typing-extensions",
 ]
 pip = [
     "websockets>=10,<13",
+    "typing_extensions>=4.8,<5",
 ]
 
 # Pilot module does not require patch scripts

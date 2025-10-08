@@ -20,7 +20,7 @@ colcon test-result --verbose
 ros2 run pilot cockpit --log-level info
 ```
 
-The backend stores its ROS-specific logic in `pilot_cockpit/bridge.py` and the Foot telemetry state machine in `pilot_cockpit/foot.py`. Unit tests live in `modules/pilot/packages/pilot/test/` and focus on the Foot state machine helpers.
+The backend stores its ROS-specific logic in `pilot_cockpit/bridge.py` and the Foot telemetry state machine in `pilot_cockpit/foot.py`. Unit tests live in `modules/pilot/packages/pilot/test/` and focus on the Foot state machine helpers. The module ships a `typing_extensions` dependency to keep `rclpy` working on Python 3.12 hosts; remember to rerun `psh mod setup pilot` after editing dependencies so they get applied.
 
 ## Developing the frontend
 

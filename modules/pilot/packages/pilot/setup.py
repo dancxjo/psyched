@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'websockets>=10,<13'],
+    install_requires=['setuptools', 'typing_extensions>=4.8,<5', 'websockets>=10,<13'],
     zip_safe=True,
     maintainer='Psyched Maintainers',
     maintainer_email='pete@psyched.local',
