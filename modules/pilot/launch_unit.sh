@@ -32,21 +32,89 @@ USER_SITE_DIR="$(python3 -c 'import site; print(site.getusersitepackages())' 2>/
 add_pythonpath_dir "${USER_SITE_DIR}"
 add_pythonpath_dir "/usr/lib/python3/dist-packages"
 
+# shellcheck disable=SC2317
 cleanup() {
   if [[ -n "${COCKPIT_PID:-}" ]] && kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
     echo "Stopping Pilot cockpit backend (PID ${COCKPIT_PID})..."
     kill "${COCKPIT_PID}" 2>/dev/null || true
     wait "${COCKPIT_PID}" 2>/dev/null || true
+    COCKPIT_PID=""
   fi
 
   if [[ -n "${DENO_PID:-}" ]] && kill -0 "${DENO_PID}" >/dev/null 2>&1; then
     echo "Stopping Pilot frontend (PID ${DENO_PID})..."
     kill "${DENO_PID}" 2>/dev/null || true
     wait "${DENO_PID}" 2>/dev/null || true
+    DENO_PID=""
   fi
 }
 
 trap cleanup EXIT INT TERM
+
+monitor_children() {
+  local status=0
+
+  echo "Pilot cockpit backend PID ${COCKPIT_PID}"
+  echo "Pilot frontend PID ${DENO_PID}"
+  echo "Pilot cockpit backend and frontend are running. Press Ctrl+C to stop."
+
+  while true; do
+    local pids=()
+    if [[ -n "${COCKPIT_PID:-}" ]]; then
+      pids+=("${COCKPIT_PID}")
+    fi
+    if [[ -n "${DENO_PID:-}" ]]; then
+      pids+=("${DENO_PID}")
+    fi
+
+    if ((${#pids[@]} == 0)); then
+      return "${status}"
+    fi
+
+    if ! wait -n "${pids[@]}"; then
+      status=$?
+    else
+      status=0
+    fi
+
+    local cockpit_alive=1
+    if [[ -z "${COCKPIT_PID}" ]] || ! kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
+      cockpit_alive=0
+    fi
+
+    local frontend_alive=1
+    if [[ -z "${DENO_PID}" ]] || ! kill -0 "${DENO_PID}" >/dev/null 2>&1; then
+      frontend_alive=0
+    fi
+
+    if (( cockpit_alive == 0 || frontend_alive == 0 )); then
+      if (( cockpit_alive == 0 )); then
+        echo "Pilot cockpit backend exited (status ${status})."
+        if (( frontend_alive == 1 )); then
+          echo "Stopping Pilot frontend..."
+          kill "${DENO_PID}" 2>/dev/null || true
+        fi
+      fi
+
+      if (( frontend_alive == 0 )); then
+        echo "Pilot frontend exited (status ${status})."
+        if (( cockpit_alive == 1 )); then
+          echo "Stopping Pilot cockpit backend..."
+          kill "${COCKPIT_PID}" 2>/dev/null || true
+        fi
+      fi
+
+      if [[ -n "${COCKPIT_PID:-}" ]]; then
+        wait "${COCKPIT_PID}" 2>/dev/null || true
+      fi
+      if [[ -n "${DENO_PID:-}" ]]; then
+        wait "${DENO_PID}" 2>/dev/null || true
+      fi
+
+      return "${status}"
+    fi
+  done
+}
 
 if ! command -v deno >/dev/null 2>&1; then
   echo "deno is not installed. Install deno before launching the pilot module." >&2
@@ -92,7 +160,7 @@ if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
 fi
 
 echo "Starting Pilot frontend via deno task dev..."
-deno task dev --host $(hostname -s).local &
+deno task dev --host "$(hostname -s).local" &
 DENO_PID=$!
 
 sleep 2
@@ -102,4 +170,6 @@ if ! kill -0 "${DENO_PID}" >/dev/null 2>&1; then
   exit 1
 fi
 
-wait -n
+EXIT_CODE=0
+monitor_children || EXIT_CODE=$?
+exit "${EXIT_CODE}"
