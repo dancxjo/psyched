@@ -8,6 +8,12 @@ export default define.page(function App({ Component, state }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Psyched Pilot</title>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
+          integrity="sha256-3V/VWRr9ge4h3MEXrYXAFNw/HxncLXt9EB6grMKSdMI="
+          crossOrigin="anonymous"
+        />
         <link rel="stylesheet" href="/styles.css" />
       </head>
       <body
@@ -17,17 +23,22 @@ export default define.page(function App({ Component, state }) {
         data-cockpit-url={cockpit?.url}
       >
         <header class="site-header">
-          <nav>
-            <a href="/">Home</a>
-            <a href="/modules/pilot">Pilot</a>
-            <a href="/modules/imu">IMU</a>
-            <a href="/modules/foot">Foot</a>
-            <a href="/modules/eye">Eye</a>
-            <a href="/psh/host">Host</a>
-            <a href="/psh/mod">Modules</a>
-            <a href="/psh/srv">Services</a>
-            <a href="/psh/sys">Systemd</a>
-          </nav>
+          <div class="site-header__inner">
+            <a class="site-brand" href="/">Psyched Pilot</a>
+            <nav class="site-nav" aria-label="Primary navigation">
+              <ul class="site-nav__list">
+                <li><a href="/">Home</a></li>
+                <li><a href="/modules/pilot">Pilot</a></li>
+                <li><a href="/modules/imu">IMU</a></li>
+                <li><a href="/modules/foot">Foot</a></li>
+                <li><a href="/modules/eye">Eye</a></li>
+                <li><a href="/psh/host">Host</a></li>
+                <li><a href="/psh/mod">Modules</a></li>
+                <li><a href="/psh/srv">Services</a></li>
+                <li><a href="/psh/sys">Systemd</a></li>
+              </ul>
+            </nav>
+          </div>
         </header>
         <main class="site-main">
           <Component />
