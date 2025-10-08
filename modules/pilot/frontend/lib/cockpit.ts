@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  defaultCockpitUrl,
+  globalWindow,
+  isBrowser,
+  readBootstrappedConfig,
+} from "./cockpit_url.ts";
 
 export type ConnectionStatus =
   | "idle"
@@ -38,23 +44,7 @@ interface SubscribeOptions {
   replay?: boolean;
 }
 
-const globalWindow = typeof globalThis === "object" && "window" in globalThis
-  ? (globalThis as typeof globalThis & { window: Window }).window
-  : undefined;
-
-const isBrowser = Boolean(globalWindow?.WebSocket);
-
 const DEFAULT_RECONNECT_DELAY_MS = 2000;
-
-function defaultCockpitUrl(): string {
-  if (!isBrowser || !globalWindow) {
-    return "";
-  }
-  const { protocol, hostname, port } = globalWindow.location;
-  const wsProtocol = protocol === "https:" ? "wss" : "ws";
-  const inferredPort = port === "" ? "8088" : port === "8000" ? "8088" : port;
-  return `${wsProtocol}://${hostname}:${inferredPort}/ws`;
-}
 
 export class CockpitClient {
   private socket: WebSocket | null = null;
@@ -416,3 +406,8 @@ export function useCockpitTopic<T = unknown>(
     [topic, payload, status, error, client],
   );
 }
+
+export const __test__ = {
+  defaultCockpitUrl,
+  readBootstrappedConfig,
+};

@@ -4,8 +4,16 @@ export interface BuildInfo {
   version?: string;
 }
 
+export interface CockpitConfig {
+  host?: string;
+  port?: string;
+  protocol?: string;
+  url?: string;
+}
+
 export interface State {
   buildInfo?: BuildInfo;
+  cockpit?: CockpitConfig;
 }
 
 const baseDefine = createDefine<State>();
