@@ -162,10 +162,16 @@ if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
   export DENO_TLS_CA_STORE=system
 fi
 
-echo "Starting Pilot frontend via deno task dev..."
+echo "Building Pilot frontend via deno task build..."
 (
   cd "${FRONTEND_DIR}"
-  deno task dev #--host "$(hostname -s).local"
+  deno task build
+)
+
+echo "Starting Pilot frontend via deno task start..."
+(
+  cd "${FRONTEND_DIR}"
+  deno task start
 ) &
 DENO_PID=$!
 
