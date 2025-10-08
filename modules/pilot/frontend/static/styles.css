@@ -762,6 +762,9 @@ main {
   margin: 0;
   font-family: "Fira Mono", "SFMono-Regular", ui-monospace, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .command-matrix {

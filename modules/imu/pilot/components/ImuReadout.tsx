@@ -7,8 +7,8 @@ import {
   toneFromConnection,
 } from "@pilot/components/dashboard.tsx";
 import {
-  formatNullableNumber,
   formatRelativeTime,
+  formatTemperaturePair,
 } from "../../../pilot/frontend/lib/format.ts";
 import type { ConnectionStatus } from "@pilot/lib/cockpit.ts";
 
@@ -68,6 +68,11 @@ export function ImuReadout({
 }: ImuReadoutProps) {
   const euler = sensor.orientation?.euler;
   const quaternion = sensor.orientation?.quaternion;
+  const temperatureC = sensor.temperatureC;
+  const hasTemperature =
+    temperatureC !== undefined &&
+    temperatureC !== null &&
+    Number.isFinite(temperatureC);
 
   const connectionLabel =
     CONNECTION_STATUS_LABELS[connectionStatus ?? "idle"] ??
@@ -147,15 +152,10 @@ export function ImuReadout({
               <dt>Updated</dt>
               <dd>{formatRelativeTime(lastUpdate)}</dd>
             </div>
-            {sensor.temperatureC !== undefined &&
-              sensor.temperatureC !== null && (
+            {hasTemperature && (
               <div class="stat-list__item">
                 <dt>Temperature</dt>
-                <dd>
-                  {formatNullableNumber(sensor.temperatureC, {
-                    fractionDigits: 1,
-                  })} °C
-                </dd>
+                <dd>{formatTemperaturePair(temperatureC)}</dd>
               </div>
             )}
           </dl>

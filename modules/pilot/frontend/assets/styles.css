@@ -648,6 +648,9 @@ body {
     "Liberation Mono",
     "Courier New",
     monospace;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .command-matrix {

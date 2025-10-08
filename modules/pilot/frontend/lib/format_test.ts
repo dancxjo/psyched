@@ -5,6 +5,7 @@ import {
   formatBytes,
   formatNullableNumber,
   formatRelativeTime,
+  formatTemperaturePair,
 } from "./format.ts";
 
 describe("formatNullableNumber", () => {
@@ -54,5 +55,27 @@ describe("formatBytes", () => {
     assertEquals(formatBytes(512), "512 B");
     assertEquals(formatBytes(1_500), "1.5 KiB");
     assertEquals(formatBytes(2_620_000), "2.5 MiB");
+  });
+});
+
+describe("formatTemperaturePair", () => {
+  it("returns a fallback when the Celsius reading is unavailable", () => {
+    assertEquals(formatTemperaturePair(undefined), "—");
+    assertEquals(formatTemperaturePair(null), "—");
+    assertEquals(formatTemperaturePair(NaN), "—");
+  });
+
+  it("rounds both Celsius and Fahrenheit using the requested precision", () => {
+    assertEquals(
+      formatTemperaturePair(23.123, {
+        celsiusDigits: 2,
+        fahrenheitDigits: 0,
+      }),
+      "23.12 °C / 74 °F",
+    );
+  });
+
+  it("defaults to one decimal place for each scale", () => {
+    assertEquals(formatTemperaturePair(23.123), "23.1 °C / 73.6 °F");
   });
 });
