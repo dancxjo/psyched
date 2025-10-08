@@ -59,6 +59,107 @@ def _extract_arguments(candidate: object) -> TomlMapping | None:
     return None
 
 
+def _normalize_table_header(header: str) -> str:
+    """Return ``header`` without surrounding quotes for easier comparisons."""
+
+    return header.replace("'", "").replace('"', "")
+
+
+def _header_matches_module(header: str, module: str) -> bool:
+    """Return ``True`` when ``header`` belongs to ``module`` or legacy fallbacks."""
+
+    module = module.strip()
+    if not module:
+        return False
+    normalized = _normalize_table_header(header)
+    parts = normalized.split(".")
+    if not parts:
+        return False
+    if parts[0] in {"launch", "arguments"}:
+        return True
+    if parts[0] == module:
+        return True
+    if parts[0] == "modules" and len(parts) > 1 and parts[1] == module:
+        return True
+    return False
+
+
+def _sanitize_toml_for_module(text: str, module: str) -> str:
+    '''Return a minimal TOML snippet containing tables related to ``module``.
+
+    The helper keeps the most recent definition of each relevant table so that
+    duplicate declarations (which ``tomllib`` rejects) no longer prevent the
+    parser from succeeding.  For example:
+
+    >>> _sanitize_toml_for_module("""
+    ... [modules.alpha.launch.arguments]
+    ... speed = 1
+    ...
+    ... [modules.alpha.launch.arguments]
+    ... speed = 2
+    ...
+    ... [modules.beta.launch.arguments]
+    ... power = 5
+    ... """, "alpha")
+    '[modules.alpha.launch.arguments]\n    speed = 2'
+    '''
+
+    blocks: list[tuple[str, list[str]]] = []
+    current_header: str | None = None
+    current_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if current_header is not None:
+                blocks.append((current_header, current_lines))
+                current_header = None
+                current_lines = []
+            header = stripped[1:-1].strip()
+            normalized = _normalize_table_header(header)
+            if _header_matches_module(normalized, module):
+                current_header = normalized
+                current_lines = [line]
+            else:
+                current_header = None
+                current_lines = []
+            continue
+        if current_header is not None:
+            current_lines.append(line)
+    if current_header is not None:
+        blocks.append((current_header, current_lines))
+    if not blocks:
+        return ""
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for header, lines in reversed(blocks):
+        if header in seen:
+            continue
+        seen.add(header)
+        deduped.append("\n".join(lines).rstrip())
+    deduped.reverse()
+    return "\n\n".join(filter(None, deduped))
+
+
+def _parse_toml(text: str, module: str | None) -> MutableMapping[str, object]:
+    """Parse ``text`` into a TOML mapping with duplicate-table recovery."""
+
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        if not module:
+            raise
+        sanitized = _sanitize_toml_for_module(text, module)
+        if not sanitized:
+            raise
+        try:
+            data = tomllib.loads(sanitized)
+        except tomllib.TOMLDecodeError:
+            raise error
+    if not isinstance(data, MutableMapping):  # pragma: no cover - tomllib guarantees dict
+        return {}
+    return data
+
+
 def _resolve_argument_table(raw: TomlMapping, module: str | None) -> TomlMapping:
     """Return the mapping of launch arguments from a parsed TOML object."""
 
@@ -106,9 +207,7 @@ def toml_to_launch_arguments(path: Path, module: str | None = None) -> list[str]
     text = path.read_text(encoding="utf-8")
     if not text.strip():
         return []
-    data = tomllib.loads(text)
-    if not isinstance(data, MutableMapping):  # pragma: no cover - tomllib guarantees dict
-        return []
+    data = _parse_toml(text, module)
     arguments = _resolve_argument_table(data, module)
     result: list[str] = []
     for key, value in arguments.items():
