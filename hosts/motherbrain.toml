@@ -48,7 +48,7 @@ launch = { arguments = { frame_id = "gps_link" } }
 launch = { arguments = { kinect_rgb_topic = "/camera/color/image_raw", kinect_depth_topic = "/camera/depth/image_rect_raw", camera_frame = "camera_link" } }
 
 [modules.wifi]
-env = { WIFI_INTERFACE = "wlan0", WIFI_CHANNEL = "11", WIFI_COUNTRY_CODE = "US", WIFI_SSID = "Pete-Net", WIFI_ENABLE_NAT = "true", WIFI_UPLINK_INTERFACE = "eth0" }
+env = { WIFI_INTERFACE = "wlan1", WIFI_CHANNEL = "11", WIFI_COUNTRY_CODE = "US", WIFI_SSID = "Pete-Net", WIFI_ENABLE_NAT = "true", WIFI_UPLINK_INTERFACE = "wlan0" }
 
 [modules.will]
 env = { WILL_DEFAULT_REGIME = "idle" }
