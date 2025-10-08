@@ -16,6 +16,18 @@ set -euo pipefail
 
 ROS_DISTRO=${ROS_DISTRO:-kilted}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
+ROS_DOMAIN_ID_FILE="${REPO_ROOT}/config/ros_domain_id"
+
+DEFAULT_ROS_DOMAIN_ID="0"
+if [[ -f "${ROS_DOMAIN_ID_FILE}" ]]; then
+  DEFAULT_ROS_DOMAIN_ID=$(tr -d '[:space:]' < "${ROS_DOMAIN_ID_FILE}")
+  if [[ -z "${DEFAULT_ROS_DOMAIN_ID}" ]]; then
+    DEFAULT_ROS_DOMAIN_ID="0"
+  fi
+fi
+
+export ROS_DOMAIN_ID="${DEFAULT_ROS_DOMAIN_ID}"
 
 SUDO=(sudo)
 if [[ $(id -u) -eq 0 ]]; then
@@ -107,7 +119,7 @@ rosdep update
 # ROS 2 defaults provisioned by install_ros2.sh
 export LANG=en_US.UTF-8
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=0
+export ROS_DOMAIN_ID=${DEFAULT_ROS_DOMAIN_ID}
 export ROS_LOCALHOST_ONLY=0
 export ROS_DISTRO=${ROS_DISTRO}
 PROFILE

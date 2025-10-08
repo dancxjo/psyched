@@ -21,52 +21,44 @@ modules = [
 services = []
 
 [modules.pilot]
-env = { ROS_DOMAIN_ID = "25" }
 
 [modules.imu]
-env = { ROS_DOMAIN_ID = "25" }
 launch = true
 
 [modules.foot]
-env = { ROS_DOMAIN_ID = "25" }
 launch = true
 
 [modules.eye]
-env = { ROS_DOMAIN_ID = "25" }
 launch = true
 
 [modules.ear]
-env = { ROS_DOMAIN_ID = "25", EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
+env = { EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
 launch = true
 dependencies = [
   { service = "forebrain.asr", port = "ws", via = "ws://forebrain.local:5003/asr", bind_env = "EAR_SERVICE_URI", summary = "Consumes Whisper websocket for speech recognition" },
 ]
 
 [modules.faces]
-env = { ROS_DOMAIN_ID = "25" }
 launch = { arguments = { camera_topic = "/camera/color/image_raw", faces_topic = "/vision/faces", face_detected_topic = "/vision/face_detected" } }
 
 [modules.gps]
-env = { ROS_DOMAIN_ID = "25" }
 launch = { arguments = { frame_id = "gps_link" } }
 
 [modules.nav]
-env = { ROS_DOMAIN_ID = "25" }
 launch = { arguments = { kinect_rgb_topic = "/camera/color/image_raw", kinect_depth_topic = "/camera/depth/image_rect_raw", camera_frame = "camera_link" } }
 
 [modules.wifi]
 env = { WIFI_INTERFACE = "wlan0", WIFI_CHANNEL = "11", WIFI_COUNTRY_CODE = "US", WIFI_SSID = "Pete-Net", WIFI_ENABLE_NAT = "true", WIFI_UPLINK_INTERFACE = "eth0" }
 
 [modules.will]
-env = { ROS_DOMAIN_ID = "25", WILL_DEFAULT_REGIME = "idle" }
+env = { WILL_DEFAULT_REGIME = "idle" }
 
 [modules.voice]
-env = { ROS_DOMAIN_ID = "25", VOICE_BACKEND = "websocket", VOICE_TTS_URL = "ws://forebrain.local:5002/tts" }
+env = { VOICE_BACKEND = "websocket", VOICE_TTS_URL = "ws://forebrain.local:5002/tts" }
 launch = true
 dependencies = [
   { service = "forebrain.tts", port = "ws", via = "ws://forebrain.local:5002/tts", bind_env = "VOICE_TTS_URL", summary = "Streams synthesized speech from the forebrain TTS service" },
 ]
 
 [modules.viscera]
-env = { ROS_DOMAIN_ID = "25" }
 launch = true

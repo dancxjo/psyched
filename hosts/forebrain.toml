@@ -51,6 +51,6 @@ endpoints = [
 ]
 
 [modules.chat]
-env = { ROS_DOMAIN_ID = "25", OLLAMA_HOST = "http://forebrain.local:11434", OLLAMA_MODEL = "gpt-oss:20b" }
+env = { OLLAMA_HOST = "http://forebrain.local:11434", OLLAMA_MODEL = "gpt-oss:20b" }
 launch = { arguments = { conversation_topic = "/conversation", voice_topic = "/voice", transcript_topic = "/audio/transcription" } }
 dependencies = [{ service = "forebrain.llm", port = "http", via = "http://forebrain.local:11434", bind_env = "OLLAMA_HOST", summary = "Uses the Ollama service for dialogue generation" }]

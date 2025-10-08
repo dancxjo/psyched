@@ -5,6 +5,7 @@ import {
   determineRosDistro,
   renderRosProfile,
 } from "./ros2.ts";
+import { getRosDomainId } from "../ros_env.ts";
 
 Deno.test("determineRosDistro respects env override", () => {
   const value = determineRosDistro({ env: { ROS_DISTRO: "jazzy" } });
@@ -18,8 +19,9 @@ Deno.test("determineRosDistro falls back to default", () => {
 
 Deno.test("renderRosProfile emits consistent template", () => {
   const script = renderRosProfile("humble");
+  const domainId = getRosDomainId();
   const expected =
-    `# ROS 2 defaults provisioned by psh\nexport LANG=en_US.UTF-8\nexport RMW_IMPLEMENTATION=rmw_cyclonedds_cpp\nexport ROS_DOMAIN_ID=0\nexport ROS_LOCALHOST_ONLY=0\n# shellcheck disable=SC1091\n. /opt/ros/humble/setup.bash\n`;
+    `# ROS 2 defaults provisioned by psh\nexport LANG=en_US.UTF-8\nexport RMW_IMPLEMENTATION=rmw_cyclonedds_cpp\nexport ROS_DOMAIN_ID=${domainId}\nexport ROS_LOCALHOST_ONLY=0\n# shellcheck disable=SC1091\n. /opt/ros/humble/setup.bash\n`;
   assertEquals(script, expected);
 });
 

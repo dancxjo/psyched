@@ -7,6 +7,7 @@ import { hostsRoot, repoRoot } from "./paths.ts";
 import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
+import { buildRosEnv } from "./ros_env.ts";
 
 const moduleOps = {
   setup: setupModule,
@@ -137,7 +138,8 @@ function normalizeModuleLaunchConfig(
     if (enabledRaw !== undefined && enabled === undefined) {
       throw new HostConfigFormatError(
         context.path,
-        `Expected ${location}.enabled to be a boolean, received ${describeType(enabledRaw)
+        `Expected ${location}.enabled to be a boolean, received ${
+          describeType(enabledRaw)
         }.`,
       );
     }
@@ -145,7 +147,8 @@ function normalizeModuleLaunchConfig(
     if (config.arguments !== undefined && !isRecord(config.arguments)) {
       throw new HostConfigFormatError(
         context.path,
-        `Expected ${location}.arguments to be a table, received ${describeType(config.arguments)
+        `Expected ${location}.arguments to be a table, received ${
+          describeType(config.arguments)
         }.`,
       );
     }
@@ -172,7 +175,8 @@ function normalizeModuleLaunchConfig(
 
   throw new HostConfigFormatError(
     context.path,
-    `Expected ${location} to be a boolean or table, received ${describeType(raw)
+    `Expected ${location} to be a boolean or table, received ${
+      describeType(raw)
     }.`,
   );
 }
@@ -371,7 +375,9 @@ function normalizeStringArray(
     if (!name) {
       throw new HostConfigFormatError(
         context.path,
-        `Expected ${location}[${index}] to be a non-empty string, received ${describeType(value)}.`,
+        `Expected ${location}[${index}] to be a non-empty string, received ${
+          describeType(value)
+        }.`,
       );
     }
     if (!results.includes(name)) {
@@ -696,6 +702,7 @@ export async function provisionHostProfile(
   );
   const modules = cfg.modules ?? [];
   const services = cfg.services ?? [];
+  const sharedEnv = buildRosEnv();
   const envVerbose = Deno.env.get("PSH_VERBOSE") === "1";
   const verbose = options.verbose ?? envVerbose;
   const showLogsOnSuccess = options.showLogsOnSuccess ?? verbose;
@@ -748,18 +755,23 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Module provisioning skipped during host bootstrap. " +
-        "Open a new shell session before running 'psh mod setup' to configure modules.",
+          "Open a new shell session before running 'psh mod setup' to configure modules.",
       ),
     );
   } else {
     for (const directive of modules) {
-      const { name: moduleName, env = {}, setup = true, launch = false } =
-        directive;
+      const {
+        name: moduleName,
+        env: moduleEnvOverrides = {},
+        setup = true,
+        launch = false,
+      } = directive;
       const moduleDefaults = installers.includes("ros2") ? ["ros2"] : [];
       const moduleDependencies = mergeDependencies(
         moduleDefaults,
         directive.depends_on,
       );
+      const moduleEnv = { ...sharedEnv, ...moduleEnvOverrides };
 
       let setupTaskId: string | undefined;
       const moduleAliases = [`module:${moduleName}`, moduleName];
@@ -770,7 +782,7 @@ export async function provisionHostProfile(
           label: `Module '${moduleName}' setup`,
           dependencies: [...moduleDependencies],
           run: async () => {
-            const restore = applyEnv(env);
+            const restore = applyEnv(moduleEnv);
             try {
               await moduleOps.setup(moduleName);
               console.log(colors.green(`[${moduleName}] setup complete.`));
@@ -791,7 +803,7 @@ export async function provisionHostProfile(
           label: `Module '${moduleName}' launch`,
           dependencies: launchDeps,
           run: async () => {
-            const restore = applyEnv(env);
+            const restore = applyEnv(moduleEnv);
             try {
               await moduleOps.launch(moduleName);
             } finally {
@@ -811,18 +823,23 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Service provisioning skipped during host bootstrap. " +
-        "Run 'psh svc setup' after refreshing your shell if services require setup.",
+          "Run 'psh svc setup' after refreshing your shell if services require setup.",
       ),
     );
   } else {
     for (const directive of services) {
-      const { name: serviceName, env = {}, setup = true, up = false } =
-        directive;
+      const {
+        name: serviceName,
+        env: serviceEnvOverrides = {},
+        setup = true,
+        up = false,
+      } = directive;
       const serviceDefaults = installers.includes("docker") ? ["docker"] : [];
       const serviceDependencies = mergeDependencies(
         serviceDefaults,
         directive.depends_on,
       );
+      const serviceEnv = { ...sharedEnv, ...serviceEnvOverrides };
 
       let setupTaskId: string | undefined;
       const serviceAliases = [`service:${serviceName}`, serviceName];
@@ -833,7 +850,7 @@ export async function provisionHostProfile(
           label: `Service '${serviceName}' setup`,
           dependencies: [...serviceDependencies],
           run: async () => {
-            const restore = applyEnv(env);
+            const restore = applyEnv(serviceEnv);
             try {
               await serviceOps.setup(serviceName);
               console.log(colors.green(`[${serviceName}] setup complete.`));
@@ -854,7 +871,7 @@ export async function provisionHostProfile(
           label: `Service '${serviceName}' start`,
           dependencies: startDeps,
           run: async () => {
-            const restore = applyEnv(env);
+            const restore = applyEnv(serviceEnv);
             try {
               await serviceOps.start(serviceName);
             } finally {
@@ -907,7 +924,8 @@ export async function provisionHostProfile(
       );
       console.warn(
         colors.yellow(
-          `${task.label} skipped due to failed dependency (${blockedLabels.join(", ")
+          `${task.label} skipped due to failed dependency (${
+            blockedLabels.join(", ")
           }).`,
         ),
       );

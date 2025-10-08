@@ -72,7 +72,6 @@ services = ["tts", "ros2"]
 
 [modules.imu]
 launch = true
-env = { ROS_DOMAIN_ID = "25" }
 
 [modules.foot]
 launch = true
@@ -88,6 +87,8 @@ depends_on = ["docker"]
 ```
 
 When you add `--include-modules` or `--include-services`, `psh host setup` will run the corresponding lifecycle commands (`psh mod setup <name>` or `psh svc setup <name>`) and optionally launch/start the targets. Without those flags the command only runs installers and scripts, printing reminders to finish provisioning later.
+
+ROS 2 domain settings are managed globally via `config/ros_domain_id` and are applied automatically when modules and services run.
 
 ### 3. Bring modules online
 
@@ -198,7 +199,7 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ### ROS 2 (container shell)
 
-`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh up ros2` (or `psh svc up ros2`) and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. Set `ROS_DOMAIN_ID` or `ROS_DISTRO` in your environment (or host manifest `env`) before launching to propagate DDS settings into the container.
+`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh up ros2` (or `psh svc up ros2`) and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. ROS 2 domain IDs inherit from `config/ros_domain_id`; override temporarily by exporting `PSYCHED_ROS_DOMAIN_ID` (or `ROS_DOMAIN_ID`) before launching. Set `ROS_DISTRO` to select a different ROS distribution.
 
 ## Development workflows
 

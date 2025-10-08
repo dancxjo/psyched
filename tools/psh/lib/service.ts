@@ -3,6 +3,7 @@ import { parse as parseToml } from "$std/toml/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $, CommandBuilder } from "$dax";
 import { repoRoot, servicesRoot } from "./paths.ts";
+import { buildRosEnv } from "./ros_env.ts";
 
 export interface ServiceConfig {
   compose: string;
@@ -180,9 +181,8 @@ export async function bringServiceUp(service: string): Promise<void> {
   let cmd = $`docker compose -f ${composePath} -p ${project} up -d`.cwd(
     serviceDir,
   );
-  if (config.env) {
-    cmd = cmd.env(config.env);
-  }
+  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
+  cmd = cmd.env(env);
   await cmd.stdout("inherit").stderr("inherit");
 }
 
@@ -197,9 +197,8 @@ export async function bringServiceDown(service: string): Promise<void> {
   let cmd = $`docker compose -f ${composePath} -p ${project} down`.cwd(
     serviceDir,
   );
-  if (config.env) {
-    cmd = cmd.env(config.env);
-  }
+  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
+  cmd = cmd.env(env);
   await cmd.stdout("inherit").stderr("inherit");
 }
 
@@ -225,7 +224,8 @@ export async function openServiceShell(
     .stdout("inherit")
     .stderr("inherit")
     .noThrow();
-  if (config.env) builder = builder.env(config.env);
+  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
+  builder = builder.env(env);
 
   const result = await builder.spawn();
   if (result.code !== 0) {
@@ -270,7 +270,8 @@ export async function serviceStatus(name: string): Promise<ServiceStatus> {
   let cmd = $`docker compose -f ${composePath} -p ${project} ps`.cwd(
     serviceDir,
   );
-  if (config.env) cmd = cmd.env(config.env);
+  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
+  cmd = cmd.env(env);
   const output = await cmd.stderr("piped").text();
   const running = output.split("\n").slice(1).some((line) =>
     line.includes("Up")

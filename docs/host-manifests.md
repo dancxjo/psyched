@@ -68,8 +68,10 @@ configuration in inline tables so the manifest stays flat.
 ```toml
 [modules.ear]
 launch = { enabled = true }
-env = { ROS_DOMAIN_ID = "25", EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
+env = { EAR_BACKEND = "service", EAR_SERVICE_URI = "ws://forebrain.local:5003/asr" }
 ```
+
+ROS 2 domain IDs are configured globally via `config/ros_domain_id`, so individual modules typically do not need to set `ROS_DOMAIN_ID`.
 
 When you need to provide module-specific launch arguments, embed an `arguments`
 table so nested tables remain unnecessary:

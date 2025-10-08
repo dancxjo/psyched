@@ -58,6 +58,12 @@ if ! command -v ros2 >/dev/null 2>&1; then
   exit 1
 fi
 
+PILOT_PACKAGE_XML="${WORKSPACE_DIR}/install/pilot/share/pilot/package.xml"
+if [[ ! -f "${PILOT_PACKAGE_XML}" ]]; then
+  echo "pilot ROS package is missing (expected ${PILOT_PACKAGE_XML}). Run 'colcon build --packages-select pilot' before launching." >&2
+  exit 1
+fi
+
 echo "Starting Pilot cockpit backend on port ${COCKPIT_PORT}..."
 (
   cd "${ROOT_DIR}" &&

@@ -6,6 +6,7 @@ import {
   pathExists,
   safeRemove,
 } from "./os.ts";
+import { getRosDomainId } from "../ros_env.ts";
 
 export interface DetermineRosDistroOptions {
   env: Record<string, string | undefined>;
@@ -19,11 +20,12 @@ export function determineRosDistro(options: DetermineRosDistroOptions): string {
 }
 
 export function renderRosProfile(distro: string): string {
+  const domainId = getRosDomainId();
   return [
     "# ROS 2 defaults provisioned by psh",
     "export LANG=en_US.UTF-8",
     "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
-    "export ROS_DOMAIN_ID=0",
+    `export ROS_DOMAIN_ID=${domainId}`,
     "export ROS_LOCALHOST_ONLY=0",
     "# shellcheck disable=SC1091",
     `. /opt/ros/${distro}/setup.bash`,
