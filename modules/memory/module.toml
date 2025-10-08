@@ -1,0 +1,9 @@
+[unit.memory]
+apt = []
+pip = []
+launch = "modules/memory/launch_unit.sh"
+shutdown = "modules/memory/shutdown_unit.sh"
+
+[unit.memory.ros]
+workspace = "."
+packages = ["memory", "memory_interfaces"]

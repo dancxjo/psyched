@@ -1,0 +1,5 @@
+memory_interfaces/MemoryEvent event
+bool flush
+---
+string memory_id
+string vector_id
