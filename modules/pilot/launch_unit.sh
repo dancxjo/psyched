@@ -149,7 +149,10 @@ if ! kill -0 "${COCKPIT_PID}" >/dev/null 2>&1; then
 fi
 
 echo "Going to frontend directory: ${FRONTEND_DIR}"
-cd "${FRONTEND_DIR}"
+if [[ ! -d "${FRONTEND_DIR}" ]]; then
+  echo "Pilot frontend directory is missing (expected ${FRONTEND_DIR})." >&2
+  exit 1
+fi
 
 if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
   # Ensure npm dependencies fetched via deno respect the system trust store.
@@ -160,7 +163,10 @@ if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
 fi
 
 echo "Starting Pilot frontend via deno task dev..."
-deno task dev --host "$(hostname -s).local" &
+(
+  cd "${FRONTEND_DIR}"
+  deno task dev --host "$(hostname -s).local"
+) &
 DENO_PID=$!
 
 sleep 2
