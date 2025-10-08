@@ -1,67 +1,59 @@
-import { Panel, Card, type Accent } from "@pilot/components/dashboard.tsx";
+import { Card, Panel } from "@pilot/components/dashboard.tsx";
+
+import DashboardTile from "../components/DashboardTile.tsx";
+import { moduleTiles, serviceTiles } from "../lib/dashboard/tiles.ts";
 import { define } from "../utils.ts";
 
-interface ModuleLink {
-  slug: string;
-  name: string;
-  description: string;
-  tone: Accent;
-}
-
-const modules: ModuleLink[] = [
-  {
-    slug: "pilot",
-    name: "Pilot Module",
-    description:
-      "Status dashboard for the cockpit backend and websocket bridge.",
-    tone: "amber",
-  },
-  {
-    slug: "imu",
-    name: "IMU Module",
-    description:
-      "Read-only telemetry stream with orientation and velocity vectors.",
-    tone: "cyan",
-  },
-  {
-    slug: "foot",
-    name: "Foot Module",
-    description:
-      "Send manual commands and monitor Create drive base telemetry and faults.",
-    tone: "teal",
-  },
-  {
-    slug: "eye",
-    name: "Eye Module",
-    description: "Stream Kinect RGB-D telemetry for situational awareness.",
-    tone: "violet",
-  },
-];
-
 export default define.page(() => {
+  const moduleCount = moduleTiles.length;
+  const serviceCount = serviceTiles.length;
+
   return (
     <section class="content">
       <Panel
-        title="Psyched Pilot"
-        subtitle="Operator console for module diagnostics and orchestration"
+        title="Psyched cockpit"
+        subtitle="Live system overview for Pete's modules and services"
         accent="violet"
       >
         <div class="panel-grid panel-grid--stretch">
-          {modules.map((module) => (
-            <Card
-              key={module.slug}
-              title={module.name}
-              subtitle={module.description}
-              tone={module.tone}
-              footer={(
-                <a
-                  class="button button--primary"
-                  href={`/modules/${module.slug}`}
-                >
-                  Open module
-                </a>
-              )}
-            />
+          <Card title="Modules" subtitle="Managed by psh mod" tone="violet">
+            <p class="note">
+              {moduleCount} module{moduleCount === 1 ? "" : "s"}{" "}
+              exported a dashboard overlay. Expand a tile below to monitor or
+              control them without leaving the homepage.
+            </p>
+          </Card>
+          <Card title="Services" subtitle="Managed by psh srv" tone="cyan">
+            <p class="note">
+              {serviceCount} service{serviceCount === 1 ? "" : "s"}{" "}
+              expose live status from their docker compose stacks. Use the
+              cockpit controls to refresh or jump straight into lifecycle
+              tooling.
+            </p>
+          </Card>
+        </div>
+      </Panel>
+
+      <Panel
+        title="Module dashboards"
+        subtitle="Compact overlays sourced from each module's pilot bundle"
+        accent="teal"
+      >
+        <div class="dashboard-grid">
+          {moduleTiles.map((tile) => (
+            <DashboardTile key={tile.name} {...tile} />
+          ))}
+        </div>
+      </Panel>
+
+      <Panel
+        title="Service dashboards"
+        subtitle="Lifecycle telemetry for dockerised infrastructure"
+        accent="magenta"
+      >
+        <div class="dashboard-grid">
+          {serviceTiles.map((tile) => (
+            <DashboardTile key={tile.name} {...tile} />
           ))}
         </div>
       </Panel>
