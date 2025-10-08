@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/viscera/pilot/components/VisceraModulePanel.tsx

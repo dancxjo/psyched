@@ -56,8 +56,11 @@ open_tty() {
     return
   fi
   # shellcheck disable=SC2094
-  exec 4>>"$tty_path"
-  tty_active=1
+  if exec 4>>"$tty_path"; then
+    tty_active=1
+  else
+    tty_path=""
+  fi
 }
 
 close_tty() {
@@ -82,7 +85,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   fi
 
   if [[ $tty_active -eq 1 ]]; then
-    printf '%b%s %s%b\n' "$color_start" "$log_prefix" "$line" "$color_end" >&4
+    if ! printf '%b%s %s%b\n' "$color_start" "$log_prefix" "$line" "$color_end" >&4; then
+      close_tty
+      tty_path=""
+    fi
   fi
 done
 

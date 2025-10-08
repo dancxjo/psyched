@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/nav/pilot/components/NavModulePanel.tsx
