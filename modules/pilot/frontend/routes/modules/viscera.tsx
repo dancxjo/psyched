@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/viscera/pilot/routes/modules/viscera.tsx

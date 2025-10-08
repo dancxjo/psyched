@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/wifi/pilot/islands/WifiModulePanelIsland.tsx

@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/voice/pilot/components/VoiceModulePanel.tsx
