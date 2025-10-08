@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/gps/pilot/components/GpsModulePanel.tsx

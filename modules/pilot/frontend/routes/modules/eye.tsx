@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/eye/pilot/routes/modules/eye.tsx

@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/nav/pilot/islands/NavModulePanelIsland.tsx
