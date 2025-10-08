@@ -741,13 +741,6 @@ export async function bringModuleUp(
     }
   }
 
-  envCommands.push(
-    'PYTHON_USER_SITE="$(python3 -c \'import site; print(site.getusersitepackages())\')" || PYTHON_USER_SITE=""',
-  );
-  envCommands.push(
-    'if [[ -d "${PYTHON_USER_SITE}" && ":${PYTHONPATH:-}:" != *":${PYTHON_USER_SITE}:"* ]]; then export PYTHONPATH="${PYTHON_USER_SITE}${PYTHONPATH:+:$PYTHONPATH}"; fi',
-  );
-
   // Combine environment setup with launch script execution
   const launchCommand = composeLaunchCommand({
     envCommands,

@@ -5,6 +5,7 @@ apt = [
 ]
 pip = [
     "opencv-python",
+    "opencv-contrib-python",
     "numpy",
 ]
 patches = []
