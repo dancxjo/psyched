@@ -10,6 +10,7 @@ pip = ["zeroconf"]
 patches = []
 launch = "modules/wifi/launch_unit.sh"
 shutdown = "modules/wifi/shutdown_unit.sh"
+pilot_control = "modules/wifi/pilot/components/WifiModulePanel.tsx"
 
 [unit.wifi.ros]
 workspace = "."

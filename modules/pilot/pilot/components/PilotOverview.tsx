@@ -1,8 +1,5 @@
 import { useCallback, useMemo } from "preact/hooks";
-import {
-  type ConnectionStatus,
-  useCockpitTopic,
-} from "@pilot/lib/cockpit.ts";
+import { type ConnectionStatus, useCockpitTopic } from "@pilot/lib/cockpit.ts";
 
 import {
   Card,
@@ -50,8 +47,8 @@ export default function PilotOverview({
   );
 
   const connectionStatus = status as ConnectionStatus;
-  const connectionLabel =
-    CONNECTION_STATUS_LABELS[connectionStatus] ?? "Unknown";
+  const connectionLabel = CONNECTION_STATUS_LABELS[connectionStatus] ??
+    "Unknown";
   const formattedTimestamp = useMemo(
     () => formatTimestamp(data?.timestamp),
     [data?.timestamp],
@@ -69,10 +66,9 @@ export default function PilotOverview({
   }, [publish]);
 
   const activeModules = data?.activeModules;
-  const activeModulesLabel =
-    typeof activeModules === "number"
-      ? `${activeModules} active`
-      : "Active modules —";
+  const activeModulesLabel = typeof activeModules === "number"
+    ? `${activeModules} active`
+    : "Active modules —";
 
   return (
     <Panel

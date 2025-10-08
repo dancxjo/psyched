@@ -96,3 +96,6 @@ Happy hacking!
 ## Miscellaneous
 ### Symlinks
 * Each module has its own pilot folder, which is linked into the main Fresh app by `psh mod setup <module>`. This allows modules to declare their own UI components and pages without merging everything into a single codebase.
+
+### Module overlays
+* Use the shared `ModuleOverview` component under `modules/pilot/pilot/components/ModuleOverview.tsx` when you only need standard lifecycle controls for a module. Its helper functions are covered by `ModuleOverview_test.ts`; run the tests with `deno test --config modules/pilot/pilot/deno.test.json`.
