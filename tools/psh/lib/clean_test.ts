@@ -8,13 +8,13 @@ import { cleanEnvironment, __test__ } from "./clean.ts";
 Deno.test("cleanEnvironment tears down modules, services, and workspace", async () => {
   const calls: string[] = [];
   __test__.replaceModuleOps(
-    () => ["pilot", "nav"],
+    () => ["pilot", "wifi", "nav"],
     async (modules) => {
       calls.push(`modules:${modules.join(",")}`);
     },
   );
   __test__.replaceServiceOps(
-    () => ["tts"],
+    () => ["ssh", "tts", "mdns"],
     async (services) => {
       calls.push(`services:${services.join(",")}`);
     },
@@ -35,6 +35,36 @@ Deno.test("cleanEnvironment tears down modules, services, and workspace", async 
     "workspace",
   ]);
 });
+
+Deno.test(
+  "cleanEnvironment preserves protected modules and services",
+  async () => {
+    const calls: string[] = [];
+    __test__.replaceModuleOps(
+      () => ["wifi", "mdns"],
+      async () => {
+        calls.push("modules:called");
+      },
+    );
+    __test__.replaceServiceOps(
+      () => ["ssh", "mdns"],
+      async () => {
+        calls.push("services:called");
+      },
+    );
+    __test__.replaceWorkspaceReset(async () => {
+      calls.push("workspace");
+    });
+
+    try {
+      await cleanEnvironment();
+    } finally {
+      __test__.reset();
+    }
+
+    assertEquals(calls, ["workspace"]);
+  },
+);
 
 Deno.test("cleanEnvironment respects skip options", async () => {
   const calls: string[] = [];
