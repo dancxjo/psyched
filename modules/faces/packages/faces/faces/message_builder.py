@@ -1,19 +1,20 @@
 """Helpers for constructing ROS messages from processed faces."""
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, TYPE_CHECKING
 
 import numpy as np
 from cv_bridge import CvBridge
 from faces_msgs.msg import FaceDetection, FaceDetections
 from std_msgs.msg import Header
 
-from .processing import ProcessedFace
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .processing import ProcessedFace
 
 
 def build_face_detections_msg(
     header: Header,
-    faces: Iterable[ProcessedFace],
+    faces: Iterable["ProcessedFace"],
     *,
     bridge: Optional[CvBridge] = None,
 ) -> FaceDetections:

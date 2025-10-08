@@ -143,13 +143,25 @@ def _sanitize_toml_for_module(text: str, module: str) -> str:
 def _parse_toml(text: str, module: str | None) -> MutableMapping[str, object]:
     """Parse ``text`` into a TOML mapping with duplicate-table recovery."""
 
+    sanitized: str | None = None
+    if module:
+        sanitized = _sanitize_toml_for_module(text, module)
+        if sanitized and sanitized.strip():
+            try:
+                data = tomllib.loads(sanitized)
+            except tomllib.TOMLDecodeError:
+                pass
+            else:
+                if isinstance(data, MutableMapping):
+                    return data
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         if not module:
             raise
-        sanitized = _sanitize_toml_for_module(text, module)
         if not sanitized:
+            sanitized = _sanitize_toml_for_module(text, module)
+        if not sanitized or not sanitized.strip():
             raise
         try:
             data = tomllib.loads(sanitized)
