@@ -1,5 +1,16 @@
-import { Fragment } from "preact";
 import { useMemo } from "preact/hooks";
+
+import {
+  CONNECTION_STATUS_LABELS,
+  LcarsCard,
+  LcarsPanel,
+  toneFromConnection,
+} from "../../../pilot/frontend/components/lcars.tsx";
+import {
+  formatNullableNumber,
+  formatRelativeTime,
+} from "../../../pilot/frontend/lib/format.ts";
+import type { ConnectionStatus } from "@pilot/lib/cockpit.ts";
 
 type Vector3 = {
   x?: number | null;
@@ -33,6 +44,7 @@ export type ImuSample = {
 export type ImuReadoutProps = {
   title?: string;
   sensor: ImuSample;
+  connectionStatus?: ConnectionStatus;
 };
 
 const formatNumber = (value?: number | null, digits = 3) => {
@@ -49,22 +61,27 @@ const formatQuaternion = (quaternion?: OrientationQuaternion) => {
   return quaternion.map((value) => value.toFixed(3)).join(", ");
 };
 
-const formatTimestamp = (value?: Date | string | null) => {
-  if (!value) return "—";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString();
-};
-
-const sectionClass = "imu-readout__section";
-const labelClass = "imu-readout__label";
-const valueClass = "imu-readout__value";
-
-export function ImuReadout({ title = "IMU Sensor", sensor }: ImuReadoutProps) {
+export function ImuReadout({
+  title = "IMU Sensor",
+  sensor,
+  connectionStatus,
+}: ImuReadoutProps) {
   const euler = sensor.orientation?.euler;
   const quaternion = sensor.orientation?.quaternion;
+
+  const connectionLabel =
+    CONNECTION_STATUS_LABELS[connectionStatus ?? "idle"] ??
+      "Unknown";
+  const lastUpdate = useMemo(() => {
+    const value = sensor.lastUpdate;
+    if (!value) return undefined;
+    if (value instanceof Date) {
+      const time = value.getTime();
+      return Number.isNaN(time) ? undefined : time;
+    }
+    const parsed = Date.parse(String(value));
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }, [sensor.lastUpdate]);
 
   const eulerRows = useMemo(() => {
     if (!euler) return [];
@@ -87,7 +104,11 @@ export function ImuReadout({ title = "IMU Sensor", sensor }: ImuReadoutProps) {
         { label: "Z", value: formatNumber(vector.z) },
       ] as const
     );
-  }, [sensor.angularVelocity?.x, sensor.angularVelocity?.y, sensor.angularVelocity?.z]);
+  }, [
+    sensor.angularVelocity?.x,
+    sensor.angularVelocity?.y,
+    sensor.angularVelocity?.z,
+  ]);
 
   const linearAccelerationRows = useMemo(() => {
     const vector = sensor.linearAcceleration;
@@ -99,75 +120,94 @@ export function ImuReadout({ title = "IMU Sensor", sensor }: ImuReadoutProps) {
         { label: "Z", value: formatNumber(vector.z) },
       ] as const
     );
-  }, [sensor.linearAcceleration?.x, sensor.linearAcceleration?.y, sensor.linearAcceleration?.z]);
+  }, [
+    sensor.linearAcceleration?.x,
+    sensor.linearAcceleration?.y,
+    sensor.linearAcceleration?.z,
+  ]);
 
   return (
-    <section class="imu-readout">
-      <header class="imu-readout__header">
-        <h2>{title}</h2>
-        {sensor.status && <span class="imu-readout__status">{sensor.status}</span>}
-      </header>
+    <LcarsPanel
+      title={title}
+      subtitle="Live inertial telemetry"
+      accent="magenta"
+      badges={[{
+        label: connectionLabel,
+        tone: toneFromConnection(connectionStatus),
+      }]}
+    >
+      <div class="lcars-grid">
+        <LcarsCard title="Identity" tone="magenta">
+          <dl class="lcars-list">
+            <div class="lcars-list__item">
+              <dt>Frame</dt>
+              <dd>{sensor.frameId ?? "—"}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Updated</dt>
+              <dd>{formatRelativeTime(lastUpdate)}</dd>
+            </div>
+            {sensor.temperatureC !== undefined &&
+              sensor.temperatureC !== null && (
+              <div class="lcars-list__item">
+                <dt>Temperature</dt>
+                <dd>
+                  {formatNullableNumber(sensor.temperatureC, {
+                    fractionDigits: 1,
+                  })} °C
+                </dd>
+              </div>
+            )}
+          </dl>
+          {sensor.status && <p class="lcars-note">{sensor.status}</p>}
+        </LcarsCard>
 
-      <dl class={sectionClass}>
-        <dt class={labelClass}>Frame</dt>
-        <dd class={valueClass}>{sensor.frameId ?? "—"}</dd>
-
-        <dt class={labelClass}>Last update</dt>
-        <dd class={valueClass}>{formatTimestamp(sensor.lastUpdate)}</dd>
-
-        {sensor.temperatureC !== undefined && sensor.temperatureC !== null && (
-          <Fragment>
-            <dt class={labelClass}>Temperature</dt>
-            <dd class={valueClass}>{formatNumber(sensor.temperatureC, 1)} °C</dd>
-          </Fragment>
+        {eulerRows.length > 0 && (
+          <LcarsCard title="Euler" subtitle="degrees" tone="violet">
+            <dl class="lcars-list lcars-list--columns">
+              {eulerRows.map(({ label, value }) => (
+                <div class="lcars-list__item" key={`euler-${label}`}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </LcarsCard>
         )}
-      </dl>
 
-      {eulerRows.length > 0 && (
-        <dl class={sectionClass}>
-          <dt class={`${labelClass} imu-readout__section-title`}>Euler (deg)</dt>
-          {eulerRows.map(({ label, value }) => (
-            <div class="imu-readout__row" key={`euler-${label}`}>
-              <dt class={labelClass}>{label}</dt>
-              <dd class={valueClass}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+        {quaternion && (
+          <LcarsCard title="Quaternion" tone="violet">
+            <p class="lcars-readout">{formatQuaternion(quaternion)}</p>
+          </LcarsCard>
+        )}
 
-      {quaternion && (
-        <dl class={sectionClass}>
-          <dt class={`${labelClass} imu-readout__section-title`}>Quaternion</dt>
-          <dd class={valueClass}>{formatQuaternion(quaternion)}</dd>
-        </dl>
-      )}
+        {angularVelocityRows.length > 0 && (
+          <LcarsCard title="Angular velocity" subtitle="rad/s" tone="cyan">
+            <dl class="lcars-list lcars-list--columns">
+              {angularVelocityRows.map(({ label, value }) => (
+                <div class="lcars-list__item" key={`angVel-${label}`}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </LcarsCard>
+        )}
 
-      {angularVelocityRows.length > 0 && (
-        <dl class={sectionClass}>
-          <dt class={`${labelClass} imu-readout__section-title`}>Angular velocity (rad/s)</dt>
-          {angularVelocityRows.map(({ label, value }) => (
-            <div class="imu-readout__row" key={`angVel-${label}`}>
-              <dt class={labelClass}>{label}</dt>
-              <dd class={valueClass}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {linearAccelerationRows.length > 0 && (
-        <dl class={sectionClass}>
-          <dt class={`${labelClass} imu-readout__section-title`}>
-            Linear acceleration (m/s²)
-          </dt>
-          {linearAccelerationRows.map(({ label, value }) => (
-            <div class="imu-readout__row" key={`linAcc-${label}`}>
-              <dt class={labelClass}>{label}</dt>
-              <dd class={valueClass}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </section>
+        {linearAccelerationRows.length > 0 && (
+          <LcarsCard title="Linear acceleration" subtitle="m/s²" tone="teal">
+            <dl class="lcars-list lcars-list--columns">
+              {linearAccelerationRows.map(({ label, value }) => (
+                <div class="lcars-list__item" key={`linAcc-${label}`}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </LcarsCard>
+        )}
+      </div>
+    </LcarsPanel>
   );
 }
 

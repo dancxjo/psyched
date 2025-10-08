@@ -1,18 +1,10 @@
-// @ts-nocheck -- Telemetry parsing depends on loosely-typed cockpit topic payloads.
 import { useMemo } from "preact/hooks";
-import {
-  type ConnectionStatus,
-  useCockpitTopic,
-} from "../../../pilot/frontend/lib/cockpit.ts";
-import ImuReadout, { type ImuSample } from "../components/ImuReadout.tsx";
 
-const STATUS_LABELS: Record<ConnectionStatus, string> = {
-  idle: "Idle",
-  connecting: "Connecting",
-  open: "Connected",
-  closed: "Disconnected",
-  error: "Error",
-};
+import {
+  CONNECTION_STATUS_LABELS,
+} from "../../../pilot/frontend/components/lcars.tsx";
+import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
+import ImuReadout, { type ImuSample } from "../components/ImuReadout.tsx";
 
 type VectorLike = {
   x?: number | null;
@@ -74,7 +66,7 @@ export default function ImuTelemetryIsland({
   const sample = useMemo<ImuSample>(() => {
     const base = fallback ?? DEFAULT_SAMPLE;
     const mapped = mapMessageToSample(data);
-    const connection = STATUS_LABELS[status] ?? "Unknown";
+    const connection = CONNECTION_STATUS_LABELS[status] ?? "Unknown";
     const statusText = error ? `Error: ${error}` : connection;
 
     return {
@@ -84,10 +76,13 @@ export default function ImuTelemetryIsland({
     };
   }, [data, status, error, fallback]);
 
-  return ImuReadout({
-    title,
-    sensor: sample,
-  });
+  return (
+    <ImuReadout
+      title={title}
+      sensor={sample}
+      connectionStatus={status}
+    />
+  );
 }
 
 function mapMessageToSample(

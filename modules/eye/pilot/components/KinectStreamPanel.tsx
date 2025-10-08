@@ -1,5 +1,16 @@
 import { useMemo } from "preact/hooks";
-import { type ConnectionStatus, useCockpitTopic } from "@pilot/lib/cockpit.ts";
+import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
+
+import {
+  CONNECTION_STATUS_LABELS,
+  LcarsCard,
+  LcarsPanel,
+  toneFromConnection,
+} from "../../../pilot/frontend/components/lcars.tsx";
+import {
+  formatBytes,
+  formatRelativeTime,
+} from "../../../pilot/frontend/lib/format.ts";
 
 export type ImageStatistics = {
   mean?: number;
@@ -27,14 +38,6 @@ export interface KinectStreamPanelProps {
   depthTopic?: string;
 }
 
-const STATUS_LABELS: Record<ConnectionStatus, string> = {
-  idle: "Idle",
-  connecting: "Connecting",
-  open: "Connected",
-  closed: "Disconnected",
-  error: "Error",
-};
-
 const DEFAULT_IMAGE: EncodedImageMessage = {
   encoding: "rgb8",
   width: 0,
@@ -60,22 +63,6 @@ function toDataUrl(message: EncodedImageMessage | undefined) {
   return `data:${mime};base64,${message.data}`;
 }
 
-function formatTimestamp(value?: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-function formatBytes(bytes?: number) {
-  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) {
-    return "—";
-  }
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
 function formatStatistics(stats?: ImageStatistics) {
   if (!stats) return "—";
   const items: string[] = [];
@@ -89,6 +76,12 @@ function formatStatistics(stats?: ImageStatistics) {
     items.push(`max ${stats.max.toFixed(2)}`);
   }
   return items.length > 0 ? items.join(", ") : "—";
+}
+
+function parseTimestamp(value?: string) {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 export default function KinectStreamPanel({
@@ -113,105 +106,92 @@ export default function KinectStreamPanel({
     depth.data?.format,
   ]);
 
-  return (
-    <section class="kinect-stream">
-      <header class="kinect-stream__header">
-        <h2>Kinect Eye</h2>
-        <ul class="kinect-stream__status">
-          <li>
-            RGB: {STATUS_LABELS[color.status] ?? "Unknown"}
-          </li>
-          <li>
-            Depth: {STATUS_LABELS[depth.status] ?? "Unknown"}
-          </li>
-        </ul>
-      </header>
+  const colorUpdated = formatRelativeTime(parseTimestamp(
+    color.data?.timestamp ?? color.data?.received_at,
+  ));
+  const depthUpdated = formatRelativeTime(parseTimestamp(
+    depth.data?.timestamp ?? depth.data?.received_at,
+  ));
 
-      <div class="kinect-stream__grid">
-        <figure class="kinect-stream__frame">
-          <header>
-            <h3>RGB</h3>
-            <dl>
-              <div>
-                <dt>Frame</dt>
-                <dd>{color.data?.frame_id ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Size</dt>
-                <dd>
-                  {color.data?.width ?? 0}×{color.data?.height ?? 0} ·{" "}
-                  {color.data?.encoding ?? "unknown"}
-                </dd>
-              </div>
-              <div>
-                <dt>Payload</dt>
-                <dd>{formatBytes(color.data?.size_bytes)}</dd>
-              </div>
-              <div>
-                <dt>Updated</dt>
-                <dd>
-                  {formatTimestamp(
-                    color.data?.timestamp ?? color.data?.received_at,
-                  )}
-                </dd>
-              </div>
-            </dl>
-          </header>
-          <div class="kinect-stream__image">
+  return (
+    <LcarsPanel
+      title="Kinect Eye"
+      subtitle="RGB-D telemetry stream"
+      accent="cyan"
+      badges={[
+        {
+          label: `RGB ${CONNECTION_STATUS_LABELS[color.status] ?? "Unknown"}`,
+          tone: toneFromConnection(color.status),
+        },
+        {
+          label: `Depth ${CONNECTION_STATUS_LABELS[depth.status] ?? "Unknown"}`,
+          tone: toneFromConnection(depth.status),
+        },
+      ]}
+    >
+      <div class="lcars-grid lcars-grid--stretch">
+        <LcarsCard title="RGB stream" tone="cyan">
+          <dl class="lcars-list">
+            <div class="lcars-list__item">
+              <dt>Frame</dt>
+              <dd>{color.data?.frame_id ?? "—"}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Resolution</dt>
+              <dd>
+                {color.data?.width ?? 0}×{color.data?.height ?? 0} ·{" "}
+                {color.data?.encoding ?? "unknown"}
+              </dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Payload</dt>
+              <dd>{formatBytes(color.data?.size_bytes)}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Updated</dt>
+              <dd>{colorUpdated}</dd>
+            </div>
+          </dl>
+          <div class="lcars-frame">
             {colorUrl
               ? <img alt="Kinect RGB" src={colorUrl} />
-              : (
-                <p class="kinect-stream__placeholder">
-                  Waiting for RGB frames…
-                </p>
-              )}
+              : <p class="lcars-placeholder">Waiting for RGB frames…</p>}
           </div>
-        </figure>
+        </LcarsCard>
 
-        <figure class="kinect-stream__frame">
-          <header>
-            <h3>Depth</h3>
-            <dl>
-              <div>
-                <dt>Frame</dt>
-                <dd>{depth.data?.frame_id ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Size</dt>
-                <dd>
-                  {depth.data?.width ?? 0}×{depth.data?.height ?? 0} ·{" "}
-                  {depth.data?.encoding ?? "unknown"}
-                </dd>
-              </div>
-              <div>
-                <dt>Payload</dt>
-                <dd>{formatBytes(depth.data?.size_bytes)}</dd>
-              </div>
-              <div>
-                <dt>Statistics</dt>
-                <dd>{formatStatistics(depth.data?.statistics)}</dd>
-              </div>
-              <div>
-                <dt>Updated</dt>
-                <dd>
-                  {formatTimestamp(
-                    depth.data?.timestamp ?? depth.data?.received_at,
-                  )}
-                </dd>
-              </div>
-            </dl>
-          </header>
-          <div class="kinect-stream__image">
+        <LcarsCard title="Depth stream" tone="violet">
+          <dl class="lcars-list">
+            <div class="lcars-list__item">
+              <dt>Frame</dt>
+              <dd>{depth.data?.frame_id ?? "—"}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Resolution</dt>
+              <dd>
+                {depth.data?.width ?? 0}×{depth.data?.height ?? 0} ·{" "}
+                {depth.data?.encoding ?? "unknown"}
+              </dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Payload</dt>
+              <dd>{formatBytes(depth.data?.size_bytes)}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Statistics</dt>
+              <dd>{formatStatistics(depth.data?.statistics)}</dd>
+            </div>
+            <div class="lcars-list__item">
+              <dt>Updated</dt>
+              <dd>{depthUpdated}</dd>
+            </div>
+          </dl>
+          <div class="lcars-frame">
             {depthUrl
               ? <img alt="Kinect depth" src={depthUrl} />
-              : (
-                <p class="kinect-stream__placeholder">
-                  Waiting for depth frames…
-                </p>
-              )}
+              : <p class="lcars-placeholder">Waiting for depth frames…</p>}
           </div>
-        </figure>
+        </LcarsCard>
       </div>
-    </section>
+    </LcarsPanel>
   );
 }
