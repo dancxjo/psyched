@@ -62,9 +62,8 @@ export default function PshHostProvisioner({ hosts }: Props) {
             disabled={loading}
           >
             <option value="">Detected hostname</option>
-            {hosts.map((host) => (
-              <option key={host} value={host}>{host}</option>
-            ))}
+            {hosts.map((host) => <option key={host} value={host}>{host}
+            </option>)}
           </select>
         </label>
       </div>

@@ -1,8 +1,8 @@
 import { useMemo } from "preact/hooks";
 
 import {
-  CONNECTION_STATUS_LABELS,
   Card,
+  CONNECTION_STATUS_LABELS,
   Panel,
   toneFromConnection,
 } from "@pilot/components/dashboard.tsx";

@@ -7,20 +7,10 @@
     "start": "deno serve -A _fresh/server.js",
     "update": "deno run -A -r jsr:@fresh/update ."
   },
-  "lint": {
-    "rules": {
-      "tags": [
-        "fresh",
-        "recommended"
-      ]
-    }
-  },
-  "exclude": [
-    "**/_fresh/*"
-  ],
+  "lint": { "rules": { "tags": ["fresh", "recommended"] } },
+  "exclude": ["**/_fresh/*"],
   "imports": {
-    "fresh": "jsr:@fresh/core@2.1.1",
-    "$fresh/": "jsr:@fresh/core@2.1.1/",
+    "fresh": "jsr:@fresh/core@^2.1.2",
     "$std/": "https://deno.land/std@0.216.0/",
     "$cliffy/": "https://deno.land/x/cliffy@v1.0.0-rc.4/",
     "$dax": "https://deno.land/x/dax@0.38.0/mod.ts",
@@ -28,17 +18,12 @@
     "@pilot/lib/": "./lib/",
     "@pilot/components/": "../pilot/components/",
     "preact": "npm:preact@^10.27.2",
-    "@preact/signals": "npm:@preact/signals@^2.3.1",
+    "@preact/signals": "npm:@preact/signals@^2.3.2",
     "@fresh/plugin-vite": "jsr:@fresh/plugin-vite@^1.0.4",
     "vite": "npm:vite@^7.1.3"
   },
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "dom.asynciterable",
-      "dom.iterable",
-      "deno.ns"
-    ],
+    "lib": ["dom", "dom.asynciterable", "dom.iterable", "deno.ns"],
     "jsx": "precompile",
     "jsxImportSource": "preact",
     "jsxPrecompileSkipElements": [
@@ -57,8 +42,6 @@
       "noscript",
       "template"
     ],
-    "types": [
-      "vite/client"
-    ]
+    "types": ["vite/client"]
   }
 }

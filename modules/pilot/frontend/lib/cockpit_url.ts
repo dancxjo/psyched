@@ -165,7 +165,8 @@ export function defaultCockpitUrl(): string {
     finalPortSource = "default";
   }
 
-  const hostCandidate = parsedHost?.hostname ?? manualHost.host ?? sanitizedHost ?? hostname;
+  const hostCandidate = parsedHost?.hostname ?? manualHost.host ??
+    sanitizedHost ?? hostname;
   const trimmedHost = hostCandidate?.trim() || hostname;
   const safeHost = wrapIpv6Host(trimmedHost);
   const cockpitUrl = new URL(`${finalProtocol}://${safeHost}`);

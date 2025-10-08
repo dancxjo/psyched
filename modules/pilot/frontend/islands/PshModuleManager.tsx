@@ -1,10 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 
-import {
-  Badge,
-  Card,
-  type BadgeTone,
-} from "@pilot/components/dashboard.tsx";
+import { Badge, type BadgeTone, Card } from "@pilot/components/dashboard.tsx";
 
 type ModuleStatus = {
   name: string;
@@ -146,11 +142,15 @@ export default function PshModuleManager() {
                 <td>
                   <div class="status-indicator">
                     <Badge
-                      label={status.status === "running" ? "Running" : "Stopped"}
+                      label={status.status === "running"
+                        ? "Running"
+                        : "Stopped"}
                       tone={MODULE_TONES[status.status]}
                     />
                     {status.pid && (
-                      <span class="status-indicator__detail">PID {status.pid}</span>
+                      <span class="status-indicator__detail">
+                        PID {status.pid}
+                      </span>
                     )}
                   </div>
                 </td>
@@ -169,7 +169,8 @@ export default function PshModuleManager() {
                       class="button button--small button--primary"
                       type="button"
                       disabled={loading}
-                      onClick={() => runAction("/api/psh/mod/up", [status.name])}
+                      onClick={() =>
+                        runAction("/api/psh/mod/up", [status.name])}
                     >
                       Start
                     </button>

@@ -1,10 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 
-import {
-  Badge,
-  Card,
-  type BadgeTone,
-} from "@pilot/components/dashboard.tsx";
+import { Badge, type BadgeTone, Card } from "@pilot/components/dashboard.tsx";
 
 type ServiceStatus = {
   name: string;
@@ -148,13 +144,11 @@ export default function PshServiceManager() {
                 <td>
                   <div class="status-indicator">
                     <Badge
-                      label={
-                        status.status === "running"
-                          ? "Running"
-                          : status.status === "stopped"
-                          ? "Stopped"
-                          : "Error"
-                      }
+                      label={status.status === "running"
+                        ? "Running"
+                        : status.status === "stopped"
+                        ? "Stopped"
+                        : "Error"}
                       tone={SERVICE_TONES[status.status]}
                     />
                   </div>
@@ -175,7 +169,8 @@ export default function PshServiceManager() {
                       class="button button--small button--primary"
                       type="button"
                       disabled={loading}
-                      onClick={() => runAction("/api/psh/srv/up", [status.name])}
+                      onClick={() =>
+                        runAction("/api/psh/srv/up", [status.name])}
                     >
                       Start
                     </button>

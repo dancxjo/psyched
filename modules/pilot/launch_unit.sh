@@ -5,6 +5,7 @@ set -euo pipefail
 # PSYCHED_WORKSPACE_DIR and ROS environment should already be available
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+printf '%s start launch_unit\\n' "$(date -Iseconds)" >> /tmp/pilot_launch_debug.log
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
 COCKPIT_PORT="${PILOT_COCKPIT_PORT:-8088}"
@@ -120,17 +121,20 @@ if ! command -v deno >/dev/null 2>&1; then
   echo "deno is not installed. Install deno before launching the pilot module." >&2
   exit 1
 fi
+printf '%s after deno check\\n' "$(date -Iseconds)" >> /tmp/pilot_launch_debug.log
 
 if ! command -v ros2 >/dev/null 2>&1; then
   echo "ros2 CLI not found. Source your ROS workspace before launching the pilot module." >&2
   exit 1
 fi
+printf '%s after ros2 check\\n' "$(date -Iseconds)" >> /tmp/pilot_launch_debug.log
 
 PILOT_PACKAGE_XML="${WORKSPACE_DIR}/install/pilot/share/pilot/package.xml"
 if [[ ! -f "${PILOT_PACKAGE_XML}" ]]; then
   echo "pilot ROS package is missing (expected ${PILOT_PACKAGE_XML}). Run 'colcon build --packages-select pilot' before launching." >&2
   exit 1
 fi
+printf '%s after package check\\n' "$(date -Iseconds)" >> /tmp/pilot_launch_debug.log
 
 echo "Starting Pilot cockpit backend on port ${COCKPIT_PORT}..."
 (
@@ -162,13 +166,7 @@ if [[ -z "${DENO_TLS_CA_STORE:-}" ]]; then
   export DENO_TLS_CA_STORE=system
 fi
 
-echo "Building Pilot frontend via deno task build..."
-(
-  cd "${FRONTEND_DIR}"
-  deno task build
-)
-
-echo "Starting Pilot frontend via deno task start..."
+echo "Starting Pilot frontend via deno task dev..."
 (
   cd "${FRONTEND_DIR}"
   deno task dev

@@ -1,9 +1,6 @@
-import type {
-  Handlers,
-  MiddlewareHandler,
-  RouteConfig,
-} from "$fresh/server.ts";
+import type { MiddlewareHandler, RouteConfig } from "fresh";
 import type { NavigationLink } from "./lib/navigation_types.ts";
+import { Handlers } from "fresh/compat";
 
 /**
  * Connection details for the cockpit websocket bridge that powers the pilot UI.
