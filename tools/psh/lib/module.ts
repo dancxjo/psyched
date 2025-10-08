@@ -177,7 +177,7 @@ export function formatExitSummary(
   const summary = status.success
     ? `[${module}] exited cleanly (code ${status.code ?? 0})`
     : `[${module}] exited with code ${status.code ?? "unknown"}` +
-    (status.signal ? ` (signal ${status.signal})` : "");
+      (status.signal ? ` (signal ${status.signal})` : "");
   return status.success ? colors.yellow(summary) : colors.red(summary);
 }
 
@@ -266,7 +266,8 @@ export function composeLaunchCommand(
   };
 
   const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${composeStreamCommand("stdout")
+    `exec bash ${shellEscape(launchScript)} > >(${
+      composeStreamCommand("stdout")
     }) ` +
     `2> >(${composeStreamCommand("stderr")})`;
   const parts = [...envCommands, launch];
@@ -727,6 +728,13 @@ export async function bringModuleUp(
       }
     }
   }
+
+  envCommands.push(
+    'PYTHON_USER_SITE="$(python3 -c \'import site; print(site.getusersitepackages())\')" || PYTHON_USER_SITE=""',
+  );
+  envCommands.push(
+    'if [[ -d "${PYTHON_USER_SITE}" && ":${PYTHONPATH:-}:" != *":${PYTHON_USER_SITE}:"* ]]; then export PYTHONPATH="${PYTHON_USER_SITE}${PYTHONPATH:+:$PYTHONPATH}"; fi',
+  );
 
   // Combine environment setup with launch script execution
   const launchCommand = composeLaunchCommand({
