@@ -1,0 +1,13 @@
+[unit.faces]
+apt = []
+pip = [
+    "opencv-python",
+    "numpy",
+]
+patches = []
+launch = "modules/faces/launch_unit.sh"
+shutdown = "modules/faces/shutdown_unit.sh"
+
+[unit.faces.ros]
+workspace = "."
+packages = ["faces", "faces_msgs"]

@@ -1,0 +1,18 @@
+[unit.gps]
+apt = [
+    "gpsd",
+    "gpsd-clients",
+]
+pip = ["gps3"]
+patches = [
+    "modules/gps/scripts/ensure_dialout.sh",
+    "modules/gps/scripts/install_udev_rule.sh",
+    "modules/gps/scripts/configure_gpsd.sh",
+    "modules/gps/scripts/enable_gpsd.sh",
+]
+launch = "modules/gps/launch_unit.sh"
+shutdown = "modules/gps/shutdown_unit.sh"
+
+[unit.gps.ros]
+workspace = "."
+packages = ["ublox_gps", "psyched_msgs"]

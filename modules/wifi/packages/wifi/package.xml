@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>wifi</name>
+  <version>0.1.0</version>
+  <description>Wi-Fi access point manager with DHCP, mDNS, and optional NAT sharing.</description>
+  <maintainer email="tdreed@gmail.com">Psyched</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+</package>

@@ -1,0 +1,16 @@
+[unit.wifi]
+apt = [
+    "hostapd",
+    "dnsmasq",
+    "iproute2",
+    "iw",
+    "iptables",
+]
+pip = ["zeroconf"]
+patches = []
+launch = "modules/wifi/launch_unit.sh"
+shutdown = "modules/wifi/shutdown_unit.sh"
+
+[unit.wifi.ros]
+workspace = "."
+packages = ["wifi"]

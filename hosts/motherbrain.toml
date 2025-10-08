@@ -49,6 +49,55 @@ launch = true
   bind_env = "EAR_SERVICE_URI"
   summary = "Consumes Whisper websocket for speech recognition"
 
+[modules.faces]
+launch = true
+
+  [modules.faces.env]
+  ROS_DOMAIN_ID = "25"
+
+  [modules.faces.launch.arguments]
+  camera_topic = "/camera/color/image_raw"
+  faces_topic = "/vision/faces"
+  face_detected_topic = "/vision/face_detected"
+
+[modules.gps]
+launch = true
+
+  [modules.gps.env]
+  ROS_DOMAIN_ID = "25"
+
+  [modules.gps.launch.arguments]
+  frame_id = "gps_link"
+
+[modules.nav]
+launch = true
+
+  [modules.nav.env]
+  ROS_DOMAIN_ID = "25"
+
+  [modules.nav.launch.arguments]
+  kinect_rgb_topic = "/camera/color/image_raw"
+  kinect_depth_topic = "/camera/depth/image_rect_raw"
+  camera_frame = "camera_link"
+
+[modules.wifi]
+launch = false
+
+  [modules.wifi.env]
+  WIFI_INTERFACE = "wlan0"
+  WIFI_CHANNEL = "11"
+  WIFI_COUNTRY_CODE = "US"
+  WIFI_SSID = "Pete-Net"
+  WIFI_ENABLE_NAT = "true"
+  WIFI_UPLINK_INTERFACE = "eth0"
+
+[modules.will]
+launch = true
+
+  [modules.will.env]
+  ROS_DOMAIN_ID = "25"
+  WILL_DEFAULT_REGIME = "idle"
+
 [modules.voice]
 launch = true
 
