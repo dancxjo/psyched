@@ -2,11 +2,13 @@ import {
   assert,
   assertArrayIncludes,
   assertEquals,
+  assertRejects,
   assertStringIncludes,
 } from "$std/testing/asserts.ts";
 import { join } from "$std/path/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import {
+  bringModulesUp,
   composeLaunchCommand,
   formatExitSummary,
   formatLaunchDiagnostics,
@@ -126,3 +128,26 @@ Deno.test("formatExitSummary highlights success and failure", () => {
   );
   assertStringIncludes(failure, "exited with code 1 (signal SIGTERM)");
 });
+
+Deno.test(
+  "bringModulesUp continues launching remaining modules when one fails",
+  async () => {
+    const modules = ["faces", "nav", "gps"];
+    const launched: string[] = [];
+    const launcher = async (module: string) => {
+      launched.push(module);
+      if (module === "nav") {
+        throw new Error("nav is unavailable");
+      }
+    };
+
+    const error = await assertRejects(async () => {
+      await bringModulesUp(modules, { launcher });
+    });
+
+    assert(error instanceof AggregateError);
+    assertEquals(launched, modules);
+    assertEquals(error.errors.length, 1);
+    assertStringIncludes(error.message, "nav");
+  },
+);

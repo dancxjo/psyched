@@ -44,6 +44,19 @@ export interface BringModuleUpOptions {
   verbose?: boolean;
 }
 
+export interface ModuleLaunchFailure {
+  module: string;
+  error: unknown;
+}
+
+export interface BringModulesUpOptions extends BringModuleUpOptions {
+  launcher?: (
+    module: string,
+    options: BringModuleUpOptions,
+  ) => Promise<void>;
+  onError?: (failure: ModuleLaunchFailure) => void;
+}
+
 function ensurePidDir(): void {
   Deno.mkdirSync(PID_DIR, { recursive: true });
 }
@@ -893,10 +906,33 @@ export async function teardownModules(modules: string[]): Promise<void> {
 
 export async function bringModulesUp(
   modules: string[],
-  options: BringModuleUpOptions = {},
+  options: BringModulesUpOptions = {},
 ): Promise<void> {
+  const { launcher = bringModuleUp, onError, ...rest } = options;
+  const launchOptions: BringModuleUpOptions = rest;
+  const failures: ModuleLaunchFailure[] = [];
+
   for (const module of modules) {
-    await bringModuleUp(module, options);
+    try {
+      await launcher(module, launchOptions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failure: ModuleLaunchFailure = { module, error };
+      failures.push(failure);
+      console.error(
+        colors.red(`[${module}] failed to launch: ${message}`),
+      );
+      onError?.(failure);
+    }
+  }
+
+  if (failures.length) {
+    const summary = failures.map((failure) => failure.module).join(", ");
+    const label = failures.length === 1 ? "module" : "modules";
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to launch ${failures.length} ${label}: ${summary}`,
+    );
   }
 }
 
