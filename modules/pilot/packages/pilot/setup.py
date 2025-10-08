@@ -1,3 +1,5 @@
+import sys
+
 from setuptools import find_packages, setup
 
 package_name = 'pilot'
@@ -6,10 +8,15 @@ setup(
     name=package_name,
     version='0.2.0',
     packages=find_packages(exclude=['test']),
+    py_modules=['sitecustomize'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (
+            f'lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages',
+            ['sitecustomize.py'],
+        ),
     ],
     install_requires=['setuptools', 'typing_extensions>=4.8,<5', 'websockets>=10,<13'],
     zip_safe=True,
