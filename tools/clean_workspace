@@ -40,60 +40,7 @@ for legacy in "${REPO_ROOT}/src" "${REPO_ROOT}/build" "${REPO_ROOT}/install"; do
   fi
 done
 
-# Re-establish local package symlinks inside the workspace src directory.
-shopt -s nullglob
-
-declare -A LINKED_PACKAGES=()
-
-link_package() {
-  local name="$1"
-  local target="$2"
-
-  if [[ -z "${name}" ]]; then
-    return
-  fi
-
-  if [[ -n "${LINKED_PACKAGES[${name}]:-}" ]]; then
-    if [[ "${LINKED_PACKAGES[${name}]}" != "${target}" ]]; then
-      echo "    Skipping ${name} (already linked to ${LINKED_PACKAGES[${name}]})"
-    fi
-    return
-  fi
-
-  if [[ ! -d "${target}" ]]; then
-    return
-  fi
-
-  if [[ ! -f "${target}/Cargo.toml" \
-        && ! -f "${target}/package.xml" \
-        && ! -f "${target}/setup.py" \
-        && ! -f "${target}/pyproject.toml" ]]; then
-    return
-  fi
-
-  local link="${SRC_DIR}/${name}"
-  if [[ -e "${link}" && ! -L "${link}" ]]; then
-    echo "    Skipping ${name} (destination ${link} exists and is not a symlink)"
-    return
-  fi
-
-  rm -f "${link}"
-  ln -s "${target}" "${link}"
-  LINKED_PACKAGES["${name}"]="${target}"
-  echo "    ${link} -> ${target}"
-}
-
-echo "==> Re-establishing local package symlinks"
-
-for package_dir in "${REPO_ROOT}/packages"/*; do
-  base="$(basename "${package_dir}")"
-  [[ "${base}" == .* ]] && continue
-  link_package "${base}" "${package_dir}"
-done
-
-for module_package in "${REPO_ROOT}"/modules/*/packages/*; do
-  base="$(basename "${module_package}")"
-  link_package "${base}" "${module_package}"
-done
-
+# Module and service setup commands re-create any required symlinks. Leaving
+# the workspace empty here prevents disabled targets from polluting builds.
+echo "==> Skipping automatic package symlink creation (handled by module/service setup)"
 echo "✓ Workspace ready at ${WORKSPACE_DIR}"

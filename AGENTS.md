@@ -74,7 +74,7 @@ Always prefer running the smallest relevant command set.
 - **Pilot backend is Python-first:** The `psh` CLI runs on Deno. Expect ROS nodes and cockpit bridges to live under Python packages and keep their dependencies declared in module manifests.
 - **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
 - **Background processes:** Launch scripts spawn long-lived processes (for example `deno task dev`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
-- **Workspace resets:** `tools/clean_workspace` wipes `work/` and relinks local ROS/Python packages. Run it (or `psh clean`) whenever package paths drift instead of tweaking build directories manually.
+- **Workspace resets:** `tools/clean_workspace` wipes `work/` and leaves `src/` empty so disabled modules stay out of the build graph. Run it (or `psh clean`) when paths drift, then rerun `psh mod setup <module>` for any packages you need.
 - **Network safety:** `psh clean` intentionally preserves connectivity-critical modules/services (Wi-Fi, SSH, mDNS). Keep those protections in place so remote sessions stay alive during cleanup.
 - **Deno TLS certificates:** When fetching dependencies during `deno task test`, set `DENO_TLS_CA_STORE=system` if you encounter TLS certificate errors in restricted environments.
 - **Deno permissions:** Prefer `deno task test` (which wraps `deno test --allow-all`) so permission-gated tests can read env vars and temp directories without manual flags.

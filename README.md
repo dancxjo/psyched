@@ -205,7 +205,7 @@ Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host
 
 ### Workspace cleanup
 
-Use `psh clean` (or run `tools/clean_workspace` directly) to stop active modules and services before recreating the ROS workspace from scratch. The helper wipes `work/`, relinks every package declared under `modules/*/packages/`, and leaves the repository ready for a fresh `psh mod setup`. Pass `--skip-modules`, `--skip-services`, or `--skip-workspace` to tailor the reset when you only need part of the cleanup.
+Use `psh clean` (or run `tools/clean_workspace` directly) to stop active modules and services before recreating the ROS workspace from scratch. The helper wipes `work/` and leaves an empty `src/` directory so disabled modules stay out of the build graph; rerun `psh mod setup <module>` afterwards to link the packages you need. Pass `--skip-modules`, `--skip-services`, or `--skip-workspace` to tailor the reset when you only need part of the cleanup.
 
 ### Python + ROS backend
 
@@ -213,7 +213,7 @@ Use `psh clean` (or run `tools/clean_workspace` directly) to stop active modules
 - Run unit tests: `colcon test --packages-select pilot`
 - Launch the websocket bridge: `ros2 run pilot cockpit`
 
-ROS packages live under `modules/*/packages/` and are symlinked into `work/src/` by `psh mod setup` or `psh clean`. Use `psh build` to compile ROS nodes without invoking `colcon` directly:
+ROS packages live under `modules/*/packages/` and are symlinked into `work/src/` during `psh mod setup`. Use `psh build` to compile ROS nodes without invoking `colcon` directly:
 
 ```bash
 psh build                 # builds the entire workspace
