@@ -56,7 +56,6 @@ ports = [11434]
   description = "HTTP inference API exposed to orchestration tooling"
 
 [modules.chat]
-launch = { enabled = true }
 
   [modules.chat.env]
   ROS_DOMAIN_ID = "25"
