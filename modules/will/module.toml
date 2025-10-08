@@ -1,0 +1,13 @@
+[unit.will]
+apt = [
+    "python3-pip",
+    "git",
+]
+pip = ["py_trees"]
+patches = ["modules/will/scripts/install_py_trees_ros.sh"]
+launch = "modules/will/launch_unit.sh"
+shutdown = "modules/will/shutdown_unit.sh"
+
+[unit.will.ros]
+workspace = "."
+packages = ["psyched_bt"]

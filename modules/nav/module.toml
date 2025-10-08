@@ -1,0 +1,14 @@
+[unit.nav]
+apt = []
+pip = []
+patches = [
+    "modules/nav/scripts/install_nav2_deps.sh",
+    "modules/nav/scripts/link_nav2_sources.sh",
+    "modules/nav/scripts/build_psyched_nav.sh",
+]
+launch = "modules/nav/launch_unit.sh"
+shutdown = "modules/nav/shutdown_unit.sh"
+
+[unit.nav.ros]
+workspace = "."
+packages = ["psyched_nav"]
