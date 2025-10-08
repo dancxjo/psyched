@@ -180,8 +180,7 @@ Deno.test(
 [host]
 name = "demo"
 
-[[modules]]
-name = "alpha"
+modules = ["alpha"]
 `;
     await withTempRepo("demo", hostToml, async () => {
       let setupCalls = 0;
@@ -214,8 +213,7 @@ Deno.test(
 [host]
 name = "demo"
 
-[[modules]]
-name = "alpha"
+modules = ["alpha"]
 `;
     await withTempRepo("demo", hostToml, async () => {
       let setupCalls = 0;
@@ -242,8 +240,7 @@ Deno.test(
 [host]
 name = "demo"
 
-[[services]]
-name = "telemetry"
+services = ["telemetry"]
 `;
     await withTempRepo("demo", hostToml, async () => {
       let setupCalls = 0;
@@ -276,8 +273,7 @@ Deno.test(
 [host]
 name = "demo"
 
-[[services]]
-name = "telemetry"
+services = ["telemetry"]
 `;
     await withTempRepo("demo", hostToml, async () => {
       let setupCalls = 0;

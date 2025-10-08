@@ -1,9 +1,9 @@
 # Host manifest guidelines
 
-- Keep manifests declarative: `installers` arrays replace ad-hoc `[features]` toggles.
+- Keep manifests declarative: list `installers`, `modules`, and `services` directly under `[host]` so it is obvious what runs where.
 - Populate `roles` to describe what each host is responsible for (e.g. `compute`, `ros2-control`).
-- Describe services with `[[services.<name>]]` entries; include `intent`, `summary`, `runtime`, and a quick `ports = [...]` list so orchestration tooling can render useful dashboards.
-- Declare externally reachable sockets under `[[services.<name>.ports]]` and capture `bind`, `port`, `target`, and `advertise` values so consumers know how to connect.
-- Declare modules with `[modules.<name>]`, add runtime configuration in `[modules.<name>.env]`, and capture cross-host wiring with `[[modules.<name>.dependencies]]` (reference dependencies as `<host>.<service>` and bind env vars with `bind_env`).
-- Keep module launch argument blocks unique; if you need to override values, update the existing table instead of duplicating it so configuration remains easy to diff.
+- Describe services with `[services.<name>]` tables; include `intent`, `summary`, `runtime`, a quick `ports = [...]` list, and enumerate socket metadata under an `endpoints = [{ ... }]` array.
+- Declare modules with `[modules.<name>]`, store runtime configuration in `env = { ... }`, and capture launch arguments via `launch = { ... }` inline tables.
+- Record cross-host wiring with `dependencies = [{ ... }]` arrays (reference dependencies as `<host>.<service>` and bind env vars with `bind_env`).
+- Keep module launch argument blocks unique; update existing tables instead of duplicating values so configuration remains easy to diff.
 - Draft updates in an editor before overwriting files—redirects (`cat <<'EOF'`) won’t forgive stray placeholders.

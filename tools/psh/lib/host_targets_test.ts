@@ -88,6 +88,7 @@ denoTest("invalid host configuration surfaces a helpful error", () => {
   const config = `
 [host]
 name = "${hostName}"
+modules = ["oops"]
 
 [modules]
 oops = "bad shape"

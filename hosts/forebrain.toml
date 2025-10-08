@@ -3,118 +3,54 @@
 
 [host]
 name = "forebrain"
+roles = ["compute", "inference"]
 installers = ["docker", "cuda"]
-modules=[]
-services=["asr", "tts", "llm", "graphs", "vectors"]
+modules = []
+services = ["asr", "tts", "llm", "graphs", "vectors"]
 
-[[services.asr]]
+[services.asr]
 intent = "speech-to-text"
 summary = "Streaming Whisper-based ASR over websockets"
 runtime = "container"
 ports = [5003]
+endpoints = [{ name = "ws", protocol = "ws", bind = "0.0.0.0", port = 5003, target = 5003, advertise = "ws://forebrain.local:5003/asr", description = "Websocket endpoint consumed by motherbrain.ear" }]
 
-  [[services.asr.ports]]
-  name = "ws"
-  protocol = "ws"
-  bind = "0.0.0.0"
-  port = 5003
-  target = 5003
-  advertise = "ws://forebrain.local:5003/asr"
-  description = "Websocket endpoint consumed by motherbrain.ear"
-
-[[services.tts]]
+[services.tts]
 intent = "text-to-speech"
 summary = "Streaming Coqui-driven TTS websocket"
 runtime = "container"
 ports = [5002]
+endpoints = [{ name = "ws", protocol = "ws", bind = "0.0.0.0", port = 5002, target = 5002, advertise = "ws://forebrain.local:5002/tts", description = "Websocket endpoint consumed by motherbrain.voice" }]
 
-  [[services.tts.ports]]
-  name = "ws"
-  protocol = "ws"
-  bind = "0.0.0.0"
-  port = 5002
-  target = 5002
-  advertise = "ws://forebrain.local:5002/tts"
-  description = "Websocket endpoint consumed by motherbrain.voice"
-
-[[services.llm]]
+[services.llm]
 intent = "language-model"
 summary = "Ollama LLM runtime for Pete's dialogue system"
 runtime = "container"
 ports = [11434]
+endpoints = [{ name = "http", protocol = "http", bind = "0.0.0.0", port = 11434, target = 11434, advertise = "http://forebrain.local:11434", description = "HTTP inference API exposed to orchestration tooling" }]
 
-  [[services.llm.ports]]
-  name = "http"
-  protocol = "http"
-  bind = "0.0.0.0"
-  port = 11434
-  target = 11434
-  advertise = "http://forebrain.local:11434"
-  description = "HTTP inference API exposed to orchestration tooling"
 
-[modules.chat]
-
-  [modules.chat.env]
-  ROS_DOMAIN_ID = "25"
-  OLLAMA_HOST = "http://forebrain.local:11434"
-  OLLAMA_MODEL = "gpt-oss:20b"
-
-  [modules.chat.launch.arguments]
-  conversation_topic = "/conversation"
-  voice_topic = "/voice"
-  transcript_topic = "/audio/transcription"
-
-  [[modules.chat.dependencies]]
-  service = "forebrain.llm"
-  port = "http"
-  via = "http://forebrain.local:11434"
-  bind_env = "OLLAMA_HOST"
-  summary = "Uses the Ollama service for dialogue generation"
-
-[[services.graphs]]
+[services.graphs]
 intent = "knowledge-graph"
 summary = "Neo4j graph store powering relationship lookups"
 runtime = "container"
 ports = [7474, 7687]
+endpoints = [
+  { name = "http", protocol = "http", bind = "0.0.0.0", port = 7474, target = 7474, advertise = "http://forebrain.local:7474", description = "Neo4j Browser" },
+  { name = "bolt", protocol = "bolt", bind = "0.0.0.0", port = 7687, target = 7687, advertise = "bolt://forebrain.local:7687", description = "Bolt protocol endpoint for graph queries" },
+]
 
-  [[services.graphs.ports]]
-  name = "http"
-  protocol = "http"
-  bind = "0.0.0.0"
-  port = 7474
-  target = 7474
-  advertise = "http://forebrain.local:7474"
-  description = "Neo4j Browser"
-
-  [[services.graphs.ports]]
-  name = "bolt"
-  protocol = "bolt"
-  bind = "0.0.0.0"
-  port = 7687
-  target = 7687
-  advertise = "bolt://forebrain.local:7687"
-  description = "Bolt protocol endpoint for graph queries"
-
-[[services.vectors]]
+[services.vectors]
 intent = "vector-store"
 summary = "Qdrant semantic search backend"
 runtime = "container"
 ports = [6333, 6334]
+endpoints = [
+  { name = "http", protocol = "http", bind = "0.0.0.0", port = 6333, target = 6333, advertise = "http://forebrain.local:6333", description = "REST API for vector collections" },
+  { name = "grpc", protocol = "grpc", bind = "0.0.0.0", port = 6334, target = 6334, advertise = "grpc://forebrain.local:6334", description = "gRPC endpoint for high-throughput similarity search" },
+]
 
-  [[services.vectors.ports]]
-  name = "http"
-  protocol = "http"
-  bind = "0.0.0.0"
-  port = 6333
-  target = 6333
-  advertise = "http://forebrain.local:6333"
-  description = "REST API for vector collections"
-
-  [[services.vectors.ports]]
-  name = "grpc"
-  protocol = "grpc"
-  bind = "0.0.0.0"
-  port = 6334
-  target = 6334
-  advertise = "grpc://forebrain.local:6334"
-  description = "gRPC endpoint for high-throughput similarity search"
+[modules.chat]
+env = { ROS_DOMAIN_ID = "25", OLLAMA_HOST = "http://forebrain.local:11434", OLLAMA_MODEL = "gpt-oss:20b" }
+launch = { arguments = { conversation_topic = "/conversation", voice_topic = "/voice", transcript_topic = "/audio/transcription" } }
+dependencies = [{ service = "forebrain.llm", port = "http", via = "http://forebrain.local:11434", bind_env = "OLLAMA_HOST", summary = "Uses the Ollama service for dialogue generation" }]

@@ -64,23 +64,25 @@ Host configs can also declare module directives so provisioning automatically in
 
 ```toml
 # hosts/motherbrain.toml
-[[modules]]
-name = "imu"
+[host]
+name = "motherbrain"
+installers = ["ros2", "docker"]
+modules = ["imu", "foot"]
+services = ["tts", "ros2"]
+
+[modules.imu]
 launch = true
 env = { ROS_DOMAIN_ID = "25" }
 
-[[modules]]
-name = "foot"
+[modules.foot]
 launch = true
 depends_on = ["service:ros2"]
 
-[[services]]
-name = "tts"
+[services.tts]
 setup = true
 up = true
 
-[[services]]
-name = "ros2"
+[services.ros2]
 up = true
 depends_on = ["docker"]
 ```

@@ -19,7 +19,14 @@ const serviceOps = {
 };
 
 export interface HostConfig {
-  host: { name: string; roles?: string[] };
+  host: {
+    name: string;
+    roles?: string[];
+    installers?: string[];
+    modules?: string[];
+    services?: string[];
+    [key: string]: unknown;
+  };
   provision?: { scripts?: string[]; installers?: string[] };
   modules?: ModuleDirective[];
   services?: ServiceDirective[];
@@ -68,9 +75,12 @@ export class HostConfigNotFoundError extends Error {
   }
 }
 
-type RawHostConfig = Omit<HostConfig, "modules" | "services"> & {
+type RawHostConfig = {
+  host?: unknown;
+  provision?: unknown;
   modules?: unknown;
   services?: unknown;
+  [key: string]: unknown;
 };
 
 interface NormalizationContext {
@@ -173,6 +183,10 @@ function normalizeModuleDirective(
   location: string,
   fallbackName?: string,
 ): ModuleDirective {
+  if (raw === undefined || raw === null) {
+    raw = {};
+  }
+
   if (!isRecord(raw)) {
     throw new HostConfigFormatError(
       context.path,
@@ -212,55 +226,64 @@ function normalizeModuleDirective(
 }
 
 function normalizeModuleDirectives(
+  hostModuleNames: readonly string[] | undefined,
   raw: unknown,
   context: NormalizationContext,
 ): ModuleDirective[] {
-  if (raw === undefined || raw === null) return [];
+  const byName = new Map<string, unknown>();
+  if (raw !== undefined && raw !== null) {
+    if (!isRecord(raw)) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected 'modules' to be a table, received ${describeType(raw)}.`,
+      );
+    }
+
+    for (const [moduleName, value] of Object.entries(raw)) {
+      byName.set(moduleName, value);
+    }
+  }
 
   const result: ModuleDirective[] = [];
-  if (Array.isArray(raw)) {
-    raw.forEach((entry, index) => {
+  const declared = hostModuleNames ?? [];
+  for (const moduleName of declared) {
+    if (!moduleName) continue;
+    if (byName.has(moduleName)) {
+      const rawEntry = byName.get(moduleName);
+      byName.delete(moduleName);
       result.push(
-        normalizeModuleDirective(entry, context, `modules[${index}]`),
+        normalizeModuleDirective(
+          rawEntry,
+          context,
+          `modules.${moduleName}`,
+          moduleName,
+        ),
       );
-    });
-    return result;
-  }
-
-  if (isRecord(raw)) {
-    for (const [moduleName, value] of Object.entries(raw)) {
-      if (value === undefined || value === null) continue;
-      if (Array.isArray(value)) {
-        if (!value.length) continue;
-        value.forEach((entry, index) => {
-          result.push(
-            normalizeModuleDirective(
-              entry,
-              context,
-              `modules.${moduleName}[${index}]`,
-              moduleName,
-            ),
-          );
-        });
-      } else {
-        result.push(
-          normalizeModuleDirective(
-            value,
-            context,
-            `modules.${moduleName}`,
-            moduleName,
-          ),
-        );
-      }
+    } else {
+      result.push(
+        normalizeModuleDirective(
+          undefined,
+          context,
+          `modules.${moduleName}`,
+          moduleName,
+        ),
+      );
     }
-    return result;
   }
 
-  throw new HostConfigFormatError(
-    context.path,
-    `Expected 'modules' to be an array or table, received ${describeType(raw)
-    }.`,
-  );
+  for (const [moduleName, value] of byName.entries()) {
+    if (value === undefined || value === null) continue;
+    result.push(
+      normalizeModuleDirective(
+        value,
+        context,
+        `modules.${moduleName}`,
+        moduleName,
+      ),
+    );
+  }
+
+  return result;
 }
 
 function normalizeServiceDirective(
@@ -269,6 +292,10 @@ function normalizeServiceDirective(
   location: string,
   fallbackName?: string,
 ): ServiceDirective {
+  if (raw === undefined || raw === null) {
+    raw = {};
+  }
+
   if (!isRecord(raw)) {
     throw new HostConfigFormatError(
       context.path,
@@ -289,54 +316,138 @@ function normalizeServiceDirective(
 }
 
 function normalizeServiceDirectives(
+  hostServiceNames: readonly string[] | undefined,
   raw: unknown,
   context: NormalizationContext,
 ): ServiceDirective[] {
-  if (raw === undefined || raw === null) return [];
+  const byName = new Map<string, unknown>();
+  if (raw !== undefined && raw !== null) {
+    if (!isRecord(raw)) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected 'services' to be a table, received ${describeType(raw)}.`,
+      );
+    }
+
+    for (const [serviceName, value] of Object.entries(raw)) {
+      byName.set(serviceName, value);
+    }
+  }
 
   const result: ServiceDirective[] = [];
-  if (Array.isArray(raw)) {
-    raw.forEach((entry, index) => {
+  const declared = hostServiceNames ?? [];
+  for (const serviceName of declared) {
+    if (!serviceName) continue;
+    if (byName.has(serviceName)) {
+      const rawEntry = byName.get(serviceName);
+      byName.delete(serviceName);
       result.push(
-        normalizeServiceDirective(entry, context, `services[${index}]`),
+        normalizeServiceDirective(
+          rawEntry,
+          context,
+          `services.${serviceName}`,
+          serviceName,
+        ),
       );
-    });
-    return result;
-  }
-
-  if (isRecord(raw)) {
-    for (const [serviceName, value] of Object.entries(raw)) {
-      if (value === undefined || value === null) continue;
-      if (Array.isArray(value)) {
-        value.forEach((entry, index) => {
-          result.push(
-            normalizeServiceDirective(
-              entry,
-              context,
-              `services.${serviceName}[${index}]`,
-              serviceName,
-            ),
-          );
-        });
-      } else {
-        result.push(
-          normalizeServiceDirective(
-            value,
-            context,
-            `services.${serviceName}`,
-            serviceName,
-          ),
-        );
-      }
+    } else {
+      result.push(
+        normalizeServiceDirective(
+          undefined,
+          context,
+          `services.${serviceName}`,
+          serviceName,
+        ),
+      );
     }
-    return result;
   }
 
-  throw new HostConfigFormatError(
-    context.path,
-    `Expected 'services' to be an array or table, received ${describeType(raw)
-    }.`,
+  for (const [serviceName, value] of byName.entries()) {
+    if (value === undefined || value === null) continue;
+    result.push(
+      normalizeServiceDirective(
+        value,
+        context,
+        `services.${serviceName}`,
+        serviceName,
+      ),
+    );
+  }
+
+  return result;
+}
+
+function normalizeStringArray(
+  raw: unknown,
+  context: NormalizationContext,
+  location: string,
+): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected ${location} to be an array, received ${describeType(raw)}.`,
+    );
+  }
+  const results: string[] = [];
+  for (const [index, value] of raw.entries()) {
+    const name = coerceName(value);
+    if (!name) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected ${location}[${index}] to be a non-empty string, received ${describeType(value)}.`,
+      );
+    }
+    if (!results.includes(name)) {
+      results.push(name);
+    }
+  }
+  return results;
+}
+
+function normalizeHostSection(
+  hostname: string,
+  raw: unknown,
+  context: NormalizationContext,
+): HostConfig["host"] {
+  if (raw === undefined || raw === null) {
+    raw = {};
+  }
+  if (!isRecord(raw)) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected 'host' to be a table, received ${describeType(raw)}.`,
+    );
+  }
+
+  const name = coerceName(raw.name) ?? hostname;
+  if (!name) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Host entry is missing a name and no fallback was provided.`,
+    );
+  }
+
+  const roles = normalizeStringArray(raw.roles, context, "host.roles");
+  const installers = normalizeStringArray(
+    raw.installers,
+    context,
+    "host.installers",
   );
+  const modules = normalizeStringArray(raw.modules, context, "host.modules");
+  const services = normalizeStringArray(
+    raw.services,
+    context,
+    "host.services",
+  );
+
+  const host: HostConfig["host"] = { ...raw, name };
+  if (roles !== undefined) host.roles = roles;
+  if (installers !== undefined) host.installers = installers;
+  if (modules !== undefined) host.modules = modules;
+  if (services !== undefined) host.services = services;
+
+  return host;
 }
 
 function normalizeHostConfig(
@@ -344,18 +455,22 @@ function normalizeHostConfig(
   path: string,
   raw: RawHostConfig,
 ): HostConfig {
-  const { modules: rawModules, services: rawServices, ...rest } = raw;
+  const { host: rawHost, modules: rawModules, services: rawServices, ...rest } =
+    raw;
   const context = { path };
-  const modules = normalizeModuleDirectives(rawModules, context);
-  const services = normalizeServiceDirectives(rawServices, context);
+  const host = normalizeHostSection(hostname, rawHost, context);
+  const modules = normalizeModuleDirectives(host.modules, rawModules, context);
+  const services = normalizeServiceDirectives(
+    host.services,
+    rawServices,
+    context,
+  );
   const config: HostConfig = {
     ...rest,
+    host,
     modules,
     services,
   } as HostConfig;
-  if (!config.host?.name) {
-    config.host = { ...(config.host ?? {}), name: hostname };
-  }
   return config;
 }
 
@@ -598,7 +713,11 @@ export async function provisionHostProfile(
   console.log(colors.cyan(`Loading host config: ${configPath}`));
   const cfg = config;
   const scripts = cfg.provision?.scripts ?? [];
-  const installers = cfg.provision?.installers ?? [];
+  const hostInstallers = cfg.host.installers ?? [];
+  const provisionInstallers = cfg.provision?.installers ?? [];
+  const installers = Array.from(
+    new Set<string>([...hostInstallers, ...provisionInstallers]),
+  );
   const modules = cfg.modules ?? [];
   const services = cfg.services ?? [];
   const envVerbose = Deno.env.get("PSH_VERBOSE") === "1";
