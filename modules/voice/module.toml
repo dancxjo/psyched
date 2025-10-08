@@ -5,6 +5,7 @@ apt = [
 pip = []
 launch = "modules/voice/launch_unit.sh"
 shutdown = "modules/voice/shutdown_unit.sh"
+pilot_control = "modules/voice/pilot/components/VoiceModulePanel.tsx"
 
 [unit.voice.ros]
 workspace = "."

@@ -1,0 +1,16 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "@pilot/lib/": "../frontend/lib/",
+    "@pilot/components/": "./components/",
+    "@pilot/lib/cockpit.ts": "../lib/cockpit.ts",
+    "@pilot/components/dashboard.tsx": "./components/dashboard.tsx",
+    "preact": "npm:preact@^10.27.2",
+    "preact/hooks": "npm:preact@^10.27.2/hooks"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "lib": ["dom", "dom.iterable", "deno.ns"]
+  }
+}

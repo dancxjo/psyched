@@ -3,9 +3,19 @@ import type { ComponentType } from "preact";
 import type { Accent } from "@pilot/components/dashboard.tsx";
 
 import PilotOverviewIsland from "../../../pilot/islands/PilotOverviewIsland.tsx";
+import ChatModulePanelIsland from "../../../../chat/pilot/islands/ChatModulePanelIsland.tsx";
+import EarModulePanelIsland from "../../../../ear/pilot/islands/EarModulePanelIsland.tsx";
 import ImuTelemetryIsland from "../../../../imu/pilot/islands/ImuTelemetryIsland.tsx";
+import FacesModulePanelIsland from "../../../../faces/pilot/islands/FacesModulePanelIsland.tsx";
 import FootControlPanelIsland from "../../../../foot/pilot/islands/FootControlPanelIsland.tsx";
+import GpsModulePanelIsland from "../../../../gps/pilot/islands/GpsModulePanelIsland.tsx";
 import KinectStreamPanelIsland from "../../../../eye/pilot/islands/KinectStreamPanelIsland.tsx";
+import MemoryModulePanelIsland from "../../../../memory/pilot/islands/MemoryModulePanelIsland.tsx";
+import NavModulePanelIsland from "../../../../nav/pilot/islands/NavModulePanelIsland.tsx";
+import VoiceModulePanelIsland from "../../../../voice/pilot/islands/VoiceModulePanelIsland.tsx";
+import VisceraModulePanelIsland from "../../../../viscera/pilot/islands/VisceraModulePanelIsland.tsx";
+import WifiModulePanelIsland from "../../../../wifi/pilot/islands/WifiModulePanelIsland.tsx";
+import WillModulePanelIsland from "../../../../will/pilot/islands/WillModulePanelIsland.tsx";
 import AsrServicePanelIsland from "../../../../../services/asr/pilot/islands/AsrServicePanelIsland.tsx";
 import GraphsServicePanelIsland from "../../../../../services/graphs/pilot/islands/GraphsServicePanelIsland.tsx";
 import LlmServicePanelIsland from "../../../../../services/llm/pilot/islands/LlmServicePanelIsland.tsx";
@@ -45,6 +55,24 @@ export const moduleTiles: ReadonlyArray<DashboardTileDefinition> = [
     },
   },
   {
+    name: "chat",
+    title: "Chat module",
+    description: "Conversational agent orchestrating Pete's dialogue skills.",
+    accent: "violet",
+    kind: "module",
+    href: "/modules/chat",
+    overlay: ChatModulePanelIsland,
+  },
+  {
+    name: "ear",
+    title: "Ear module",
+    description: "Microphone ingestion and speech recognition interface.",
+    accent: "cyan",
+    kind: "module",
+    href: "/modules/ear",
+    overlay: EarModulePanelIsland,
+  },
+  {
     name: "imu",
     title: "IMU module",
     description: "Orientation, acceleration, and angular velocity telemetry.",
@@ -52,6 +80,15 @@ export const moduleTiles: ReadonlyArray<DashboardTileDefinition> = [
     kind: "module",
     href: "/modules/imu",
     overlay: ImuTelemetryIsland,
+  },
+  {
+    name: "faces",
+    title: "Faces module",
+    description: "Face detection pipeline for presence and identity cues.",
+    accent: "magenta",
+    kind: "module",
+    href: "/modules/faces",
+    overlay: FacesModulePanelIsland,
   },
   {
     name: "foot",
@@ -64,6 +101,15 @@ export const moduleTiles: ReadonlyArray<DashboardTileDefinition> = [
     overlay: FootControlPanelIsland,
   },
   {
+    name: "gps",
+    title: "GPS module",
+    description: "GNSS receiver integration for Pete's localization stack.",
+    accent: "amber",
+    kind: "module",
+    href: "/modules/gps",
+    overlay: GpsModulePanelIsland,
+  },
+  {
     name: "eye",
     title: "Eye module",
     description: "Kinect RGB-D stream with payload diagnostics.",
@@ -71,6 +117,61 @@ export const moduleTiles: ReadonlyArray<DashboardTileDefinition> = [
     kind: "module",
     href: "/modules/eye",
     overlay: KinectStreamPanelIsland,
+  },
+  {
+    name: "memory",
+    title: "Memory module",
+    description: "Semantic memory pipelines bridging vectors and graph stores.",
+    accent: "teal",
+    kind: "module",
+    href: "/modules/memory",
+    overlay: MemoryModulePanelIsland,
+  },
+  {
+    name: "nav",
+    title: "Nav module",
+    description:
+      "Navigation stack coordinating localization and path planning.",
+    accent: "violet",
+    kind: "module",
+    href: "/modules/nav",
+    overlay: NavModulePanelIsland,
+  },
+  {
+    name: "voice",
+    title: "Voice module",
+    description: "Speech synthesis bridge coordinating the TTS service.",
+    accent: "cyan",
+    kind: "module",
+    href: "/modules/voice",
+    overlay: VoiceModulePanelIsland,
+  },
+  {
+    name: "viscera",
+    title: "Viscera module",
+    description: "System health monitors and feelers for onboard diagnostics.",
+    accent: "amber",
+    kind: "module",
+    href: "/modules/viscera",
+    overlay: VisceraModulePanelIsland,
+  },
+  {
+    name: "wifi",
+    title: "Wi-Fi module",
+    description: "Wireless connectivity tooling and diagnostics for Pete.",
+    accent: "teal",
+    kind: "module",
+    href: "/modules/wifi",
+    overlay: WifiModulePanelIsland,
+  },
+  {
+    name: "will",
+    title: "Will module",
+    description: "High-level intent planner orchestrating Pete's behaviours.",
+    accent: "magenta",
+    kind: "module",
+    href: "/modules/will",
+    overlay: WillModulePanelIsland,
   },
 ] as const;
 

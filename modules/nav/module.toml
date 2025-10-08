@@ -8,6 +8,7 @@ patches = [
 ]
 launch = "modules/nav/launch_unit.sh"
 shutdown = "modules/nav/shutdown_unit.sh"
+pilot_control = "modules/nav/pilot/components/NavModulePanel.tsx"
 
 [unit.nav.ros]
 workspace = "."

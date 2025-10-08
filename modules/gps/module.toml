@@ -12,6 +12,7 @@ patches = [
 ]
 launch = "modules/gps/launch_unit.sh"
 shutdown = "modules/gps/shutdown_unit.sh"
+pilot_control = "modules/gps/pilot/components/GpsModulePanel.tsx"
 
 [unit.gps.ros]
 workspace = "."

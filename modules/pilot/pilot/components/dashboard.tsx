@@ -149,8 +149,7 @@ export function Card({
   return (
     <section class="card" data-tone={tone}>
       <header class="card__header">
-        {icon && <span class="card__icon" aria-hidden="true">{icon}
-        </span>}
+        {icon && <span class="card__icon" aria-hidden="true">{icon}</span>}
         <div>
           <h2 class="card__title">{title}</h2>
           {subtitle && <p class="card__subtitle">{subtitle}</p>}
