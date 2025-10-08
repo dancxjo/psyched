@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/eye/pilot/islands/KinectStreamPanelIsland.tsx
+../../../eye/pilot/islands/KinectStreamPanelIsland.tsx

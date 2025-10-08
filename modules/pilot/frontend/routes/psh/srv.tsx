@@ -1,16 +1,17 @@
+import { Panel } from "@pilot/components/dashboard.tsx";
 import PshServiceManager from "../../islands/PshServiceManager.tsx";
 import { define } from "../../utils.ts";
 
 export default define.route(() => {
   return (
     <section class="content">
-      <h1>Service Orchestration</h1>
-      <p>
-        These controls invoke <code>psh srv</code>{" "}
-        commands to manage Docker-based services. Status updates are pulled live
-        from the same backend helpers.
-      </p>
-      <PshServiceManager />
+      <Panel
+        title="Service orchestration"
+        subtitle="Manage Docker stacks with the familiar psh srv commands"
+        accent="magenta"
+      >
+        <PshServiceManager />
+      </Panel>
     </section>
   );
 });

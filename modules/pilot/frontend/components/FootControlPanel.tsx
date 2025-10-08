@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/foot/pilot/components/FootControlPanel.tsx
+../../../foot/pilot/components/FootControlPanel.tsx

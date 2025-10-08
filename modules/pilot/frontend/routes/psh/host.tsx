@@ -1,4 +1,5 @@
 import { page } from "fresh";
+import { Panel } from "@pilot/components/dashboard.tsx";
 import PshHostProvisioner from "../../islands/PshHostProvisioner.tsx";
 import { define } from "../../utils.ts";
 import { availableHosts } from "../../lib/server/hosts.ts";
@@ -18,13 +19,13 @@ export default define.page<typeof handler>(({ data }) => {
   const { hosts } = data;
   return (
     <section class="content">
-      <h1>Host Setup Wizard</h1>
-      <p>
-        Choose a host profile and trigger{" "}
-        <code>psh host setup</code>. The server reuses the same provisioning
-        routines as the CLI wizard.
-      </p>
-      <PshHostProvisioner hosts={hosts} />
+      <Panel
+        title="Host setup"
+        subtitle="Run psh host setup without leaving the cockpit"
+        accent="teal"
+      >
+        <PshHostProvisioner hosts={hosts} />
+      </Panel>
     </section>
   );
 });

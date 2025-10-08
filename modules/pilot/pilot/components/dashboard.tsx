@@ -13,14 +13,14 @@ export const CONNECTION_STATUS_LABELS: Readonly<
   error: "Error",
 } as const;
 
-/** Badge accent used throughout the LCARS themed dashboard. */
-export type LcarsBadgeTone = "neutral" | "info" | "ok" | "warn" | "danger";
+/** Badge accent used throughout the cockpit dashboard. */
+export type BadgeTone = "neutral" | "info" | "ok" | "warn" | "danger";
 
 /** Accent palette for panels and cards. */
-export type LcarsAccent = "amber" | "teal" | "magenta" | "cyan" | "violet";
+export type Accent = "amber" | "teal" | "magenta" | "cyan" | "violet";
 
 /**
- * Maps a websocket status to the colour palette used by LCARS badges.
+ * Maps a websocket status to the colour palette used by cockpit badges.
  *
  * @example
  * ```ts
@@ -29,7 +29,7 @@ export type LcarsAccent = "amber" | "teal" | "magenta" | "cyan" | "violet";
  */
 export function toneFromConnection(
   status: ConnectionStatus | undefined,
-): LcarsBadgeTone {
+): BadgeTone {
   switch (status) {
     case "open":
       return "ok";
@@ -46,24 +46,24 @@ export function toneFromConnection(
   }
 }
 
-export interface LcarsBadgeProps {
+export interface BadgeProps {
   label: string;
-  tone?: LcarsBadgeTone;
+  tone?: BadgeTone;
   pulse?: boolean;
 }
 
 /**
  * Compact pill-style badge suited for status readouts.
  */
-export function LcarsBadge({
+export function Badge({
   label,
   tone = "neutral",
   pulse = false,
-}: LcarsBadgeProps) {
+}: BadgeProps) {
   return (
     <span
-      class={`lcars-badge lcars-badge--${tone}${
-        pulse ? " lcars-badge--pulse" : ""
+      class={`status-badge status-badge--${tone}${
+        pulse ? " status-badge--pulse" : ""
       }`}
     >
       {label}
@@ -71,42 +71,42 @@ export function LcarsBadge({
   );
 }
 
-export interface LcarsPanelProps {
+export interface PanelProps {
   title: string;
   subtitle?: string;
-  accent?: LcarsAccent;
-  badges?: Array<{ label: string; tone?: LcarsBadgeTone; pulse?: boolean }>;
+  accent?: Accent;
+  badges?: Array<{ label: string; tone?: BadgeTone; pulse?: boolean }>;
   actions?: ComponentChildren;
   children?: ComponentChildren;
 }
 
 /**
- * Primary container component for LCARS-styled dashboards. It ensures the
+ * Primary container component for cockpit-styled dashboards. It ensures the
  * header, accent bar, and badges are consistently laid out across modules.
  */
-export function LcarsPanel({
+export function Panel({
   title,
   subtitle,
   accent = "amber",
   badges = [],
   actions,
   children,
-}: LcarsPanelProps) {
+}: PanelProps) {
   return (
-    <article class="lcars-panel" data-tone={accent}>
-      <header class="lcars-panel__header">
-        <div class="lcars-panel__heading">
-          <span class="lcars-panel__accent" aria-hidden="true" />
+    <article class="dashboard-panel" data-tone={accent}>
+      <header class="dashboard-panel__header">
+        <div class="dashboard-panel__heading">
+          <span class="dashboard-panel__accent" aria-hidden="true" />
           <div>
-            <h1 class="lcars-panel__title">{title}</h1>
-            {subtitle && <p class="lcars-panel__subtitle">{subtitle}</p>}
+            <h1 class="dashboard-panel__title">{title}</h1>
+            {subtitle && <p class="dashboard-panel__subtitle">{subtitle}</p>}
           </div>
         </div>
-        <div class="lcars-panel__header-meta">
+        <div class="dashboard-panel__meta">
           {badges.length > 0 && (
-            <div class="lcars-panel__badges">
+            <div class="dashboard-panel__badges">
               {badges.map((badge) => (
-                <LcarsBadge
+                <Badge
                   key={`${badge.label}-${badge.tone ?? "neutral"}`}
                   label={badge.label}
                   tone={badge.tone}
@@ -115,18 +115,18 @@ export function LcarsPanel({
               ))}
             </div>
           )}
-          {actions && <div class="lcars-panel__actions">{actions}</div>}
+          {actions && <div class="dashboard-panel__actions">{actions}</div>}
         </div>
       </header>
-      {children && <div class="lcars-panel__body">{children}</div>}
+      {children && <div class="dashboard-panel__body">{children}</div>}
     </article>
   );
 }
 
-export interface LcarsCardProps {
+export interface CardProps {
   title: string;
   subtitle?: string;
-  tone?: LcarsAccent | "neutral";
+  tone?: Accent | "neutral";
   icon?: ComponentChildren;
   footer?: ComponentChildren;
   actions?: ComponentChildren;
@@ -134,10 +134,10 @@ export interface LcarsCardProps {
 }
 
 /**
- * Content card nested inside a LCARS panel. Cards automatically inherit the
+ * Content card nested inside a cockpit panel. Cards automatically inherit the
  * accent colour while keeping a consistent padding and border radius.
  */
-export function LcarsCard({
+export function Card({
   title,
   subtitle,
   tone = "neutral",
@@ -145,20 +145,20 @@ export function LcarsCard({
   footer,
   actions,
   children,
-}: LcarsCardProps) {
+}: CardProps) {
   return (
-    <section class="lcars-card" data-tone={tone}>
-      <header class="lcars-card__header">
-        {icon && <span class="lcars-card__icon" aria-hidden="true">{icon}
+    <section class="card" data-tone={tone}>
+      <header class="card__header">
+        {icon && <span class="card__icon" aria-hidden="true">{icon}
         </span>}
         <div>
-          <h2 class="lcars-card__title">{title}</h2>
-          {subtitle && <p class="lcars-card__subtitle">{subtitle}</p>}
+          <h2 class="card__title">{title}</h2>
+          {subtitle && <p class="card__subtitle">{subtitle}</p>}
         </div>
-        {actions && <div class="lcars-card__actions">{actions}</div>}
+        {actions && <div class="card__actions">{actions}</div>}
       </header>
-      {children && <div class="lcars-card__body">{children}</div>}
-      {footer && <footer class="lcars-card__footer">{footer}</footer>}
+      {children && <div class="card__body">{children}</div>}
+      {footer && <footer class="card__footer">{footer}</footer>}
     </section>
   );
 }

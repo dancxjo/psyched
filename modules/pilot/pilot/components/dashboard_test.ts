@@ -1,7 +1,7 @@
 import { describe, it } from "$std/testing/bdd.ts";
 import { assertEquals } from "$std/testing/asserts.ts";
 
-import { toneFromConnection } from "./lcars.tsx";
+import { toneFromConnection } from "./dashboard.tsx";
 
 describe("toneFromConnection", () => {
   it("maps websocket statuses to badge tones", () => {

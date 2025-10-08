@@ -9,10 +9,10 @@ import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
 
 import {
   CONNECTION_STATUS_LABELS,
-  LcarsCard,
-  LcarsPanel,
+  Card,
+  Panel,
   toneFromConnection,
-} from "../../../pilot/frontend/components/lcars.tsx";
+} from "@pilot/components/dashboard.tsx";
 import {
   formatNullableNumber,
   formatRelativeTime,
@@ -312,60 +312,60 @@ export default function FootControlPanel() {
     : `${Math.round(batteryPercentage)}%`;
 
   return (
-    <LcarsPanel
+    <Panel
       title="Create base"
       subtitle="Compact drive, power, and hazard console for Pete's drivetrain."
       accent="amber"
       badges={[telemetryBadge, cmdVelBadge]}
     >
-      <div class="lcars-grid lcars-grid--stretch">
-        <LcarsCard
+      <div class="panel-grid panel-grid--stretch">
+        <Card
           title="Power"
           tone="amber"
           icon={<BatteryIcon level={batteryRatio} />}
         >
-          <div class="lcars-metric">
-            <span class="lcars-metric__value">{batteryPercentageLabel}</span>
-            <span class="lcars-metric__caption">Charge</span>
+          <div class="stat-metric">
+            <span class="stat-metric__value">{batteryPercentageLabel}</span>
+            <span class="stat-metric__caption">Charge</span>
           </div>
-          <dl class="lcars-list lcars-list--columns">
+          <dl class="stat-list stat-list--columns">
             {batteryStats.map(({ label, value }) => (
-              <div class="lcars-list__item" key={label}>
+              <div class="stat-list__item" key={label}>
                 <dt>{label}</dt>
                 <dd>{value}</dd>
               </div>
             ))}
           </dl>
-          <p class="lcars-note">
+          <p class="note">
             {chargingLabel}
             {telemetry?.battery?.is_charging ? " • charging" : ""}
           </p>
-        </LcarsCard>
+        </Card>
 
-        <LcarsCard title="Status" tone="teal" icon={<StatusIcon />}>
-          <dl class="lcars-list">
-            <div class="lcars-list__item">
+        <Card title="Status" tone="teal" icon={<StatusIcon />}>
+          <dl class="stat-list">
+            <div class="stat-list__item">
               <dt>Mode</dt>
               <dd>{modeLabel}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Last command</dt>
               <dd>{lastCommandLabel}</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>Telemetry</dt>
               <dd>{lastUpdateLabel}</dd>
             </div>
           </dl>
           {telemetryError && (
-            <p class="lcars-note lcars-note--alert">{telemetryError}</p>
+            <p class="note note--alert">{telemetryError}</p>
           )}
-        </LcarsCard>
+        </Card>
 
-        <LcarsCard title="Motion" tone="cyan" icon={<MotionIcon />}>
-          <div class="lcars-matrix">
-            <div class="lcars-matrix__row">
-              <span class="lcars-chip">cmd</span>
+        <Card title="Motion" tone="cyan" icon={<MotionIcon />}>
+          <div class="command-matrix">
+            <div class="command-matrix__row">
+              <span class="chip">cmd</span>
               <span>
                 {formatNullableNumber(commanded?.linear_x, {
                   fractionDigits: 2,
@@ -377,8 +377,8 @@ export default function FootControlPanel() {
                 })} rad/s
               </span>
             </div>
-            <div class="lcars-matrix__row">
-              <span class="lcars-chip">odom</span>
+            <div class="command-matrix__row">
+              <span class="chip">odom</span>
               <span>
                 {formatNullableNumber(odometry?.linear_x, {
                   fractionDigits: 2,
@@ -391,13 +391,13 @@ export default function FootControlPanel() {
               </span>
             </div>
           </div>
-        </LcarsCard>
+        </Card>
 
-        <LcarsCard title="Hazards" tone="magenta" icon={<HazardIcon />}>
-          <div class="lcars-hazard-grid">
+        <Card title="Hazards" tone="magenta" icon={<HazardIcon />}>
+          <div class="hazard-grid">
             <div>
-              <h3 class="lcars-hazard__title">Bumpers</h3>
-              <div class="lcars-dots">
+              <h3 class="hazard-grid__title">Bumpers</h3>
+              <div class="indicator-dots">
                 <span
                   class={hazardClass(hazards.bumper_left)}
                   title="Left bumper"
@@ -425,8 +425,8 @@ export default function FootControlPanel() {
               </div>
             </div>
             <div>
-              <h3 class="lcars-hazard__title">Cliffs</h3>
-              <div class="lcars-dots">
+              <h3 class="hazard-grid__title">Cliffs</h3>
+              <div class="indicator-dots">
                 <span
                   class={hazardClass(hazards.cliff_left)}
                   title="Left cliff"
@@ -454,20 +454,20 @@ export default function FootControlPanel() {
               </div>
             </div>
           </div>
-        </LcarsCard>
+        </Card>
       </div>
 
-      <LcarsCard
+      <Card
         title="Manual control"
         tone="teal"
         icon={<JoystickIcon />}
         footer={
-          <dl class="lcars-list lcars-list--columns">
-            <div class="lcars-list__item">
+          <dl class="stat-list stat-list--columns">
+            <div class="stat-list__item">
               <dt>linear.x</dt>
               <dd>{currentTwist.linear.x.toFixed(2)} m/s</dd>
             </div>
-            <div class="lcars-list__item">
+            <div class="stat-list__item">
               <dt>angular.z</dt>
               <dd>{currentTwist.angular.z.toFixed(2)} rad/s</dd>
             </div>
@@ -476,7 +476,7 @@ export default function FootControlPanel() {
         actions={
           <button
             type="button"
-            class="lcars-button"
+            class="control-button"
             onClick={resetStick}
             title="Stop"
           >
@@ -485,33 +485,33 @@ export default function FootControlPanel() {
           </button>
         }
       >
-        <p class="lcars-note">
+        <p class="note">
           Drag the pad to command velocities (±{MAX_LINEAR_X.toFixed(2)}{" "}
           m/s, ±{MAX_ANGULAR_Z.toFixed(2)} rad/s). Release to halt.
         </p>
         <div
           ref={joystickRef}
-          class={`lcars-joystick${isDragging ? " lcars-joystick--active" : ""}`}
+          class={`joystick${isDragging ? " joystick--active" : ""}`}
           aria-label="Drive joystick"
           role="application"
         >
           <div
-            class={`lcars-joystick__thumb${
-              isDragging ? " lcars-joystick__thumb--active" : ""
+            class={`joystick__thumb${
+              isDragging ? " joystick__thumb--active" : ""
             }`}
             style={joystickThumbStyle}
           />
           <div
-            class="lcars-joystick__axis lcars-joystick__axis--x"
+            class="joystick__axis joystick__axis--x"
             aria-hidden="true"
           />
           <div
-            class="lcars-joystick__axis lcars-joystick__axis--y"
+            class="joystick__axis joystick__axis--y"
             aria-hidden="true"
           />
         </div>
-      </LcarsCard>
-    </LcarsPanel>
+      </Card>
+    </Panel>
   );
 }
 
@@ -519,14 +519,14 @@ function BatteryIcon({ level }: { level: number | null }) {
   const clamped = level === null ? 0 : Math.min(1, Math.max(0, level));
   const width = 36 * clamped;
   return (
-    <svg viewBox="0 0 48 24" class="lcars-icon" aria-hidden="true">
+    <svg viewBox="0 0 48 24" class="icon" aria-hidden="true">
       <rect
         x="1"
         y="4"
         width="40"
         height="16"
         rx="3"
-        class="lcars-icon__outline"
+        class="icon__outline"
       />
       <rect
         x="42"
@@ -534,7 +534,7 @@ function BatteryIcon({ level }: { level: number | null }) {
         width="5"
         height="6"
         rx="1"
-        class="lcars-icon__outline"
+        class="icon__outline"
       />
       <rect
         x="3"
@@ -542,7 +542,7 @@ function BatteryIcon({ level }: { level: number | null }) {
         width={width}
         height="12"
         rx="2"
-        class="lcars-icon__fill"
+        class="icon__fill"
       />
     </svg>
   );
@@ -550,8 +550,8 @@ function BatteryIcon({ level }: { level: number | null }) {
 
 function StatusIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
-      <circle cx="12" cy="12" r="8" class="lcars-icon__outline" />
+    <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" class="icon__outline" />
       <path
         d="M12 6v6l4 2"
         fill="none"
@@ -566,7 +566,7 @@ function StatusIcon() {
 
 function MotionIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
       <path
         d="M4 12h16M12 4v16M16 8l4 4-4 4M8 16l-4-4 4-4"
         fill="none"
@@ -581,7 +581,7 @@ function MotionIcon() {
 
 function HazardIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
       <path
         d="M12 3 2.5 20.5h19L12 3z"
         fill="none"
@@ -589,7 +589,7 @@ function HazardIcon() {
         stroke-width="2"
         stroke-linejoin="round"
       />
-      <circle cx="12" cy="16" r="1.5" class="lcars-icon__fill" />
+      <circle cx="12" cy="16" r="1.5" class="icon__fill" />
       <path
         d="M12 9v5"
         stroke="currentColor"
@@ -602,8 +602,8 @@ function HazardIcon() {
 
 function JoystickIcon() {
   return (
-    <svg viewBox="0 0 24 24" class="lcars-icon" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" class="lcars-icon__fill" />
+    <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" class="icon__fill" />
       <path
         d="M12 3v6M12 15v6M3 12h6M15 12h6"
         stroke="currentColor"
@@ -616,12 +616,12 @@ function JoystickIcon() {
 
 function StopIcon() {
   return (
-    <svg viewBox="0 0 16 16" class="lcars-icon" aria-hidden="true">
+    <svg viewBox="0 0 16 16" class="icon" aria-hidden="true">
       <rect x="3" y="3" width="10" height="10" rx="2" />
     </svg>
   );
 }
 
 function hazardClass(active?: boolean) {
-  return `lcars-dot${active ? " lcars-dot--active" : ""}`;
+  return `indicator-dot${active ? " indicator-dot--active" : ""}`;
 }

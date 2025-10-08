@@ -22,6 +22,7 @@ from websockets.server import WebSocketServerProtocol, serve
 
 from .foot import FootTelemetryBridge
 from .image import ImageEncoder
+from .status import PilotStatusTracker
 from .protocol import (
     InboundMessage,
     OutboundMessage,
@@ -34,6 +35,17 @@ from .protocol import (
 
 
 _LOGGER = logging.getLogger(__name__)
+
+_STATUS_TOPIC = "/pilot/status"
+_MODULE_TOPIC_MAP: Dict[str, str] = {
+    "/foot/telemetry": "foot",
+    "/cmd_vel": "foot",
+    "/imu/data": "imu",
+    "/image_raw": "eye",
+    "/camera/depth/image_raw": "eye",
+    "/conversation": "voice",
+    "/audio/transcript/final": "ear",
+}
 
 
 class CockpitError(RuntimeError):
@@ -71,6 +83,7 @@ class CockpitBridgeNode(Node):
         self._foot_bridge = FootTelemetryBridge(self, self.enqueue_broadcast)
         self._image_encoder = ImageEncoder(self.get_logger())
         self._image_topics = {"/image_raw", "/camera/depth/image_raw"}
+        self._status = PilotStatusTracker()
 
     # -- client lifecycle -------------------------------------------------
     def register_client(self, websocket: WebSocketServerProtocol) -> ClientConnection:
@@ -156,21 +169,28 @@ class CockpitBridgeNode(Node):
 
     # -- subscription plumbing ------------------------------------------
     def subscribe_topic(self, topic: str) -> List[OutboundMessage]:
+        if topic == _STATUS_TOPIC:
+            return [self._status_message()]
         if FootTelemetryBridge.handles_topic(topic):
-            return self._foot_bridge.handle_subscribe(topic)
+            messages = self._foot_bridge.handle_subscribe(topic)
+            self._register_module_subscription(topic)
+            return messages
 
         entry = self._topic_subscriptions.get(topic)
         if entry is not None:
             entry.ref_count += 1
-            return []
-
-        subscription = self._create_subscription(topic)
-        self._topic_subscriptions[topic] = SubscriptionEntry(ref_count=1, subscription=subscription)
+        else:
+            subscription = self._create_subscription(topic)
+            self._topic_subscriptions[topic] = SubscriptionEntry(ref_count=1, subscription=subscription)
+        self._register_module_subscription(topic)
         return []
 
     def unsubscribe_topic(self, topic: str) -> None:
+        if topic == _STATUS_TOPIC:
+            return
         if FootTelemetryBridge.handles_topic(topic):
             self._foot_bridge.handle_unsubscribe(topic)
+            self._unregister_module_subscription(topic)
             return
 
         entry = self._topic_subscriptions.get(topic)
@@ -178,10 +198,10 @@ class CockpitBridgeNode(Node):
             raise CockpitError(f"unsupported topic '{topic}'")
         if entry.ref_count > 1:
             entry.ref_count -= 1
-            return
-
-        self.destroy_subscription(entry.subscription)
-        del self._topic_subscriptions[topic]
+        else:
+            self.destroy_subscription(entry.subscription)
+            del self._topic_subscriptions[topic]
+        self._unregister_module_subscription(topic)
 
     def _create_subscription(self, topic: str) -> Subscription:
         if topic == "/audio/transcript/final":
@@ -237,6 +257,8 @@ class CockpitBridgeNode(Node):
             self._publish_conversation(inbound.msg or {})
         elif inbound.topic == "/cmd_vel":
             self._publish_cmd_vel(inbound.msg or {})
+        elif inbound.topic == _STATUS_TOPIC:
+            self._publish_status(inbound.msg or {})
         else:
             raise CockpitError(f"unsupported topic '{inbound.topic}'")
 
@@ -253,6 +275,16 @@ class CockpitBridgeNode(Node):
         twist = self._parse_twist(payload)
         self._cmd_vel_pub.publish(twist)
         self._foot_bridge.record_command(twist)
+
+    def _publish_status(self, payload: Dict[str, Any]) -> None:
+        note = payload.get("note")
+        timestamp = payload.get("timestamp")
+        if note is not None and not isinstance(note, str):
+            raise CockpitError("expected field 'msg.note'")
+        if timestamp is not None and not isinstance(timestamp, str):
+            raise CockpitError("expected field 'msg.timestamp'")
+        self._status.update(note=note, timestamp=timestamp)
+        self._broadcast_status()
 
     def _parse_twist(self, payload: Dict[str, Any]) -> Twist:
         linear = self._expect_object(payload, "linear")
@@ -285,6 +317,22 @@ class CockpitBridgeNode(Node):
         await self.stop_background_tasks()
         for client in list(self._clients):
             await self.unregister_client(client)
+
+    def _status_message(self) -> OutboundMessage:
+        return make_message(_STATUS_TOPIC, self._status.snapshot().to_payload())
+
+    def _broadcast_status(self) -> None:
+        self.enqueue_broadcast(self._status_message())
+
+    def _register_module_subscription(self, topic: str) -> None:
+        module = _MODULE_TOPIC_MAP.get(topic)
+        if self._status.register_module(module):
+            self._broadcast_status()
+
+    def _unregister_module_subscription(self, topic: str) -> None:
+        module = _MODULE_TOPIC_MAP.get(topic)
+        if self._status.unregister_module(module):
+            self._broadcast_status()
 
 
 class WebsocketServer:

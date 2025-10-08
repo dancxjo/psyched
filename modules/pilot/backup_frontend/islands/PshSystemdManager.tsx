@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
 
+import { Card } from "@pilot/components/dashboard.tsx";
+
 type Props = {
   modules: string[];
 };
@@ -7,6 +9,11 @@ type Props = {
 type ResponseBody = {
   ok: boolean;
   error?: string;
+};
+
+type Message = {
+  kind: "success" | "error";
+  text: string;
 };
 
 async function post(url: string, module: string) {
@@ -20,12 +27,12 @@ async function post(url: string, module: string) {
 
 export default function PshSystemdManager({ modules }: Props) {
   const [module, setModule] = useState(modules[0] ?? "");
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function run(endpoint: string) {
     if (!module) {
-      setMessage("Select a module first");
+      setMessage({ kind: "error", text: "Select a module first" });
       return;
     }
     setLoading(true);
@@ -33,39 +40,42 @@ export default function PshSystemdManager({ modules }: Props) {
     try {
       const res = await post(endpoint, module);
       if (!res.ok) {
-        setMessage(res.error ?? "Action failed");
+        setMessage({ kind: "error", text: res.error ?? "Action failed" });
       } else {
-        setMessage(`Action completed for ${module}`);
+        setMessage({ kind: "success", text: `Action completed for ${module}` });
       }
     } catch (error) {
-      setMessage(String(error));
+      setMessage({ kind: "error", text: String(error) });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <section class="psh-card">
-      <header>
-        <h2>Systemd Units</h2>
-        <p>
-          Create and control user-level units mapped to module launch scripts.
-        </p>
-      </header>
-      <label>
-        Module
-        <select
-          value={module}
-          onChange={(event) =>
-            setModule((event.target as HTMLSelectElement).value)}
-          disabled={loading}
-        >
-          {modules.map((name) => <option key={name} value={name}>{name}
-          </option>)}
-        </select>
-      </label>
-      <div class="psh-actions">
+    <Card
+      title="Systemd units"
+      subtitle="Create and control user-level wrappers for module launch scripts"
+      tone="cyan"
+    >
+      <div class="form-grid">
+        <label class="form-field">
+          <span class="form-label">Module</span>
+          <select
+            class="form-control"
+            value={module}
+            onChange={(event) =>
+              setModule((event.target as HTMLSelectElement).value)}
+            disabled={loading}
+          >
+            {modules.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div class="button-group button-group--wrap">
         <button
+          class="button button--primary"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/setup")}
@@ -73,6 +83,7 @@ export default function PshSystemdManager({ modules }: Props) {
           Setup
         </button>
         <button
+          class="button button--danger"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/teardown")}
@@ -80,6 +91,7 @@ export default function PshSystemdManager({ modules }: Props) {
           Teardown
         </button>
         <button
+          class="button button--primary"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/enable")}
@@ -87,6 +99,7 @@ export default function PshSystemdManager({ modules }: Props) {
           Enable
         </button>
         <button
+          class="button button--ghost"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/disable")}
@@ -94,6 +107,7 @@ export default function PshSystemdManager({ modules }: Props) {
           Disable
         </button>
         <button
+          class="button button--primary"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/up")}
@@ -101,6 +115,7 @@ export default function PshSystemdManager({ modules }: Props) {
           Start
         </button>
         <button
+          class="button button--ghost"
           type="button"
           disabled={loading}
           onClick={() => run("/api/psh/sys/down")}
@@ -108,7 +123,15 @@ export default function PshSystemdManager({ modules }: Props) {
           Stop
         </button>
       </div>
-      {message && <p class="psh-message">{message}</p>}
-    </section>
+      {message && (
+        <p
+          class={`note ${
+            message.kind === "success" ? "note--success" : "note--alert"
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
+    </Card>
   );
 }

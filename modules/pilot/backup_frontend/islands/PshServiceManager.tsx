@@ -1,5 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 
+import {
+  Badge,
+  Card,
+  type BadgeTone,
+} from "@pilot/components/dashboard.tsx";
+
 type ServiceStatus = {
   name: string;
   status: "running" | "stopped" | "error";
@@ -17,6 +23,17 @@ type ActionResponse = {
   error?: string;
 };
 
+type Message = {
+  kind: "success" | "error";
+  text: string;
+};
+
+const SERVICE_TONES: Record<ServiceStatus["status"], BadgeTone> = {
+  running: "ok",
+  stopped: "warn",
+  error: "danger",
+};
+
 async function post(url: string, body?: unknown) {
   const response = await fetch(url, {
     method: "POST",
@@ -29,7 +46,7 @@ async function post(url: string, body?: unknown) {
 export default function PshServiceManager() {
   const [statuses, setStatuses] = useState<ServiceStatus[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
 
   async function refresh() {
     const res: ApiResponse = await fetch("/api/psh/srv/list").then((r) =>
@@ -53,111 +70,140 @@ export default function PshServiceManager() {
         services?.length ? { services } : undefined,
       );
       if (!res.ok) {
-        setMessage(res.error ?? "Action failed");
+        setMessage({ kind: "error", text: res.error ?? "Action failed" });
       } else {
-        setMessage("Action completed successfully");
+        setMessage({ kind: "success", text: "Action completed successfully" });
         await refresh();
       }
     } catch (error) {
-      setMessage(String(error));
+      setMessage({ kind: "error", text: String(error) });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <section class="psh-card">
-      <header>
-        <h2>Service Lifecycle</h2>
-        <p>
-          Manage Docker compose stacks via <code>psh srv</code>.
+    <Card
+      title="Service lifecycle"
+      subtitle="Manage Docker compose stacks with psh srv"
+      tone="magenta"
+    >
+      {message && (
+        <p
+          class={`note ${
+            message.kind === "success" ? "note--success" : "note--alert"
+          }`}
+        >
+          {message.text}
         </p>
-      </header>
-      {message && <p class="psh-message">{message}</p>}
-      <div class="psh-actions">
+      )}
+      <div class="button-group button-group--wrap">
         <button
+          class="button button--primary"
           type="button"
           disabled={loading}
           onClick={() => runAction("/api/psh/srv/setup")}
         >
-          Setup All
+          Setup all
         </button>
         <button
+          class="button button--danger"
           type="button"
           disabled={loading}
           onClick={() => runAction("/api/psh/srv/teardown")}
         >
-          Teardown All
+          Teardown all
         </button>
         <button
+          class="button button--primary"
           type="button"
           disabled={loading}
           onClick={() => runAction("/api/psh/srv/up")}
         >
-          Start All
+          Start all
         </button>
         <button
+          class="button button--ghost"
           type="button"
           disabled={loading}
           onClick={() => runAction("/api/psh/srv/down")}
         >
-          Stop All
+          Stop all
         </button>
       </div>
-      <table class="psh-table">
-        <thead>
-          <tr>
-            <th>Service</th>
-            <th>Status</th>
-            <th>Description</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {statuses.map((status) => (
-            <tr key={status.name}>
-              <td>{status.name}</td>
-              <td>{status.status}</td>
-              <td>{status.description ?? "—"}</td>
-              <td>
-                <div class="psh-row-actions">
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      runAction("/api/psh/srv/setup", [status.name])}
-                  >
-                    Setup
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => runAction("/api/psh/srv/up", [status.name])}
-                  >
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      runAction("/api/psh/srv/down", [status.name])}
-                  >
-                    Stop
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      runAction("/api/psh/srv/teardown", [status.name])}
-                  >
-                    Teardown
-                  </button>
-                </div>
-              </td>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Service</th>
+              <th scope="col">Status</th>
+              <th scope="col">Description</th>
+              <th scope="col">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+          </thead>
+          <tbody>
+            {statuses.map((status) => (
+              <tr key={status.name}>
+                <td>{status.name}</td>
+                <td>
+                  <div class="status-indicator">
+                    <Badge
+                      label={
+                        status.status === "running"
+                          ? "Running"
+                          : status.status === "stopped"
+                          ? "Stopped"
+                          : "Error"
+                      }
+                      tone={SERVICE_TONES[status.status]}
+                    />
+                  </div>
+                </td>
+                <td>{status.description ?? "—"}</td>
+                <td>
+                  <div class="button-group button-group--wrap">
+                    <button
+                      class="button button--small button--primary"
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        runAction("/api/psh/srv/setup", [status.name])}
+                    >
+                      Setup
+                    </button>
+                    <button
+                      class="button button--small button--primary"
+                      type="button"
+                      disabled={loading}
+                      onClick={() => runAction("/api/psh/srv/up", [status.name])}
+                    >
+                      Start
+                    </button>
+                    <button
+                      class="button button--small button--ghost"
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        runAction("/api/psh/srv/down", [status.name])}
+                    >
+                      Stop
+                    </button>
+                    <button
+                      class="button button--small button--danger"
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        runAction("/api/psh/srv/teardown", [status.name])}
+                    >
+                      Teardown
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }

@@ -20,7 +20,7 @@ const DEFAULT_NUMBER_OPTIONS: Required<
 
 /**
  * Formats a numeric value while guarding against `null`, `undefined`, and
- * `NaN`. The output intentionally mirrors the LCARS-inspired dashboard style by
+ * `NaN`. The output intentionally mirrors the cockpit dashboard style by
  * returning an em dash when the data is unavailable.
  *
  * @example

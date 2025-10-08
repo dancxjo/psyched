@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/eye/pilot/routes/modules/eye.tsx
+../../../../eye/pilot/routes/modules/eye.tsx

@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/PilotOverview.tsx
+../../pilot/components/PilotOverview.tsx

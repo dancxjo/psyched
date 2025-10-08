@@ -51,6 +51,7 @@ Always prefer running the smallest relevant command set.
 - Use ES modules with explicit file extensions (Deno requirement).
 - Stick to the hooks-based API exposed in `lib/cockpit.ts`. New topics should be declared in a single place so reconnect logic remains centralized.
 - Keep hooks SSR-safe: guard browser-only APIs (`window`, `WebSocket`) with `typeof` checks.
+- Use the shared `Panel`, `Card`, and `Badge` helpers from `@pilot/components/dashboard.tsx` so cockpit pages and utilities share one styling system.
 
 ### Shell
 

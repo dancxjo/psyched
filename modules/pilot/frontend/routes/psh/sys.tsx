@@ -1,3 +1,4 @@
+import { Panel } from "@pilot/components/dashboard.tsx";
 import { page } from "fresh";
 import PshSystemdManager from "../../islands/PshSystemdManager.tsx";
 import { define } from "../../utils.ts";
@@ -18,12 +19,13 @@ export default define.page<typeof handler>(({ data }) => {
   const { modules } = data;
   return (
     <section class="content">
-      <h1>Systemd Integration</h1>
-      <p>
-        Generate and manage user-level systemd services that wrap module launch
-        scripts. These commands map directly to <code>psh sys</code>.
-      </p>
-      <PshSystemdManager modules={modules} />
+      <Panel
+        title="Systemd integration"
+        subtitle="Bridge module launch scripts to persistent user units"
+        accent="cyan"
+      >
+        <PshSystemdManager modules={modules} />
+      </Panel>
     </section>
   );
 });

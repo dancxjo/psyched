@@ -1,0 +1,1 @@
+../../pilot/components/dashboard.tsx
