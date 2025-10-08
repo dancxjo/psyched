@@ -6,7 +6,7 @@ import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
 import { modulesRoot, repoRoot, workspaceRoot, workspaceSrc } from "./paths.ts";
 import { ensureRebootCompleted } from "./reboot_guard.ts";
-import { manifest as generateFreshManifest } from "https://deno.land/x/fresh@1.7.3/src/dev/mod.ts";
+import { manifest as generateFreshManifest } from "$fresh/dev/mod.ts";
 
 const PID_DIR = join(workspaceRoot(), ".psh");
 
@@ -99,6 +99,27 @@ function ensureDirectory(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
+function fileContentsEqual(pathA: string, pathB: string): boolean {
+  try {
+    const a = Deno.readFileSync(pathA);
+    const b = Deno.readFileSync(pathB);
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) {
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 function ensureLogFile(path: string): void {
   ensureDirectory(dirname(path));
   const file = Deno.openSync(path, {
@@ -156,7 +177,7 @@ export function formatExitSummary(
   const summary = status.success
     ? `[${module}] exited cleanly (code ${status.code ?? 0})`
     : `[${module}] exited with code ${status.code ?? "unknown"}` +
-      (status.signal ? ` (signal ${status.signal})` : "");
+    (status.signal ? ` (signal ${status.signal})` : "");
   return status.success ? colors.yellow(summary) : colors.red(summary);
 }
 
@@ -245,8 +266,7 @@ export function composeLaunchCommand(
   };
 
   const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${
-      composeStreamCommand("stdout")
+    `exec bash ${shellEscape(launchScript)} > >(${composeStreamCommand("stdout")
     }) ` +
     `2> >(${composeStreamCommand("stderr")})`;
   const parts = [...envCommands, launch];
@@ -459,7 +479,15 @@ function link(target: string, destination: string): void {
       }
       Deno.removeSync(destination);
     } else {
-      throw new Error(`refusing to replace non-symlink at ${destination}`);
+      if (fileContentsEqual(target, destination)) {
+        return;
+      }
+      console.warn(
+        colors.yellow(
+          `skipping link for ${destination}; destination is not a symlink`,
+        ),
+      );
+      return;
     }
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) {
@@ -709,13 +737,15 @@ export async function bringModuleUp(
   });
 
   if (options.verbose) {
-    for (const line of formatLaunchDiagnostics({
-      module,
-      launchScript,
-      envCommands,
-      logFile,
-      command: launchCommand,
-    })) {
+    for (
+      const line of formatLaunchDiagnostics({
+        module,
+        launchScript,
+        envCommands,
+        logFile,
+        command: launchCommand,
+      })
+    ) {
       console.log(colors.dim(`[${module}] ${line}`));
     }
   }
