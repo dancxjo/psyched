@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import contextlib
 import logging
 import signal
@@ -296,7 +297,33 @@ class WebsocketServer:
         self._server: Optional[asyncio.base_events.Server] = None
 
     async def start(self) -> None:
-        self._server = await serve(self._handler, self._host, self._port, ping_interval=30, ping_timeout=30)
+        backoff = 0.5
+        attempt = 0
+        while True:
+            try:
+                self._server = await serve(
+                    self._handler,
+                    self._host,
+                    self._port,
+                    ping_interval=30,
+                    ping_timeout=30,
+                    reuse_port=True,
+                )
+            except OSError as err:
+                if err.errno != errno.EADDRINUSE or attempt >= 4:
+                    raise
+                attempt += 1
+                _LOGGER.warning(
+                    "ws bridge port %s:%d busy (%s); retrying in %.1fs",
+                    self._host,
+                    self._port,
+                    err.strerror,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 4.0)
+            else:
+                break
         _LOGGER.info("listening on ws://%s:%d/ws", self._host, self._port)
 
     async def stop(self) -> None:

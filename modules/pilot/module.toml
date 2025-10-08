@@ -17,4 +17,4 @@ patches = []
 # Service control
 launch = "modules/pilot/launch_unit.sh"
 shutdown = "modules/pilot/shutdown_unit.sh"
-pilot_control = "modules/pilot/pilot/components/PilotOverview.tsx"
+pilot_control = "modules/pilot/components/PilotOverview.tsx"
