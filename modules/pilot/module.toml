@@ -11,8 +11,10 @@ pip = [
     "typing_extensions>=4.8,<5",
 ]
 
-# Pilot module does not require patch scripts
-patches = []
+# Apply overlays needed for ROS workspace builds.
+patches = [
+    "modules/pilot/scripts/ensure_cv_bridge_overlay.sh",
+]
 
 # Service control
 launch = "modules/pilot/launch_unit.sh"
