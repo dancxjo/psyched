@@ -69,6 +69,17 @@ Deno.test("defaults to bridge port 8088 when dev server runs on 8000", async () 
   });
 });
 
+Deno.test(
+  "defaults to bridge port 8088 when served from Vite's dev server",
+  async () => {
+    await withBrowserEnv({ port: "5173" }, async () => {
+      const { __test__ } = await importCockpitModule();
+      const url = __test__.defaultCockpitUrl();
+      assertEquals(url, "ws://localhost:8088/ws");
+    });
+  },
+);
+
 Deno.test("uses bootstrapped cockpit port when provided", async () => {
   await withBrowserEnv({
     port: "8000",
