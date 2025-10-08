@@ -171,7 +171,7 @@ echo "Building Pilot frontend via deno task build..."
 echo "Starting Pilot frontend via deno task start..."
 (
   cd "${FRONTEND_DIR}"
-  deno task start
+  deno task dev
 ) &
 DENO_PID=$!
 
