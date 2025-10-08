@@ -7,6 +7,9 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
+COCKPIT_PORT="${PILOT_COCKPIT_PORT:-8088}"
+
+export PILOT_COCKPIT_PORT="${COCKPIT_PORT}"
 
 add_pythonpath_dir() {
   local dir="$1"
@@ -55,10 +58,12 @@ if ! command -v ros2 >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Starting Pilot cockpit backend..."
+echo "Starting Pilot cockpit backend on port ${COCKPIT_PORT}..."
 (
   cd "${ROOT_DIR}" &&
-    ros2 run pilot cockpit --log-level "${PILOT_LOG_LEVEL:-info}"
+    ros2 run pilot cockpit \
+      --port "${COCKPIT_PORT}" \
+      --log-level "${PILOT_LOG_LEVEL:-info}"
 ) &
 COCKPIT_PID=$!
 

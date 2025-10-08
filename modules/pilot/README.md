@@ -2,7 +2,7 @@
 
 The pilot module delivers Pete's browser-based cockpit. It is split into two pieces:
 
-- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit` is an `ament_python` package that exposes a websocket bridge at `ws://0.0.0.0:8088/ws`. The bridge is implemented with `rclpy` + `asyncio` + `websockets` and mirrors cockpit messages to ROS topics (`/conversation`, `/cmd_vel`). Telemetry from `/audio/transcript/final`, `/imu/data`, and the Foot drivetrain is fanned out to any subscribed clients.
+- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit` is an `ament_python` package that exposes a websocket bridge at `ws://0.0.0.0:8088/ws` by default. Override the port via the `PILOT_COCKPIT_PORT` environment variable (propagated by the `ros2` service) to keep the frontend and backend aligned. The bridge is implemented with `rclpy` + `asyncio` + `websockets` and mirrors cockpit messages to ROS topics (`/conversation`, `/cmd_vel`). Telemetry from `/audio/transcript/final`, `/imu/data`, and the Foot drivetrain is fanned out to any subscribed clients.
 - **Frontend:** `modules/pilot/frontend` is a Deno Fresh application that renders the cockpit UI and consumes the websocket bridge via `lib/cockpit.ts`.
 
 ## Developing the backend

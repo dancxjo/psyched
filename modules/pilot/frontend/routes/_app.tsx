@@ -1,6 +1,7 @@
 import { define } from "../utils.ts";
 
-export default define.page(function App({ Component }) {
+export default define.page(function App({ Component, state }) {
+  const { cockpit } = state;
   return (
     <html lang="en">
       <head>
@@ -9,7 +10,12 @@ export default define.page(function App({ Component }) {
         <title>Psyched Pilot</title>
         <link rel="stylesheet" href="/styles.css" />
       </head>
-      <body>
+      <body
+        data-cockpit-host={cockpit?.host}
+        data-cockpit-port={cockpit?.port}
+        data-cockpit-protocol={cockpit?.protocol}
+        data-cockpit-url={cockpit?.url}
+      >
         <header class="site-header">
           <nav>
             <a href="/">Home</a>
