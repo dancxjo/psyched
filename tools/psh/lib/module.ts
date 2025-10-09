@@ -156,6 +156,20 @@ export interface ComposeLaunchCommandOptions {
 
 const EARLY_EXIT_WINDOW_MS = 500;
 
+export async function awaitModuleStability(
+  statusPromise: Promise<Deno.CommandStatus>,
+  windowMs = EARLY_EXIT_WINDOW_MS,
+): Promise<Deno.CommandStatus | null> {
+  const outcome = await Promise.race<
+    { status: Deno.CommandStatus } | null
+  >([
+    statusPromise.then((status) => ({ status })),
+    delay(windowMs).then(() => null),
+  ]);
+
+  return outcome?.status ?? null;
+}
+
 export interface LaunchDiagnosticsContext {
   module: string;
   launchScript: string;
@@ -737,15 +751,13 @@ export async function bringModuleUp(
   );
 
   const statusPromise = child.status;
+  child.unref();
 
-  const earlyStatus = await Promise.race([
-    statusPromise.then((status) => ({ status })),
-    delay(EARLY_EXIT_WINDOW_MS).then(() => null),
-  ]);
+  const earlyStatus = await awaitModuleStability(statusPromise);
 
   if (earlyStatus) {
     clearPid(module);
-    logExitSummary(module, earlyStatus.status);
+    logExitSummary(module, earlyStatus);
     return;
   }
 
@@ -760,9 +772,6 @@ export async function bringModuleUp(
         colors.red(`[${module}] failed to read exit status: ${message}`),
       );
     });
-
-  // Unref to allow psh to continue without waiting
-  child.unref();
 }
 
 export async function bringModuleDown(module: string): Promise<void> {

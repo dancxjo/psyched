@@ -8,6 +8,7 @@ import {
 import { join } from "$std/path/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import {
+  awaitModuleStability,
   bringModulesUp,
   composeLaunchCommand,
   formatExitSummary,
@@ -105,6 +106,24 @@ Deno.test("formatExitSummary highlights success and failure", () => {
   );
   assertStringIncludes(failure, "exited with code 1 (signal SIGTERM)");
 });
+
+Deno.test(
+  "awaitModuleStability reports early exit when the process stops immediately",
+  async () => {
+    const status: Deno.CommandStatus = { success: false, code: 1, signal: null };
+    const result = await awaitModuleStability(Promise.resolve(status), 5);
+    assertEquals(result, status);
+  },
+);
+
+Deno.test(
+  "awaitModuleStability returns null when the process keeps running",
+  async () => {
+    const pending = new Promise<Deno.CommandStatus>(() => {});
+    const result = await awaitModuleStability(pending, 5);
+    assertEquals(result, null);
+  },
+);
 
 Deno.test(
   "bringModulesUp continues launching remaining modules when one fails",
