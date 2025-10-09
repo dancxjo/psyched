@@ -224,9 +224,7 @@ main {
 }
 
 .dashboard-panel__header {
-  display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
   justify-content: space-between;
   gap: var(--brand-spacing-lg);
 }
@@ -358,8 +356,14 @@ main {
 
 .dashboard-grid {
   display: grid;
-  gap: var(--brand-spacing-lg);
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--brand-spacing-xl);
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 64rem) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .dashboard-tile__helper {
