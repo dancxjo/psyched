@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 PATTERN="ros2 launch create_bringup create_1.launch"
 TIMEOUT=${TIMEOUT:-10}
