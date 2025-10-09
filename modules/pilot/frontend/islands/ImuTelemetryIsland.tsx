@@ -1,1 +1,2 @@
-/home/pete/psyched/modules/imu/pilot/islands/ImuTelemetryIsland.tsx
+export { default } from "../../../../imu/pilot/islands/ImuTelemetryIsland.tsx";
+export * from "../../../../imu/pilot/islands/ImuTelemetryIsland.tsx";
