@@ -367,19 +367,28 @@ main {
 }
 
 .overlay-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--brand-spacing-lg);
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-}
-
-@media (min-width: 70rem) {
-  .overlay-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  align-items: stretch;
 }
 
 .overlay-grid__item {
   min-width: 0;
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.overlay-grid__item[draggable="true"] {
+  cursor: grab;
+}
+
+.overlay-grid__item--dragging {
+  opacity: 0.6;
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px var(--brand-border-strong);
 }
 
 .overlay-grid__empty {
