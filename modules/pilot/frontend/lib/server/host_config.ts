@@ -20,6 +20,8 @@ export interface EnabledModuleOptions extends HostConfigLocatorOptions {
   includePilot?: boolean;
 }
 
+export type EnabledServiceOptions = HostConfigLocatorOptions;
+
 const DEFAULT_HOSTS_DIR = resolve(defaultHostsRoot());
 
 const HOST_CONFIG_EXTENSIONS = [
@@ -134,10 +136,20 @@ function moduleLaunchEnabled(raw: unknown): boolean {
   return false;
 }
 
+interface ModuleEntry {
+  declared: boolean;
+  value?: unknown;
+}
+
+interface ServiceEntry {
+  declared: boolean;
+  value?: unknown;
+}
+
 function gatherModuleEntries(
   raw: Record<string, unknown>,
-): Map<string, unknown> {
-  const modules = new Map<string, unknown>();
+): Map<string, ModuleEntry> {
+  const modules = new Map<string, ModuleEntry>();
 
   const host = raw.host;
   if (isRecord(host)) {
@@ -147,8 +159,11 @@ function gatherModuleEntries(
         if (typeof entry !== "string") continue;
         const name = entry.trim();
         if (!name) continue;
-        if (!modules.has(name)) {
-          modules.set(name, undefined);
+        const existing = modules.get(name);
+        if (existing) {
+          modules.set(name, { declared: true, value: existing.value });
+        } else {
+          modules.set(name, { declared: true });
         }
       }
     }
@@ -159,11 +174,56 @@ function gatherModuleEntries(
     for (const [key, value] of Object.entries(moduleTable)) {
       const name = key.trim();
       if (!name) continue;
-      modules.set(name, value);
+      const existing = modules.get(name);
+      if (existing) {
+        modules.set(name, { declared: existing.declared, value });
+      } else {
+        modules.set(name, { declared: false, value });
+      }
     }
   }
 
   return modules;
+}
+
+function gatherServiceEntries(
+  raw: Record<string, unknown>,
+): Map<string, ServiceEntry> {
+  const services = new Map<string, ServiceEntry>();
+
+  const host = raw.host;
+  if (isRecord(host)) {
+    const declared = host.services;
+    if (Array.isArray(declared)) {
+      for (const entry of declared) {
+        if (typeof entry !== "string") continue;
+        const name = entry.trim();
+        if (!name) continue;
+        const existing = services.get(name);
+        if (existing) {
+          services.set(name, { declared: true, value: existing.value });
+        } else {
+          services.set(name, { declared: true });
+        }
+      }
+    }
+  }
+
+  const serviceTable = raw.services;
+  if (isRecord(serviceTable)) {
+    for (const [key, value] of Object.entries(serviceTable)) {
+      const name = key.trim();
+      if (!name) continue;
+      const existing = services.get(name);
+      if (existing) {
+        services.set(name, { declared: existing.declared, value });
+      } else {
+        services.set(name, { declared: false, value });
+      }
+    }
+  }
+
+  return services;
 }
 
 function sortModules(modules: string[]): string[] {
@@ -201,28 +261,103 @@ export function determineEnabledModules(
 ): string[] {
   const modules = gatherModuleEntries(raw);
   const enabled = new Set<string>();
+  const restrictToDeclared = Array.from(modules.values()).some((entry) =>
+    entry.declared
+  );
 
-  for (const [name, value] of modules.entries()) {
+  for (const [name, entry] of modules.entries()) {
     if (!options.includePilot && name === "pilot") continue;
+    if (restrictToDeclared && !entry.declared) continue;
+
+    const value = entry.value;
 
     if (value === undefined) {
-      continue;
-    }
-
-    if (!isRecord(value)) {
-      if (coerceBoolean(value) === true) {
+      if (entry.declared) {
         enabled.add(name);
       }
       continue;
     }
 
-    const launch = value.launch ?? value.launchConfig;
-    if (moduleLaunchEnabled(launch)) {
+    const direct = coerceBoolean(value);
+    if (direct !== undefined) {
+      if (direct) {
+        enabled.add(name);
+      }
+      continue;
+    }
+
+    if (isRecord(value)) {
+      const launch = value.launch ?? value.launchConfig;
+      if (launch === undefined) {
+        if (entry.declared) {
+          enabled.add(name);
+        }
+        continue;
+      }
+      if (moduleLaunchEnabled(launch)) {
+        enabled.add(name);
+      }
+      continue;
+    }
+
+    if (entry.declared) {
       enabled.add(name);
     }
   }
 
   return sortModules(Array.from(enabled));
+}
+
+function serviceEnabled(raw: unknown): boolean {
+  const direct = coerceBoolean(raw);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (isRecord(raw)) {
+    const enabled = coerceBoolean(raw.enabled);
+    if (enabled !== undefined) {
+      return enabled;
+    }
+    return true;
+  }
+  return false;
+}
+
+function sortServices(services: string[]): string[] {
+  if (services.length <= 1) return services;
+  return services.sort((a, b) => a.localeCompare(b));
+}
+
+export function determineEnabledServices(raw: Record<string, unknown>): string[] {
+  const services = gatherServiceEntries(raw);
+  const enabled = new Set<string>();
+  const restrictToDeclared = Array.from(services.values()).some((entry) =>
+    entry.declared
+  );
+
+  for (const [name, entry] of services.entries()) {
+    if (restrictToDeclared && !entry.declared) continue;
+
+    const value = entry.value;
+
+    if (value === undefined) {
+      if (entry.declared) {
+        enabled.add(name);
+      }
+      continue;
+    }
+
+    if (serviceEnabled(value)) {
+      enabled.add(name);
+      continue;
+    }
+
+    if (entry.declared) {
+      enabled.add(name);
+    }
+  }
+
+  return sortServices(Array.from(enabled));
 }
 
 export function enabledModulesForHost(
@@ -235,6 +370,17 @@ export function enabledModulesForHost(
   }
   const modules = determineEnabledModules(resolved.raw, { includePilot });
   return { modules, path: resolved.path, mtimeMs: resolved.mtimeMs };
+}
+
+export function enabledServicesForHost(
+  options: EnabledServiceOptions = {},
+): { services: string[]; path?: string; mtimeMs?: number } {
+  const resolved = resolveHostConfig(options);
+  if (!resolved) {
+    return { services: [] };
+  }
+  const services = determineEnabledServices(resolved.raw);
+  return { services, path: resolved.path, mtimeMs: resolved.mtimeMs };
 }
 
 export const __test__ = {

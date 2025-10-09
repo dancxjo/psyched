@@ -23,13 +23,14 @@ function withTempHostsDir(
   }
 }
 
-Deno.test("builds navigation from launched modules in the host manifest", () => {
+Deno.test("builds navigation from host declared modules and services", () => {
   withTempHostsDir({
     "testhost.json": JSON.stringify(
       {
         host: {
           name: "testhost",
-          modules: ["pilot"],
+          modules: ["pilot", "ear", "imu", "eye", "nav"],
+          services: ["asr", "graphs"],
         },
         modules: {
           pilot: {},
@@ -38,6 +39,11 @@ Deno.test("builds navigation from launched modules in the host manifest", () => 
           foot: { launch: false },
           eye: { launch: { arguments: { camera_topic: "/camera" } } },
           nav: { launch: { enabled: true } },
+        },
+        services: {
+          asr: {},
+          graphs: { enabled: true },
+          vectors: { enabled: false },
         },
       },
       null,
@@ -51,14 +57,46 @@ Deno.test("builds navigation from launched modules in the host manifest", () => 
     });
     assertEquals(links, [
       { href: "/", label: "Home" },
-      { href: "/modules/pilot", label: "Pilot" },
       { href: "/modules/ear", label: "Ear" },
       { href: "/modules/imu", label: "IMU" },
       { href: "/modules/eye", label: "Eye" },
       { href: "/modules/nav", label: "Nav" },
-      { href: "/psh/host", label: "Host" },
+      { href: "/modules/pilot", label: "Pilot" },
       { href: "/psh/mod", label: "Modules" },
       { href: "/psh/srv", label: "Services" },
+      { href: "/psh/host", label: "Host" },
+      { href: "/psh/sys", label: "Systemd" },
+    ]);
+  });
+});
+
+Deno.test("omits modules not listed for the host", () => {
+  withTempHostsDir({
+    "testhost.json": JSON.stringify(
+      {
+        host: {
+          name: "testhost",
+          modules: ["imu"],
+        },
+        modules: {
+          imu: { launch: true },
+          ear: { launch: true },
+        },
+      },
+      null,
+      2,
+    ),
+  }, (dir) => {
+    __test__.resetCache();
+    const links = primaryNavigationLinks({
+      hostname: "testhost",
+      hostsDir: dir,
+    });
+    assertEquals(links, [
+      { href: "/", label: "Home" },
+      { href: "/modules/imu", label: "IMU" },
+      { href: "/psh/mod", label: "Modules" },
+      { href: "/psh/host", label: "Host" },
       { href: "/psh/sys", label: "Systemd" },
     ]);
   });

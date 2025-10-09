@@ -2,6 +2,7 @@ import type { ComponentType } from "preact";
 
 import type { Accent } from "@pilot/components/dashboard.tsx";
 import { listModules, type ListModulesOptions } from "../server/modules.ts";
+import { enabledServicesForHost } from "../server/host_config.ts";
 
 import PilotOverviewIsland from "../../../pilot/islands/PilotOverviewIsland.tsx";
 import ChatModulePanelIsland from "../../../../chat/pilot/islands/ChatModulePanelIsland.tsx";
@@ -247,6 +248,11 @@ export const dashboardTiles: ReadonlyArray<DashboardTileDefinition> = [
 
 export type ModuleTileFilterOptions = ListModulesOptions;
 
+export interface ServiceTileFilterOptions {
+  hostname?: string;
+  hostsDir?: string;
+}
+
 export function moduleTilesForHost(
   options: ModuleTileFilterOptions = {},
 ): DashboardTileDefinition[] {
@@ -257,8 +263,29 @@ export function moduleTilesForHost(
   return moduleTiles.filter((tile) => enabled.has(tile.name));
 }
 
+export function serviceTilesForHost(
+  options: ServiceTileFilterOptions = {},
+): DashboardTileDefinition[] {
+  const { services } = enabledServicesForHost({
+    hostname: options.hostname,
+    hostsDir: options.hostsDir,
+  });
+  if (services.length === 0) {
+    return [];
+  }
+  const enabled = new Set(services);
+  return serviceTiles.filter((tile) => enabled.has(tile.name));
+}
+
 export function dashboardTilesForHost(
   options: ModuleTileFilterOptions = {},
 ): DashboardTileDefinition[] {
-  return [...moduleTilesForHost(options), ...serviceTiles];
+  const serviceOptions: ServiceTileFilterOptions = {
+    hostname: options.hostname,
+    hostsDir: options.hostsDir,
+  };
+  return [
+    ...moduleTilesForHost(options),
+    ...serviceTilesForHost(serviceOptions),
+  ];
 }

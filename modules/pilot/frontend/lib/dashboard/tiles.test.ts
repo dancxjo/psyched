@@ -8,6 +8,7 @@ import {
   moduleTiles,
   moduleTilesForHost,
   serviceTiles,
+  serviceTilesForHost,
 } from "./tiles.ts";
 
 Deno.test("module tiles have unique names", () => {
@@ -45,10 +46,13 @@ Deno.test("moduleTilesForHost returns tiles for enabled modules", () => {
     }
 
     const manifest = {
-      host: { modules: ["imu"] },
+      host: { modules: ["imu", "chat"], services: ["asr"] },
       modules: {
         chat: { launch: true },
         imu: { launch: { enabled: true } },
+      },
+      services: {
+        asr: {},
       },
     };
     Deno.writeTextFileSync(
@@ -63,6 +67,12 @@ Deno.test("moduleTilesForHost returns tiles for enabled modules", () => {
     });
 
     assertEquals(tiles.map((tile) => tile.name).sort(), ["chat", "imu"]);
+
+    const serviceTilesForHostResult = serviceTilesForHost({
+      hostname: "dash",
+      hostsDir,
+    });
+    assertEquals(serviceTilesForHostResult.map((tile) => tile.name), ["asr"]);
   } finally {
     Deno.removeSync(tempDir, { recursive: true });
   }
