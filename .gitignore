@@ -99,3 +99,6 @@ modules/pilot/frontend/islands/PilotOverviewIsland.tsx
 modules/pilot/frontend/routes/modules/pilot.tsx
 modules/pilot/frontend/islands/ImuTelemetryIsland_test.ts
 modules/pilot/frontend/islands/ImuTelemetryIsland.tsx
+modules/pilot/frontend/components/FootControlPanel.tsx
+modules/pilot/frontend/islands/FootControlPanelIsland.tsx
+modules/pilot/frontend/routes/modules/foot.tsx
