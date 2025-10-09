@@ -2,7 +2,7 @@ import { join, resolve } from "$std/path/mod.ts";
 import { enabledModulesForHost } from "./host_config.ts";
 import { modulesRoot, workspaceRoot } from "./paths.ts";
 import { runPsh } from "./psh_cli.ts";
-import { ModuleStatus, moduleStatuses } from "./module_status.ts";
+import { type ModuleStatus, moduleStatuses } from "./module_status.ts";
 
 export interface ListModulesOptions {
   hostname?: string;
