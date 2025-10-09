@@ -8,7 +8,8 @@
     "modules": [
       "pilot",
       "imu",
-      "foot"
+      "foot",
+      "eye"
     ],
     "services": []
   },
