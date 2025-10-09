@@ -18,7 +18,23 @@ export interface DashboardTileProps {
 }
 
 /**
- * Compact card that pairs lifecycle telemetry with a collapsible overlay.
+ * Compact card that pairs lifecycle telemetry with a live overlay.
+ *
+ * Tiles keep their `<details>` element open by default so websocket-backed
+ * widgets can subscribe as soon as the page renders.
+ *
+ * @example
+ * ```tsx
+ * <DashboardTile
+ *   name="pilot"
+ *   title="Pilot module"
+ *   description="Bridge health and cockpit version"
+ *   kind="module"
+ *   accent="amber"
+ *   href="/modules/pilot"
+ *   overlay={() => <span>Overlay</span>}
+ * />
+ * ```
  */
 export default function DashboardTile({
   name,
@@ -43,7 +59,7 @@ export default function DashboardTile({
       actions={<DashboardStatusBadge kind={kind} name={name} />}
     >
       {helper && <div class="dashboard-tile__helper">{helper}</div>}
-      <details class="dashboard-tile__details">
+      <details open class="dashboard-tile__details">
         <summary class="dashboard-tile__summary">Show live overlay</summary>
         <div class="dashboard-tile__overlay">
           <Overlay {...overlayProps} />

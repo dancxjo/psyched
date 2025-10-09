@@ -94,7 +94,7 @@ export function Panel({
 }: PanelProps) {
   return (
     <article class="dashboard-panel" data-tone={accent}>
-      <header class="dashboard-panel__header">
+      <header class="card__header dashboard-panel__header">
         <div class="dashboard-panel__heading">
           <span class="dashboard-panel__accent" aria-hidden="true" />
           <div>
