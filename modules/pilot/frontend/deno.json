@@ -27,6 +27,8 @@
     "@pilot/lib/": "./lib/",
     "@pilot/components/": "../pilot/components/",
     "preact": "npm:preact@^10.27.2",
+    "@preact/signals": "npm:@preact/signals@^2.3.2",
+    "@preact/signals-core": "npm:@preact/signals-core@^1.12.1",
     "@fresh/plugin-vite": "jsr:@fresh/plugin-vite@^1.0.4",
     "@preact/preset-vite": "npm:@preact/preset-vite@^2.10.2",
     "vite": "npm:vite@^7.1.3"
