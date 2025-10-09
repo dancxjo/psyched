@@ -2,7 +2,11 @@ import { resolve } from "$std/path/mod.ts";
 
 import type { NavigationLink } from "../navigation_types.ts";
 import { hostsRoot as defaultHostsRoot } from "./paths.ts";
-import { determineEnabledModules, resolveHostConfig } from "./host_config.ts";
+import {
+  determineEnabledModules,
+  determineEnabledServices,
+  resolveHostConfig,
+} from "./host_config.ts";
 
 export interface PrimaryNavigationOptions {
   hostname?: string;
@@ -27,15 +31,22 @@ const DEFAULT_HOSTS_DIR = resolve(defaultHostsRoot());
 
 const STATIC_PREFIX_LINKS: ReadonlyArray<NavigationLink> = [
   { href: "/", label: "Home" },
-  { href: "/modules/pilot", label: "Pilot" },
 ];
 
 const STATIC_SUFFIX_LINKS: ReadonlyArray<NavigationLink> = [
   { href: "/psh/host", label: "Host" },
-  { href: "/psh/mod", label: "Modules" },
-  { href: "/psh/srv", label: "Services" },
   { href: "/psh/sys", label: "Systemd" },
 ];
+
+const MODULE_MANAGEMENT_LINK: NavigationLink = {
+  href: "/psh/mod",
+  label: "Modules",
+};
+
+const SERVICE_MANAGEMENT_LINK: NavigationLink = {
+  href: "/psh/srv",
+  label: "Services",
+};
 
 const MODULE_NAV_LINKS: Readonly<Record<string, NavigationLink>> = {
   pilot: { href: "/modules/pilot", label: "Pilot" },
@@ -83,12 +94,32 @@ function cloneLink(link: NavigationLink): NavigationLink {
   return { href: link.href, label: link.label };
 }
 
-function buildNavigation(moduleLinks: NavigationLink[]): NavigationLink[] {
+function defaultNavigation(): NavigationLink[] {
   return [
-    ...STATIC_PREFIX_LINKS.map(cloneLink),
-    ...moduleLinks.map(cloneLink),
-    ...STATIC_SUFFIX_LINKS.map(cloneLink),
+    { href: "/", label: "Home" },
+    { href: "/modules/pilot", label: "Pilot" },
+    { href: "/psh/host", label: "Host" },
+    { href: "/psh/mod", label: "Modules" },
+    { href: "/psh/srv", label: "Services" },
+    { href: "/psh/sys", label: "Systemd" },
   ];
+}
+
+function buildNavigation(
+  moduleLinks: NavigationLink[],
+  options: { hasModules: boolean; hasServices: boolean },
+): NavigationLink[] {
+  const links: NavigationLink[] = [];
+  links.push(...STATIC_PREFIX_LINKS.map(cloneLink));
+  links.push(...moduleLinks.map(cloneLink));
+  if (options.hasModules) {
+    links.push(cloneLink(MODULE_MANAGEMENT_LINK));
+  }
+  if (options.hasServices) {
+    links.push(cloneLink(SERVICE_MANAGEMENT_LINK));
+  }
+  links.push(...STATIC_SUFFIX_LINKS.map(cloneLink));
+  return links;
 }
 
 function computeNavigation(
@@ -97,20 +128,24 @@ function computeNavigation(
 ): NavigationComputation {
   const resolved = resolveHostConfig({ hostname, hostsDir });
   if (!resolved) {
-    return { links: buildNavigation([]) };
+    return { links: defaultNavigation() };
   }
 
   try {
-    const modules = determineEnabledModules(resolved.raw);
+    const modules = determineEnabledModules(resolved.raw, { includePilot: true });
+    const services = determineEnabledServices(resolved.raw);
     const moduleLinks = modules.map(moduleLinkFor);
     return {
-      links: buildNavigation(moduleLinks),
+      links: buildNavigation(moduleLinks, {
+        hasModules: modules.length > 0,
+        hasServices: services.length > 0,
+      }),
       path: resolved.path,
       mtimeMs: resolved.mtimeMs,
     };
   } catch (error) {
     console.warn(`Failed to read navigation from ${resolved.path}`, error);
-    return { links: buildNavigation([]) };
+    return { links: defaultNavigation() };
   }
 }
 
