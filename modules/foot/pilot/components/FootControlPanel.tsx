@@ -8,8 +8,8 @@ import {
 import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
 
 import {
-  CONNECTION_STATUS_LABELS,
   Card,
+  CONNECTION_STATUS_LABELS,
   Panel,
   toneFromConnection,
 } from "@pilot/components/dashboard.tsx";
@@ -224,7 +224,14 @@ export default function FootControlPanel() {
     (event: PointerEvent) => {
       const pad = joystickRef.current;
       if (!pad) return;
-      pad.setPointerCapture(event.pointerId);
+      try {
+        // Some browsers (for example Safari) lack pointer capture support.
+        if (typeof pad.setPointerCapture === "function") {
+          pad.setPointerCapture(event.pointerId);
+        }
+      } catch {
+        // Ignore capture failures; the control still works without them.
+      }
       activePointerId.current = event.pointerId;
       setIsDragging(true);
       updateStickFromPointer(event.clientX, event.clientY);
@@ -244,8 +251,16 @@ export default function FootControlPanel() {
     (event: PointerEvent) => {
       if (activePointerId.current !== event.pointerId) return;
       const pad = joystickRef.current;
-      if (pad?.hasPointerCapture(event.pointerId)) {
-        pad.releasePointerCapture(event.pointerId);
+      const canRelease = pad &&
+        typeof pad.releasePointerCapture === "function" &&
+        (typeof pad.hasPointerCapture !== "function" ||
+          pad.hasPointerCapture(event.pointerId));
+      if (canRelease) {
+        try {
+          pad.releasePointerCapture(event.pointerId);
+        } catch {
+          // Ignore capture release failures to avoid breaking interaction.
+        }
       }
       activePointerId.current = null;
       setIsDragging(false);
@@ -357,9 +372,7 @@ export default function FootControlPanel() {
               <dd>{lastUpdateLabel}</dd>
             </div>
           </dl>
-          {telemetryError && (
-            <p class="note note--alert">{telemetryError}</p>
-          )}
+          {telemetryError && <p class="note note--alert">{telemetryError}</p>}
         </Card>
 
         <Card title="Motion" tone="cyan" icon={<MotionIcon />}>
