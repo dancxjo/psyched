@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/foot/pilot/routes/modules/foot.tsx
