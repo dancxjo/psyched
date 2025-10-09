@@ -10,6 +10,14 @@ cockpit pulls ROS telemetry over the websocket bridge served by the
 - `deno task build` – create a production bundle in `.fresh`
 - `deno task check` – format check, lint, and type-check the codebase
 
+## Cockpit websocket signals
+
+The shared websocket client in `lib/cockpit.ts` mirrors its connection state to
+signals exposed by `lib/cockpit_signals.ts`. Prefer consuming those signals over
+rolling ad-hoc polling logic—any island or utility can react to
+`cockpitConnectionStatus`/`cockpitHasError` without prop drilling. See the
+module's inline example for a quick usage refresher.
+
 ## Module overlays
 
 Use `psh mod setup <name>` to link a module's `pilot/` directory into this
