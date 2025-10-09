@@ -1,4 +1,4 @@
-import { useMemo } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 
 import { CONNECTION_STATUS_LABELS } from "@pilot/components/dashboard.tsx";
 import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
@@ -57,27 +57,47 @@ export default function ImuTelemetryIsland({
   title = "IMU Telemetry",
   topic = "/imu/data",
 }: ImuTelemetryIslandProps) {
+  const fallbackSample = useMemo<ImuSample>(() => ({
+    ...DEFAULT_SAMPLE,
+    ...(fallback ?? {}),
+  }), [fallback]);
+
   const { data, status, error } = useCockpitTopic<RosImuMessage>(topic, {
     replay: true,
   });
 
-  const sample = useMemo<ImuSample>(() => {
-    const base = fallback ?? DEFAULT_SAMPLE;
-    const mapped = mapMessageToSample(data);
-    const connection = CONNECTION_STATUS_LABELS[status] ?? "Unknown";
-    const statusText = error ? `Error: ${error}` : connection;
+  const [sample, setSample] = useState<ImuSample>(fallbackSample);
 
-    return {
-      ...base,
-      ...mapped,
-      status: statusText,
-    };
-  }, [data, status, error, fallback]);
+  useEffect(() => {
+    setSample((previous) => ({ ...previous, ...fallbackSample }));
+  }, [fallbackSample]);
+
+  useEffect(() => {
+    if (!data) return;
+    const mapped = mapMessageToSample(data);
+    if (Object.keys(mapped).length === 0) {
+      return;
+    }
+    if (mapped.lastUpdate === undefined || mapped.lastUpdate === null) {
+      mapped.lastUpdate = new Date();
+    }
+    setSample((previous) => ({ ...previous, ...mapped }));
+  }, [data]);
+
+  const connectionLabel = CONNECTION_STATUS_LABELS[status] ?? "Unknown";
+  const statusText = useMemo(() => (
+    composeStatus(sample.status, connectionLabel, error)
+  ), [sample.status, connectionLabel, error]);
+
+  const sensor = useMemo<ImuSample>(() => ({
+    ...sample,
+    status: statusText,
+  }), [sample, statusText]);
 
   return (
     <ImuReadout
       title={title}
-      sensor={sample}
+      sensor={sensor}
       connectionStatus={status}
     />
   );
@@ -96,6 +116,7 @@ function mapMessageToSample(
     message.header?.frame_id;
 
   const quaternion = toQuaternion(message.orientation);
+  const euler = quaternion ? quaternionToEuler(quaternion) : undefined;
   const angularVelocity = vectorLikeToSample(
     message.angular_velocity ?? message.angularVelocity,
   );
@@ -105,7 +126,7 @@ function mapMessageToSample(
 
   return {
     frameId,
-    orientation: quaternion ? { quaternion } : undefined,
+    orientation: quaternion ? { quaternion, euler } : undefined,
     angularVelocity,
     linearAcceleration,
     temperatureC: message.temperature ?? undefined,
@@ -132,6 +153,30 @@ function toQuaternion(
   }
 
   return [x, y, z, w];
+}
+
+function quaternionToEuler(
+  [x, y, z, w]: [number, number, number, number],
+): { roll: number; pitch: number; yaw: number } {
+  const sinrCosp = 2 * (w * x + y * z);
+  const cosrCosp = 1 - 2 * (x * x + y * y);
+  const roll = Math.atan2(sinrCosp, cosrCosp);
+
+  const sinp = 2 * (w * y - z * x);
+  const pitch = Math.abs(sinp) >= 1
+    ? Math.sign(sinp) * Math.PI / 2
+    : Math.asin(sinp);
+
+  const sinyCosp = 2 * (w * z + x * y);
+  const cosyCosp = 1 - 2 * (y * y + z * z);
+  const yaw = Math.atan2(sinyCosp, cosyCosp);
+
+  const toDegrees = (radians: number) => radians * (180 / Math.PI);
+  return {
+    roll: toDegrees(roll),
+    pitch: toDegrees(pitch),
+    yaw: toDegrees(yaw),
+  };
 }
 
 function vectorLikeToSample(vector: VectorLike | undefined) {
@@ -181,3 +226,26 @@ function extractTimestamp(message: RosImuMessage): string | null {
   );
   return new Date(ms).toISOString();
 }
+
+function composeStatus(
+  sampleStatus: string | undefined,
+  connectionLabel: string,
+  error: string | null,
+): string {
+  if (error) {
+    return `Error: ${error}`;
+  }
+  const trimmed = sampleStatus?.trim();
+  if (!trimmed) {
+    return connectionLabel;
+  }
+  if (trimmed === connectionLabel) {
+    return connectionLabel;
+  }
+  return `${trimmed} (${connectionLabel})`;
+}
+
+export const __test__ = {
+  mapMessageToSample,
+  quaternionToEuler,
+};

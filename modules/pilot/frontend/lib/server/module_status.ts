@@ -1,5 +1,7 @@
 import { fromFileUrl, join } from "$std/path/mod.ts";
 
+import { enabledModulesForHost } from "./host_config.ts";
+
 /**
  * Options for customizing how module status information is discovered.
  *
@@ -20,6 +22,22 @@ export interface ModuleStatusOptions {
    * Absolute path to the modules directory. Defaults to `<repo>/modules`.
    */
   modulesRoot?: string;
+  /**
+   * Optional override for the hosts directory used to resolve enabled modules.
+   */
+  hostsDir?: string;
+  /**
+   * Optional hostname override when resolving host manifests.
+   */
+  hostname?: string;
+  /**
+   * Explicit set of module names to inspect, bypassing manifest discovery.
+   */
+  enabledModules?: string[];
+  /**
+   * Include the pilot module when deriving module lists. Defaults to false.
+   */
+  includePilot?: boolean;
 }
 
 /**
@@ -120,6 +138,36 @@ function listModules(modulesRoot: string): string[] {
   }
 }
 
+function determineModuleNames(
+  modulesRoot: string,
+  options: ModuleStatusOptions,
+  includePilot: boolean,
+): string[] {
+  const directories = listModules(modulesRoot);
+  const directorySet = new Set(directories);
+
+  if (options.enabledModules && options.enabledModules.length > 0) {
+    return options.enabledModules.filter((name) => directorySet.has(name));
+  }
+
+  try {
+    const { modules } = enabledModulesForHost({
+      hostsDir: options.hostsDir,
+      hostname: options.hostname,
+      includePilot,
+    });
+    if (modules.length > 0) {
+      return modules.filter((name) => directorySet.has(name));
+    }
+  } catch (error) {
+    console.warn("Failed to resolve host modules for status", error);
+  }
+
+  return includePilot
+    ? directories
+    : directories.filter((name) => name !== "pilot");
+}
+
 /**
  * Inspect the repository workspace to determine the launch status of modules.
  *
@@ -137,9 +185,11 @@ export function moduleStatuses(
   const repoRoot = determineRepoRoot(options);
   const workspaceRoot = determineWorkspaceRoot(repoRoot, options);
   const modulesRoot = determineModulesRoot(repoRoot, options);
+  const includePilot = options.includePilot ?? false;
+  const moduleNames = determineModuleNames(modulesRoot, options, includePilot);
   const results: ModuleStatus[] = [];
 
-  for (const name of listModules(modulesRoot)) {
+  for (const name of moduleNames) {
     const pid = readPid(workspaceRoot, name);
     if (pid && isPidRunning(pid)) {
       results.push({ name, status: "running", pid });

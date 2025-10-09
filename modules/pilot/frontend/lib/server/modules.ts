@@ -1,7 +1,15 @@
-import { join } from "$std/path/mod.ts";
+import { join, resolve } from "$std/path/mod.ts";
+import { enabledModulesForHost } from "./host_config.ts";
 import { modulesRoot, workspaceRoot } from "./paths.ts";
 import { runPsh } from "./psh_cli.ts";
 import { ModuleStatus, moduleStatuses } from "./module_status.ts";
+
+export interface ListModulesOptions {
+  hostname?: string;
+  hostsDir?: string;
+  modulesDir?: string;
+  includePilot?: boolean;
+}
 
 function pathExists(path: string): boolean {
   try {
@@ -17,13 +25,46 @@ function pidPath(module: string): string {
   return join(workspaceRoot(), ".psh", `${module}.pid`);
 }
 
-export function listModules(): string[] {
+function readModuleDirectories(dir: string): string[] {
   const names: string[] = [];
-  for (const entry of Deno.readDirSync(modulesRoot())) {
-    if (entry.isDirectory) names.push(entry.name);
+  try {
+    for (const entry of Deno.readDirSync(dir)) {
+      if (entry.isDirectory) names.push(entry.name);
+    }
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      return [];
+    }
+    throw error;
   }
   names.sort();
   return names;
+}
+
+export function listModules(options: ListModulesOptions = {}): string[] {
+  const modulesDir = options.modulesDir
+    ? resolve(options.modulesDir)
+    : modulesRoot();
+  const includePilot = options.includePilot ?? false;
+  const directories = readModuleDirectories(modulesDir);
+  const directorySet = new Set(directories);
+
+  try {
+    const { modules } = enabledModulesForHost({
+      hostname: options.hostname,
+      hostsDir: options.hostsDir,
+      includePilot,
+    });
+    if (modules.length > 0) {
+      return modules.filter((name) => directorySet.has(name));
+    }
+  } catch (error) {
+    console.warn("Failed to resolve host modules", error);
+  }
+
+  return includePilot
+    ? directories
+    : directories.filter((name) => name !== "pilot");
 }
 
 export { ModuleStatus, moduleStatuses };

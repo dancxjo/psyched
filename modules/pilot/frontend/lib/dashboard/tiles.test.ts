@@ -1,8 +1,14 @@
 import { assertEquals } from "$std/assert/assert_equals.ts";
 import { assertGreater } from "$std/assert/assert_greater.ts";
 import { assert } from "$std/assert/assert.ts";
+import { join } from "$std/path/mod.ts";
 
-import { dashboardTiles, moduleTiles, serviceTiles } from "./tiles.ts";
+import {
+  dashboardTiles,
+  moduleTiles,
+  moduleTilesForHost,
+  serviceTiles,
+} from "./tiles.ts";
 
 Deno.test("module tiles have unique names", () => {
   const names = moduleTiles.map((tile) => tile.name);
@@ -23,5 +29,41 @@ Deno.test("dashboard tiles expose overlays", () => {
     assert(typeof tile.title === "string" && tile.title.length > 0);
     assert(typeof tile.href === "string" && tile.href.startsWith("/"));
     assertEquals(typeof tile.overlay, "function");
+  }
+});
+
+Deno.test("moduleTilesForHost returns tiles for enabled modules", () => {
+  const tempDir = Deno.makeTempDirSync();
+  try {
+    const modulesDir = join(tempDir, "modules");
+    const hostsDir = join(tempDir, "hosts");
+    Deno.mkdirSync(modulesDir, { recursive: true });
+    Deno.mkdirSync(hostsDir, { recursive: true });
+
+    for (const name of ["chat", "imu", "memory"]) {
+      Deno.mkdirSync(join(modulesDir, name));
+    }
+
+    const manifest = {
+      host: { modules: ["imu"] },
+      modules: {
+        chat: { launch: true },
+        imu: { launch: { enabled: true } },
+      },
+    };
+    Deno.writeTextFileSync(
+      join(hostsDir, "dash.json"),
+      JSON.stringify(manifest, null, 2),
+    );
+
+    const tiles = moduleTilesForHost({
+      hostname: "dash",
+      hostsDir,
+      modulesDir,
+    });
+
+    assertEquals(tiles.map((tile) => tile.name).sort(), ["chat", "imu"]);
+  } finally {
+    Deno.removeSync(tempDir, { recursive: true });
   }
 });
