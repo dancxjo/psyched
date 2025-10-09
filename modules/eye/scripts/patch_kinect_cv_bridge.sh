@@ -52,18 +52,20 @@ for target in kinect_ros2_component kinect_ros2_node; do
 done
 
 HEADER_FILE="${SRC_DIR}/kinect_ros2/include/kinect_ros2/kinect_ros2_component.hpp"
-if [[ -f "${HEADER_FILE}" ]] && grep -q 'cv_bridge/cv_bridge\.h' "${HEADER_FILE}"; then
+if [[ -f "${HEADER_FILE}" ]] && grep -Eq 'cv_bridge/cv_bridge\.h([^p]|$)|cv_bridge/cv_bridge\.hppp' "${HEADER_FILE}"; then
   python3 - "${HEADER_FILE}" <<'PY'
 import pathlib
+import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
 text = path.read_text()
-updated = text.replace('cv_bridge/cv_bridge.h', 'cv_bridge/cv_bridge.hpp')
+updated = re.sub(r"cv_bridge/cv_bridge\.hppp+", "cv_bridge/cv_bridge.hpp", text)
+updated = re.sub(r"cv_bridge/cv_bridge\.h(?!p)", "cv_bridge/cv_bridge.hpp", updated)
 if updated != text:
     path.write_text(updated)
 PY
-  echo "[eye/patch] Updated cv_bridge header include to .hpp in ${HEADER_FILE}"
+  echo "[eye/patch] Normalised cv_bridge header include in ${HEADER_FILE}"
 fi
 
 echo "[eye/patch] Ensured cv_bridge dependency in ${CMAKE_FILE}"
