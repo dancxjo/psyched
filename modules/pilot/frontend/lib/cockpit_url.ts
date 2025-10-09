@@ -10,7 +10,10 @@ export const globalWindow = typeof globalThis === "object" &&
   ? (globalThis as typeof globalThis & { window: Window }).window
   : undefined;
 
-export const isBrowser = Boolean(globalWindow?.WebSocket);
+const hasDom = typeof globalWindow?.document !== "undefined" &&
+  typeof globalWindow?.document?.createElement === "function";
+
+export const isBrowser = Boolean(hasDom && globalWindow?.WebSocket);
 
 const DEV_SERVER_PORTS = new Set(["8000", "5173"]);
 

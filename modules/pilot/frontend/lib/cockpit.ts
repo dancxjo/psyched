@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { createContext, createElement } from "preact";
+import type { ComponentChildren } from "preact";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   defaultCockpitUrl,
-  globalWindow,
   isBrowser,
   readBootstrappedConfig,
 } from "./cockpit_url.ts";
@@ -45,6 +46,108 @@ interface SubscribeOptions {
 }
 
 const DEFAULT_RECONNECT_DELAY_MS = 2000;
+
+type ResolvedCockpitClientOptions = {
+  url?: string;
+  autoReconnect: boolean;
+  reconnectDelayMs: number;
+};
+
+const CockpitClientContext = createContext<CockpitClient | null>(null);
+const CockpitStatusContext = createContext<ConnectionStatus>("idle");
+
+function resolveProviderOptions(
+  options?: CockpitClientOptions,
+): ResolvedCockpitClientOptions {
+  return {
+    url: options?.url,
+    autoReconnect: options?.autoReconnect ?? true,
+    reconnectDelayMs: options?.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
+  };
+}
+
+function serializeOptions(options: ResolvedCockpitClientOptions): string {
+  return [
+    options.url ?? "",
+    options.autoReconnect ? "1" : "0",
+    String(options.reconnectDelayMs),
+  ].join("|");
+}
+
+export interface CockpitProviderProps {
+  children: ComponentChildren;
+  options?: CockpitClientOptions;
+  autoConnect?: boolean;
+}
+
+export function CockpitProvider({
+  children,
+  options,
+  autoConnect = true,
+}: CockpitProviderProps) {
+  const resolvedOptions = useMemo(
+    () => resolveProviderOptions(options),
+    [options?.url, options?.autoReconnect, options?.reconnectDelayMs],
+  );
+  const optionsSignature = useMemo(
+    () => serializeOptions(resolvedOptions),
+    [resolvedOptions],
+  );
+  const signatureRef = useRef(optionsSignature);
+  const [client, setClient] = useState<CockpitClient>(() =>
+    createCockpitClient(resolvedOptions)
+  );
+  const [status, setStatus] = useState<ConnectionStatus>(
+    client.connectionStatus,
+  );
+
+  useEffect(() => {
+    if (signatureRef.current === optionsSignature) {
+      return;
+    }
+    signatureRef.current = optionsSignature;
+    setClient((previous) => {
+      previous?.disconnect();
+      return createCockpitClient(resolvedOptions);
+    });
+  }, [optionsSignature, resolvedOptions]);
+
+  useEffect(() => {
+    setStatus(client.connectionStatus);
+    return client.onStatusChange((next) => {
+      setStatus(next);
+    });
+  }, [client]);
+
+  useEffect(() => {
+    if (!autoConnect) {
+      return;
+    }
+    client.connect();
+    return () => {
+      client.disconnect();
+    };
+  }, [client, autoConnect]);
+
+  return createElement(
+    CockpitClientContext.Provider,
+    { value: client },
+    createElement(
+      CockpitStatusContext.Provider,
+      { value: status },
+      children,
+    ),
+  );
+}
+
+export function useCockpitClient(): CockpitClient {
+  const client = useContext(CockpitClientContext);
+  return client ?? getDefaultCockpitClient();
+}
+
+export function useCockpitConnectionStatus(): ConnectionStatus {
+  return useContext(CockpitStatusContext);
+}
 
 export class CockpitClient {
   private socket: WebSocket | null = null;
@@ -347,8 +450,10 @@ interface UseTopicOptions<T> {
 export function useCockpitTopic<T = unknown>(
   topic: string,
   options: UseTopicOptions<T> = {},
-  client: CockpitClient = getDefaultCockpitClient(),
+  explicitClient?: CockpitClient,
 ) {
+  const contextClient = useContext(CockpitClientContext);
+  const client = explicitClient ?? contextClient ?? getDefaultCockpitClient();
   const { initialValue, autoConnect = true, replay = true } = options;
   const [payload, setPayload] = useState<T | undefined>(initialValue);
   const [status, setStatus] = useState<ConnectionStatus>(
