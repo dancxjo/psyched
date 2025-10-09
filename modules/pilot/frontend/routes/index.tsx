@@ -1,3 +1,4 @@
+import OverlayGrid from "../islands/OverlayGrid.tsx";
 import {
   moduleTilesForHost,
   serviceTilesForHost,
@@ -14,27 +15,30 @@ export default define.page(() => {
 
   return (
     <section class="content">
-      <div class="overlay-grid">
-        {overlays.length > 0
-          ? overlays.map((tile) => {
-            const Overlay = tile.overlay;
-            return (
-              <div
-                key={tile.key}
-                class="overlay-grid__item"
-                data-kind={tile.kind}
-                data-name={tile.name}
-              >
-                <Overlay {...(tile.overlayProps ?? {})} />
-              </div>
-            );
-          })
-          : (
-            <p class="overlay-grid__empty">
-              No cockpit overlays are enabled for this host.
-            </p>
-          )}
-      </div>
+      {overlays.length > 0
+        ? (
+          <OverlayGrid>
+            {overlays.map((tile) => {
+              const Overlay = tile.overlay;
+              return (
+                <div
+                  key={tile.key}
+                  class="overlay-grid__item"
+                  data-kind={tile.kind}
+                  data-name={tile.name}
+                  data-overlay-key={tile.key}
+                >
+                  <Overlay {...(tile.overlayProps ?? {})} />
+                </div>
+              );
+            })}
+          </OverlayGrid>
+        )
+        : (
+          <p class="overlay-grid__empty">
+            No cockpit overlays are enabled for this host.
+          </p>
+        )}
     </section>
   );
 });
