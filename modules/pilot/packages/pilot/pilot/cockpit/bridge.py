@@ -7,7 +7,7 @@ import contextlib
 import logging
 import signal
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -50,6 +50,53 @@ _MODULE_TOPIC_MAP: Dict[str, str] = {
 
 class CockpitError(RuntimeError):
     """Raised when websocket operations cannot be satisfied."""
+
+
+@dataclass(frozen=True)
+class TopicRelaySpec:
+    """Declarative description of a ROS topic bridged to the cockpit."""
+
+    message_type: Type[Any]
+    serializer: Callable[[Any], Dict[str, Any]]
+    qos_profile: Any
+
+
+def _make_transcript_payload(msg: String) -> Dict[str, Any]:
+    return {"data": msg.data}
+
+
+def _make_imu_payload(msg: Imu) -> Dict[str, Any]:
+    return {
+        "header": {
+            "frame_id": msg.header.frame_id,
+            "stamp": {
+                "sec": msg.header.stamp.sec,
+                "nanosec": msg.header.stamp.nanosec,
+            },
+        },
+        "orientation": {
+            "x": msg.orientation.x,
+            "y": msg.orientation.y,
+            "z": msg.orientation.z,
+            "w": msg.orientation.w,
+        },
+        "angular_velocity": {
+            "x": msg.angular_velocity.x,
+            "y": msg.angular_velocity.y,
+            "z": msg.angular_velocity.z,
+        },
+        "linear_acceleration": {
+            "x": msg.linear_acceleration.x,
+            "y": msg.linear_acceleration.y,
+            "z": msg.linear_acceleration.z,
+        },
+    }
+
+
+_SIMPLE_TOPIC_RELAYS: Dict[str, TopicRelaySpec] = {
+    "/audio/transcript/final": TopicRelaySpec(String, _make_transcript_payload, 10),
+    "/imu/data": TopicRelaySpec(Imu, _make_imu_payload, qos_profile_sensor_data),
+}
 
 
 @dataclass
@@ -180,7 +227,16 @@ class CockpitBridgeNode(Node):
         if entry is not None:
             entry.ref_count += 1
         else:
-            subscription = self._create_subscription(topic)
+            relay = _SIMPLE_TOPIC_RELAYS.get(topic)
+            if relay is not None:
+                subscription = self.create_subscription(
+                    relay.message_type,
+                    topic,
+                    lambda msg, spec=relay, name=topic: self._handle_simple_topic(name, spec, msg),
+                    relay.qos_profile,
+                )
+            else:
+                subscription = self._create_subscription(topic)
             self._topic_subscriptions[topic] = SubscriptionEntry(ref_count=1, subscription=subscription)
         self._register_module_subscription(topic)
         return []
@@ -204,10 +260,6 @@ class CockpitBridgeNode(Node):
         self._unregister_module_subscription(topic)
 
     def _create_subscription(self, topic: str) -> Subscription:
-        if topic == "/audio/transcript/final":
-            return self.create_subscription(String, topic, self._on_transcript, 10)
-        if topic == "/imu/data":
-            return self.create_subscription(Imu, topic, self._on_imu, qos_profile_sensor_data)
         if topic in self._image_topics:
             return self.create_subscription(
                 Image,
@@ -217,33 +269,20 @@ class CockpitBridgeNode(Node):
             )
         raise CockpitError(f"unsupported topic '{topic}'")
 
-    def _on_transcript(self, msg: String) -> None:
-        self.enqueue_broadcast(make_message("/audio/transcript/final", {"data": msg.data}))
-
-    def _on_imu(self, msg: Imu) -> None:
-        payload = {
-            "header": {
-                "frame_id": msg.header.frame_id,
-                "stamp": {"sec": msg.header.stamp.sec, "nanosec": msg.header.stamp.nanosec},
-            },
-            "orientation": {
-                "x": msg.orientation.x,
-                "y": msg.orientation.y,
-                "z": msg.orientation.z,
-                "w": msg.orientation.w,
-            },
-            "angular_velocity": {
-                "x": msg.angular_velocity.x,
-                "y": msg.angular_velocity.y,
-                "z": msg.angular_velocity.z,
-            },
-            "linear_acceleration": {
-                "x": msg.linear_acceleration.x,
-                "y": msg.linear_acceleration.y,
-                "z": msg.linear_acceleration.z,
-            },
-        }
-        self.enqueue_broadcast(make_message("/imu/data", payload))
+    def _handle_simple_topic(self, topic: str, spec: TopicRelaySpec, msg: Any) -> None:
+        try:
+            payload = spec.serializer(msg)
+        except Exception:
+            self.get_logger().exception("failed to serialise payload for topic %s", topic)
+            return
+        if not isinstance(payload, dict):
+            self.get_logger().warning(
+                "serializer for topic %s returned %s; expected dict",
+                topic,
+                type(payload).__name__,
+            )
+            return
+        self.enqueue_broadcast(make_message(topic, payload))
 
     def _on_image(self, topic: str, msg: Image) -> None:
         result = self._image_encoder.encode(topic, msg)
