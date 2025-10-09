@@ -6,6 +6,11 @@ import {
   isBrowser,
   readBootstrappedConfig,
 } from "./cockpit_url.ts";
+import {
+  clearCockpitConnectionError,
+  recordCockpitConnectionError,
+  updateCockpitConnectionStatus,
+} from "./cockpit_signals.ts";
 
 export type ConnectionStatus =
   | "idle"
@@ -167,6 +172,8 @@ export class CockpitClient {
       reconnectDelayMs: opts.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
     };
 
+    updateCockpitConnectionStatus(this.status);
+
     if (isBrowser && this.options.autoReconnect) {
       // Eagerly connect so hooks receive status updates.
       queueMicrotask(() => this.connect());
@@ -192,6 +199,8 @@ export class CockpitClient {
 
     if (!this.options.url) {
       console.warn("CockpitClient cannot connect without a URL.");
+      recordCockpitConnectionError("missing cockpit websocket URL");
+      this.setStatus("error");
       return;
     }
 
@@ -199,17 +208,23 @@ export class CockpitClient {
 
     this.manualDisconnect = false;
     this.setStatus("connecting");
+    console.debug(
+      "CockpitClient connecting to",
+      this.options.url,
+    );
     try {
       this.socket = new WebSocket(this.options.url);
     } catch (error) {
       console.error("Failed to open cockpit websocket", error);
       this.setStatus("error");
+      recordCockpitConnectionError("failed to open cockpit websocket");
       this.scheduleReconnect();
       return;
     }
 
     this.socket.addEventListener("open", () => {
       this.setStatus("open");
+      clearCockpitConnectionError();
       // Resubscribe to all topics when the connection is re-established.
       for (const [topic, record] of this.subscriptions.entries()) {
         record.pending = true;
@@ -217,7 +232,11 @@ export class CockpitClient {
       }
     });
 
-    this.socket.addEventListener("close", () => {
+    this.socket.addEventListener("close", (event) => {
+      console.debug(
+        "Cockpit websocket closed",
+        { code: event.code, wasClean: event.wasClean },
+      );
       this.setStatus("closed");
       if (this.options.autoReconnect && !this.manualDisconnect) {
         this.scheduleReconnect();
@@ -227,9 +246,11 @@ export class CockpitClient {
     this.socket.addEventListener("error", (event) => {
       console.error("Cockpit websocket error", event);
       this.setStatus("error");
+      recordCockpitConnectionError("cockpit websocket error");
     });
 
     this.socket.addEventListener("message", (event) => {
+      console.debug("Cockpit websocket message", { type: typeof event.data });
       void this.handleInbound(event.data);
     });
   }
@@ -240,6 +261,7 @@ export class CockpitClient {
     if (this.socket) {
       this.socket.close();
       this.socket = null;
+      this.setStatus("closed");
     }
   }
 
@@ -327,6 +349,7 @@ export class CockpitClient {
         : payloadRaw as WsOutboundMessage;
     } catch (error) {
       console.warn("Failed to parse cockpit message", error, raw);
+      recordCockpitConnectionError("failed to parse cockpit message");
       return;
     }
 
@@ -353,6 +376,9 @@ export class CockpitClient {
         console.error(
           "Cockpit reported error",
           payload.reason ?? "unknown error",
+        );
+        recordCockpitConnectionError(
+          payload.reason ?? "unknown cockpit error",
         );
         break;
       }
@@ -396,6 +422,7 @@ export class CockpitClient {
   private setStatus(status: ConnectionStatus): void {
     if (this.status === status) return;
     this.status = status;
+    updateCockpitConnectionStatus(status);
     for (const listener of this.statusListeners) {
       try {
         listener(status);
@@ -410,6 +437,11 @@ export class CockpitClient {
       return;
     }
     this.clearReconnectTimer();
+    console.debug(
+      "CockpitClient scheduling reconnect in",
+      this.options.reconnectDelayMs,
+      "ms",
+    );
     this.reconnectTimer = globalThis.setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
