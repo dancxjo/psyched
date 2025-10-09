@@ -47,7 +47,7 @@ body {
 }
 
 .content {
-  width: min(1100px, 100%);
+  width: 100%;
   display: grid;
   gap: 2rem;
 }
