@@ -1,6 +1,7 @@
 import type { ComponentType } from "preact";
 
 import type { Accent } from "@pilot/components/dashboard.tsx";
+import { listModules, type ListModulesOptions } from "../server/modules.ts";
 
 import PilotOverviewIsland from "../../../pilot/islands/PilotOverviewIsland.tsx";
 import ChatModulePanelIsland from "../../../../chat/pilot/islands/ChatModulePanelIsland.tsx";
@@ -243,3 +244,21 @@ export const dashboardTiles: ReadonlyArray<DashboardTileDefinition> = [
   ...moduleTiles,
   ...serviceTiles,
 ];
+
+export type ModuleTileFilterOptions = ListModulesOptions;
+
+export function moduleTilesForHost(
+  options: ModuleTileFilterOptions = {},
+): DashboardTileDefinition[] {
+  const enabled = new Set(listModules(options));
+  if (enabled.size === 0) {
+    return [];
+  }
+  return moduleTiles.filter((tile) => enabled.has(tile.name));
+}
+
+export function dashboardTilesForHost(
+  options: ModuleTileFilterOptions = {},
+): DashboardTileDefinition[] {
+  return [...moduleTilesForHost(options), ...serviceTiles];
+}

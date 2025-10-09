@@ -52,3 +52,48 @@ Deno.test("returns running and stopped module statuses", () => {
     Deno.removeSync(tempDir, { recursive: true });
   }
 });
+
+Deno.test("moduleStatuses filters modules using host manifest when provided", () => {
+  const tempDir = Deno.makeTempDirSync();
+  try {
+    const modulesDir = join(tempDir, "modules");
+    const workspaceDir = join(tempDir, "work");
+    const hostsDir = join(tempDir, "hosts");
+    Deno.mkdirSync(modulesDir, { recursive: true });
+    Deno.mkdirSync(workspaceDir, { recursive: true });
+    Deno.mkdirSync(hostsDir, { recursive: true });
+    Deno.mkdirSync(join(workspaceDir, ".psh"), { recursive: true });
+
+    for (const name of ["alpha", "bravo", "charlie"]) {
+      Deno.mkdirSync(join(modulesDir, name));
+    }
+
+    const config = {
+      host: { modules: ["alpha"] },
+      modules: {
+        alpha: { launch: true },
+        bravo: { launch: false },
+        charlie: { launch: { enabled: true } },
+      },
+    };
+    Deno.writeTextFileSync(
+      join(hostsDir, "test-host.json"),
+      JSON.stringify(config, null, 2),
+    );
+
+    const statuses = moduleStatuses({
+      repoRoot: tempDir,
+      modulesRoot: modulesDir,
+      workspaceRoot: workspaceDir,
+      hostsDir,
+      hostname: "test-host",
+    });
+
+    assertEquals(statuses, [
+      { name: "alpha", status: "stopped" },
+      { name: "charlie", status: "stopped" },
+    ]);
+  } finally {
+    Deno.removeSync(tempDir, { recursive: true });
+  }
+});

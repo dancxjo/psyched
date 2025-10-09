@@ -1,10 +1,11 @@
 import { Card, Panel } from "@pilot/components/dashboard.tsx";
 
 import DashboardTile from "../components/DashboardTile.tsx";
-import { moduleTiles, serviceTiles } from "../lib/dashboard/tiles.ts";
+import { moduleTilesForHost, serviceTiles } from "../lib/dashboard/tiles.ts";
 import { define } from "../utils.ts";
 
 export default define.page(() => {
+  const moduleTiles = moduleTilesForHost();
   const moduleCount = moduleTiles.length;
   const serviceCount = serviceTiles.length;
 
