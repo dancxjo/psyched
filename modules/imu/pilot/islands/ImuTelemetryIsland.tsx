@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useReducer, useState } from "preact/hooks";
 
 import { CONNECTION_STATUS_LABELS } from "@pilot/components/dashboard.tsx";
 import { useCockpitTopic } from "@pilot/lib/cockpit.ts";
@@ -52,6 +52,13 @@ export interface ImuTelemetryIslandProps {
   topic?: string;
 }
 
+/**
+ * Interval in milliseconds used to keep the IMU readout refreshed even when no
+ * new ROS messages are flowing. This drives the relative time badge so
+ * operators can see telemetry staleness at a glance.
+ */
+const REFRESH_INTERVAL_MS = 1_000;
+
 export default function ImuTelemetryIsland({
   fallback,
   title = "IMU Telemetry",
@@ -63,10 +70,12 @@ export default function ImuTelemetryIsland({
   }), [fallback]);
 
   const { data, status, error } = useCockpitTopic<RosImuMessage>(topic, {
+    autoConnect: true, // Eagerly connect so the cockpit bridge begins streaming right away.
     replay: true,
   });
 
   const [sample, setSample] = useState<ImuSample>(fallbackSample);
+  const [, forceRefresh] = useReducer((count: number) => count + 1, 0);
 
   useEffect(() => {
     setSample((previous) => ({ ...previous, ...fallbackSample }));
@@ -83,6 +92,21 @@ export default function ImuTelemetryIsland({
     }
     setSample((previous) => ({ ...previous, ...mapped }));
   }, [data]);
+
+  useEffect(() => {
+    if (
+      typeof globalThis.setInterval !== "function" ||
+      typeof globalThis.clearInterval !== "function"
+    ) {
+      return;
+    }
+    const interval = globalThis.setInterval(() => {
+      // Force a re-render so relative timestamps continue updating even when
+      // telemetry is momentarily quiet.
+      forceRefresh();
+    }, REFRESH_INTERVAL_MS);
+    return () => globalThis.clearInterval(interval);
+  }, [forceRefresh]);
 
   const connectionLabel = CONNECTION_STATUS_LABELS[status] ?? "Unknown";
   const statusText = useMemo(() => (
@@ -248,4 +272,5 @@ function composeStatus(
 export const __test__ = {
   mapMessageToSample,
   quaternionToEuler,
+  composeStatus,
 };
