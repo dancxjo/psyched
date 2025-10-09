@@ -1,5 +1,4 @@
 import { assert, assertEquals } from "$std/testing/asserts.ts";
-import { effect } from "@preact/signals";
 import {
   clearCockpitConnectionError,
   cockpitConnectionError,
@@ -15,7 +14,7 @@ import {
 Deno.test("updates propagate to dependent computed signals", () => {
   resetCockpitSignals();
   const observed: Array<{ status: string; connected: boolean }> = [];
-  const dispose = effect(() => {
+  const unsubscribe = cockpitConnectionStatus.subscribe(() => {
     observed.push({
       status: cockpitConnectionStatus.value,
       connected: cockpitIsConnected.value,
@@ -23,7 +22,7 @@ Deno.test("updates propagate to dependent computed signals", () => {
   });
   updateCockpitConnectionStatus("connecting");
   updateCockpitConnectionStatus("open");
-  dispose();
+  unsubscribe();
   assertEquals(observed, [
     { status: "idle", connected: false },
     { status: "connecting", connected: false },
