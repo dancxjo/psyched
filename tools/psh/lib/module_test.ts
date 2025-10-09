@@ -41,7 +41,6 @@ Deno.test("composeLaunchCommand directs streams through the prefix helper", () =
     launchScript: "/tmp/launch.sh",
     logFile: "/var/log/demo module.log",
     module: "demo module",
-    ttyPath: null,
   });
   const prefixScript = join(
     repoRoot(),
@@ -56,33 +55,11 @@ Deno.test("composeLaunchCommand directs streams through the prefix helper", () =
   );
   assertStringIncludes(
     command,
-    `> >('${prefixScript}' 'demo module' 'stdout' '/var/log/demo module.log')`,
+    `> >('${prefixScript}' 'demo module' 'stdout' | tee -a '/var/log/demo module.log')`,
   );
   assertStringIncludes(
     command,
-    `2> >('${prefixScript}' 'demo module' 'stderr' '/var/log/demo module.log')`,
-  );
-});
-
-Deno.test("composeLaunchCommand includes tty forwarding when provided", () => {
-  const command = composeLaunchCommand({
-    envCommands: [],
-    launchScript: "/tmp/launch.sh",
-    logFile: "/var/log/demo module.log",
-    module: "demo module",
-    ttyPath: "/dev/pts/9",
-    callerPid: 42,
-  });
-  const prefixScript = join(
-    repoRoot(),
-    "tools",
-    "psh",
-    "scripts",
-    "prefix_logs.sh",
-  );
-  assertStringIncludes(
-    command,
-    `> >('${prefixScript}' 'demo module' 'stdout' '/var/log/demo module.log' '/dev/pts/9' '42')`,
+    `2> >('${prefixScript}' 'demo module' 'stderr' | tee -a '/var/log/demo module.log' >&2)`,
   );
 });
 

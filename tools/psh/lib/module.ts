@@ -152,8 +152,6 @@ export interface ComposeLaunchCommandOptions {
   launchScript: string;
   logFile: string;
   module: string;
-  ttyPath?: string | null;
-  callerPid?: number;
 }
 
 const EARLY_EXIT_WINDOW_MS = 500;
@@ -198,47 +196,6 @@ function logExitSummary(module: string, status: Deno.CommandStatus): void {
   console.log(formatExitSummary(module, status));
 }
 
-function stdoutRid(): number | null {
-  const candidate = (Deno.stdout as { rid?: number | undefined }).rid;
-  return typeof candidate === "number" ? candidate : null;
-}
-
-function stdoutIsTerminal(): boolean {
-  const stdout = Deno.stdout as { isTerminal?: () => boolean };
-  try {
-    if (typeof stdout.isTerminal === "function") {
-      return stdout.isTerminal();
-    }
-  } catch (_error) {
-    return false;
-  }
-  const rid = stdoutRid();
-  if (rid === null) return false;
-  const legacy =
-    (Deno as unknown as { isatty?: (rid: number) => boolean }).isatty;
-  if (typeof legacy === "function") {
-    try {
-      return legacy.call(Deno, rid);
-    } catch (_error) {
-      return false;
-    }
-  }
-  return false;
-}
-
-function detectStdoutTty(): string | null {
-  if (!stdoutIsTerminal()) return null;
-  const rid = stdoutRid();
-  if (rid === null) return null;
-  if (Deno.build.os !== "linux") return null;
-  try {
-    const linkTarget = Deno.readLinkSync(`/proc/self/fd/${rid}`);
-    return linkTarget.startsWith("/dev/") ? linkTarget : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
 /**
  * Build the shell pipeline used to bootstrap a module launch.
  *
@@ -257,32 +214,17 @@ export function composeLaunchCommand(
     "scripts",
     "prefix_logs.sh",
   );
-  const ttyPath = options.ttyPath === undefined
-    ? detectStdoutTty()
-    : options.ttyPath;
-  const callerPid = options.callerPid ?? (ttyPath ? Deno.pid : undefined);
-
   const composeStreamCommand = (stream: "stdout" | "stderr") => {
-    const parts = [
+    return [
       shellEscape(prefixScript),
       shellEscape(module),
       shellEscape(stream),
-      shellEscape(logFile),
-    ];
-    if (ttyPath) {
-      parts.push(shellEscape(ttyPath));
-      if (callerPid !== undefined) {
-        parts.push(shellEscape(String(callerPid)));
-      }
-    }
-    return parts.join(" ");
+    ].join(" ");
   };
 
   const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${
-      composeStreamCommand("stdout")
-    }) ` +
-    `2> >(${composeStreamCommand("stderr")})`;
+    `exec bash ${shellEscape(launchScript)} > >(${composeStreamCommand("stdout")} | tee -a ${shellEscape(logFile)}) ` +
+    `2> >(${composeStreamCommand("stderr")} | tee -a ${shellEscape(logFile)} >&2)`;
   const parts = [...envCommands, launch];
   return parts.join(" && ");
 }
