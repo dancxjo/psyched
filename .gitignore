@@ -97,3 +97,5 @@ modules/pilot/frontend/components/PilotOverview.tsx
 modules/pilot/frontend/components/ServiceOverview.tsx
 modules/pilot/frontend/islands/PilotOverviewIsland.tsx
 modules/pilot/frontend/routes/modules/pilot.tsx
+modules/pilot/frontend/islands/ImuTelemetryIsland_test.ts
+modules/pilot/frontend/islands/ImuTelemetryIsland.tsx
