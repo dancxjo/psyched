@@ -102,3 +102,5 @@ modules/pilot/frontend/islands/ImuTelemetryIsland.tsx
 modules/pilot/frontend/components/FootControlPanel.tsx
 modules/pilot/frontend/islands/FootControlPanelIsland.tsx
 modules/pilot/frontend/routes/modules/foot.tsx
+modules/pilot/frontend/components/KinectStreamPanel.tsx
+modules/pilot/frontend/islands/KinectStreamPanelIsland.tsx
