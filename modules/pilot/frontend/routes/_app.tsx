@@ -1,9 +1,7 @@
-import { CockpitProvider } from "@pilot/lib/cockpit.ts";
 import { define } from "../utils.ts";
 
 export default define.page(function App({ Component, state }) {
   const { cockpit, navigation } = state;
-  const cockpitUrl = cockpit?.url?.trim();
   const navItems = navigation && navigation.length > 0 ? navigation : [
     { href: "/", label: "Home" },
     { href: "/modules/pilot", label: "Pilot" },
@@ -26,27 +24,23 @@ export default define.page(function App({ Component, state }) {
         data-cockpit-protocol={cockpit?.protocol}
         data-cockpit-url={cockpit?.url}
       >
-        <CockpitProvider
-          options={cockpitUrl ? { url: cockpitUrl } : undefined}
-        >
-          <header class="site-header">
-            <div class="site-header__inner">
-              <a class="site-brand" href="/">Psyched Pilot</a>
-              <nav class="site-nav" aria-label="Primary navigation">
-                <ul class="site-nav__list">
-                  {navItems.map((link) => (
-                    <li key={link.href}>
-                      <a href={link.href}>{link.label}</a>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            </div>
-          </header>
-          <main class="site-main">
-            <Component />
-          </main>
-        </CockpitProvider>
+        <header class="site-header">
+          <div class="site-header__inner">
+            <a class="site-brand" href="/">Psyched Pilot</a>
+            <nav class="site-nav" aria-label="Primary navigation">
+              <ul class="site-nav__list">
+                {navItems.map((link) => (
+                  <li key={link.href}>
+                    <a href={link.href}>{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </div>
+        </header>
+        <main class="site-main">
+          <Component />
+        </main>
       </body>
     </html>
   );

@@ -1,16 +1,9 @@
-import { createContext, createElement } from "preact";
-import type { ComponentChildren } from "preact";
-import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   defaultCockpitUrl,
   isBrowser,
   readBootstrappedConfig,
 } from "./cockpit_url.ts";
-import {
-  clearCockpitConnectionError,
-  recordCockpitConnectionError,
-  updateCockpitConnectionStatus,
-} from "./cockpit_signals.ts";
 
 export type ConnectionStatus =
   | "idle"
@@ -52,108 +45,13 @@ interface SubscribeOptions {
 
 const DEFAULT_RECONNECT_DELAY_MS = 2000;
 
-type ResolvedCockpitClientOptions = {
-  url?: string;
-  autoReconnect: boolean;
-  reconnectDelayMs: number;
-};
-
-const CockpitClientContext = createContext<CockpitClient | null>(null);
-const CockpitStatusContext = createContext<ConnectionStatus>("idle");
-
-function resolveProviderOptions(
-  options?: CockpitClientOptions,
-): ResolvedCockpitClientOptions {
-  return {
-    url: options?.url,
-    autoReconnect: options?.autoReconnect ?? true,
-    reconnectDelayMs: options?.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
-  };
-}
-
-function serializeOptions(options: ResolvedCockpitClientOptions): string {
-  return [
-    options.url ?? "",
-    options.autoReconnect ? "1" : "0",
-    String(options.reconnectDelayMs),
-  ].join("|");
-}
-
-export interface CockpitProviderProps {
-  children: ComponentChildren;
-  options?: CockpitClientOptions;
-  autoConnect?: boolean;
-}
-
-export function CockpitProvider({
-  children,
-  options,
-  autoConnect = true,
-}: CockpitProviderProps) {
-  const resolvedOptions = useMemo(
-    () => resolveProviderOptions(options),
-    [options?.url, options?.autoReconnect, options?.reconnectDelayMs],
-  );
-  const optionsSignature = useMemo(
-    () => serializeOptions(resolvedOptions),
-    [resolvedOptions],
-  );
-  const signatureRef = useRef(optionsSignature);
-  const [client, setClient] = useState<CockpitClient>(() =>
-    createCockpitClient(resolvedOptions)
-  );
-  const [status, setStatus] = useState<ConnectionStatus>(
-    client.connectionStatus,
-  );
-
-  useEffect(() => {
-    if (signatureRef.current === optionsSignature) {
-      return;
-    }
-    signatureRef.current = optionsSignature;
-    setClient((previous) => {
-      previous?.disconnect();
-      return createCockpitClient(resolvedOptions);
-    });
-  }, [optionsSignature, resolvedOptions]);
-
-  useEffect(() => {
-    setStatus(client.connectionStatus);
-    return client.onStatusChange((next) => {
-      setStatus(next);
-    });
-  }, [client]);
-
-  useEffect(() => {
-    if (!autoConnect) {
-      return;
-    }
-    client.connect();
-    return () => {
-      client.disconnect();
-    };
-  }, [client, autoConnect]);
-
-  return createElement(
-    CockpitClientContext.Provider,
-    { value: client },
-    createElement(
-      CockpitStatusContext.Provider,
-      { value: status },
-      children,
-    ),
-  );
-}
-
-export function useCockpitClient(): CockpitClient {
-  const client = useContext(CockpitClientContext);
-  return client ?? getDefaultCockpitClient();
-}
-
-export function useCockpitConnectionStatus(): ConnectionStatus {
-  return useContext(CockpitStatusContext);
-}
-
+/**
+ * Lightweight websocket client that mirrors the cockpit bridge API.
+ *
+ * The client keeps reconnection logic and topic replay in one place so hooks
+ * such as {@link useCockpitTopic} stay tiny. Consumers typically grab the
+ * shared instance exposed by {@link getDefaultCockpitClient}.
+ */
 export class CockpitClient {
   private socket: WebSocket | null = null;
   private status: ConnectionStatus = "idle";
@@ -171,8 +69,6 @@ export class CockpitClient {
       autoReconnect: opts.autoReconnect ?? true,
       reconnectDelayMs: opts.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
     };
-
-    updateCockpitConnectionStatus(this.status);
 
     if (isBrowser && this.options.autoReconnect) {
       // Eagerly connect so hooks receive status updates.
@@ -199,7 +95,6 @@ export class CockpitClient {
 
     if (!this.options.url) {
       console.warn("CockpitClient cannot connect without a URL.");
-      recordCockpitConnectionError("missing cockpit websocket URL");
       this.setStatus("error");
       return;
     }
@@ -208,23 +103,17 @@ export class CockpitClient {
 
     this.manualDisconnect = false;
     this.setStatus("connecting");
-    console.debug(
-      "CockpitClient connecting to",
-      this.options.url,
-    );
     try {
       this.socket = new WebSocket(this.options.url);
     } catch (error) {
       console.error("Failed to open cockpit websocket", error);
       this.setStatus("error");
-      recordCockpitConnectionError("failed to open cockpit websocket");
       this.scheduleReconnect();
       return;
     }
 
     this.socket.addEventListener("open", () => {
       this.setStatus("open");
-      clearCockpitConnectionError();
       // Resubscribe to all topics when the connection is re-established.
       for (const [topic, record] of this.subscriptions.entries()) {
         record.pending = true;
@@ -232,11 +121,7 @@ export class CockpitClient {
       }
     });
 
-    this.socket.addEventListener("close", (event) => {
-      console.debug(
-        "Cockpit websocket closed",
-        { code: event.code, wasClean: event.wasClean },
-      );
+    this.socket.addEventListener("close", () => {
       this.setStatus("closed");
       if (this.options.autoReconnect && !this.manualDisconnect) {
         this.scheduleReconnect();
@@ -246,11 +131,9 @@ export class CockpitClient {
     this.socket.addEventListener("error", (event) => {
       console.error("Cockpit websocket error", event);
       this.setStatus("error");
-      recordCockpitConnectionError("cockpit websocket error");
     });
 
     this.socket.addEventListener("message", (event) => {
-      console.debug("Cockpit websocket message", { type: typeof event.data });
       void this.handleInbound(event.data);
     });
   }
@@ -349,7 +232,6 @@ export class CockpitClient {
         : payloadRaw as WsOutboundMessage;
     } catch (error) {
       console.warn("Failed to parse cockpit message", error, raw);
-      recordCockpitConnectionError("failed to parse cockpit message");
       return;
     }
 
@@ -377,9 +259,7 @@ export class CockpitClient {
           "Cockpit reported error",
           payload.reason ?? "unknown error",
         );
-        recordCockpitConnectionError(
-          payload.reason ?? "unknown cockpit error",
-        );
+        this.setStatus("error");
         break;
       }
       case "ok":
@@ -422,7 +302,6 @@ export class CockpitClient {
   private setStatus(status: ConnectionStatus): void {
     if (this.status === status) return;
     this.status = status;
-    updateCockpitConnectionStatus(status);
     for (const listener of this.statusListeners) {
       try {
         listener(status);
@@ -437,11 +316,6 @@ export class CockpitClient {
       return;
     }
     this.clearReconnectTimer();
-    console.debug(
-      "CockpitClient scheduling reconnect in",
-      this.options.reconnectDelayMs,
-      "ms",
-    );
     this.reconnectTimer = globalThis.setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
@@ -471,6 +345,30 @@ export function getDefaultCockpitClient(): CockpitClient {
   return defaultClient;
 }
 
+/**
+ * Returns the shared cockpit websocket client for the current component tree.
+ *
+ * Components rarely need to call this directly—{@link useCockpitTopic}
+ * subscribes on its own—but the helper is handy when issuing imperative
+ * publishes from event handlers.
+ */
+export function useCockpitClient(): CockpitClient {
+  const [client] = useState(() => getDefaultCockpitClient());
+  return client;
+}
+
+/**
+ * Reactive hook that exposes the cockpit client's connection status.
+ */
+export function useCockpitConnectionStatus(): ConnectionStatus {
+  const client = useCockpitClient();
+  const [status, setStatus] = useState<ConnectionStatus>(
+    client.connectionStatus,
+  );
+  useEffect(() => client.onStatusChange(setStatus), [client]);
+  return status;
+}
+
 interface UseTopicOptions<T> {
   initialValue?: T;
   /** Disable automatic connection attempts when subscribing. */
@@ -479,13 +377,18 @@ interface UseTopicOptions<T> {
   replay?: boolean;
 }
 
+/**
+ * Subscribes to a cockpit topic and returns the latest payload.
+ *
+ * The hook automatically reconnects when the websocket drops and surfaces the
+ * connection status alongside the most recent message. Pass a custom client to
+ * target alternative bridges (for example during integration tests).
+ */
 export function useCockpitTopic<T = unknown>(
   topic: string,
   options: UseTopicOptions<T> = {},
-  explicitClient?: CockpitClient,
+  client: CockpitClient = getDefaultCockpitClient(),
 ) {
-  const contextClient = useContext(CockpitClientContext);
-  const client = explicitClient ?? contextClient ?? getDefaultCockpitClient();
   const { initialValue, autoConnect = true, replay = true } = options;
   const [payload, setPayload] = useState<T | undefined>(initialValue);
   const [status, setStatus] = useState<ConnectionStatus>(
