@@ -366,6 +366,31 @@ main {
   }
 }
 
+.overlay-grid {
+  display: grid;
+  gap: var(--brand-spacing-lg);
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 70rem) {
+  .overlay-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.overlay-grid__item {
+  min-width: 0;
+}
+
+.overlay-grid__empty {
+  margin: 0;
+  padding: var(--brand-spacing-lg);
+  border-radius: var(--brand-radius-md);
+  border: 1px dashed var(--brand-border);
+  color: var(--brand-text-muted);
+  text-align: center;
+}
+
 .dashboard-tile__helper {
   margin: 0;
   color: var(--brand-text-muted);
