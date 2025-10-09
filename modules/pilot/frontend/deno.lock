@@ -29,8 +29,6 @@
     "npm:@mjackson/node-fetch-server@0.7": "0.7.0",
     "npm:@opentelemetry/api@^1.9.0": "1.9.0",
     "npm:@preact/preset-vite@^2.10.2": "2.10.2_@babel+core@7.28.4_vite@7.1.9__picomatch@4.0.3_preact@10.27.2",
-    "npm:@preact/signals-core@^1.12.1": "1.12.1",
-    "npm:@preact/signals@^2.3.2": "2.3.2_preact@10.27.2",
     "npm:@prefresh/vite@^2.4.8": "2.4.10_preact@10.27.2_vite@7.1.9__picomatch@4.0.3",
     "npm:dependency-graph@1.0.0": "1.0.0",
     "npm:esbuild-wasm@0.25.7": "0.25.7",
@@ -635,16 +633,6 @@
         "picocolors",
         "vite",
         "vite-prerender-plugin"
-      ]
-    },
-    "@preact/signals-core@1.12.1": {
-      "integrity": "sha512-BwbTXpj+9QutoZLQvbttRg5x3l5468qaV2kufh+51yha1c53ep5dY4kTuZR35+3pAZxpfQerGJiQqg34ZNZ6uA=="
-    },
-    "@preact/signals@2.3.2_preact@10.27.2": {
-      "integrity": "sha512-Q22avIn4z0BQnmFeo6Y5HCnJTo8VufN84zN51OtqeNgZOVCYgdwEOcJKVX1x/IrjRVxUnOy6Ubn7H5aVFujXaQ==",
-      "dependencies": [
-        "@preact/signals-core",
-        "preact"
       ]
     },
     "@prefresh/babel-plugin@0.5.2": {
@@ -1312,8 +1300,6 @@
       "jsr:@fresh/core@^2.1.2",
       "jsr:@fresh/plugin-vite@^1.0.4",
       "npm:@preact/preset-vite@^2.10.2",
-      "npm:@preact/signals-core@^1.12.1",
-      "npm:@preact/signals@^2.3.2",
       "npm:dependency-graph@1.0.0",
       "npm:preact@^10.27.2",
       "npm:vite@^7.1.3"
