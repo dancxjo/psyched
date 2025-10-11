@@ -4,9 +4,14 @@ from __future__ import annotations
 import asyncio
 import errno
 import contextlib
+import json
 import logging
+import mimetypes
+import os
 import signal
 from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 import rclpy
@@ -486,8 +491,215 @@ class WebsocketServer:
         await client.websocket.send(make_ok().to_json())
 
 
-async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
-    """Entry point that spins ROS alongside the websocket server."""
+class HttpServer:
+    """HTTP server that serves the cockpit UI static files."""
+
+    def __init__(self, node: CockpitBridgeNode, www_dir: str, host: str = "0.0.0.0", port: int = 8080) -> None:
+        self._node = node
+        self._www_dir = Path(www_dir).resolve()
+        self._host = host
+        self._port = port
+        self._server: Optional[asyncio.base_events.Server] = None
+
+    async def start(self) -> None:
+        """Start the HTTP server."""
+        self._server = await asyncio.start_server(
+            self._handle_client,
+            self._host,
+            self._port,
+        )
+        _LOGGER.info("HTTP server listening on http://%s:%d", self._host, self._port)
+
+    async def stop(self) -> None:
+        """Stop the HTTP server."""
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Handle HTTP client connection."""
+        try:
+            # Read the HTTP request
+            request_line = await reader.readline()
+            if not request_line:
+                writer.close()
+                await writer.wait_closed()
+                return
+
+            request_line = request_line.decode('utf-8').strip()
+            headers = {}
+            while True:
+                line = await reader.readline()
+                if not line or line == b'\r\n':
+                    break
+                header = line.decode('utf-8').strip()
+                if ':' in header:
+                    key, value = header.split(':', 1)
+                    headers[key.strip().lower()] = value.strip()
+
+            # Parse request
+            parts = request_line.split()
+            if len(parts) < 2:
+                await self._send_response(writer, 400, b'Bad Request')
+                return
+
+            method = parts[0]
+            path = parts[1]
+
+            if method != 'GET':
+                await self._send_response(writer, 405, b'Method Not Allowed')
+                return
+
+            # Handle API endpoint for modules list
+            if path == '/api/modules':
+                await self._handle_modules_api(writer)
+                return
+
+            # Serve static files
+            await self._serve_file(writer, path)
+
+        except Exception as e:
+            _LOGGER.exception("Error handling HTTP request: %s", e)
+            try:
+                await self._send_response(writer, 500, b'Internal Server Error')
+            except Exception:
+                pass
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    async def _handle_modules_api(self, writer: asyncio.StreamWriter) -> None:
+        """Handle the /api/modules endpoint."""
+        try:
+            # Try to read the host config to get active modules
+            modules = self._get_active_modules()
+            response_data = json.dumps({'modules': modules}).encode('utf-8')
+            
+            headers = [
+                'HTTP/1.1 200 OK',
+                'Content-Type: application/json',
+                f'Content-Length: {len(response_data)}',
+                'Connection: close',
+                '',
+                ''
+            ]
+            writer.write('\r\n'.join(headers).encode('utf-8'))
+            writer.write(response_data)
+            await writer.drain()
+        except Exception as e:
+            _LOGGER.exception("Error in modules API: %s", e)
+            await self._send_response(writer, 500, b'Internal Server Error')
+
+    def _get_active_modules(self) -> List[str]:
+        """Get list of active modules from host config."""
+        # Try to find and read host config
+        try:
+            import socket
+            hostname = socket.gethostname()
+            config_dir = Path(__file__).parent.parent.parent.parent.parent.parent.parent / 'hosts'
+            config_file = config_dir / f'{hostname}.json'
+            
+            if config_file.exists():
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                    host_modules = config.get('host', {}).get('modules', [])
+                    module_configs = config.get('modules', {})
+                    
+                    # Filter to modules that have launch enabled
+                    active = []
+                    for module in host_modules:
+                        if module == 'pilot':
+                            active.append(module)
+                            continue
+                        mod_config = module_configs.get(module, {})
+                        if mod_config.get('launch'):
+                            active.append(module)
+                    
+                    return active
+        except Exception as e:
+            _LOGGER.warning("Could not load host config: %s", e)
+        
+        # Fallback to common modules
+        return ['pilot', 'imu', 'foot', 'eye', 'ear']
+
+    async def _serve_file(self, writer: asyncio.StreamWriter, path: str) -> None:
+        """Serve a static file."""
+        # Clean up the path
+        if path == '/':
+            path = '/index.html'
+        
+        # Remove leading slash and resolve
+        path = path.lstrip('/')
+        file_path = self._www_dir / path
+
+        # Security check: ensure the resolved path is under www_dir
+        try:
+            file_path = file_path.resolve()
+            file_path.relative_to(self._www_dir)
+        except (ValueError, OSError):
+            await self._send_response(writer, 403, b'Forbidden')
+            return
+
+        # Check if file exists
+        if not file_path.exists() or not file_path.is_file():
+            await self._send_response(writer, 404, b'Not Found')
+            return
+
+        # Read and serve the file
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+
+            # Determine content type
+            content_type, _ = mimetypes.guess_type(str(file_path))
+            if content_type is None:
+                content_type = 'application/octet-stream'
+
+            headers = [
+                'HTTP/1.1 200 OK',
+                f'Content-Type: {content_type}',
+                f'Content-Length: {len(content)}',
+                'Connection: close',
+                '',
+                ''
+            ]
+            writer.write('\r\n'.join(headers).encode('utf-8'))
+            writer.write(content)
+            await writer.drain()
+        except Exception as e:
+            _LOGGER.exception("Error serving file %s: %s", file_path, e)
+            await self._send_response(writer, 500, b'Internal Server Error')
+
+    async def _send_response(self, writer: asyncio.StreamWriter, status: int, body: bytes) -> None:
+        """Send a simple HTTP response."""
+        status_text = {
+            200: 'OK',
+            400: 'Bad Request',
+            403: 'Forbidden',
+            404: 'Not Found',
+            405: 'Method Not Allowed',
+            500: 'Internal Server Error',
+        }.get(status, 'Unknown')
+
+        headers = [
+            f'HTTP/1.1 {status} {status_text}',
+            'Content-Type: text/plain',
+            f'Content-Length: {len(body)}',
+            'Connection: close',
+            '',
+            ''
+        ]
+        writer.write('\r\n'.join(headers).encode('utf-8'))
+        writer.write(body)
+        await writer.drain()
+
+
+async def run_bridge(host: str = "0.0.0.0", port: int = 8088, http_port: int = 8080) -> None:
+    """Entry point that spins ROS alongside the websocket and HTTP servers."""
     import threading
 
     rclpy.init()
@@ -513,12 +725,26 @@ async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
     ros_thread = threading.Thread(target=executor.spin, daemon=True)
     ros_thread.start()
 
-    server = WebsocketServer(node, host=host, port=port)
-    await server.start()
+    # Start websocket server
+    ws_server = WebsocketServer(node, host=host, port=port)
+    await ws_server.start()
+
+    # Find the www directory
+    www_dir = Path(__file__).parent.parent.parent.parent.parent / 'www'
+    if not www_dir.exists():
+        node.get_logger().warning("www directory not found at %s, HTTP server disabled", www_dir)
+        http_server = None
+    else:
+        # Start HTTP server
+        http_server = HttpServer(node, str(www_dir), host=host, port=http_port)
+        await http_server.start()
 
     await stop_event.wait()
 
-    await server.stop()
+    # Stop servers
+    await ws_server.stop()
+    if http_server:
+        await http_server.stop()
     
     # Shutdown ROS
     executor.shutdown()

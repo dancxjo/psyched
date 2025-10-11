@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye Module - Pete Cockpit</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+    <div class="container" x-data="eyeModule()">
+        <header>
+            <h1>👁️ Eye Module</h1>
+            <a href="/" class="back-link">← Back to Cockpit</a>
+        </header>
+        
+        <div class="status-bar">
+            <span>Websocket:</span>
+            <span class="status-badge" :class="'status-' + status" x-text="statusLabel"></span>
+        </div>
+        
+        <div class="info-card">
+            <h2>Eye Module</h2>
+            <p>Camera and vision controls will appear here.</p>
+        </div>
+    </div>
+
+    <script>
+        function eyeModule() {
+            return {
+                ws: null,
+                status: 'connecting',
+                
+                get statusLabel() {
+                    return {
+                        'connecting': 'Connecting...',
+                        'open': 'Connected',
+                        'closed': 'Disconnected'
+                    }[this.status] || 'Unknown';
+                },
+                
+                init() {
+                    this.connect();
+                },
+                
+                connect() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.hostname}:8088/ws`;
+                    
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.status = 'open';
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.status = 'closed';
+                        this.ws = null;
+                        setTimeout(() => this.connect(), 2000);
+                    };
+                }
+            };
+        }
+    </script>
+</body>
+</html>
