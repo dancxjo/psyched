@@ -20,8 +20,23 @@
         </div>
         
         <div class="info-card">
-            <h2>Ear Module</h2>
-            <p>Audio input and speech recognition controls will appear here.</p>
+            <h2>Audio Transcription</h2>
+            <p>Real-time speech-to-text from the microphone.</p>
+        </div>
+
+        <div class="info-card" style="margin-top: 20px;">
+            <h2>Recent Transcripts</h2>
+            <div x-show="transcripts.length === 0" style="color: #888; font-style: italic;">
+                No transcripts yet. Waiting for audio input...
+            </div>
+            <div x-show="transcripts.length > 0" style="max-height: 400px; overflow-y: auto;">
+                <template x-for="(transcript, index) in transcripts.slice().reverse()" :key="index">
+                    <div style="padding: 10px; margin: 5px 0; background: #1a1a1a; border-radius: 4px; border-left: 3px solid #4CAF50;">
+                        <div style="font-size: 12px; color: #888; margin-bottom: 5px;" x-text="transcript.timestamp"></div>
+                        <div x-text="transcript.text"></div>
+                    </div>
+                </template>
+            </div>
         </div>
     </div>
 
@@ -30,6 +45,8 @@
             return {
                 ws: null,
                 status: 'connecting',
+                transcripts: [],
+                maxTranscripts: 50,
                 
                 get statusLabel() {
                     return {
@@ -51,6 +68,17 @@
                     
                     this.ws.onopen = () => {
                         this.status = 'open';
+                        // Subscribe to audio transcripts
+                        this.send({ op: 'sub', topic: '/audio/transcript/final' });
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            console.error('Failed to parse message:', e);
+                        }
                     };
                     
                     this.ws.onclose = () => {
@@ -58,6 +86,28 @@
                         this.ws = null;
                         setTimeout(() => this.connect(), 2000);
                     };
+                },
+                
+                send(message) {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify(message));
+                    }
+                },
+                
+                handleMessage(data) {
+                    if (data.op === 'msg' && data.topic === '/audio/transcript/final') {
+                        const text = data.msg.data || data.msg;
+                        if (text && typeof text === 'string' && text.trim()) {
+                            this.transcripts.push({
+                                text: text.trim(),
+                                timestamp: new Date().toLocaleTimeString()
+                            });
+                            // Keep only the last N transcripts
+                            if (this.transcripts.length > this.maxTranscripts) {
+                                this.transcripts.shift();
+                            }
+                        }
+                    }
                 }
             };
         }

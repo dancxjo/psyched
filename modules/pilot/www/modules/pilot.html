@@ -93,6 +93,20 @@
         <div class="info-card">
             <h2>Pilot Module Active</h2>
             <p>The pilot module is running and serving this cockpit interface.</p>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #3a3a3a;">
+                <h3 style="color: #4CAF50; margin-bottom: 10px;">System Status</h3>
+                <div x-show="systemStatus">
+                    <div style="margin: 5px 0;">
+                        <strong>Active Modules:</strong> <span x-text="activeModules"></span>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>Connected Clients:</strong> <span x-text="systemStatus.clients || 0"></span>
+                    </div>
+                </div>
+                <div x-show="!systemStatus" style="color: #888; font-style: italic;">
+                    Loading system status...
+                </div>
+            </div>
         </div>
     </div>
 
@@ -101,6 +115,7 @@
             return {
                 ws: null,
                 status: 'connecting',
+                systemStatus: null,
                 
                 get statusLabel() {
                     return {
@@ -108,6 +123,11 @@
                         'open': 'Connected',
                         'closed': 'Disconnected'
                     }[this.status] || 'Unknown';
+                },
+                
+                get activeModules() {
+                    if (!this.systemStatus || !this.systemStatus.modules) return 'None';
+                    return this.systemStatus.modules.join(', ') || 'None';
                 },
                 
                 init() {
@@ -122,6 +142,17 @@
                     
                     this.ws.onopen = () => {
                         this.status = 'open';
+                        // Subscribe to system status
+                        this.send({ op: 'sub', topic: '/_status' });
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            console.error('Failed to parse message:', e);
+                        }
                     };
                     
                     this.ws.onclose = () => {
@@ -129,6 +160,18 @@
                         this.ws = null;
                         setTimeout(() => this.connect(), 2000);
                     };
+                },
+                
+                send(message) {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify(message));
+                    }
+                },
+                
+                handleMessage(data) {
+                    if (data.op === 'msg' && data.topic === '/_status') {
+                        this.systemStatus = data.msg;
+                    }
                 }
             };
         }

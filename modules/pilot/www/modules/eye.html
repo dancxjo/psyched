@@ -6,6 +6,48 @@
     <title>Eye Module - Pete Cockpit</title>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .camera-view {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #3a3a3a;
+        }
+        .camera-view h3 {
+            color: #4CAF50;
+            margin-bottom: 15px;
+        }
+        .camera-frame {
+            width: 100%;
+            background: #1a1a1a;
+            border-radius: 4px;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .camera-image {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 4px;
+        }
+        .no-feed {
+            color: #888;
+            font-style: italic;
+        }
+        .feed-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
 </head>
 <body>
     <div class="container" x-data="eyeModule()">
@@ -20,8 +62,32 @@
         </div>
         
         <div class="info-card">
-            <h2>Eye Module</h2>
-            <p>Camera and vision controls will appear here.</p>
+            <h2>Vision System</h2>
+            <p>Camera feeds from the robot's vision system.</p>
+        </div>
+
+        <div class="camera-grid">
+            <div class="camera-view">
+                <h3>RGB Camera</h3>
+                <div class="camera-frame">
+                    <img x-show="rgbImage" :src="rgbImage" class="camera-image" alt="RGB Camera Feed">
+                    <div x-show="!rgbImage" class="no-feed">No RGB camera feed available</div>
+                </div>
+                <div class="feed-info" x-show="rgbImage">
+                    Last update: <span x-text="rgbTimestamp"></span>
+                </div>
+            </div>
+            
+            <div class="camera-view">
+                <h3>Depth Camera</h3>
+                <div class="camera-frame">
+                    <img x-show="depthImage" :src="depthImage" class="camera-image" alt="Depth Camera Feed">
+                    <div x-show="!depthImage" class="no-feed">No depth camera feed available</div>
+                </div>
+                <div class="feed-info" x-show="depthImage">
+                    Last update: <span x-text="depthTimestamp"></span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -30,6 +96,10 @@
             return {
                 ws: null,
                 status: 'connecting',
+                rgbImage: null,
+                depthImage: null,
+                rgbTimestamp: '',
+                depthTimestamp: '',
                 
                 get statusLabel() {
                     return {
@@ -51,6 +121,18 @@
                     
                     this.ws.onopen = () => {
                         this.status = 'open';
+                        // Subscribe to camera feeds
+                        this.send({ op: 'sub', topic: '/image_raw' });
+                        this.send({ op: 'sub', topic: '/camera/depth/image_raw' });
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            console.error('Failed to parse message:', e);
+                        }
                     };
                     
                     this.ws.onclose = () => {
@@ -58,6 +140,26 @@
                         this.ws = null;
                         setTimeout(() => this.connect(), 2000);
                     };
+                },
+                
+                send(message) {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify(message));
+                    }
+                },
+                
+                handleMessage(data) {
+                    if (data.op === 'msg') {
+                        if (data.topic === '/image_raw' && data.msg.data) {
+                            // Convert base64 encoded image to data URL
+                            this.rgbImage = `data:image/jpeg;base64,${data.msg.data}`;
+                            this.rgbTimestamp = new Date().toLocaleTimeString();
+                        } else if (data.topic === '/camera/depth/image_raw' && data.msg.data) {
+                            // Convert base64 encoded depth image to data URL
+                            this.depthImage = `data:image/jpeg;base64,${data.msg.data}`;
+                            this.depthTimestamp = new Date().toLocaleTimeString();
+                        }
+                    }
                 }
             };
         }
