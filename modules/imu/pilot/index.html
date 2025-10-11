@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" x-data="Imu.imuDashboard()" x-init="init()">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IMU Telemetry</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script type="module" src="/js/pilot.js"></script>
+    <script type="module" src="/modules/imu/js/imu.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>IMU Telemetry</h1>
+        <p x-text="status"></p>
+      </header>
+      <section class="grid">
+        <article class="card">
+          <h2>Orientation (Quaternion)</h2>
+          <p>X: <strong x-text="format(orientation.x)"></strong></p>
+          <p>Y: <strong x-text="format(orientation.y)"></strong></p>
+          <p>Z: <strong x-text="format(orientation.z)"></strong></p>
+          <p>W: <strong x-text="format(orientation.w)"></strong></p>
+        </article>
+        <article class="card">
+          <h2>Angular Velocity (rad/s)</h2>
+          <p>X: <strong x-text="format(angularVelocity.x)"></strong></p>
+          <p>Y: <strong x-text="format(angularVelocity.y)"></strong></p>
+          <p>Z: <strong x-text="format(angularVelocity.z)"></strong></p>
+        </article>
+        <article class="card">
+          <h2>Linear Acceleration (m/s²)</h2>
+          <p>X: <strong x-text="format(linearAcceleration.x)"></strong></p>
+          <p>Y: <strong x-text="format(linearAcceleration.y)"></strong></p>
+          <p>Z: <strong x-text="format(linearAcceleration.z)"></strong></p>
+        </article>
+        <article class="card">
+          <h2>Temperature</h2>
+          <p>Celsius: <strong x-text="temperatureC !== null ? format(temperatureC) : '—'"></strong></p>
+          <p>Fahrenheit: <strong x-text="temperatureF !== null ? format(temperatureF) : '—'"></strong></p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

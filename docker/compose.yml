@@ -16,9 +16,7 @@ services:
     volumes:
       - ..:/workspace/psyched:rw
     ports:
-      # Fresh dev server (pilot UI)
-      - "8000:8000"
-      # Cockpit websocket bridge (pilot backend)
+      # Cockpit HTTP + websocket server
       - "8088:8088"
     tty: true
     stdin_open: true

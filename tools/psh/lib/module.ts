@@ -6,7 +6,6 @@ import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
 import { modulesRoot, repoRoot, workspaceRoot, workspaceSrc } from "./paths.ts";
 import { ensureRebootCompleted } from "./reboot_guard.ts";
-import { manifest as generateFreshManifest } from "$fresh/dev/mod.ts";
 
 const PID_DIR = join(workspaceRoot(), ".psh");
 
@@ -518,7 +517,34 @@ async function linkPilotAssets(
 }
 
 async function rebuildPilotManifest(frontendRoot: string): Promise<void> {
-  await generateFreshManifest(frontendRoot);
+  await generatePilotManifest(frontendRoot);
+}
+
+async function generatePilotManifest(frontendRoot: string): Promise<void> {
+  const modulesDir = join(frontendRoot, "modules");
+  const modules: string[] = [];
+  try {
+    for await (const entry of Deno.readDir(modulesDir)) {
+      if (entry.isDirectory) {
+        modules.push(entry.name);
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      throw error;
+    }
+  }
+  modules.sort();
+  const manifestPath = join(frontendRoot, "pilot.manifest.json");
+  const payload = JSON.stringify(
+    {
+      generated_at: new Date().toISOString(),
+      modules,
+    },
+    null,
+    2,
+  );
+  await Deno.writeTextFile(manifestPath, payload);
 }
 
 export async function setupModule(module: string): Promise<void> {

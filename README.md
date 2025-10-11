@@ -101,6 +101,8 @@ psh up pilot          # start the cockpit (websocket bridge + HTTP server)
 
 Add other modules with `psh mod setup <name>` followed by `psh up <name>`. Use `psh down <name>` to stop a module or `psh down` to stop everything that is running. When you're ready for the full stack, `psh up` without arguments launches every module and service.
 
+Once the cockpit is running, browse to `http://<host>:8088/` to access the dashboard. The same server exposes the WebSocket bridge under `/api/topics/bridge`.
+
 ## Docker dev container
 
 Prefer to run everything inside a ROS 2 container for tests? A ready‑to‑use dev image and Compose stack are included. Pick a hostname (matching `hosts/<name>.json`), build, and start:
