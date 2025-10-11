@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foot Control - Pete Cockpit</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 28px;
+        }
+        
+        .back-link {
+            color: #4CAF50;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .status-bar {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .status-open { background: #4CAF50; }
+        .status-closed { background: #f44336; }
+        .status-connecting { background: #ff9800; }
+        
+        .control-section {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .control-section h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #4CAF50;
+        }
+        
+        .joystick-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .joystick {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            background: #1a1a1a;
+            border-radius: 50%;
+            border: 2px solid #3a3a3a;
+            cursor: pointer;
+            touch-action: none;
+        }
+        
+        .joystick-handle {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: #4CAF50;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.5);
+        }
+        
+        .joystick-label {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .telemetry-card {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #3a3a3a;
+        }
+        
+        .telemetry-card h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #4CAF50;
+            border-bottom: 1px solid #3a3a3a;
+            padding-bottom: 10px;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .data-row:last-child {
+            border-bottom: none;
+        }
+        
+        .data-label {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .data-value {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .stop-button {
+            width: 100%;
+            padding: 15px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .stop-button:hover {
+            background: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" x-data="footControl()">
+        <header>
+            <h1>🦶 Foot Control</h1>
+            <a href="/" class="back-link">← Back to Cockpit</a>
+        </header>
+        
+        <div class="status-bar">
+            <span>Websocket:</span>
+            <span class="status-badge" :class="'status-' + status" x-text="statusLabel"></span>
+        </div>
+        
+        <div class="control-section">
+            <h2>Movement Control</h2>
+            <div class="joystick-container">
+                <div>
+                    <div class="joystick"
+                         x-ref="linearJoystick"
+                         @mousedown="startDrag($event, 'linear')"
+                         @touchstart="startDrag($event, 'linear')">
+                        <div class="joystick-handle" 
+                             :style="`transform: translate(-50%, -50%) translate(${linear.x * 70}px, ${-linear.y * 70}px)`">
+                        </div>
+                    </div>
+                    <div class="joystick-label">Linear (Forward/Backward)</div>
+                </div>
+                
+                <div>
+                    <div class="joystick"
+                         x-ref="angularJoystick"
+                         @mousedown="startDrag($event, 'angular')"
+                         @touchstart="startDrag($event, 'angular')">
+                        <div class="joystick-handle"
+                             :style="`transform: translate(-50%, -50%) translate(${angular.z * 70}px, 0)`">
+                        </div>
+                    </div>
+                    <div class="joystick-label">Angular (Turn Left/Right)</div>
+                </div>
+            </div>
+            
+            <button class="stop-button" @click="stop()">EMERGENCY STOP</button>
+        </div>
+        
+        <div class="telemetry-grid">
+            <div class="telemetry-card">
+                <h2>Current Command</h2>
+                <div class="data-row">
+                    <span class="data-label">Linear X:</span>
+                    <span class="data-value" x-text="formatNumber(linear.x) + ' m/s'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Angular Z:</span>
+                    <span class="data-value" x-text="formatNumber(angular.z) + ' rad/s'"></span>
+                </div>
+            </div>
+            
+            <div class="telemetry-card">
+                <h2>Battery</h2>
+                <div class="data-row">
+                    <span class="data-label">Charge:</span>
+                    <span class="data-value" x-text="telemetry.battery.percentage ? telemetry.battery.percentage.toFixed(1) + '%' : 'N/A'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Voltage:</span>
+                    <span class="data-value" x-text="telemetry.battery.voltage_v ? telemetry.battery.voltage_v.toFixed(2) + 'V' : 'N/A'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Current:</span>
+                    <span class="data-value" x-text="telemetry.battery.current_a ? telemetry.battery.current_a.toFixed(2) + 'A' : 'N/A'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">State:</span>
+                    <span class="data-value" x-text="telemetry.battery.charging_state || 'Unknown'"></span>
+                </div>
+            </div>
+            
+            <div class="telemetry-card">
+                <h2>Odometry</h2>
+                <div class="data-row">
+                    <span class="data-label">Linear X:</span>
+                    <span class="data-value" x-text="telemetry.motion.odometry ? formatNumber(telemetry.motion.odometry.linear.x) + ' m/s' : 'N/A'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Angular Z:</span>
+                    <span class="data-value" x-text="telemetry.motion.odometry ? formatNumber(telemetry.motion.odometry.angular.z) + ' rad/s' : 'N/A'"></span>
+                </div>
+            </div>
+            
+            <div class="telemetry-card">
+                <h2>Hazards</h2>
+                <div class="data-row">
+                    <span class="data-label">Bumper Left:</span>
+                    <span class="data-value" :style="telemetry.hazards.bumper_left ? 'color: #f44336' : ''" x-text="telemetry.hazards.bumper_left ? '⚠ PRESSED' : 'Clear'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Bumper Right:</span>
+                    <span class="data-value" :style="telemetry.hazards.bumper_right ? 'color: #f44336' : ''" x-text="telemetry.hazards.bumper_right ? '⚠ PRESSED' : 'Clear'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Cliff:</span>
+                    <span class="data-value" :style="hasCliff ? 'color: #f44336' : ''" x-text="hasCliff ? '⚠ DETECTED' : 'Clear'"></span>
+                </div>
+            </div>
+            
+            <div class="telemetry-card">
+                <h2>Robot Status</h2>
+                <div class="data-row">
+                    <span class="data-label">Mode:</span>
+                    <span class="data-value" x-text="telemetry.status.mode || 'Unknown'"></span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Last Cmd:</span>
+                    <span class="data-value" x-text="lastCommandAge"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function footControl() {
+            return {
+                ws: null,
+                status: 'connecting',
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+                dragging: null,
+                telemetry: {
+                    battery: {},
+                    motion: { odometry: null, command: null },
+                    hazards: {},
+                    status: {}
+                },
+                
+                get statusLabel() {
+                    return {
+                        'connecting': 'Connecting...',
+                        'open': 'Connected',
+                        'closed': 'Disconnected'
+                    }[this.status] || 'Unknown';
+                },
+                
+                get hasCliff() {
+                    const h = this.telemetry.hazards;
+                    return h.cliff_left || h.cliff_front_left || h.cliff_right || h.cliff_front_right;
+                },
+                
+                get lastCommandAge() {
+                    if (!this.telemetry.status.last_command_ms) return 'Never';
+                    const age = Date.now() - this.telemetry.status.last_command_ms;
+                    if (age < 1000) return 'Just now';
+                    if (age < 60000) return Math.floor(age / 1000) + 's ago';
+                    return Math.floor(age / 60000) + 'm ago';
+                },
+                
+                init() {
+                    this.connect();
+                    
+                    // Global mouse/touch event handlers
+                    document.addEventListener('mousemove', (e) => this.drag(e));
+                    document.addEventListener('touchmove', (e) => this.drag(e));
+                    document.addEventListener('mouseup', () => this.stopDrag());
+                    document.addEventListener('touchend', () => this.stopDrag());
+                },
+                
+                connect() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.hostname}:8088/ws`;
+                    
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.status = 'open';
+                        // Subscribe to foot telemetry
+                        this.send({ op: 'sub', topic: '/foot/telemetry' });
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.status = 'closed';
+                        this.ws = null;
+                        setTimeout(() => this.connect(), 2000);
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (e) {
+                            console.error('Failed to parse message:', e);
+                        }
+                    };
+                },
+                
+                send(message) {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify(message));
+                    }
+                },
+                
+                handleMessage(data) {
+                    if (data.op === 'msg' && data.topic === '/foot/telemetry') {
+                        const msg = data.msg;
+                        // Update telemetry with new data
+                        if (msg.battery) {
+                            this.telemetry.battery = { ...this.telemetry.battery, ...msg.battery };
+                        }
+                        if (msg.motion) {
+                            this.telemetry.motion = { ...this.telemetry.motion, ...msg.motion };
+                        }
+                        if (msg.hazards) {
+                            this.telemetry.hazards = { ...this.telemetry.hazards, ...msg.hazards };
+                        }
+                        if (msg.status) {
+                            this.telemetry.status = { ...this.telemetry.status, ...msg.status };
+                        }
+                    }
+                },
+                
+                startDrag(event, type) {
+                    event.preventDefault();
+                    this.dragging = type;
+                },
+                
+                drag(event) {
+                    if (!this.dragging) return;
+                    
+                    const joystick = this.dragging === 'linear' 
+                        ? this.$refs.linearJoystick 
+                        : this.$refs.angularJoystick;
+                    
+                    const rect = joystick.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    let clientX, clientY;
+                    if (event.type.startsWith('touch')) {
+                        clientX = event.touches[0].clientX;
+                        clientY = event.touches[0].clientY;
+                    } else {
+                        clientX = event.clientX;
+                        clientY = event.clientY;
+                    }
+                    
+                    let dx = (clientX - centerX) / 70;
+                    let dy = (centerY - clientY) / 70; // Inverted Y
+                    
+                    // Clamp to circle
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 1) {
+                        dx /= distance;
+                        dy /= distance;
+                    }
+                    
+                    if (this.dragging === 'linear') {
+                        // Apply Create velocity limits: -0.5 to 0.5 m/s for linear
+                        this.linear.x = dy * 0.5;  // Forward/backward
+                        this.linear.y = 0;  // Create doesn't support strafe
+                        this.sendCommand();
+                    } else {
+                        // Apply Create velocity limits: -4.25 to 4.25 rad/s for angular
+                        this.angular.z = dx * 4.25;
+                        this.sendCommand();
+                    }
+                },
+                
+                stopDrag() {
+                    if (!this.dragging) return;
+                    
+                    if (this.dragging === 'linear') {
+                        this.linear.x = 0;
+                        this.linear.y = 0;
+                    } else {
+                        this.angular.z = 0;
+                    }
+                    
+                    this.dragging = null;
+                    this.sendCommand();
+                },
+                
+                stop() {
+                    this.linear = { x: 0, y: 0, z: 0 };
+                    this.angular = { x: 0, y: 0, z: 0 };
+                    this.sendCommand();
+                },
+                
+                sendCommand() {
+                    this.send({
+                        op: 'pub',
+                        topic: '/cmd_vel',
+                        msg: {
+                            linear: { ...this.linear },
+                            angular: { ...this.angular }
+                        }
+                    });
+                },
+                
+                formatNumber(value) {
+                    if (value === null || value === undefined) return 'N/A';
+                    return value.toFixed(3);
+                }
+            };
+        }
+    </script>
+</body>
+</html>

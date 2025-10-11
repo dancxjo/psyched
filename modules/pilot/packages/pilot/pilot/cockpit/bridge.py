@@ -4,9 +4,14 @@ from __future__ import annotations
 import asyncio
 import errno
 import contextlib
+import json
 import logging
+import mimetypes
+import os
 import signal
 from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 import rclpy
@@ -374,11 +379,20 @@ class CockpitBridgeNode(Node):
             self._broadcast_status()
 
 
-class WebsocketServer:
-    """Thin wrapper around :mod:`websockets` for cockpit clients."""
+class UnifiedServer:
+    """Unified server that handles both WebSocket and HTTP requests on the same port."""
 
-    def __init__(self, node: CockpitBridgeNode, host: str = "0.0.0.0", port: int = 8088) -> None:
+    def __init__(
+        self,
+        node: CockpitBridgeNode,
+        www_dir: str,
+        host: str = "0.0.0.0",
+        port: int = 8088,
+        hosts_dir: Optional[str] = None
+    ) -> None:
         self._node = node
+        self._www_dir = Path(www_dir).resolve()
+        self._hosts_dir = Path(hosts_dir).resolve() if hosts_dir else None
         self._host = host
         self._port = port
         self._server: Optional[asyncio.base_events.Server] = None
@@ -389,9 +403,10 @@ class WebsocketServer:
         while True:
             try:
                 self._server = await serve(
-                    self._handler,
+                    self._ws_handler,
                     self._host,
                     self._port,
+                    process_request=self._http_handler,
                     ping_interval=30,
                     ping_timeout=30,
                     reuse_port=True,
@@ -401,7 +416,7 @@ class WebsocketServer:
                     raise
                 attempt += 1
                 _LOGGER.warning(
-                    "ws bridge port %s:%d busy (%s); retrying in %.1fs",
+                    "unified server port %s:%d busy (%s); retrying in %.1fs",
                     self._host,
                     self._port,
                     err.strerror,
@@ -411,7 +426,7 @@ class WebsocketServer:
                 backoff = min(backoff * 2, 4.0)
             else:
                 break
-        _LOGGER.info("listening on ws://%s:%d/ws", self._host, self._port)
+        _LOGGER.info("unified server listening on http://%s:%d (ws://%s:%d/ws)", self._host, self._port, self._host, self._port)
 
     async def stop(self) -> None:
         if self._server is not None:
@@ -419,7 +434,115 @@ class WebsocketServer:
             await self._server.wait_closed()
             self._server = None
 
-    async def _handler(self, websocket: WebSocketServerProtocol, path: str) -> None:
+    async def _http_handler(self, path: str, request_headers) -> Optional[tuple]:
+        """Handle HTTP requests. Return None to let websockets handle it as a WebSocket upgrade."""
+        # Check if this is a WebSocket upgrade request
+        upgrade = request_headers.get("Upgrade", "").lower()
+        if upgrade == "websocket":
+            # Let websockets library handle WebSocket upgrade
+            return None
+        
+        # Handle HTTP requests
+        try:
+            if path == "/api/modules":
+                return await self._handle_modules_api()
+            else:
+                return await self._serve_file(path)
+        except Exception as e:
+            _LOGGER.exception("Error handling HTTP request for %s: %s", path, e)
+            return (500, [], b'Internal Server Error')
+
+    async def _handle_modules_api(self) -> tuple:
+        """Handle the /api/modules endpoint."""
+        try:
+            modules = self._get_active_modules()
+            response_data = json.dumps({'modules': modules}).encode('utf-8')
+            return (
+                200,
+                [
+                    ('Content-Type', 'application/json'),
+                    ('Content-Length', str(len(response_data))),
+                ],
+                response_data
+            )
+        except Exception as e:
+            _LOGGER.exception("Error in modules API: %s", e)
+            return (500, [], b'Internal Server Error')
+
+    def _get_active_modules(self) -> List[str]:
+        """Get list of active modules from host config."""
+        try:
+            import socket
+            hostname = socket.gethostname()
+            
+            if self._hosts_dir:
+                config_dir = self._hosts_dir
+            else:
+                # Fall back to relative path from this file (for development)
+                config_dir = Path(__file__).parent.parent.parent.parent.parent.parent / 'hosts'
+            
+            config_file = config_dir / f'{hostname}.json'
+            
+            if config_file.exists():
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                    host_modules = config.get('host', {}).get('modules', [])
+                    module_configs = config.get('modules', {})
+                    
+                    active = []
+                    for module in host_modules:
+                        if module == 'pilot':
+                            active.append(module)
+                            continue
+                        mod_config = module_configs.get(module, {})
+                        if mod_config.get('launch'):
+                            active.append(module)
+                    
+                    return active
+        except Exception as e:
+            _LOGGER.warning("Could not load host config: %s", e)
+        
+        return ['pilot', 'imu', 'foot', 'eye', 'ear']
+
+    async def _serve_file(self, path: str) -> tuple:
+        """Serve a static file."""
+        if path == '/':
+            path = '/index.html'
+        
+        path = path.lstrip('/')
+        file_path = self._www_dir / path
+
+        # Security check
+        try:
+            file_path = file_path.resolve()
+            file_path.relative_to(self._www_dir)
+        except (ValueError, OSError):
+            return (403, [], b'Forbidden')
+
+        if not file_path.exists() or not file_path.is_file():
+            return (404, [], b'Not Found')
+
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+
+            content_type, _ = mimetypes.guess_type(str(file_path))
+            if content_type is None:
+                content_type = 'application/octet-stream'
+
+            return (
+                200,
+                [
+                    ('Content-Type', content_type),
+                    ('Content-Length', str(len(content))),
+                ],
+                content
+            )
+        except Exception as e:
+            _LOGGER.exception("Error serving file %s: %s", file_path, e)
+            return (500, [], b'Internal Server Error')
+
+    async def _ws_handler(self, websocket: WebSocketServerProtocol, path: str) -> None:
         if path != "/ws":
             await websocket.close(code=1008, reason="unsupported path")
             return
@@ -486,8 +609,13 @@ class WebsocketServer:
         await client.websocket.send(make_ok().to_json())
 
 
-async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
-    """Entry point that spins ROS alongside the websocket server."""
+async def run_bridge(
+    host: str = "0.0.0.0",
+    port: int = 8088,
+    www_dir: Optional[str] = None,
+    hosts_dir: Optional[str] = None
+) -> None:
+    """Entry point that spins ROS alongside the unified server (WebSocket + HTTP)."""
     import threading
 
     rclpy.init()
@@ -513,11 +641,27 @@ async def run_bridge(host: str = "0.0.0.0", port: int = 8088) -> None:
     ros_thread = threading.Thread(target=executor.spin, daemon=True)
     ros_thread.start()
 
-    server = WebsocketServer(node, host=host, port=port)
+    # Find the www directory
+    if www_dir:
+        www_path = Path(www_dir)
+    else:
+        # Fall back to relative path from this file (for development)
+        www_path = Path(__file__).parent.parent.parent.parent.parent / 'www'
+    
+    if not www_path.exists():
+        node.get_logger().error("www directory not found at %s, cannot start server", www_path)
+        executor.shutdown()
+        await node.shutdown()
+        rclpy.shutdown()
+        return
+    
+    # Start unified server (handles both WebSocket and HTTP)
+    server = UnifiedServer(node, str(www_path), host=host, port=port, hosts_dir=hosts_dir)
     await server.start()
 
     await stop_event.wait()
 
+    # Stop server
     await server.stop()
     
     # Shutdown ROS

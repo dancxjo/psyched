@@ -35,9 +35,9 @@ Psyched is organized around three ideas:
 1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
 2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
 3. **A ROS 2 + Python bridge.** The `pilot` package (linked into `work/src/pilot`) exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using `rclpy` and `websockets`.
-4. **A modern pilot UI.** The `modules/pilot/frontend` package uses [Deno](https://deno.land/) and [Fresh](https://fresh.deno.dev/) with Preact hooks. It consumes the cockpit websocket via a reusable client in `lib/cockpit.ts`.
+4. **A modern pilot UI.** The `modules/pilot/www` package uses Alpine.js to provide lightweight, browser-based controls. HTML pages connect directly to the cockpit websocket bridge for real-time ROS telemetry and command publishing.
 
-Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orchestrator that provisions hosts, manages modules, and keeps the pilot frontend in sync.
+Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orchestrator that provisions hosts, manages modules, and coordinates service lifecycles.
 
 ## Quick start
 
@@ -99,8 +99,8 @@ ROS 2 domain settings are managed globally via `config/ros_domain_id` and are ap
 ### 3. Bring modules online
 
 ```bash
-psh mod setup pilot   # prepare symlinks and dependencies
-psh up pilot          # start the cockpit backend + Fresh frontend
+psh mod setup pilot   # prepare dependencies
+psh up pilot          # start the cockpit (websocket bridge + HTTP server)
 ```
 
 Add other modules with `psh mod setup <name>` followed by `psh up <name>`. Use `psh down <name>` to stop a module or `psh down` to stop everything that is running. When you're ready for the full stack, `psh up` without arguments launches every module and service.
@@ -114,7 +114,7 @@ export PSY_HOSTNAME=motherbrain   # or forebrain
 docker compose -f docker/compose.yml up --build
 ```
 
-The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes ports `8000` (pilot UI) and `8088` (cockpit backend). See `docs/docker.md` for details.
+The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes port `8088` (unified cockpit server for both UI and websocket). See `docs/docker.md` for details.
 
 ## Repository layout
 
@@ -122,8 +122,7 @@ The container sets its hostname so `psh` applies the selected host profile, runs
 ├── modules/                       # Module definitions (pilot, foot, imu, …)
 │   └── <name>/
 │       ├── module.toml            # Manifest consumed by psh
-│       ├── packages/              # ROS/Python packages linked into work/src/
-│       └── pilot/                 # Fresh overlays (components, routes, islands, …)
+│       └── packages/              # ROS/Python packages linked into work/src/
 ├── services/                      # Containerised microservices (tts, language, graphs, vectors, …)
 │   └── <name>/
 │       ├── service.toml           # Manifest consumed by psh svc
@@ -139,10 +138,10 @@ The container sets its hostname so `psh` applies the selected host profile, runs
 
 ### Pilot
 
-The pilot module provides a browser-based cockpit with two parts:
+The pilot module provides a browser-based cockpit:
 
-- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit/bridge.py` exposes a websocket at `ws://0.0.0.0:8088/ws`. Incoming messages are mapped to ROS topics (`/conversation`, `/cmd_vel`) and ROS telemetry (`/audio/transcript/final`, `/imu/data`, `/foot/telemetry`) is fanned out to the browser.
-- **Frontend:** `modules/pilot/frontend` is a Fresh app. `lib/cockpit.ts` contains the websocket client (`CockpitClient`) and a `useCockpitTopic` hook that any component can reuse.
+- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit/bridge.py` exposes a unified server at `http://0.0.0.0:8088` that handles both HTTP requests for the UI and WebSocket connections at `/ws`. Incoming websocket messages are mapped to ROS topics (`/conversation`, `/cmd_vel`) and ROS telemetry (`/audio/transcript/final`, `/imu/data`, `/foot/telemetry`) is fanned out to connected browsers.
+- **Frontend:** `modules/pilot/www` contains static HTML pages using Alpine.js. Each module page connects directly to the websocket and uses the cockpit protocol (`{ op: 'sub', topic: '/topic/name' }` to subscribe, `{ op: 'pub', topic: '/topic/name', msg: {...} }` to publish).
 
 Bring it up with:
 
@@ -151,12 +150,7 @@ psh mod setup pilot
 psh up pilot
 ```
 
-During development you can run the frontend directly:
-
-```bash
-cd modules/pilot/frontend
-deno task dev
-```
+Then visit `http://{hostname}:8088` in your browser.
 
 ### IMU
 
@@ -164,9 +158,8 @@ Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](
 
 ### Foot
 
-Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`) and provides cockpit controls in `modules/foot/pilot/`. Launch via `psh up foot`.
-
-Modules can optionally contribute Fresh components or routes by placing files inside `modules/<name>/pilot/{components,routes,islands,static}`. `psh mod setup <name>` manages symlinks into the pilot frontend.
+Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`). Launch via `psh up foot`.
+Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`). Launch via `psh up foot`.
 
 ## Services
 
@@ -265,7 +258,7 @@ CI is currently manual; prefer running the commands above before pushing.
 ## Troubleshooting
 
 - Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `env/psyched_env.sh` and run `psyched --ros-only` after changing the distro.
-- Cockpit websocket unreachable: verify `ros2 run pilot cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
+- Cockpit server unreachable: verify `ros2 run pilot cockpit` logs "unified server listening on http://..." and that port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
 

@@ -2,8 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-FRONTEND_DIR="${ROOT_DIR}/modules/pilot/frontend"
-FRONTEND_DEV_TS="${FRONTEND_DIR}/dev.ts"
 WORKSPACE_ENV="${ROOT_DIR}/env/psyched_env.sh"
 
 if [[ -f "${WORKSPACE_ENV}" ]]; then
@@ -60,14 +58,8 @@ terminate_process_group() {
 }
 
 terminate_process_group \
-        "Pilot cockpit backend" \
+        "Pilot cockpit" \
         "ros2 run pilot cockpit" \
-        "python3 -m pilot_cockpit.cli"
-
-terminate_process_group \
-	"Pilot Fresh dev server" \
-	"deno task dev" \
-	"deno run -A --watch=static/,routes/ dev.ts" \
-	"${FRONTEND_DEV_TS}"
+        "python3 -m pilot.cockpit.cli"
 
 echo "[pilot/shutdown] Shutdown cleanup complete"

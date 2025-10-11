@@ -77,57 +77,7 @@ services/tts/models/*
 # ROS 2 workspace overlay
 /work/
 
-fresh.gen.ts
-
 # ------------------------------
 # Local machine configs
 # ------------------------------
 hosts/*.local.toml
-modules/pilot/frontend/fresh.gen.ts
-modules/pilot/frontend/components/ImuReadout.tsx
-modules/pilot/frontend/routes/modules/imu.tsx
-modules/pilot/frontend/fresh.gen.ts
-modules/pilot/frontend/deno.test.json
-modules/pilot/frontend/components/dashboard_test.ts
-modules/pilot/frontend/components/dashboard.tsx
-modules/pilot/frontend/components/module_actions.ts
-modules/pilot/frontend/components/ModuleOverview_test.ts
-modules/pilot/frontend/components/ModuleOverview.tsx
-modules/pilot/frontend/components/PilotOverview.tsx
-modules/pilot/frontend/components/ServiceOverview.tsx
-modules/pilot/frontend/islands/PilotOverviewIsland.tsx
-modules/pilot/frontend/routes/modules/pilot.tsx
-modules/pilot/frontend/islands/ImuTelemetryIsland_test.ts
-modules/pilot/frontend/islands/ImuTelemetryIsland.tsx
-modules/pilot/frontend/components/FootControlPanel.tsx
-modules/pilot/frontend/islands/FootControlPanelIsland.tsx
-modules/pilot/frontend/routes/modules/foot.tsx
-modules/pilot/frontend/components/KinectStreamPanel.tsx
-modules/pilot/frontend/islands/KinectStreamPanelIsland.tsx
-modules/pilot/frontend/components/EarModulePanel.tsx
-modules/pilot/frontend/components/FacesModulePanel.tsx
-modules/pilot/frontend/components/GpsModulePanel.tsx
-modules/pilot/frontend/components/MemoryModulePanel.tsx
-modules/pilot/frontend/components/NavModulePanel.tsx
-modules/pilot/frontend/components/VisceraModulePanel.tsx
-modules/pilot/frontend/components/VoiceModulePanel.tsx
-modules/pilot/frontend/components/WifiModulePanel.tsx
-modules/pilot/frontend/components/WillModulePanel.tsx
-modules/pilot/frontend/islands/EarModulePanelIsland.tsx
-modules/pilot/frontend/islands/FacesModulePanelIsland.tsx
-modules/pilot/frontend/islands/GpsModulePanelIsland.tsx
-modules/pilot/frontend/islands/MemoryModulePanelIsland.tsx
-modules/pilot/frontend/islands/NavModulePanelIsland.tsx
-modules/pilot/frontend/islands/VisceraModulePanelIsland.tsx
-modules/pilot/frontend/islands/VoiceModulePanelIsland.tsx
-modules/pilot/frontend/islands/WifiModulePanelIsland.tsx
-modules/pilot/frontend/islands/WillModulePanelIsland.tsx
-modules/pilot/frontend/routes/modules/ear.tsx
-modules/pilot/frontend/routes/modules/faces.tsx
-modules/pilot/frontend/routes/modules/gps.tsx
-modules/pilot/frontend/routes/modules/memory.tsx
-modules/pilot/frontend/routes/modules/nav.tsx
-modules/pilot/frontend/routes/modules/viscera.tsx
-modules/pilot/frontend/routes/modules/voice.tsx
-modules/pilot/frontend/routes/modules/wifi.tsx
-modules/pilot/frontend/routes/modules/will.tsx
