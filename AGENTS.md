@@ -5,10 +5,8 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 ## System snapshot
 
 - **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a browser-based cockpit for operators.
-- **Languages & frameworks:** Python (`rclpy`, `websockets`), Deno/Fresh + Preact for the pilot UI and `psh` CLI, ROS 2 (colcon), Bash, optional Rust for certain services (e.g. ASR), and assorted Python/C++ ROS packages pulled in as git dependencies.
+- **Languages & frameworks:** Python (`rclpy`, `websockets`), and `psh` CLI, ROS 2 (colcon), Bash, optional Rust for certain services (e.g. ASR), and assorted Python/C++ ROS packages pulled in as git dependencies.
 - **Runtime topology:**
-  - `pilot` Python package hosts the cockpit websocket bridge (`ws://0.0.0.0:8088/ws`).
-  - Each module in `modules/<name>` declares lifecycle scripts and optional UI widgets under `pilot/`.
 - The `psh` CLI provisions hosts (`hosts/*.json`) and synchronizes module assets into the Fresh frontend.
 
 ## Key directories and entry points
@@ -16,9 +14,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 | Path | Purpose |
 | --- | --- |
 | `tools/psh/` | `psh` Deno CLI for provisioning and module orchestration. Entry: `main.ts`. |
-| `modules/pilot/packages/pilot/pilot_cockpit/` | ROS-aware Python backend serving the cockpit websocket. |
-| `modules/pilot/frontend/` | Deno Fresh app for the pilot console. |
-| `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and pilot overlays. |
+| `modules/<name>/module.toml` | Module manifest consumed by `psh`. Also defines bootstrap git repos and overlays. |
 | `tools/bootstrap/` & `tools/provision/` | Host bootstrap scripts invoked by `psh host setup`. |
 | `setup` | Top-level bootstrap script. Installs dependencies, installs the Deno-based `psh` wrapper, and instructs you to reboot before running `psh`. |
 | `hosts/*.json` | Host manifests. Prefer `provision.installers = ["ros2", …]` over shell scripts and run `psh host setup --verbose` for detailed logs. Deno is bootstrapped by `setup`. |
@@ -29,9 +25,7 @@ Always prefer running the smallest relevant command set.
 
 | Domain | Commands |
 | --- | --- |
-| Cockpit backend only | `colcon build --packages-select pilot && ros2 run pilot cockpit` |
 | ROS packages (colcon) | `colcon build --packages-select <pkg>` followed by `source install/setup.bash` |
-| Deno pilot UI | `deno fmt`, `deno check lib/cockpit.ts`, `deno task dev`, `deno test` |
 | `psh` CLI | `cd tools/psh && deno fmt && deno lint && deno task test` |
 | Shell scripts | `shellcheck modules/**/launch_*.sh modules/**/shutdown_*.sh setup` |
 
@@ -46,13 +40,6 @@ Always prefer running the smallest relevant command set.
 - Add regression coverage with `deno test` for new helpers before wiring them into the CLI (TDD/BDD encouraged).
 - Document exported helpers with `/** ... */` JSDoc comments when behaviour isn’t self-evident.
 
-### TypeScript / Fresh
-
-- Use ES modules with explicit file extensions (Deno requirement).
-- Stick to the hooks-based API exposed in `lib/cockpit.ts`. New topics should be declared in a single place so reconnect logic remains centralized.
-- Keep hooks SSR-safe: guard browser-only APIs (`window`, `WebSocket`) with `typeof` checks.
-- Use the shared `Panel`, `Card`, and `Badge` helpers from `@pilot/components/dashboard.tsx` so cockpit pages and utilities share one styling system.
-- Base cockpit styling layers [Pico.css](https://picocss.com/) with the design tokens defined in `modules/pilot/frontend/static/styles.css`. Reuse the `--brand-*` and `--accent-*` variables instead of introducing one-off colours.
 
 ### Shell
 
@@ -71,9 +58,6 @@ Always prefer running the smallest relevant command set.
 
 - **Lockfile drift:** `deno.lock` enforces lockfile version ≥5. Older Deno releases will fail with “unsupported lockfile version”. Upgrade Deno or regenerate the lock.
 - **ROS distro mismatch:** Scripts default to the custom `kilted` distro name. Override with `ROS_DISTRO=<distro>` before running `psh env` if you target `humble`/`jazzy`.
-- **Pilot backend is Python-first:** The `psh` CLI runs on Deno. Expect ROS nodes and cockpit bridges to live under Python packages and keep their dependencies declared in module manifests.
-- **Symlink overlays:** Deleting `modules/*/pilot` symlinks manually breaks the Fresh app. Always re-run `psh mod setup <module>`.
-- **Background processes:** Launch scripts spawn long-lived processes (for example `deno task dev`). Ensure traps stop them (`modules/pilot/launch_unit.sh` shows the pattern).
 - **Workspace resets:** `tools/clean_workspace` wipes `work/` and leaves `src/` empty so disabled modules stay out of the build graph. Run it (or `psh clean`) when paths drift, then rerun `psh mod setup <module>` for any packages you need.
 - **Network safety:** `psh clean` intentionally preserves connectivity-critical modules/services (Wi-Fi, SSH, mDNS). Keep those protections in place so remote sessions stay alive during cleanup.
 - **Deno TLS certificates:** When fetching dependencies during `deno task test`, set `DENO_TLS_CA_STORE=system` if you encounter TLS certificate errors in restricted environments.
@@ -94,10 +78,3 @@ Always prefer running the smallest relevant command set.
 - MPU6050 ROS driver: <https://github.com/hiwad-aziz/ros2_mpu6050_driver>
 
 Happy hacking!
-
-## Miscellaneous
-### Symlinks
-* Each module has its own pilot folder, which is linked into the main Fresh app by `psh mod setup <module>`. This allows modules to declare their own UI components and pages without merging everything into a single codebase.
-
-### Module overlays
-* Use the shared `ModuleOverview` component under `modules/pilot/pilot/components/ModuleOverview.tsx` when you only need standard lifecycle controls for a module. Its helper functions are covered by `ModuleOverview_test.ts`; run the tests with `deno test --config modules/pilot/pilot/deno.test.json`.

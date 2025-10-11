@@ -8,7 +8,6 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 - [Quick start](#quick-start)
 - [Repository layout](#repository-layout)
 - [Modules](#modules)
-	- [Pilot](#pilot)
 	- [IMU](#imu)
 	- [Foot](#foot)
 - [Services](#services)
@@ -19,7 +18,6 @@ Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a co
 	- [ASR](#asr)
 - [Development workflows](#development-workflows)
         - [Python + ROS backend](#python--ros-backend)
-        - [Pilot frontend](#pilot-frontend)
         - [Using the `psh` CLI](#using-the-psh-cli)
         - [Workspace cleanup](#workspace-cleanup)
 - [Docker dev container](#docker-dev-container)
@@ -34,8 +32,6 @@ Psyched is organized around three ideas:
 
 1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
 2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
-3. **A ROS 2 + Python bridge.** The `pilot` package (linked into `work/src/pilot`) exposes a websocket API (`ws://<host>:8088/ws`) that forwards cockpit messages into ROS topics using `rclpy` and `websockets`.
-4. **A modern pilot UI.** The `modules/pilot/www` package uses Alpine.js to provide lightweight, browser-based controls. HTML pages connect directly to the cockpit websocket bridge for real-time ROS telemetry and command publishing.
 
 Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orchestrator that provisions hosts, manages modules, and coordinates service lifecycles.
 
@@ -136,22 +132,6 @@ The container sets its hostname so `psh` applies the selected host profile, runs
 
 ## Modules
 
-### Pilot
-
-The pilot module provides a browser-based cockpit:
-
-- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit/bridge.py` exposes a unified server at `http://0.0.0.0:8088` that handles both HTTP requests for the UI and WebSocket connections at `/ws`. Incoming websocket messages are mapped to ROS topics (`/conversation`, `/cmd_vel`) and ROS telemetry (`/audio/transcript/final`, `/imu/data`, `/foot/telemetry`) is fanned out to connected browsers.
-- **Frontend:** `modules/pilot/www` contains static HTML pages using Alpine.js. Each module page connects directly to the websocket and uses the cockpit protocol (`{ op: 'sub', topic: '/topic/name' }` to subscribe, `{ op: 'pub', topic: '/topic/name', msg: {...} }` to publish).
-
-Bring it up with:
-
-```bash
-psh mod setup pilot
-psh up pilot
-```
-
-Then visit `http://{hostname}:8088` in your browser.
-
 ### IMU
 
 Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver) and exposes pilot UI components under `modules/imu/pilot/`. Launch it with `psh up imu` once the hardware is attached.
@@ -220,13 +200,6 @@ psh build mpu6050driver   # optionally target specific packages
 source install/setup.bash
 ```
 
-### Pilot frontend
-
-- Install dependencies: handled automatically by Deno (`deno.json` + `deno.lock`)
-- Dev server: `deno task dev`
-- Type-check: `deno check lib/cockpit.ts`
-- Format: `deno fmt`
-
 ### Using the `psh` CLI
 
 `psh` wraps common workflows:
@@ -249,8 +222,6 @@ source install/setup.bash
 
 ## Testing & validation
 
-- **Pilot backend:** `colcon test --packages-select pilot`
-- **Pilot Frontend:** `deno test` (add tests under `modules/pilot/frontend`). Use `deno check` to catch type errors.
 - **ROS nodes:** Build via `colcon build` then run `ros2 test` or module-specific launch files as needed.
 
 CI is currently manual; prefer running the commands above before pushing.
