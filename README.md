@@ -114,7 +114,7 @@ export PSY_HOSTNAME=motherbrain   # or forebrain
 docker compose -f docker/compose.yml up --build
 ```
 
-The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes ports `8080` (pilot UI) and `8088` (cockpit websocket). See `docs/docker.md` for details.
+The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes port `8088` (unified cockpit server for both UI and websocket). See `docs/docker.md` for details.
 
 ## Repository layout
 
@@ -140,7 +140,7 @@ The container sets its hostname so `psh` applies the selected host profile, runs
 
 The pilot module provides a browser-based cockpit:
 
-- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit/bridge.py` exposes a websocket at `ws://0.0.0.0:8088/ws` and an HTTP server at `http://0.0.0.0:8080`. Incoming websocket messages are mapped to ROS topics (`/conversation`, `/cmd_vel`) and ROS telemetry (`/audio/transcript/final`, `/imu/data`, `/foot/telemetry`) is fanned out to connected browsers.
+- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit/bridge.py` exposes a unified server at `http://0.0.0.0:8088` that handles both HTTP requests for the UI and WebSocket connections at `/ws`. Incoming websocket messages are mapped to ROS topics (`/conversation`, `/cmd_vel`) and ROS telemetry (`/audio/transcript/final`, `/imu/data`, `/foot/telemetry`) is fanned out to connected browsers.
 - **Frontend:** `modules/pilot/www` contains static HTML pages using Alpine.js. Each module page connects directly to the websocket and uses the cockpit protocol (`{ op: 'sub', topic: '/topic/name' }` to subscribe, `{ op: 'pub', topic: '/topic/name', msg: {...} }` to publish).
 
 Bring it up with:
@@ -150,7 +150,7 @@ psh mod setup pilot
 psh up pilot
 ```
 
-Then visit `http://{hostname}:8080` in your browser.
+Then visit `http://{hostname}:8088` in your browser.
 
 ### IMU
 
@@ -258,7 +258,7 @@ CI is currently manual; prefer running the commands above before pushing.
 ## Troubleshooting
 
 - Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `env/psyched_env.sh` and run `psyched --ros-only` after changing the distro.
-- Cockpit websocket unreachable: verify `ros2 run pilot cockpit` logs “listening on ws://…/ws” and that port `8088` is open on the host.
+- Cockpit server unreachable: verify `ros2 run pilot cockpit` logs "unified server listening on http://..." and that port `8088` is open on the host.
 - Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
 - Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
 

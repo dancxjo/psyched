@@ -7,10 +7,8 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 WORKSPACE_DIR="${PSYCHED_WORKSPACE_DIR:-${ROOT_DIR}/work}"
 COCKPIT_PORT="${PILOT_COCKPIT_PORT:-8088}"
-HTTP_PORT="${PILOT_HTTP_PORT:-8080}"
 
 export PILOT_COCKPIT_PORT="${COCKPIT_PORT}"
-export PILOT_HTTP_PORT="${HTTP_PORT}"
 
 add_pythonpath_dir() {
   local dir="$1"
@@ -56,12 +54,11 @@ if [[ ! -f "${PILOT_PACKAGE_XML}" ]]; then
   exit 1
 fi
 
-echo "Starting Pilot cockpit on websocket port ${COCKPIT_PORT} and HTTP port ${HTTP_PORT}..."
+echo "Starting Pilot cockpit unified server on port ${COCKPIT_PORT}..."
 (
   cd "${ROOT_DIR}" &&
     ros2 run pilot cockpit \
       --port "${COCKPIT_PORT}" \
-      --http-port "${HTTP_PORT}" \
       --www-dir "${ROOT_DIR}/modules/pilot/www" \
       --hosts-dir "${ROOT_DIR}/hosts" \
       --log-level "${PILOT_LOG_LEVEL:-info}"

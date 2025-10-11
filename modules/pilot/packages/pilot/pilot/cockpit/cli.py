@@ -9,10 +9,9 @@ from .bridge import run_bridge
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pilot cockpit websocket bridge")
+    parser = argparse.ArgumentParser(description="Pilot cockpit unified server")
     parser.add_argument("--host", default="0.0.0.0", help="Host interface to bind (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8088, help="Websocket port (default: 8088)")
-    parser.add_argument("--http-port", type=int, default=8080, help="HTTP port for web UI (default: 8080)")
+    parser.add_argument("--port", type=int, default=8088, help="Server port for WebSocket and HTTP (default: 8088)")
     parser.add_argument("--www-dir", default=None, help="Path to www directory with static files")
     parser.add_argument("--hosts-dir", default=None, help="Path to hosts directory with config files")
     parser.add_argument("--log-level", default="INFO", help="Python logging level (default: INFO)")
@@ -25,7 +24,6 @@ def main() -> None:
     asyncio.run(run_bridge(
         host=args.host,
         port=args.port,
-        http_port=args.http_port,
         www_dir=args.www_dir,
         hosts_dir=args.hosts_dir
     ))

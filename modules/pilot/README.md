@@ -2,11 +2,11 @@
 
 The pilot module delivers Pete's browser-based cockpit. It consists of:
 
-- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit` is an `ament_python` package that exposes:
-  - A websocket bridge at `ws://0.0.0.0:8088/ws` (configurable via `PILOT_COCKPIT_PORT`)
-  - An HTTP server at `http://0.0.0.0:8080` (configurable via `PILOT_HTTP_PORT`)
+- **Backend:** `modules/pilot/packages/pilot/pilot_cockpit` is an `ament_python` package that exposes a unified server at `http://0.0.0.0:8088` (configurable via `PILOT_COCKPIT_PORT`) which handles:
+  - HTTP requests for static files and API endpoints
+  - WebSocket connections at `/ws` for the cockpit bridge
   
-  The bridge is implemented with `rclpy` + `asyncio` + `websockets` and mirrors cockpit messages to ROS topics (`/conversation`, `/cmd_vel`). Telemetry from `/audio/transcript/final`, `/imu/data`, and the Foot drivetrain is fanned out to any subscribed clients.
+  The server is implemented with `rclpy` + `asyncio` + `websockets` and mirrors cockpit messages to ROS topics (`/conversation`, `/cmd_vel`). Telemetry from `/audio/transcript/final`, `/imu/data`, and the Foot drivetrain is fanned out to any subscribed clients.
 
 - **Frontend:** `modules/pilot/www` contains static HTML pages using Alpine.js that connect directly to the cockpit websocket. The HTTP server automatically serves these pages and provides an API endpoint at `/api/modules` that lists active modules from the host configuration.
 
@@ -24,8 +24,9 @@ colcon test-result --verbose
 # Launch the cockpit (websocket bridge + HTTP server)
 ros2 run pilot cockpit --log-level info
 
-# Or with custom paths (useful for development):
+# Or with custom paths and port (useful for development):
 ros2 run pilot cockpit \
+  --port 8088 \
   --www-dir /path/to/psyched/modules/pilot/www \
   --hosts-dir /path/to/psyched/hosts \
   --log-level info
@@ -37,6 +38,7 @@ The backend stores its ROS-specific logic in `pilot_cockpit/bridge.py` and the F
 
 The cockpit UI is built with vanilla HTML and Alpine.js. Module-specific pages live in `modules/pilot/www/modules/`. Each page:
 
+- Is served from `http://{host}:8088` by the unified server
 - Connects to the cockpit websocket at `ws://{host}:8088/ws`
 - Subscribes to relevant ROS topics using the `{ op: 'sub', topic: '/topic/name' }` protocol
 - Publishes commands using `{ op: 'pub', topic: '/topic/name', msg: {...} }`
