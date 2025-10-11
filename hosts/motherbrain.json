@@ -9,7 +9,16 @@
       "pilot",
       "imu",
       "foot",
-      "eye"
+      "eye",
+      "ear",
+      "faces",
+      "gps",
+      "nav",
+      "wifi",
+      "will",
+      "voice",
+      "viscera",
+      "memory"
     ],
     "services": []
   },
