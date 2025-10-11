@@ -494,11 +494,19 @@ class WebsocketServer:
 class HttpServer:
     """HTTP server that serves the cockpit UI static files."""
 
-    def __init__(self, node: CockpitBridgeNode, www_dir: str, host: str = "0.0.0.0", port: int = 8080) -> None:
+    def __init__(
+        self,
+        node: CockpitBridgeNode,
+        www_dir: str,
+        host: str = "0.0.0.0",
+        port: int = 8080,
+        hosts_dir: Optional[str] = None
+    ) -> None:
         self._node = node
         self._www_dir = Path(www_dir).resolve()
         self._host = host
         self._port = port
+        self._hosts_dir = Path(hosts_dir).resolve() if hosts_dir else None
         self._server: Optional[asyncio.base_events.Server] = None
 
     async def start(self) -> None:
@@ -600,7 +608,14 @@ class HttpServer:
         try:
             import socket
             hostname = socket.gethostname()
-            config_dir = Path(__file__).parent.parent.parent.parent.parent.parent.parent / 'hosts'
+            
+            # Use provided hosts_dir or fall back to relative path
+            if self._hosts_dir:
+                config_dir = self._hosts_dir
+            else:
+                # Fall back to relative path from this file (for development)
+                config_dir = Path(__file__).parent.parent.parent.parent.parent.parent / 'hosts'
+            
             config_file = config_dir / f'{hostname}.json'
             
             if config_file.exists():
@@ -698,7 +713,13 @@ class HttpServer:
         await writer.drain()
 
 
-async def run_bridge(host: str = "0.0.0.0", port: int = 8088, http_port: int = 8080) -> None:
+async def run_bridge(
+    host: str = "0.0.0.0",
+    port: int = 8088,
+    http_port: int = 8080,
+    www_dir: Optional[str] = None,
+    hosts_dir: Optional[str] = None
+) -> None:
     """Entry point that spins ROS alongside the websocket and HTTP servers."""
     import threading
 
@@ -730,13 +751,18 @@ async def run_bridge(host: str = "0.0.0.0", port: int = 8088, http_port: int = 8
     await ws_server.start()
 
     # Find the www directory
-    www_dir = Path(__file__).parent.parent.parent.parent.parent / 'www'
-    if not www_dir.exists():
-        node.get_logger().warning("www directory not found at %s, HTTP server disabled", www_dir)
+    if www_dir:
+        www_path = Path(www_dir)
+    else:
+        # Fall back to relative path from this file (for development)
+        www_path = Path(__file__).parent.parent.parent.parent.parent / 'www'
+    
+    if not www_path.exists():
+        node.get_logger().warning("www directory not found at %s, HTTP server disabled", www_path)
         http_server = None
     else:
         # Start HTTP server
-        http_server = HttpServer(node, str(www_dir), host=host, port=http_port)
+        http_server = HttpServer(node, str(www_path), host=host, port=http_port, hosts_dir=hosts_dir)
         await http_server.start()
 
     await stop_event.wait()

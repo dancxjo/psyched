@@ -62,6 +62,8 @@ echo "Starting Pilot cockpit on websocket port ${COCKPIT_PORT} and HTTP port ${H
     ros2 run pilot cockpit \
       --port "${COCKPIT_PORT}" \
       --http-port "${HTTP_PORT}" \
+      --www-dir "${ROOT_DIR}/modules/pilot/www" \
+      --hosts-dir "${ROOT_DIR}/hosts" \
       --log-level "${PILOT_LOG_LEVEL:-info}"
 ) &
 COCKPIT_PID=$!
