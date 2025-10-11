@@ -11,7 +11,9 @@
     "services": []
   },
   "modules": {
-    "pilot": {},
+    "pilot": {
+      "launch": true
+    },
     "imu": {
       "launch": true
     },
