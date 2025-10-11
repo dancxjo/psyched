@@ -4,8 +4,7 @@ This repo includes a simple ROS 2 development container you can use to run the 
 
 - Base image: `ros:humble-ros-base` (Ubuntu 22.04)
 - Exposed ports:
-  - `8000`: Fresh dev server for the pilot UI
-  - `8088`: Cockpit websocket bridge (`ws://0.0.0.0:8088/ws`)
+  - `8088`: Unified cockpit server (`http://0.0.0.0:8088`, websocket bridge at `/api/topics/bridge`)
 - The container “dresses” itself as a hostname you choose so `psh` applies the matching profile from `hosts/<name>.json`.
 
 ## Quick start

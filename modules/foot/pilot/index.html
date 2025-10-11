@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" x-data="Foot.footDashboard()" x-init="init()">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Base Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script type="module" src="/js/pilot.js"></script>
+    <script type="module" src="/modules/foot/js/foot.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Create Base Dashboard</h1>
+        <p>Telemetry and controls for the Create drivetrain.</p>
+      </header>
+      <section class="grid">
+        <template x-for="topic in topics" :key="topic.name">
+          <article class="card">
+            <h2 x-text="topic.name"></h2>
+            <p><strong>Type:</strong> <span x-text="topic.type"></span></p>
+            <p x-text="topic.description"></p>
+            <template x-if="topic.direction !== 'subscriber'">
+              <pre style="max-height: 200px; overflow: auto;" x-text="formatted(topic)"></pre>
+            </template>
+            <template x-if="topic.direction === 'subscriber'">
+              <div>
+                <textarea
+                  rows="6"
+                  style="width: 100%;"
+                  x-model="commands[topic.name]"
+                  :placeholder="example(topic) || '{ }'"
+                ></textarea>
+                <button type="button" @click="sendCommand(topic)" style="margin-top: 0.5rem;">
+                  Send command
+                </button>
+                <p class="status" x-text="errors[topic.name] || ''"></p>
+              </div>
+            </template>
+          </article>
+        </template>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+[unit.pilot]
+apt = [
+    "python3-aiohttp",
+    "python3-yaml",
+]
+pip = []
+launch = "modules/pilot/launch_unit.sh"
+shutdown = "modules/pilot/shutdown_unit.sh"
+pilot_control = "modules/pilot/frontend/index.html"
+
+[unit.pilot.ros]
+workspace = "."
+packages = ["pilot"]
