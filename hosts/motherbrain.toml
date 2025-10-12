@@ -55,7 +55,7 @@ display_name = "Hypothalamus"
 
 [config.mod.hypothalamus.env]
 HYPOTHALAMUS_SENSOR_TYPE = "DHT11"
-HYPOTHALAMUS_GPIO_PIN = "D4"
+HYPOTHALAMUS_GPIO_PIN = "D23"
 
 [config.mod.wifi.env]
 WIFI_INTERFACE = "wlan1"
