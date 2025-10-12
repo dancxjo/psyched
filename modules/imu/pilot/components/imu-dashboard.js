@@ -2,16 +2,16 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/pilot.js';
 
 class ImuDashboard extends LitElement {
-  static properties = {
-    status: { state: true },
-    orientation: { state: true },
-    angularVelocity: { state: true },
-    linearAcceleration: { state: true },
-    temperatureC: { state: true },
-    temperatureF: { state: true },
-  };
+    static properties = {
+        status: { state: true },
+        orientation: { state: true },
+        angularVelocity: { state: true },
+        linearAcceleration: { state: true },
+        temperatureC: { state: true },
+        temperatureF: { state: true },
+    };
 
-  static styles = css`
+    static styles = css`
     :host {
       display: block;
     }
@@ -72,86 +72,86 @@ class ImuDashboard extends LitElement {
     }
   `;
 
-  constructor() {
-    super();
-    this.status = 'Connecting…';
-    this.orientation = { x: 0, y: 0, z: 0, w: 0 };
-    this.angularVelocity = { x: 0, y: 0, z: 0 };
-    this.linearAcceleration = { x: 0, y: 0, z: 0 };
-    this.temperatureC = null;
-    this.temperatureF = null;
-    this.sockets = [];
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.connectImu();
-    this.connectTemperature();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    for (const socket of this.sockets) {
-      try {
-        socket.close();
-      } catch (_error) {
-        // ignore
-      }
+    constructor() {
+        super();
+        this.status = 'Connecting…';
+        this.orientation = { x: 0, y: 0, z: 0, w: 0 };
+        this.angularVelocity = { x: 0, y: 0, z: 0 };
+        this.linearAcceleration = { x: 0, y: 0, z: 0 };
+        this.temperatureC = null;
+        this.temperatureF = null;
+        this.sockets = [];
     }
-    this.sockets.length = 0;
-  }
 
-  connectImu() {
-    const socket = createTopicSocket({
-      topic: '/imu/data',
-      type: 'sensor_msgs/msg/Imu',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.event === 'message' && payload.data) {
-        const data = payload.data;
-        this.orientation = data.orientation ?? this.orientation;
-        this.angularVelocity = data.angular_velocity ?? this.angularVelocity;
-        this.linearAcceleration = data.linear_acceleration ?? this.linearAcceleration;
-        this.status = 'Live';
-      }
-    });
-    socket.addEventListener('close', () => {
-      this.status = 'Disconnected';
-    });
-    socket.addEventListener('error', () => {
-      this.status = 'Error';
-    });
-    this.sockets.push(socket);
-  }
+    connectedCallback() {
+        super.connectedCallback();
+        this.connectImu();
+        this.connectTemperature();
+    }
 
-  connectTemperature() {
-    const socket = createTopicSocket({
-      topic: '/imu/temperature',
-      type: 'std_msgs/msg/Float32',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.event === 'message' && payload.data && 'data' in payload.data) {
-        const celsius = Number(payload.data.data);
-        if (!Number.isNaN(celsius)) {
-          this.temperatureC = celsius;
-          this.temperatureF = celsius * (9 / 5) + 32;
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        for (const socket of this.sockets) {
+            try {
+                socket.close();
+            } catch (_error) {
+                // ignore
+            }
         }
-      }
-    });
-    this.sockets.push(socket);
-  }
+        this.sockets.length = 0;
+    }
 
-  format(value, fractionDigits = 2) {
-    return Number(value).toFixed(fractionDigits);
-  }
+    connectImu() {
+        const socket = createTopicSocket({
+            topic: '/imu/data',
+            type: 'sensor_msgs/msg/Imu',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', (event) => {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'message' && payload.data) {
+                const data = payload.data;
+                this.orientation = data.orientation ?? this.orientation;
+                this.angularVelocity = data.angular_velocity ?? this.angularVelocity;
+                this.linearAcceleration = data.linear_acceleration ?? this.linearAcceleration;
+                this.status = 'Live';
+            }
+        });
+        socket.addEventListener('close', () => {
+            this.status = 'Disconnected';
+        });
+        socket.addEventListener('error', () => {
+            this.status = 'Error';
+        });
+        this.sockets.push(socket);
+    }
 
-  render() {
-    const statusClass = this.status === 'Live' ? 'live' : this.status === 'Error' ? 'error' : '';
-    return html`
+    connectTemperature() {
+        const socket = createTopicSocket({
+            topic: '/imu/temperature',
+            type: 'std_msgs/msg/Float32',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', (event) => {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'message' && payload.data && 'data' in payload.data) {
+                const celsius = Number(payload.data.data);
+                if (!Number.isNaN(celsius)) {
+                    this.temperatureC = celsius;
+                    this.temperatureF = celsius * (9 / 5) + 32;
+                }
+            }
+        });
+        this.sockets.push(socket);
+    }
+
+    format(value, fractionDigits = 2) {
+        return Number(value).toFixed(fractionDigits);
+    }
+
+    render() {
+        const statusClass = this.status === 'Live' ? 'live' : this.status === 'Error' ? 'error' : '';
+        return html`
       <div class="imu-grid">
         <div class="status-bar ${statusClass}">Status: ${this.status}</div>
         
@@ -220,7 +220,7 @@ class ImuDashboard extends LitElement {
         </div>
       </div>
     `;
-  }
+    }
 }
 
 customElements.define('imu-dashboard', ImuDashboard);

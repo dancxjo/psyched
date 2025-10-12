@@ -2,25 +2,25 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/pilot.js';
 
 function generateId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `event-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return `event-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 class VoiceDashboard extends LitElement {
-  static properties = {
-    status: { state: true },
-    voiceFeedback: { state: true },
-    commandFeedback: { state: true },
-    volumeFeedback: { state: true },
-    voiceMessage: { state: true },
-    volume: { state: true },
-    lastVoice: { state: true },
-    eventLog: { state: true },
-  };
+    static properties = {
+        status: { state: true },
+        voiceFeedback: { state: true },
+        commandFeedback: { state: true },
+        volumeFeedback: { state: true },
+        voiceMessage: { state: true },
+        volume: { state: true },
+        lastVoice: { state: true },
+        eventLog: { state: true },
+    };
 
-  static styles = css`
+    static styles = css`
     :host {
       display: block;
     }
@@ -147,179 +147,179 @@ class VoiceDashboard extends LitElement {
     }
   `;
 
-  constructor() {
-    super();
-    this.status = 'Connecting…';
-    this.voiceFeedback = '';
-    this.commandFeedback = '';
-    this.volumeFeedback = '';
-    this.voiceMessage = '';
-    this.volume = 255;
-    this.lastVoice = '';
-    this.eventLog = [];
-    this.voicePublisher = null;
-    this.interruptPublisher = null;
-    this.resumePublisher = null;
-    this.clearPublisher = null;
-    this.volumePublisher = null;
-    this.sockets = [];
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.connectVoice();
-    this.connectEventStreams();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    for (const socket of this.sockets) {
-      try {
-        socket.close();
-      } catch (_error) {
-        // ignore
-      }
+    constructor() {
+        super();
+        this.status = 'Connecting…';
+        this.voiceFeedback = '';
+        this.commandFeedback = '';
+        this.volumeFeedback = '';
+        this.voiceMessage = '';
+        this.volume = 255;
+        this.lastVoice = '';
+        this.eventLog = [];
+        this.voicePublisher = null;
+        this.interruptPublisher = null;
+        this.resumePublisher = null;
+        this.clearPublisher = null;
+        this.volumePublisher = null;
+        this.sockets = [];
     }
-    this.sockets.length = 0;
-  }
 
-  connectVoice() {
-    const socket = createTopicSocket({
-      topic: '/voice',
-      type: 'std_msgs/msg/String',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.event === 'message' && payload.data && typeof payload.data.data !== 'undefined') {
-        this.lastVoice = String(payload.data.data ?? '');
-        this.status = 'Live';
-      }
-    });
-    socket.addEventListener('close', () => {
-      this.status = 'Disconnected';
-    });
-    socket.addEventListener('error', () => {
-      this.status = 'Error';
-    });
-    this.sockets.push(socket);
-    this.ensureVoicePublisher();
-  }
-
-  connectEventStreams() {
-    this.createEventListener('/voice_done', 'Playback complete');
-    this.createEventListener('/voice_interrupt', 'Playback interrupted');
-  }
-
-  createEventListener(topic, label) {
-    const socket = createTopicSocket({
-      topic,
-      type: 'std_msgs/msg/Empty',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', () => {
-      const event = {
-        id: generateId(),
-        label,
-        topic,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      this.eventLog = [event, ...this.eventLog].slice(0, 30);
-    });
-    this.sockets.push(socket);
-  }
-
-  ensureVoicePublisher() {
-    if (this.voicePublisher) {
-      return this.voicePublisher;
+    connectedCallback() {
+        super.connectedCallback();
+        this.connectVoice();
+        this.connectEventStreams();
     }
-    const publisher = createTopicSocket({
-      topic: '/voice',
-      type: 'std_msgs/msg/String',
-      role: 'publish',
-    });
-    publisher.addEventListener('open', () => {
-      this.voiceFeedback = '';
-    });
-    publisher.addEventListener('error', () => {
-      this.voiceFeedback = 'Unable to publish to /voice';
-    });
-    this.voicePublisher = publisher;
-    this.sockets.push(publisher);
-    return publisher;
-  }
 
-  ensurePublisher(property, topic, type) {
-    if (this[property]) {
-      return this[property];
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        for (const socket of this.sockets) {
+            try {
+                socket.close();
+            } catch (_error) {
+                // ignore
+            }
+        }
+        this.sockets.length = 0;
     }
-    const publisher = createTopicSocket({
-      topic,
-      type,
-      role: 'publish',
-    });
-    publisher.addEventListener('error', () => {
-      this.commandFeedback = `Unable to publish to ${topic}`;
-    });
-    this[property] = publisher;
-    this.sockets.push(publisher);
-    return publisher;
-  }
 
-  handleSendVoice(event) {
-    event.preventDefault();
-    const text = this.voiceMessage.trim();
-    if (!text) {
-      this.voiceFeedback = 'Message text required for /voice';
-      return;
+    connectVoice() {
+        const socket = createTopicSocket({
+            topic: '/voice',
+            type: 'std_msgs/msg/String',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', (event) => {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'message' && payload.data && typeof payload.data.data !== 'undefined') {
+                this.lastVoice = String(payload.data.data ?? '');
+                this.status = 'Live';
+            }
+        });
+        socket.addEventListener('close', () => {
+            this.status = 'Disconnected';
+        });
+        socket.addEventListener('error', () => {
+            this.status = 'Error';
+        });
+        this.sockets.push(socket);
+        this.ensureVoicePublisher();
     }
-    try {
-      const publisher = this.ensureVoicePublisher();
-      publisher.send(JSON.stringify({ data: text }));
-      this.voiceFeedback = 'Voice message sent';
-      this.voiceMessage = '';
-      this.lastVoice = text;
-    } catch (error) {
-      this.voiceFeedback = error instanceof Error ? error.message : String(error);
+
+    connectEventStreams() {
+        this.createEventListener('/voice_done', 'Playback complete');
+        this.createEventListener('/voice_interrupt', 'Playback interrupted');
     }
-  }
 
-  sendInterrupt() {
-    this.sendEmptyCommand('interruptPublisher', '/voice/interrupt', 'std_msgs/msg/Empty', 'Interrupt sent');
-  }
-
-  sendResume() {
-    this.sendEmptyCommand('resumePublisher', '/voice/resume', 'std_msgs/msg/Empty', 'Resume sent');
-  }
-
-  sendClear() {
-    this.sendEmptyCommand('clearPublisher', '/voice/clear', 'std_msgs/msg/Empty', 'Clear sent');
-  }
-
-  sendEmptyCommand(property, topic, type, successMessage) {
-    try {
-      const publisher = this.ensurePublisher(property, topic, type);
-      publisher.send(JSON.stringify({}));
-      this.commandFeedback = successMessage;
-    } catch (error) {
-      this.commandFeedback = error instanceof Error ? error.message : String(error);
+    createEventListener(topic, label) {
+        const socket = createTopicSocket({
+            topic,
+            type: 'std_msgs/msg/Empty',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', () => {
+            const event = {
+                id: generateId(),
+                label,
+                topic,
+                timestamp: new Date().toLocaleTimeString(),
+            };
+            this.eventLog = [event, ...this.eventLog].slice(0, 30);
+        });
+        this.sockets.push(socket);
     }
-  }
 
-  applyVolume() {
-    const value = Math.max(0, Math.min(255, Number(this.volume)));
-    this.volume = value;
-    try {
-      const publisher = this.ensurePublisher('volumePublisher', '/voice/volume', 'std_msgs/msg/UInt8');
-      publisher.send(JSON.stringify({ data: value }));
-      this.volumeFeedback = `Volume set to ${value}`;
-    } catch (error) {
-      this.volumeFeedback = error instanceof Error ? error.message : String(error);
+    ensureVoicePublisher() {
+        if (this.voicePublisher) {
+            return this.voicePublisher;
+        }
+        const publisher = createTopicSocket({
+            topic: '/voice',
+            type: 'std_msgs/msg/String',
+            role: 'publish',
+        });
+        publisher.addEventListener('open', () => {
+            this.voiceFeedback = '';
+        });
+        publisher.addEventListener('error', () => {
+            this.voiceFeedback = 'Unable to publish to /voice';
+        });
+        this.voicePublisher = publisher;
+        this.sockets.push(publisher);
+        return publisher;
     }
-  }
 
-  render() {
-    return html`
+    ensurePublisher(property, topic, type) {
+        if (this[property]) {
+            return this[property];
+        }
+        const publisher = createTopicSocket({
+            topic,
+            type,
+            role: 'publish',
+        });
+        publisher.addEventListener('error', () => {
+            this.commandFeedback = `Unable to publish to ${topic}`;
+        });
+        this[property] = publisher;
+        this.sockets.push(publisher);
+        return publisher;
+    }
+
+    handleSendVoice(event) {
+        event.preventDefault();
+        const text = this.voiceMessage.trim();
+        if (!text) {
+            this.voiceFeedback = 'Message text required for /voice';
+            return;
+        }
+        try {
+            const publisher = this.ensureVoicePublisher();
+            publisher.send(JSON.stringify({ data: text }));
+            this.voiceFeedback = 'Voice message sent';
+            this.voiceMessage = '';
+            this.lastVoice = text;
+        } catch (error) {
+            this.voiceFeedback = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    sendInterrupt() {
+        this.sendEmptyCommand('interruptPublisher', '/voice/interrupt', 'std_msgs/msg/Empty', 'Interrupt sent');
+    }
+
+    sendResume() {
+        this.sendEmptyCommand('resumePublisher', '/voice/resume', 'std_msgs/msg/Empty', 'Resume sent');
+    }
+
+    sendClear() {
+        this.sendEmptyCommand('clearPublisher', '/voice/clear', 'std_msgs/msg/Empty', 'Clear sent');
+    }
+
+    sendEmptyCommand(property, topic, type, successMessage) {
+        try {
+            const publisher = this.ensurePublisher(property, topic, type);
+            publisher.send(JSON.stringify({}));
+            this.commandFeedback = successMessage;
+        } catch (error) {
+            this.commandFeedback = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    applyVolume() {
+        const value = Math.max(0, Math.min(255, Number(this.volume)));
+        this.volume = value;
+        try {
+            const publisher = this.ensurePublisher('volumePublisher', '/voice/volume', 'std_msgs/msg/UInt8');
+            publisher.send(JSON.stringify({ data: value }));
+            this.volumeFeedback = `Volume set to ${value}`;
+        } catch (error) {
+            this.volumeFeedback = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    render() {
+        return html`
       <div class="voice-layout">
         <article class="voice-card">
           <h3>Speak Command</h3>
@@ -359,9 +359,9 @@ class VoiceDashboard extends LitElement {
           <h3>Event Log</h3>
           <ul class="event-log">
             ${this.eventLog.length === 0
-              ? html`<li>No events yet</li>`
-              : this.eventLog.map(
-                  (event) => html`
+                ? html`<li>No events yet</li>`
+                : this.eventLog.map(
+                    (event) => html`
                     <li key="${event.id}">
                       <strong>${event.label}</strong>
                       <span class="status">${event.topic} · ${event.timestamp}</span>
@@ -372,7 +372,7 @@ class VoiceDashboard extends LitElement {
         </article>
       </div>
     `;
-  }
+    }
 }
 
 customElements.define('voice-dashboard', VoiceDashboard);

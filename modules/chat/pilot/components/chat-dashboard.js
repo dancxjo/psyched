@@ -2,28 +2,28 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/pilot.js';
 
 function generateId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 class ChatDashboard extends LitElement {
-  static properties = {
-    status: { state: true },
-    voiceStatus: { state: true },
-    formFeedback: { state: true },
-    voiceFeedback: { state: true },
-    messages: { state: true },
-    voiceLast: { state: true },
-    composerRole: { state: true },
-    composerSpeaker: { state: true },
-    composerConfidence: { state: true },
-    composerContent: { state: true },
-    voiceCommand: { state: true },
-  };
+    static properties = {
+        status: { state: true },
+        voiceStatus: { state: true },
+        formFeedback: { state: true },
+        voiceFeedback: { state: true },
+        messages: { state: true },
+        voiceLast: { state: true },
+        composerRole: { state: true },
+        composerSpeaker: { state: true },
+        composerConfidence: { state: true },
+        composerContent: { state: true },
+        voiceCommand: { state: true },
+    };
 
-  static styles = css`
+    static styles = css`
     :host {
       display: block;
     }
@@ -156,184 +156,184 @@ class ChatDashboard extends LitElement {
     }
   `;
 
-  constructor() {
-    super();
-    this.status = 'Connecting…';
-    this.voiceStatus = 'Connecting…';
-    this.formFeedback = '';
-    this.voiceFeedback = '';
-    this.conversationPublisher = null;
-    this.voicePublisher = null;
-    this.messages = [];
-    this.voiceLast = '';
-    this.composerRole = 'user';
-    this.composerSpeaker = 'pilot';
-    this.composerConfidence = 1.0;
-    this.composerContent = '';
-    this.voiceCommand = '';
-    this.sockets = [];
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.connectConversation();
-    this.connectVoice();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    for (const socket of this.sockets) {
-      try {
-        socket.close();
-      } catch (_error) {
-        // ignore
-      }
+    constructor() {
+        super();
+        this.status = 'Connecting…';
+        this.voiceStatus = 'Connecting…';
+        this.formFeedback = '';
+        this.voiceFeedback = '';
+        this.conversationPublisher = null;
+        this.voicePublisher = null;
+        this.messages = [];
+        this.voiceLast = '';
+        this.composerRole = 'user';
+        this.composerSpeaker = 'pilot';
+        this.composerConfidence = 1.0;
+        this.composerContent = '';
+        this.voiceCommand = '';
+        this.sockets = [];
     }
-    this.sockets.length = 0;
-  }
 
-  connectConversation() {
-    const socket = createTopicSocket({
-      topic: '/conversation',
-      type: 'psyched_msgs/msg/Message',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.event === 'message' && payload.data) {
-        this.addMessage(payload.data);
-        this.status = 'Live';
-      }
-    });
-    socket.addEventListener('close', () => {
-      this.status = 'Disconnected';
-    });
-    socket.addEventListener('error', () => {
-      this.status = 'Error';
-    });
-    this.sockets.push(socket);
-
-    this.conversationPublisher = createTopicSocket({
-      topic: '/conversation',
-      type: 'psyched_msgs/msg/Message',
-      role: 'publish',
-    });
-    this.conversationPublisher.addEventListener('open', () => {
-      this.formFeedback = '';
-    });
-    this.conversationPublisher.addEventListener('error', () => {
-      this.formFeedback = 'Unable to publish to /conversation';
-    });
-    this.sockets.push(this.conversationPublisher);
-  }
-
-  connectVoice() {
-    const socket = createTopicSocket({
-      topic: '/voice',
-      type: 'std_msgs/msg/String',
-      role: 'subscribe',
-    });
-    socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.event === 'message' && payload.data && typeof payload.data.data !== 'undefined') {
-        this.voiceLast = String(payload.data.data ?? '');
-        this.voiceStatus = 'Live';
-      }
-    });
-    socket.addEventListener('close', () => {
-      this.voiceStatus = 'Disconnected';
-    });
-    socket.addEventListener('error', () => {
-      this.voiceStatus = 'Error';
-    });
-    this.sockets.push(socket);
-
-    this.voicePublisher = createTopicSocket({
-      topic: '/voice',
-      type: 'std_msgs/msg/String',
-      role: 'publish',
-    });
-    this.voicePublisher.addEventListener('open', () => {
-      this.voiceFeedback = '';
-    });
-    this.voicePublisher.addEventListener('error', () => {
-      this.voiceFeedback = 'Unable to publish to /voice';
-    });
-    this.sockets.push(this.voicePublisher);
-  }
-
-  addMessage(data) {
-    const message = {
-      id: generateId(),
-      role: data.role || 'unknown',
-      speaker: data.speaker || '',
-      confidence: typeof data.confidence === 'number' ? data.confidence : null,
-      content: data.content || '',
-      timestamp: new Date().toLocaleTimeString(),
-    };
-    this.messages = [message, ...this.messages].slice(0, 50);
-  }
-
-  formatConfidence(value) {
-    if (typeof value !== 'number' || Number.isNaN(value)) {
-      return '—';
+    connectedCallback() {
+        super.connectedCallback();
+        this.connectConversation();
+        this.connectVoice();
     }
-    return `${Math.round(value * 100)}%`;
-  }
 
-  handleSendMessage(event) {
-    event.preventDefault();
-    const text = this.composerContent.trim();
-    if (!text) {
-      this.formFeedback = 'Message text required';
-      return;
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        for (const socket of this.sockets) {
+            try {
+                socket.close();
+            } catch (_error) {
+                // ignore
+            }
+        }
+        this.sockets.length = 0;
     }
-    const payload = {
-      role: this.composerRole || 'user',
-      content: text,
-      speaker: this.composerSpeaker || 'pilot',
-      confidence: Number.isFinite(Number(this.composerConfidence)) ? Number(this.composerConfidence) : 1.0,
-      segments: [],
-      words: [],
-    };
-    try {
-      this.conversationPublisher.send(JSON.stringify(payload));
-      this.formFeedback = 'Message sent to /conversation';
-      this.composerContent = '';
-    } catch (error) {
-      this.formFeedback = error instanceof Error ? error.message : String(error);
-    }
-  }
 
-  handleSendVoice(event) {
-    event.preventDefault();
-    const text = this.voiceCommand.trim();
-    if (!text) {
-      this.voiceFeedback = 'Text required to publish to /voice';
-      return;
-    }
-    const payload = { data: text };
-    try {
-      this.voicePublisher.send(JSON.stringify(payload));
-      this.voiceFeedback = 'Voice command sent';
-      this.voiceCommand = '';
-      this.voiceLast = text;
-    } catch (error) {
-      this.voiceFeedback = error instanceof Error ? error.message : String(error);
-    }
-  }
+    connectConversation() {
+        const socket = createTopicSocket({
+            topic: '/conversation',
+            type: 'psyched_msgs/msg/Message',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', (event) => {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'message' && payload.data) {
+                this.addMessage(payload.data);
+                this.status = 'Live';
+            }
+        });
+        socket.addEventListener('close', () => {
+            this.status = 'Disconnected';
+        });
+        socket.addEventListener('error', () => {
+            this.status = 'Error';
+        });
+        this.sockets.push(socket);
 
-  render() {
-    return html`
+        this.conversationPublisher = createTopicSocket({
+            topic: '/conversation',
+            type: 'psyched_msgs/msg/Message',
+            role: 'publish',
+        });
+        this.conversationPublisher.addEventListener('open', () => {
+            this.formFeedback = '';
+        });
+        this.conversationPublisher.addEventListener('error', () => {
+            this.formFeedback = 'Unable to publish to /conversation';
+        });
+        this.sockets.push(this.conversationPublisher);
+    }
+
+    connectVoice() {
+        const socket = createTopicSocket({
+            topic: '/voice',
+            type: 'std_msgs/msg/String',
+            role: 'subscribe',
+        });
+        socket.addEventListener('message', (event) => {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'message' && payload.data && typeof payload.data.data !== 'undefined') {
+                this.voiceLast = String(payload.data.data ?? '');
+                this.voiceStatus = 'Live';
+            }
+        });
+        socket.addEventListener('close', () => {
+            this.voiceStatus = 'Disconnected';
+        });
+        socket.addEventListener('error', () => {
+            this.voiceStatus = 'Error';
+        });
+        this.sockets.push(socket);
+
+        this.voicePublisher = createTopicSocket({
+            topic: '/voice',
+            type: 'std_msgs/msg/String',
+            role: 'publish',
+        });
+        this.voicePublisher.addEventListener('open', () => {
+            this.voiceFeedback = '';
+        });
+        this.voicePublisher.addEventListener('error', () => {
+            this.voiceFeedback = 'Unable to publish to /voice';
+        });
+        this.sockets.push(this.voicePublisher);
+    }
+
+    addMessage(data) {
+        const message = {
+            id: generateId(),
+            role: data.role || 'unknown',
+            speaker: data.speaker || '',
+            confidence: typeof data.confidence === 'number' ? data.confidence : null,
+            content: data.content || '',
+            timestamp: new Date().toLocaleTimeString(),
+        };
+        this.messages = [message, ...this.messages].slice(0, 50);
+    }
+
+    formatConfidence(value) {
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+            return '—';
+        }
+        return `${Math.round(value * 100)}%`;
+    }
+
+    handleSendMessage(event) {
+        event.preventDefault();
+        const text = this.composerContent.trim();
+        if (!text) {
+            this.formFeedback = 'Message text required';
+            return;
+        }
+        const payload = {
+            role: this.composerRole || 'user',
+            content: text,
+            speaker: this.composerSpeaker || 'pilot',
+            confidence: Number.isFinite(Number(this.composerConfidence)) ? Number(this.composerConfidence) : 1.0,
+            segments: [],
+            words: [],
+        };
+        try {
+            this.conversationPublisher.send(JSON.stringify(payload));
+            this.formFeedback = 'Message sent to /conversation';
+            this.composerContent = '';
+        } catch (error) {
+            this.formFeedback = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    handleSendVoice(event) {
+        event.preventDefault();
+        const text = this.voiceCommand.trim();
+        if (!text) {
+            this.voiceFeedback = 'Text required to publish to /voice';
+            return;
+        }
+        const payload = { data: text };
+        try {
+            this.voicePublisher.send(JSON.stringify(payload));
+            this.voiceFeedback = 'Voice command sent';
+            this.voiceCommand = '';
+            this.voiceLast = text;
+        } catch (error) {
+            this.voiceFeedback = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    render() {
+        return html`
       <div class="chat-layout">
         <article class="chat-card">
           <h3>Conversation Stream</h3>
           <p class="status">Status: <strong>${this.status}</strong></p>
           <ul class="conversation-log">
             ${this.messages.length === 0
-              ? html`<li class="conversation-empty">Waiting for conversation activity…</li>`
-              : this.messages.map(
-                  (message) => html`
+                ? html`<li class="conversation-empty">Waiting for conversation activity…</li>`
+                : this.messages.map(
+                    (message) => html`
                     <li key="${message.id}">
                       <div class="meta">
                         <span class="role">${message.role}</span>
@@ -394,7 +394,7 @@ class ChatDashboard extends LitElement {
         </article>
       </div>
     `;
-  }
+    }
 }
 
 customElements.define('chat-dashboard', ChatDashboard);
