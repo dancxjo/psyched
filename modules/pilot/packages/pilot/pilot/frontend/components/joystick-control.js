@@ -1,4 +1,4 @@
-import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
 const MAX_LINEAR = 0.7;
 const MAX_ANGULAR = 2.0;
@@ -27,17 +27,57 @@ class PilotJoystickControl extends LitElement {
     this._handlePointerUp = (event) => this.handlePointerUp(event);
   }
 
-  createRenderRoot() {
-    return this;
-  }
-
   firstUpdated() {
-    this._container = this.querySelector('.joystick');
-    this._knob = this.querySelector('.joystick-knob');
+    this._container = this.shadowRoot.querySelector('.joystick');
+    this._knob = this.shadowRoot.querySelector('.joystick-knob');
     this._container?.addEventListener('pointerdown', this._handlePointerDown);
     window.addEventListener('pointermove', this._handlePointerMove);
     window.addEventListener('pointerup', this._handlePointerUp);
   }
+
+  static styles = [css`
+    :host {
+      display: block;
+    }
+    .joystick {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .joystick-grid {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%, rgba(88, 178, 220, 0.25), rgba(27, 31, 42, 0.9));
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.4);
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+    .joystick-knob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(248, 128, 60, 0.8), rgba(248, 128, 60, 0.4));
+      transform: translate(-50%, -50%);
+      transition: transform 0.05s ease;
+      cursor: grab;
+    }
+    .joystick-knob:active {
+      cursor: grabbing;
+    }
+    .joystick-readout {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.8rem;
+      color: var(--lcars-muted, #9aa0b5);
+      font-family: 'Source Code Pro', monospace;
+    }
+  `];
 
   disconnectedCallback() {
     super.disconnectedCallback();

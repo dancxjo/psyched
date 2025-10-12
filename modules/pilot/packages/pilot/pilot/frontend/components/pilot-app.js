@@ -1,5 +1,14 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
+// Component registry - maps module names to their component tag names
+const MODULE_COMPONENTS = {
+  foot: 'foot-dashboard',
+  imu: 'imu-dashboard',
+  chat: 'chat-dashboard',
+  voice: 'voice-dashboard',
+  hypothalamus: 'hypothalamus-dashboard',
+};
+
 /**
  * Lightweight shell that lists module dashboards surfaced by the pilot.
  */
@@ -15,6 +24,7 @@ class PilotApp extends LitElement {
     this.modules = [];
     this.loading = true;
     this.errorMessage = '';
+    this.loadedComponents = new Set();
   }
 
   createRenderRoot() {
@@ -38,10 +48,25 @@ class PilotApp extends LitElement {
       this.modules = Array.isArray(payload.modules) ? payload.modules : [];
       this.broadcastNavigation();
       this.updateBridgeGlobals(payload.bridge);
+      await this.loadModuleComponents();
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : String(error);
     } finally {
       this.loading = false;
+    }
+  }
+
+  async loadModuleComponents() {
+    for (const module of this.modules) {
+      const componentTag = MODULE_COMPONENTS[module.name];
+      if (componentTag && !this.loadedComponents.has(module.name)) {
+        try {
+          await import(`/modules/${module.name}/components/${componentTag}.js`);
+          this.loadedComponents.add(module.name);
+        } catch (error) {
+          console.warn(`Failed to load component for module ${module.name}:`, error);
+        }
+      }
     }
   }
 
@@ -76,12 +101,6 @@ class PilotApp extends LitElement {
     window.dispatchEvent(new CustomEvent('pilot-sections', { detail }));
   }
 
-  updated(changedProperties) {
-    if (changedProperties.has('modules')) {
-      this.updateComplete.then(() => this._bootstrapFrames());
-    }
-  }
-
   render() {
     if (this.loading) {
       return html`<section class="pilot-loading">Loading module dashboards…</section>`;
@@ -109,31 +128,17 @@ class PilotApp extends LitElement {
 
   renderModuleSurface(module) {
     const slug = module.slug || module.name;
-    const fallbackUrl = module.has_pilot ? `/modules/${module.name}/` : null;
-    const dashboardUrl = module.dashboard_url || fallbackUrl;
     const displayName = module.display_name || module.name;
+    const componentTag = MODULE_COMPONENTS[module.name];
 
     return html`
       <section class="module-section" id=${`module-${slug}`}>
         <header class="module-section__header">
-          <div class="module-section__meta">
-            <h2>${displayName}</h2>
-            ${module.description ? html`<p>${module.description}</p>` : ''}
-          </div>
-          ${dashboardUrl
-        ? html`<a class="module-section__link" href=${dashboardUrl} target="_blank" rel="noopener">Open standalone ↗</a>`
-        : ''}
+          <h2>${displayName}</h2>
+          ${module.description ? html`<p class="module-description">${module.description}</p>` : ''}
         </header>
-        ${dashboardUrl
-        ? html`<div class="module-surface">
-              <iframe
-                src=${dashboardUrl}
-                title=${`${displayName} dashboard`}
-                loading="lazy"
-                allow="autoplay; clipboard-read; clipboard-write"
-                data-module=${slug}
-              ></iframe>
-            </div>`
+        ${componentTag
+        ? html`<div class="module-surface">${this.renderComponent(componentTag)}</div>`
         : html`<div class="module-placeholder">
               <p>This module does not expose pilot assets yet.</p>
             </div>`}
@@ -141,58 +146,16 @@ class PilotApp extends LitElement {
     `;
   }
 
-  _bootstrapFrames() {
-    const frames = this.querySelectorAll('iframe[data-module]');
-    frames.forEach((frame) => {
-      if (frame.dataset.bootstrap === 'true') {
-        return;
-      }
-      frame.dataset.bootstrap = 'true';
-      frame.addEventListener('load', () => {
-        this._resizeFrame(frame);
-        this._attachResizeObserver(frame);
-      });
-    });
-  }
-
-  _attachResizeObserver(frame) {
-    try {
-      const win = frame.contentWindow;
-      const doc = win?.document;
-      if (!win || !doc || typeof win.ResizeObserver === 'undefined') {
-        return;
-      }
-      const target = doc.body || doc.documentElement;
-      if (!target) {
-        return;
-      }
-      const observer = new win.ResizeObserver(() => this._resizeFrame(frame));
-      observer.observe(target);
-      frame._pilotResizeObserver = observer;
-    } catch (error) {
-      // Cross-origin frames cannot be observed; ignore safely.
-    }
-  }
-
-  _resizeFrame(frame) {
-    const minHeight = 640;
-    try {
-      const doc = frame.contentDocument || frame.contentWindow?.document;
-      if (!doc) {
-        frame.style.height = `${minHeight}px`;
-        return;
-      }
-      const body = doc.body;
-      const html = doc.documentElement;
-      const measured = Math.max(
-        body ? body.scrollHeight : 0,
-        html ? html.scrollHeight : 0,
-        minHeight,
-      );
-      frame.style.height = `${measured}px`;
-    } catch (error) {
-      frame.style.height = `${minHeight}px`;
-    }
+  renderComponent(tagName) {
+    // Create the component element dynamically based on tag name
+    const tagMap = {
+      'foot-dashboard': html`<foot-dashboard></foot-dashboard>`,
+      'imu-dashboard': html`<imu-dashboard></imu-dashboard>`,
+      'chat-dashboard': html`<chat-dashboard></chat-dashboard>`,
+      'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
+      'hypothalamus-dashboard': html`<hypothalamus-dashboard></hypothalamus-dashboard>`,
+    };
+    return tagMap[tagName] || html`<p>Component ${tagName} not found</p>`;
   }
 }
 
