@@ -5,6 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "$std/testing/asserts.ts";
+import { delay } from "$std/async/delay.ts";
 import { join } from "$std/path/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import {
@@ -15,6 +16,8 @@ import {
   formatLaunchDiagnostics,
   listModules,
   moduleStatuses,
+  RosBuildPlanner,
+  RosBuildPlannerRunner,
 } from "./module.ts";
 import { repoRoot } from "./paths.ts";
 
@@ -113,6 +116,7 @@ Deno.test(
     const status: Deno.CommandStatus = { success: false, code: 1, signal: null };
     const result = await awaitModuleStability(Promise.resolve(status), 5);
     assertEquals(result, status);
+    await delay(10);
   },
 );
 
@@ -122,6 +126,7 @@ Deno.test(
     const pending = new Promise<Deno.CommandStatus>(() => {});
     const result = await awaitModuleStability(pending, 5);
     assertEquals(result, null);
+    await delay(10);
   },
 );
 
@@ -145,5 +150,98 @@ Deno.test(
     assertEquals(launched, modules);
     assertEquals(error.errors.length, 1);
     assertStringIncludes(error.message, "nav");
+  },
+);
+
+Deno.test(
+  "RosBuildPlanner aggregates rosdep and colcon invocations per workspace",
+  async () => {
+    const tempWorkspace = Deno.makeTempDirSync();
+    try {
+      const invocations: Array<{
+        type: "rosdep" | "colcon";
+        payload: unknown;
+      }> = [];
+      const runner: RosBuildPlannerRunner = {
+        async rosdep(invocation) {
+          invocations.push({ type: "rosdep", payload: invocation });
+        },
+        async colcon(invocation) {
+          invocations.push({ type: "colcon", payload: invocation });
+        },
+      };
+      const planner = new RosBuildPlanner(runner);
+      planner.add("alpha", {
+        workspace: tempWorkspace,
+        packages: ["alpha_pkg"],
+        skip_rosdep_keys: ["foo"],
+      });
+      planner.add("beta", {
+        workspace: tempWorkspace,
+        packages: ["beta_pkg"],
+        build_args: ["--cmake-args", "-DCMAKE_BUILD_TYPE=Release"],
+        skip_rosdep: true,
+      });
+      await planner.execute();
+
+      assertEquals(invocations.length, 2);
+
+      const rosdepCall = invocations[0];
+      assertEquals(rosdepCall.type, "rosdep");
+      const rosdepPayload = rosdepCall.payload as {
+        workspace: string;
+        skipKeys: string[];
+        modules: string[];
+      };
+      assertEquals(rosdepPayload.workspace, tempWorkspace);
+      assertEquals(rosdepPayload.skipKeys, ["foo"]);
+      assertEquals(rosdepPayload.modules, ["alpha", "beta"]);
+
+      const colconCall = invocations[1];
+      assertEquals(colconCall.type, "colcon");
+      const colconPayload = colconCall.payload as {
+        workspace: string;
+        packages: string[];
+        buildArgs: string[];
+        modules: string[];
+      };
+      assertEquals(colconPayload.workspace, tempWorkspace);
+      assertEquals(colconPayload.packages, ["alpha_pkg", "beta_pkg"]);
+      assertEquals(colconPayload.buildArgs, [
+        "--cmake-args",
+        "-DCMAKE_BUILD_TYPE=Release",
+      ]);
+      assertEquals(colconPayload.modules, ["alpha", "beta"]);
+    } finally {
+      Deno.removeSync(tempWorkspace, { recursive: true });
+    }
+  },
+);
+
+Deno.test(
+  "RosBuildPlanner skips rosdep and colcon when all modules opt out",
+  async () => {
+    const tempWorkspace = Deno.makeTempDirSync();
+    try {
+      const calls: string[] = [];
+      const runner: RosBuildPlannerRunner = {
+        async rosdep() {
+          calls.push("rosdep");
+        },
+        async colcon() {
+          calls.push("colcon");
+        },
+      };
+      const planner = new RosBuildPlanner(runner);
+      planner.add("gamma", {
+        workspace: tempWorkspace,
+        skip_rosdep: true,
+        skip_colcon: true,
+      });
+      await planner.execute();
+      assertEquals(calls, []);
+    } finally {
+      Deno.removeSync(tempWorkspace, { recursive: true });
+    }
   },
 );

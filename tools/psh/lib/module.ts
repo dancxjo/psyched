@@ -559,7 +559,14 @@ async function generatePilotManifest(frontendRoot: string): Promise<void> {
   await Deno.writeTextFile(manifestPath, payload);
 }
 
-export async function setupModule(module: string): Promise<void> {
+export interface ModuleSetupOptions {
+  rosPlanner?: RosBuildPlanner;
+}
+
+export async function setupModule(
+  module: string,
+  options: ModuleSetupOptions = {},
+): Promise<void> {
   const moduleDir = locateModuleDir(module);
   const config = loadModuleManifest(moduleDir, module);
   await installAptPackages(`setup:${module}`, dedupePreserveOrder(config.apt));
@@ -571,7 +578,7 @@ export async function setupModule(module: string): Promise<void> {
       await runScript(module, patch, moduleDir);
     }
   }
-  await prepareRosWorkspace(module, config.ros);
+  await prepareRosWorkspace(module, config.ros, options.rosPlanner);
   await linkPilotAssets(module, moduleDir);
 }
 
@@ -609,23 +616,37 @@ function linkModulePackages(
   }
 }
 
-async function prepareRosWorkspace(
-  module: string,
-  ros?: RosBuildConfig,
-): Promise<void> {
-  if (!ros) return;
-  const base = ros.workspace
-    ? (ros.workspace.startsWith("/")
-      ? ros.workspace
-      : resolve(join(workspaceRoot(), ros.workspace)))
-    : workspaceRoot();
-  if (!pathExists(base)) {
-    throw new Error(`ROS workspace ${base} not found for module '${module}'`);
-  }
-  const srcDir = join(base, "src");
-  ensureDirectory(srcDir);
-  if (!ros.skip_rosdep) {
-    console.log(colors.cyan(`[${module}] running rosdep install in ${base}`));
+interface RosWorkspacePlan {
+  workspace: string;
+  modules: string[];
+  rosdepRequired: boolean;
+  rosdepSkipKeys: string[];
+  colconRequired: boolean;
+  colconPackages: string[];
+  colconArgs: string[];
+}
+
+export interface RosdepInvocation {
+  workspace: string;
+  srcDir: string;
+  skipKeys: string[];
+  modules: string[];
+}
+
+export interface ColconInvocation {
+  workspace: string;
+  packages: string[];
+  buildArgs: string[];
+  modules: string[];
+}
+
+export interface RosBuildPlannerRunner {
+  rosdep(invocation: RosdepInvocation): Promise<void>;
+  colcon(invocation: ColconInvocation): Promise<void>;
+}
+
+const defaultRosBuildRunner: RosBuildPlannerRunner = {
+  async rosdep({ workspace, srcDir, skipKeys }: RosdepInvocation) {
     const args = [
       "install",
       "--from-paths",
@@ -634,29 +655,125 @@ async function prepareRosWorkspace(
       "-r",
       "-y",
     ];
-    if (ros.skip_rosdep_keys && ros.skip_rosdep_keys.length) {
-      args.push("--skip-keys", ros.skip_rosdep_keys.join(" "));
+    if (skipKeys.length) {
+      args.push("--skip-keys", skipKeys.join(" "));
     }
-    await $`rosdep ${args}`.cwd(base).stdout("inherit").stderr("inherit");
-  } else {
-    console.log(
-      colors.yellow(`[${module}] skipping rosdep (skip_rosdep=true)`),
-    );
+    await $`rosdep ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
+  },
+  async colcon({ workspace, packages, buildArgs }: ColconInvocation) {
+    const args = ["build", "--symlink-install"];
+    if (packages.length) {
+      args.push("--packages-select", ...packages);
+    }
+    if (buildArgs.length) {
+      args.push(...buildArgs);
+    }
+    await $`colcon ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
+  },
+};
+
+export class RosBuildPlanner {
+  #plans = new Map<string, RosWorkspacePlan>();
+  #runner: RosBuildPlannerRunner;
+
+  constructor(runner: RosBuildPlannerRunner = defaultRosBuildRunner) {
+    this.#runner = runner;
   }
-  if (ros.skip_colcon) {
-    console.log(
-      colors.yellow(`[${module}] skipping colcon build (skip_colcon=true)`),
-    );
+
+  add(module: string, ros: RosBuildConfig): void {
+    const workspace = this.#resolveWorkspaceBase(ros);
+    if (!pathExists(workspace)) {
+      throw new Error(`ROS workspace ${workspace} not found for module '${module}'`);
+    }
+    const plan = this.#plans.get(workspace) ?? {
+      workspace,
+      modules: [],
+      rosdepRequired: false,
+      rosdepSkipKeys: [],
+      colconRequired: false,
+      colconPackages: [],
+      colconArgs: [],
+    };
+    plan.modules.push(module);
+    if (!ros.skip_rosdep) {
+      plan.rosdepRequired = true;
+      if (ros.skip_rosdep_keys?.length) {
+        plan.rosdepSkipKeys.push(...ros.skip_rosdep_keys);
+      }
+    }
+    if (!ros.skip_colcon) {
+      plan.colconRequired = true;
+      if (ros.packages?.length) {
+        plan.colconPackages.push(...ros.packages);
+      }
+      if (ros.build_args?.length) {
+        plan.colconArgs.push(...ros.build_args);
+      }
+    }
+    this.#plans.set(workspace, plan);
+  }
+
+  async execute(): Promise<void> {
+    for (const plan of this.#plans.values()) {
+      const label = plan.modules.join(", ");
+      const srcDir = join(plan.workspace, "src");
+      ensureDirectory(srcDir);
+      if (plan.rosdepRequired) {
+        console.log(
+          colors.cyan(`[${label}] running rosdep install in ${plan.workspace}`),
+        );
+        await this.#runner.rosdep({
+          workspace: plan.workspace,
+          srcDir,
+          skipKeys: dedupePreserveOrder(plan.rosdepSkipKeys),
+          modules: [...plan.modules],
+        });
+      } else if (plan.modules.length) {
+        console.log(
+          colors.yellow(`[${label}] skipping rosdep (skip_rosdep=true)`),
+        );
+      }
+      if (plan.colconRequired) {
+        console.log(
+          colors.cyan(`[${label}] running colcon build in ${plan.workspace}`),
+        );
+        await this.#runner.colcon({
+          workspace: plan.workspace,
+          packages: dedupePreserveOrder(plan.colconPackages),
+          buildArgs: [...plan.colconArgs],
+          modules: [...plan.modules],
+        });
+      } else if (plan.modules.length) {
+        console.log(
+          colors.yellow(`[${label}] skipping colcon build (skip_colcon=true)`),
+        );
+      }
+    }
+  }
+
+  #resolveWorkspaceBase(ros: RosBuildConfig): string {
+    if (!ros.workspace) {
+      return workspaceRoot();
+    }
+    return ros.workspace.startsWith("/")
+      ? ros.workspace
+      : resolve(join(workspaceRoot(), ros.workspace));
+  }
+}
+
+async function prepareRosWorkspace(
+  module: string,
+  ros: RosBuildConfig | undefined,
+  planner?: RosBuildPlanner,
+): Promise<void> {
+  if (!ros) return;
+  if (planner) {
+    planner.add(module, ros);
     return;
   }
-  const colconArgs = ["build", "--symlink-install"];
-  if (ros.build_args?.length) {
-    colconArgs.push(...ros.build_args);
-  }
-  if (ros.packages?.length) {
-    colconArgs.push("--packages-select", ...ros.packages);
-  }
-  await $`colcon ${colconArgs}`.cwd(base).stdout("inherit").stderr("inherit");
+  const singlePlanner = new RosBuildPlanner();
+  singlePlanner.add(module, ros);
+  await singlePlanner.execute();
 }
 
 export async function teardownModule(module: string): Promise<void> {
@@ -882,9 +999,11 @@ function isPidRunning(pid: number): boolean {
 
 export async function setupModules(modules: string[]): Promise<void> {
   ensureRebootCompleted();
+  const rosPlanner = new RosBuildPlanner();
   for (const module of modules) {
-    await setupModule(module);
+    await setupModule(module, { rosPlanner });
   }
+  await rosPlanner.execute();
 }
 
 export async function teardownModules(modules: string[]): Promise<void> {
