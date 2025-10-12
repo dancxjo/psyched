@@ -43,6 +43,10 @@ export function createTopicSocket({ topic, type, role = 'subscribe' }) {
   return new WebSocket(location.toString());
 }
 
-window.Pilot = {
-  createTopicSocket,
-};
+if (typeof window !== 'undefined') {
+  const pilotGlobals = window.Pilot ? { ...window.Pilot } : {};
+  pilotGlobals.createTopicSocket = createTopicSocket;
+  pilotGlobals.dashboard = pilotDashboard;
+  window.Pilot = pilotGlobals;
+  window.pilotDashboard = pilotDashboard;
+}
