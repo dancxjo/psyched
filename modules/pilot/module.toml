@@ -11,3 +11,38 @@ pilot_control = "modules/pilot/frontend/index.html"
 [unit.pilot.ros]
 workspace = "."
 packages = ["pilot"]
+
+[pilot]
+display_name = "Pilot"
+description = "Teleoperation dashboard and ROS 2 bridge"
+mod_commands = ["setup", "build", "launch", "restart", "shutdown"]
+system_commands = ["start", "stop", "restart", "status"]
+regimes = ["system"]
+
+[[pilot.topics]]
+name = "/cmd_vel"
+type = "geometry_msgs/msg/Twist"
+access = "rw"
+presentation = "joystick"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/imu"
+type = "sensor_msgs/msg/Imu"
+access = "ro"
+presentation = "imu"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/host/health"
+type = "psyched_msgs/msg/HostHealth"
+access = "ro"
+presentation = "status"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/diagnostics"
+type = "diagnostic_msgs/msg/DiagnosticArray"
+access = "ro"
+presentation = "diagnostics"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }

@@ -24,3 +24,15 @@ branch = "main"
 [unit.imu.ros]
 workspace = "."
 packages = ["mpu6050driver"]
+
+[pilot]
+display_name = "IMU"
+description = "Inertial measurement data from the MPU6050"
+regimes = ["perception"]
+
+[[pilot.topics]]
+name = "/imu/data"
+type = "sensor_msgs/msg/Imu"
+access = "ro"
+presentation = "imu"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }

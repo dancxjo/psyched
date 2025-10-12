@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, MutableMapping, Optional
+from typing import Any, Dict, Iterable, List, MutableMapping, Optional, Sequence
 
 from aiohttp import web
 
+from .commands import CommandExecutor
+from .module_catalog import ModuleCatalog, ModuleInfo
 from .config import ModuleDescriptor, discover_active_modules, load_host_config
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,8 +23,14 @@ class PilotSettings:
 
     host_config_path: Path
     frontend_root: Path
+    modules_root: Path
+    repo_root: Optional[Path] = None
     listen_host: str = "0.0.0.0"
     listen_port: int = 8088
+
+    def __post_init__(self) -> None:
+        if self.repo_root is None:
+            self.repo_root = self.modules_root.resolve().parent
 
     def load_config(self) -> MutableMapping[str, Any]:
         """Return the parsed host configuration."""
@@ -33,6 +42,8 @@ class PilotSettings:
 
 
 PILOT_SETTINGS_KEY: web.AppKey[PilotSettings] = web.AppKey("pilot_settings")
+MODULE_CATALOG_KEY: web.AppKey[ModuleCatalog] = web.AppKey("module_catalog")
+COMMAND_EXECUTOR_KEY: web.AppKey[CommandExecutor] = web.AppKey("command_executor")
 ROS_BRIDGE_KEY: web.AppKey[Any] = web.AppKey("ros_bridge")
 
 
@@ -42,10 +53,23 @@ def create_app(*, settings: PilotSettings, ros_bridge: Any) -> web.Application:
     app = web.Application()
     app[PILOT_SETTINGS_KEY] = settings
     app[ROS_BRIDGE_KEY] = ros_bridge
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise RuntimeError("PilotSettings.repo_root must be resolved before creating the app")
+
+    catalog = ModuleCatalog(settings.modules_root)
+    executor = CommandExecutor(repo_root=repo_root)
+
+    app[MODULE_CATALOG_KEY] = catalog
+    app[COMMAND_EXECUTOR_KEY] = executor
+    # Fallback string keys for test harnesses that cannot import the AppKey constants.
+    app["module_catalog"] = catalog
+    app["command_executor"] = executor
 
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/topics/bridge", _topics_bridge_handler)
     app.router.add_get("/ws", _topics_bridge_handler)
+    app.router.add_post("/api/modules/{module}/commands", _modules_command_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -54,15 +78,64 @@ def create_app(*, settings: PilotSettings, ros_bridge: Any) -> web.Application:
 
 async def _modules_handler(request: web.Request) -> web.Response:
     settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
-    modules = [
-        {
-            "name": module.name,
-            "display_name": module.display_name,
-            "slug": module.slug,
-        }
-        for module in settings.active_modules()
-    ]
+    catalog = _get_module_catalog(request.app)
+
+    active_descriptors = settings.active_modules()
+    catalog.refresh()
+
+    if active_descriptors:
+        modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
+    else:
+        modules = [
+            _module_payload_from_info(info)
+            for info in catalog.list_modules()
+        ]
     return web.json_response({"modules": modules})
+
+
+async def _modules_command_handler(request: web.Request) -> web.Response:
+    module = request.match_info.get("module", "").strip()
+    if not module:
+        raise web.HTTPBadRequest(text="Module name required")
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise web.HTTPBadRequest(text=f"Invalid JSON payload: {exc}") from exc
+
+    if not isinstance(payload, MutableMapping):
+        raise web.HTTPBadRequest(text="Command payload must be a JSON object")
+
+    scope = str(payload.get("scope", "")).strip()
+    command = str(payload.get("command", "")).strip()
+    if not scope or not command:
+        raise web.HTTPBadRequest(text="Both 'scope' and 'command' fields are required")
+
+    args = payload.get("args") or []
+    if isinstance(args, Sequence) and not isinstance(args, (str, bytes, bytearray)):
+        coerced_args = [str(item) for item in args]
+    else:
+        raise web.HTTPBadRequest(text="'args' must be an array of arguments")
+
+    catalog = _get_module_catalog(request.app)
+    executor = _get_command_executor(request.app)
+
+    allowed_commands: Iterable[str] | None = None
+    try:
+        metadata = catalog.get_module(module)
+    except KeyError:
+        metadata = None
+
+    if metadata is not None:
+        if scope.lower() == "mod":
+            allowed_commands = metadata.commands.mod
+        elif scope.lower() == "sys":
+            allowed_commands = metadata.commands.system
+        if allowed_commands is not None and command not in allowed_commands:
+            raise web.HTTPBadRequest(text=f"Unsupported command '{command}' for module '{module}'")
+
+    result = await executor.run(scope, module, command, coerced_args)
+    return web.json_response({"result": result})
 
 
 async def _topics_bridge_handler(request: web.Request) -> web.StreamResponse:
@@ -149,3 +222,48 @@ class CockpitServer:
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.stop()
+
+
+def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dict[str, Any]:
+    try:
+        info = catalog.get_module(descriptor.name)
+    except KeyError:
+        info = None
+    if info is not None:
+        data = info.to_dict()
+        data["display_name"] = descriptor.display_name or data.get("display_name") or descriptor.name
+    else:
+        data = {
+            "name": descriptor.name,
+            "display_name": descriptor.display_name or descriptor.name,
+            "description": "",
+            "regimes": [],
+            "topics": [],
+            "commands": {"mod": [], "system": []},
+        }
+    data["slug"] = descriptor.slug
+    return data
+
+
+def _module_payload_from_info(info: ModuleInfo) -> Dict[str, Any]:
+    data = info.to_dict()
+    data["slug"] = info.name.replace("_", "-")
+    return data
+
+
+def _get_module_catalog(app: web.Application) -> ModuleCatalog:
+    catalog = app.get(MODULE_CATALOG_KEY)
+    if catalog is None:
+        catalog = app.get("module_catalog")
+    if catalog is None:
+        raise RuntimeError("Module catalog not configured on pilot application")
+    return catalog
+
+
+def _get_command_executor(app: web.Application) -> CommandExecutor:
+    executor = app.get("command_executor")
+    if executor is None:
+        executor = app.get(COMMAND_EXECUTOR_KEY)
+    if executor is None:
+        raise RuntimeError("Command executor not configured on pilot application")
+    return executor

@@ -13,3 +13,22 @@ pilot_control = "modules/chat/pilot/components/ChatModulePanel.tsx"
 [unit.chat.ros]
 workspace = "."
 packages = ["chat", "psyched_msgs"]
+
+[pilot]
+display_name = "Chat"
+description = "Conversational agent powered by Ollama"
+regimes = ["conversation"]
+
+[[pilot.topics]]
+name = "/conversation"
+type = "psyched_msgs/msg/Message"
+access = "rw"
+presentation = "chat"
+qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice"
+type = "std_msgs/msg/String"
+access = "wo"
+presentation = "text"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }

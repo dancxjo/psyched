@@ -5,12 +5,27 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+import importlib.util
+import sys
+from typing import Any, Dict, Iterable, List
 
 import pytest
 
 pytest.importorskip("aiohttp")
 from aiohttp import ClientSession, web
+
+REPO_ROOT = Path(__file__).resolve().parents[5]
+PACKAGE_DIR = REPO_ROOT / "modules" / "pilot" / "packages" / "pilot" / "pilot"
+MODULES_ROOT = REPO_ROOT / "modules"
+
+spec = importlib.util.spec_from_file_location(
+    "pilot",
+    PACKAGE_DIR / "__init__.py",
+    submodule_search_locations=[str(PACKAGE_DIR)],
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules["pilot"] = module
+spec.loader.exec_module(module)
 
 from pilot.server import PilotSettings, create_app
 
@@ -54,10 +69,20 @@ def test_legacy_ws_route_delegates_to_bridge(config_file: Path, tmp_path: Path) 
     asyncio.run(_exercise_legacy_websocket_endpoint(config_file, tmp_path))
 
 
+def test_command_endpoint_executes_allowed_command(config_file: Path, tmp_path: Path) -> None:
+    asyncio.run(_exercise_command_endpoint_success(config_file, tmp_path))
+
+
+def test_command_endpoint_rejects_unknown_command(config_file: Path, tmp_path: Path) -> None:
+    asyncio.run(_exercise_command_endpoint_rejects(config_file, tmp_path))
+
+
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     settings = PilotSettings(
         host_config_path=config_file,
         frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
         listen_host="127.0.0.1",
         listen_port=0,
     )
@@ -78,6 +103,8 @@ async def _exercise_websocket_endpoint(config_file: Path, tmp_path: Path) -> Non
     settings = PilotSettings(
         host_config_path=config_file,
         frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
         listen_host="127.0.0.1",
         listen_port=0,
     )
@@ -100,6 +127,8 @@ async def _exercise_legacy_websocket_endpoint(config_file: Path, tmp_path: Path)
     settings = PilotSettings(
         host_config_path=config_file,
         frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
         listen_host="127.0.0.1",
         listen_port=0,
     )
@@ -116,6 +145,77 @@ async def _exercise_legacy_websocket_endpoint(config_file: Path, tmp_path: Path)
             "role": "subscribe",
         }
     ]
+
+
+async def _exercise_command_endpoint_success(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    bridge = StubRosBridge()
+
+    class StubExecutor:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str, tuple[str, ...]]] = []
+
+        async def run(self, scope: str, module: str, command: str, args: Iterable[str]) -> Dict[str, Any]:
+            call = (scope, module, command, tuple(args))
+            self.calls.append(call)
+            return {
+                "code": 0,
+                "stdout": "ok\n",
+                "stderr": "",
+                "stdout_plain": "ok\n",
+                "stderr_plain": "",
+            }
+
+    executor = StubExecutor()
+    app = create_app(settings=settings, ros_bridge=bridge)
+    app["command_executor"] = executor
+
+    async with _run_app(app) as client:
+        response = await client.post("/api/modules/imu/commands", json={"scope": "mod", "command": "setup"})
+        assert response.status == 200
+        payload = await response.json()
+
+    assert executor.calls == [("mod", "imu", "setup", ())]
+    assert payload["result"]["code"] == 0
+
+
+async def _exercise_command_endpoint_rejects(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    bridge = StubRosBridge()
+
+    class StubExecutor:
+        def __init__(self) -> None:
+            self.calls: list[Any] = []
+
+        async def run(self, scope: str, module: str, command: str, args: Iterable[str]) -> Dict[str, Any]:
+            self.calls.append((scope, module, command, tuple(args)))
+            return {}
+
+    executor = StubExecutor()
+    app = create_app(settings=settings, ros_bridge=bridge)
+    app["command_executor"] = executor
+
+    async with _run_app(app) as client:
+        response = await client.post("/api/modules/imu/commands", json={"scope": "mod", "command": "reboot"})
+        assert response.status == 400
+        error_text = await response.text()
+
+    assert executor.calls == []
+    assert "Unsupported command" in error_text
 
 
 class _TestClientContext:
@@ -147,6 +247,10 @@ class _TestClientContext:
     async def get(self, path: str) -> web.ClientResponse:
         assert self._session and self._address
         return await self._session.get(self._address + path)
+
+    async def post(self, path: str, json: Any) -> web.ClientResponse:
+        assert self._session and self._address
+        return await self._session.post(self._address + path, json=json)
 
     async def ws_connect(self, path: str) -> web.ClientWebSocketResponse:
         assert self._session and self._address

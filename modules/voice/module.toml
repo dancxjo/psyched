@@ -10,3 +10,57 @@ pilot_control = "modules/voice/pilot/components/VoiceModulePanel.tsx"
 [unit.voice.ros]
 workspace = "."
 packages = ["voice"]
+
+[pilot]
+display_name = "Voice"
+description = "Text-to-speech synthesis"
+regimes = ["audio"]
+
+[[pilot.topics]]
+name = "/voice"
+type = "std_msgs/msg/String"
+access = "rw"
+presentation = "voice"
+qos = { history = "keep_last", depth = 10, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/interrupt"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "voice-control"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/resume"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "voice-control"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/clear"
+type = "std_msgs/msg/Empty"
+access = "wo"
+presentation = "voice-control"
+qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice/volume"
+type = "std_msgs/msg/UInt8"
+access = "wo"
+presentation = "voice-volume"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice_done"
+type = "std_msgs/msg/Empty"
+access = "ro"
+presentation = "event-log"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/voice_interrupt"
+type = "std_msgs/msg/Empty"
+access = "ro"
+presentation = "event-log"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }

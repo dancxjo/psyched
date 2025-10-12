@@ -8,3 +8,8 @@ pilot_control = "modules/memory/pilot/components/MemoryModulePanel.tsx"
 [unit.memory.ros]
 workspace = "."
 packages = ["memory", "memory_interfaces"]
+
+[pilot]
+display_name = "Memory"
+description = "Long-term semantic storage and recall services"
+regimes = ["cognition"]

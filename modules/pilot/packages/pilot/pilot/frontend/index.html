@@ -1,57 +1,77 @@
 <!DOCTYPE html>
-<html lang="en" x-data="pilotDashboard()" x-init="init()">
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Psyched Pilot</title>
+    <link rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230055ff'/%3E%3Ctext x='8' y='12' font-size='9' text-anchor='middle' fill='%23ffffff'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/js/pilot.js"></script>
+    <script type="module" src="/app.js"></script>
+  </head>
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Psyched Pilot</title>
-  <link rel="icon"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230055ff'/%3E%3Ctext x='8' y='12' font-size='9' text-anchor='middle' fill='%23ffffff'%3EP%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/styles.css" />
-  <script>
-    window.__startAlpineIfReady = function () {
-      if (window.__alpineStarted) return;
-      if (typeof window.alpineInit === "function" && typeof window.pilotDashboard === "function") {
-        window.alpineInit();
-        window.__alpineStarted = true;
-      }
-    };
-
-    window.deferLoadingAlpine = function (alpineInit) {
-      window.alpineInit = alpineInit;
-      window.__startAlpineIfReady();
-    };
-  </script>
-  <script type="module" src="/js/pilot.js"></script>
-  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-</head>
-
-<body>
-  <main>
-    <header>
-      <h1>Pilot Console</h1>
-      <p>Choose a module to view telemetry and controls.</p>
-    </header>
-    <template x-if="loading">
-      <p class="status">Loading modules…</p>
-    </template>
-    <template x-if="error">
-      <p class="status error" x-text="error"></p>
-    </template>
-    <div class="grid" x-show="!loading && modules.length">
-      <template x-for="module in modules" :key="module.name">
-        <article class="card">
-          <a :href="moduleUrl(module)">
-            <h2 x-text="module.display_name || module.name"></h2>
-            <p>Open dashboard</p>
-          </a>
-        </article>
+  <body x-data="pilotNav()" x-init="init()" class="lcars-body">
+    <!-- Advanced mode toggle (no JS): checking #advanced-mode enables advanced UI elements -->
+    <input type="checkbox" id="advanced-mode" aria-hidden="false" />
+    <label for="advanced-mode" class="advanced-toggle" title="Toggle advanced view" aria-hidden="false">⚙</label>
+    <aside class="lcars-nav">
+      <div class="nav-title">PSYCHED PILOT</div>
+      <template x-for="section in sections" :key="section.id">
+        <button type="button" class="nav-button" :class="{ active: section.id === activeId }" @click="scrollTo(section.id)">
+          <span class="nav-index" x-text="padIndex(section.index)"></span>
+          <span class="nav-label" x-text="section.label"></span>
+        </button>
       </template>
-    </div>
-    <template x-if="!loading && !modules.length && !error">
-      <p class="status">No modules are active for this host.</p>
-    </template>
-  </main>
-</body>
+    </aside>
 
+    <main class="lcars-main">
+      <header class="lcars-hero">
+        <div>
+          <h1>Pilot Control Surface</h1>
+          <p>Monitor modules, manage ROS 2 topics, and orchestrate the Psyched stack from a single console.</p>
+        </div>
+      </header>
+      <div id="pilot-app" class="app-root"></div>
+    </main>
+
+    <script>
+      function pilotNav() {
+        return {
+          sections: [],
+          activeId: null,
+          init() {
+            const updateActive = () => {
+              for (const section of this.sections) {
+                const node = document.getElementById(section.id);
+                if (!node) continue;
+                const rect = node.getBoundingClientRect();
+                if (rect.top < window.innerHeight * 0.45 && rect.bottom > window.innerHeight * 0.25) {
+                  this.activeId = section.id;
+                  return;
+                }
+              }
+            };
+            this.scrollTo = (id) => {
+              const node = document.getElementById(id);
+              if (node) {
+                node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                this.activeId = id;
+              }
+            };
+            this.padIndex = (value) => String(value + 1).padStart(2, '0');
+            window.addEventListener('pilot-sections', (event) => {
+              this.sections = event.detail || [];
+              if (this.sections.length && !this.activeId) {
+                this.activeId = this.sections[0].id;
+              }
+              updateActive();
+            });
+            window.addEventListener('scroll', updateActive, { passive: true });
+          },
+        };
+      }
+    </script>
+  </body>
+</html>
 </html>

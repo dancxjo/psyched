@@ -16,3 +16,22 @@ pilot_control = "modules/faces/pilot/components/FacesModulePanel.tsx"
 [unit.faces.ros]
 workspace = "."
 packages = ["faces", "faces_msgs"]
+
+[pilot]
+display_name = "Faces"
+description = "Detects faces, publishes crops, and emits embeddings"
+regimes = ["perception"]
+
+[[pilot.topics]]
+name = "/vision/faces"
+type = "faces_msgs/msg/FaceDetections"
+access = "ro"
+presentation = "json"
+qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }
+
+[[pilot.topics]]
+name = "/vision/face_detected"
+type = "std_msgs/msg/String"
+access = "ro"
+presentation = "text"
+qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
