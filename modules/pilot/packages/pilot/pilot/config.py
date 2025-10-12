@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
@@ -89,10 +90,11 @@ def load_host_config(path: Path | str) -> MutableMapping[str, Any]:
 def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]:
     """Return module descriptors for modules active on the host.
 
-    A module is considered active when either of the following hold:
-
-    * It appears in the host configuration's ``host.modules`` list.
-    * Its module configuration contains a truthy ``launch`` directive.
+    The canonical definition of an active module comes from the module's
+    configuration table. A module is considered active when its directive
+    contains a ``launch`` field that evaluates to ``true``. Legacy host
+    manifests that still rely on ``host.modules`` are also supported, but no
+    longer required.
     """
 
     if not config:
@@ -101,7 +103,15 @@ def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]
     modules_section = config.get("modules")
     modules: Dict[str, Mapping[str, Any]] = {}
     if isinstance(modules_section, Mapping):
-        modules = {str(name): value for name, value in modules_section.items() if isinstance(value, Mapping)}
+        modules = {}
+        for name, value in modules_section.items():
+            key = str(name)
+            if isinstance(value, Mapping):
+                modules[key] = value
+            elif isinstance(value, bool):
+                modules[key] = {"launch": value}
+            elif value is None:
+                modules[key] = {}
 
     host_section = config.get("host")
     host_module_names: Iterable[str] = []
@@ -113,11 +123,7 @@ def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]
     active: Dict[str, ModuleDescriptor] = {}
 
     for name, raw in modules.items():
-        launch = raw.get("launch")
-        is_active = bool(launch)
-        if isinstance(launch, Mapping):
-            is_active = True
-        if is_active:
+        if _launch_enabled(raw):
             active[name] = ModuleDescriptor(
                 name=name,
                 display_name=_display_name_for(name, raw),
@@ -136,12 +142,49 @@ def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]
     return sorted(active.values(), key=lambda module: module.display_name.lower())
 
 
+def _launch_enabled(raw: Mapping[str, Any]) -> bool:
+    launch = raw.get("launch")
+    if isinstance(launch, Mapping):
+        enabled = launch.get("enabled")
+        if enabled is None:
+            return True
+        coerced = _coerce_bool(enabled)
+        if coerced is not None:
+            return coerced
+        return bool(enabled)
+    if launch is None:
+        return False
+    coerced = _coerce_bool(launch)
+    if coerced is not None:
+        return coerced
+    return bool(launch)
+
+
 def _display_name_for(name: str, raw: Optional[Mapping[str, Any]]) -> str:
     if raw and isinstance(raw.get("display_name"), str):
         return raw["display_name"]  # type: ignore[index]
     if not name:
         return "Module"
     return name.replace("_", " ").title()
+
+
+def _coerce_bool(value: Any) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+        return None
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and math.isnan(value):
+            return None
+        return value != 0
+    return None
 
 
 def _strip_json_comments(text: str) -> str:

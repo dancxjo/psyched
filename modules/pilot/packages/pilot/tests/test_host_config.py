@@ -21,12 +21,12 @@ def host_config_path(tmp_path: Path) -> Path:
     payload = {
         "host": {
             "name": "testbot",
-            "modules": ["imu", "pilot"],
         },
         "modules": {
             "imu": {"launch": True},
             "foot": {"launch": {"arguments": {"foo": "bar"}}, "display_name": "Create Base"},
             "memory": {"launch": False},
+            "legacy": {},
         },
     }
     path = tmp_path / "testbot.json"
@@ -48,20 +48,34 @@ def test_load_host_config_rejects_missing_file(tmp_path: Path) -> None:
         load_host_config(missing_path)
 
 
-def test_discover_active_modules_merges_launch_and_host_list(host_config_path: Path) -> None:
-    """Modules should be marked active when launch is enabled or when listed as a host default."""
+def test_discover_active_modules_selects_launch_enabled_entries(host_config_path: Path) -> None:
+    """Modules should be marked active when launch is enabled in the module directive."""
     config = load_host_config(host_config_path)
 
     modules: List[ModuleDescriptor] = discover_active_modules(config)
     names = {module.name for module in modules}
 
-    assert names == {"imu", "foot", "pilot"}
+    assert names == {"imu", "foot"}
 
     foot_module = next(module for module in modules if module.name == "foot")
     assert foot_module.display_name == "Create Base"
 
     imu_module = next(module for module in modules if module.name == "imu")
     assert imu_module.display_name == "Imu"
+
+
+def test_discover_active_modules_supports_legacy_host_list(host_config_path: Path) -> None:
+    """Host manifests that still rely on host.modules continue to work."""
+    config = load_host_config(host_config_path)
+    config["host"]["modules"] = ["legacy", "imu"]  # type: ignore[index]
+
+    modules: List[ModuleDescriptor] = discover_active_modules(config)
+    names = {module.name for module in modules}
+
+    assert names == {"imu", "foot", "legacy"}
+
+    legacy_module = next(module for module in modules if module.name == "legacy")
+    assert legacy_module.display_name == "Legacy"
 
 
 def test_discover_active_modules_handles_empty_config() -> None:

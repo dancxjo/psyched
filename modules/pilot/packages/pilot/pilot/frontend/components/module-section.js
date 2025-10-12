@@ -122,6 +122,29 @@ class PilotModuleSection extends LitElement {
     `;
   }
 
+  renderPilotLink() {
+    if (!this.module?.has_pilot) {
+      return nothing;
+    }
+    const label = this.module.display_name || this.module.name;
+    return html`
+      <div class="command-set command-set--pilot">
+        <h3>Dashboard</h3>
+        <div class="button-row">
+          <a
+            class="control-button"
+            data-variant="accent"
+            href=${`/modules/${this.module.name}/`}
+            target="_blank"
+            rel="noopener"
+          >
+            Open ${label}
+          </a>
+        </div>
+      </div>
+    `;
+  }
+
   renderTopic(topic) {
     const record = this.topicRecord(topic);
     const identifier = topicIdentifier(topic);
@@ -260,6 +283,7 @@ class PilotModuleSection extends LitElement {
             ${this.renderRegimeTags()}
           </div>
           <div class="command-groups">
+            ${this.renderPilotLink()}
             <div class="command-set">
               <h3>Module Commands</h3>
               ${this.renderCommands('mod', this.module.commands?.mod ?? [])}

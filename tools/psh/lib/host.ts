@@ -17,7 +17,13 @@ import { buildRosEnv } from "./ros_env.ts";
  * JSON is the new default, but we continue to accept YAML and TOML so existing
  * deployments keep working while they migrate.
  */
-const HOST_CONFIG_EXTENSIONS = [".json", ".jsonc", ".yaml", ".yml", ".toml"] as const;
+const HOST_CONFIG_EXTENSIONS = [
+  ".json",
+  ".jsonc",
+  ".yaml",
+  ".yml",
+  ".toml",
+] as const;
 
 type HostConfigExtension = typeof HOST_CONFIG_EXTENSIONS[number];
 
@@ -247,6 +253,7 @@ function normalizeModuleDirectives(
   context: NormalizationContext,
 ): ModuleDirective[] {
   const byName = new Map<string, unknown>();
+  const tableOrder: string[] = [];
   if (raw !== undefined && raw !== null) {
     if (!isRecord(raw)) {
       throw new HostConfigFormatError(
@@ -257,34 +264,62 @@ function normalizeModuleDirectives(
 
     for (const [moduleName, value] of Object.entries(raw)) {
       byName.set(moduleName, value);
+      tableOrder.push(moduleName);
     }
   }
 
   const result: ModuleDirective[] = [];
+  const seen = new Set<string>();
   const declared = hostModuleNames ?? [];
+
   for (const moduleName of declared) {
-    if (!moduleName) continue;
-    if (byName.has(moduleName)) {
-      const rawEntry = byName.get(moduleName);
-      byName.delete(moduleName);
-      result.push(
-        normalizeModuleDirective(
-          rawEntry,
-          context,
-          `modules.${moduleName}`,
-          moduleName,
-        ),
-      );
-    } else {
-      result.push(
-        normalizeModuleDirective(
-          undefined,
-          context,
-          `modules.${moduleName}`,
-          moduleName,
-        ),
-      );
+    const name = coerceName(moduleName);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const rawEntry = byName.get(name);
+    if (rawEntry !== undefined) {
+      byName.delete(name);
     }
+    result.push(
+      normalizeModuleDirective(
+        rawEntry,
+        context,
+        `modules.${name}`,
+        name,
+      ),
+    );
+  }
+
+  for (const moduleName of tableOrder) {
+    const name = coerceName(moduleName);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const rawEntry = byName.get(name);
+    if (rawEntry !== undefined) {
+      byName.delete(name);
+    }
+    result.push(
+      normalizeModuleDirective(
+        rawEntry,
+        context,
+        `modules.${name}`,
+        name,
+      ),
+    );
+  }
+
+  for (const [moduleName, rawEntry] of byName.entries()) {
+    const name = coerceName(moduleName);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    result.push(
+      normalizeModuleDirective(
+        rawEntry,
+        context,
+        `modules.${name}`,
+        name,
+      ),
+    );
   }
 
   return result;
@@ -499,7 +534,9 @@ function parseHostConfig(path: string): RawHostConfig {
       if (!isRecord(parsed)) {
         throw new HostConfigFormatError(
           path,
-          `Expected JSON host config to produce an object but received ${describeType(parsed)}.`,
+          `Expected JSON host config to produce an object but received ${
+            describeType(parsed)
+          }.`,
         );
       }
       return parsed as RawHostConfig;
@@ -510,7 +547,9 @@ function parseHostConfig(path: string): RawHostConfig {
       if (!isRecord(parsed)) {
         throw new HostConfigFormatError(
           path,
-          `Expected YAML host config to produce an object but received ${describeType(parsed)}.`,
+          `Expected YAML host config to produce an object but received ${
+            describeType(parsed)
+          }.`,
         );
       }
       return parsed as RawHostConfig;

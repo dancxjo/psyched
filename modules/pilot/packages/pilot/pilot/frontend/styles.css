@@ -131,6 +131,12 @@ body {
   gap: 2rem;
 }
 
+.pilot-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
 .module-shortcuts {
   display: block;
   padding: 1.5rem;
@@ -327,6 +333,11 @@ body {
 .command-set {
   flex: 1;
   min-width: 220px;
+}
+
+.command-set--pilot {
+  flex: 0 0 240px;
+  max-width: 320px;
 }
 
 .command-set h3 {
