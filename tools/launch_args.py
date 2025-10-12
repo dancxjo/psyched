@@ -5,12 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping
 
-try:  # Python 3.11+
-    import tomllib  # type: ignore[attr-defined]
-except ModuleNotFoundError:  # pragma: no cover - fallback for Python <3.11
-    import tomli as tomllib  # type: ignore[no-redef]
-
-import json
+import tomllib
 
 
 ConfigMapping = Mapping[str, object]
@@ -61,202 +56,49 @@ def _extract_arguments(candidate: object) -> ConfigMapping | None:
     return None
 
 
-def _normalize_table_header(header: str) -> str:
-    """Return ``header`` without surrounding quotes for easier comparisons."""
+def _module_entry(raw: ConfigMapping, module: str) -> ConfigMapping | None:
+    """Return the configuration table for ``module`` when available."""
 
-    return header.replace("'", "").replace('"', "")
-
-
-def _header_matches_module(header: str, module: str) -> bool:
-    """Return ``True`` when ``header`` belongs to ``module`` or legacy fallbacks."""
-
-    module = module.strip()
-    if not module:
-        return False
-    normalized = _normalize_table_header(header)
-    parts = normalized.split(".")
-    if not parts:
-        return False
-    if parts[0] in {"launch", "arguments"}:
-        return True
-    if parts[0] == module:
-        return True
-    if parts[0] == "modules" and len(parts) > 1 and parts[1] == module:
-        return True
-    return False
+    config_section = raw.get("config")
+    if not isinstance(config_section, Mapping):
+        return None
+    modules_section = config_section.get("mod")
+    if not isinstance(modules_section, Mapping):
+        return None
+    module_entry = modules_section.get(module)
+    if isinstance(module_entry, Mapping):
+        return module_entry
+    return None
 
 
-def _sanitize_toml_for_module(text: str, module: str) -> str:
-    '''Return a minimal TOML snippet containing tables related to ``module``.
+def _resolve_argument_table(raw: ConfigMapping, module: str) -> ConfigMapping:
+    """Return the mapping of launch arguments from a parsed host manifest."""
 
-    The helper keeps the most recent definition of each relevant table so that
-    duplicate declarations (which ``tomllib`` rejects) no longer prevent the
-    parser from succeeding.  For example:
-
-    >>> _sanitize_toml_for_module("""
-    ... [modules.alpha.launch.arguments]
-    ... speed = 1
-    ...
-    ... [modules.alpha.launch.arguments]
-    ... speed = 2
-    ...
-    ... [modules.beta.launch.arguments]
-    ... power = 5
-    ... """, "alpha")
-    '[modules.alpha.launch.arguments]\n    speed = 2'
-    '''
-
-    blocks: list[tuple[str, list[str]]] = []
-    current_header: str | None = None
-    current_lines: list[str] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            if current_header is not None:
-                blocks.append((current_header, current_lines))
-                current_header = None
-                current_lines = []
-            header = stripped[1:-1].strip()
-            normalized = _normalize_table_header(header)
-            if _header_matches_module(normalized, module):
-                current_header = normalized
-                current_lines = [line]
-            else:
-                current_header = None
-                current_lines = []
-            continue
-        if current_header is not None:
-            current_lines.append(line)
-    if current_header is not None:
-        blocks.append((current_header, current_lines))
-    if not blocks:
-        return ""
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for header, lines in reversed(blocks):
-        if header in seen:
-            continue
-        seen.add(header)
-        deduped.append("\n".join(lines).rstrip())
-    deduped.reverse()
-    return "\n\n".join(filter(None, deduped))
-
-
-def _parse_toml(text: str, module: str | None) -> MutableMapping[str, object]:
-    """Parse ``text`` into a TOML mapping with duplicate-table recovery."""
-
-    sanitized: str | None = None
-    if module:
-        sanitized = _sanitize_toml_for_module(text, module)
-        if sanitized and sanitized.strip():
-            try:
-                data = tomllib.loads(sanitized)
-            except tomllib.TOMLDecodeError:
-                pass
-            else:
-                if isinstance(data, MutableMapping):
-                    return data
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as error:
-        if not module:
-            raise
-        if not sanitized:
-            sanitized = _sanitize_toml_for_module(text, module)
-        if not sanitized or not sanitized.strip():
-            raise
-        try:
-            data = tomllib.loads(sanitized)
-        except tomllib.TOMLDecodeError:
-            raise error
-    if not isinstance(data, MutableMapping):  # pragma: no cover - tomllib guarantees dict
+    module_entry = _module_entry(raw, module)
+    if module_entry is None:
         return {}
-    return data
 
+    launch_entry = module_entry.get("launch")
+    launch_args = _extract_arguments(launch_entry)
+    if launch_args is not None:
+        return launch_args
 
-def _resolve_argument_table(raw: ConfigMapping, module: str | None) -> ConfigMapping:
-    """Return the mapping of launch arguments from a parsed TOML object."""
+    explicit_args = module_entry.get("arguments")
+    if isinstance(explicit_args, Mapping):
+        return explicit_args
 
-    if module:
-        modules = raw.get("modules")
-        if isinstance(modules, Mapping):
-            module_entry = modules.get(module)
-            if isinstance(module_entry, Mapping):
-                launch_entry = module_entry.get("launch")
-                launch_args = _extract_arguments(launch_entry)
-                if launch_args is not None:
-                    return launch_args
-                explicit_args = module_entry.get("arguments")
-                if isinstance(explicit_args, Mapping):
-                    return explicit_args
-                if _is_flat_mapping(module_entry):
-                    return module_entry
-        # Fallback: allow top-level table named after the module.
-        module_table = raw.get(module)
-        if isinstance(module_table, Mapping) and _is_flat_mapping(module_table):
-            return module_table
+    if _is_flat_mapping(module_entry):
+        return module_entry
 
-    # Legacy format: module-specific TOML already scoped to the arguments table.
-    launch = raw.get("launch")
-    if isinstance(launch, Mapping):
-        arguments = launch.get("arguments")
-        if isinstance(arguments, Mapping):
-            return arguments
-        if _is_flat_mapping(launch):
-            return launch
-    arguments = raw.get("arguments")
-    if isinstance(arguments, Mapping):
-        return arguments
-    if _is_flat_mapping(raw):
-        return raw
     return {}
-
-
-def _parse_config(
-    path: Path,
-    module: str | None,
-    text: str,
-) -> MutableMapping[str, object]:
-    """Parse ``path`` into a configuration mapping regardless of format."""
-
-    suffix = path.suffix.lower()
-    if suffix in {".json", ".jsonc"}:
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                f"Invalid JSON configuration in {path}: {error}",
-            ) from error
-        if isinstance(data, MutableMapping):
-            return data
-        raise TypeError(
-            f"Expected JSON configuration {path} to decode to a mapping, got {type(data)!r}",
-        )
-    if suffix in {".yaml", ".yml"}:
-        try:
-            import yaml  # type: ignore[import-not-found]
-        except ModuleNotFoundError as error:  # pragma: no cover - optional dep
-            raise RuntimeError(
-                "YAML configuration requested but PyYAML is not installed; "
-                "install 'pyyaml' or provide a JSON/TOML file.",
-            ) from error
-        data = yaml.safe_load(text)  # type: ignore[no-any-unimported]
-        if data is None:
-            return {}
-        if isinstance(data, MutableMapping):
-            return data
-        raise TypeError(
-            f"Expected YAML configuration {path} to decode to a mapping, got {type(data)!r}",
-        )
-    return _parse_toml(text, module)
 
 
 def toml_to_launch_arguments(path: Path, module: str | None = None) -> list[str]:
     """Convert ``path`` to ``name:=value`` launch arguments.
 
-    The helper understands TOML, JSON, and YAML manifests.  JSON (or JSON with
-    comments) is preferred for new host files so the wider toolchain can parse
-    them without extra dependencies.
+    Host manifests are authored in TOML. When ``module`` is provided, the
+    helper extracts ``config.mod.<module>.launch.arguments`` (or compatible
+    flat tables) and formats each value for ``ros2 launch`` consumption.
     """
 
     path = Path(path)
@@ -265,7 +107,18 @@ def toml_to_launch_arguments(path: Path, module: str | None = None) -> list[str]
     text = path.read_text(encoding="utf-8")
     if not text.strip():
         return []
-    data = _parse_config(path, module, text)
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ValueError(
+            f"Invalid TOML configuration in {path}: {error}",
+        ) from error
+    if not isinstance(data, MutableMapping):
+        raise TypeError(
+            f"Expected TOML configuration {path} to decode to a mapping, got {type(data)!r}",
+        )
+    if module is None:
+        return []
     arguments = _resolve_argument_table(data, module)
     result: list[str] = []
     for key, value in arguments.items():
@@ -285,7 +138,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("toml_path", help="Path to the configuration file")
     parser.add_argument(
         "--module",
-        help="Optional module scope; when provided the tool inspects modules.<module>",
+        help="Optional module scope; when provided the tool inspects config.mod.<module>",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     for line in toml_to_launch_arguments(Path(args.toml_path), module=args.module):

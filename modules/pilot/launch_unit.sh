@@ -30,13 +30,12 @@ fi
 
 CONFIG_CANDIDATE="${PILOT_HOST_CONFIG:-}"
 if [[ -z "${CONFIG_CANDIDATE}" ]]; then
-  for suffix in json jsonc yaml yml toml; do
-    candidate="${REPO_DIR}/hosts/${HOST_SHORT}.${suffix}"
-    if [[ -f "${candidate}" ]]; then
-      CONFIG_CANDIDATE="${candidate}"
-      break
-    fi
-  done
+  candidate="${REPO_DIR}/hosts/${HOST_SHORT}.toml"
+  if [[ -f "${candidate}" ]]; then
+    CONFIG_CANDIDATE="${candidate}"
+  fi
+elif [[ ! -f "${CONFIG_CANDIDATE}" ]]; then
+  CONFIG_CANDIDATE=""
 fi
 
 FRONTEND_ROOT="${PILOT_FRONTEND_ROOT:-${REPO_DIR}/modules/pilot/packages/pilot/pilot/frontend}"

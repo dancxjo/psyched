@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover - fallback for older interpreters
-    import tomli as tomllib  # type: ignore
-
-import yaml
+import tomllib
 
 __all__ = [
     "HostConfigError",
@@ -47,7 +41,7 @@ def load_host_config(path: Path | str) -> MutableMapping[str, Any]:
     Parameters
     ----------
     path:
-        Filesystem path to a JSON, JSONC, YAML, or TOML configuration file.
+        Filesystem path to a TOML configuration file.
 
     Returns
     -------
@@ -59,50 +53,38 @@ def load_host_config(path: Path | str) -> MutableMapping[str, Any]:
     if not resolved.exists():
         raise HostConfigError(f"Host configuration not found: {resolved}")
 
+    if resolved.suffix.lower() != ".toml":
+        raise HostConfigError(
+            f"Unsupported host configuration format for '{resolved.name}'. "
+            "Host manifests must be expressed in TOML.",
+        )
+
     text = resolved.read_text(encoding="utf-8")
-    suffix = resolved.suffix.lower()
-    if suffix == ".jsonc":
-        text = _strip_json_comments(text)
-        suffix = ".json"
-
-    if suffix == ".json":
-        return json.loads(text)
-    if suffix in {".yaml", ".yml"}:
-        data = yaml.safe_load(text)
-        if not isinstance(data, MutableMapping):
-            raise HostConfigError(
-                f"Expected mapping at root of YAML config but received {type(data)!r}",
-            )
-        return data
-    if suffix == ".toml":
+    try:
         data = tomllib.loads(text)
-        if not isinstance(data, MutableMapping):
-            raise HostConfigError(
-                f"Expected mapping at root of TOML config but received {type(data)!r}",
-            )
-        return data
-
-    raise HostConfigError(
-        f"Unsupported host configuration format for '{resolved.name}'.",
-    )
+    except tomllib.TOMLDecodeError as exc:
+        raise HostConfigError(f"Failed to parse host configuration: {exc}") from exc
+    if not isinstance(data, MutableMapping):
+        raise HostConfigError(
+            f"Expected mapping at root of TOML config but received {type(data)!r}",
+        )
+    return data
 
 
 def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]:
     """Return module descriptors for modules active on the host.
 
     When ``host.modules`` is declared, it is treated as the canonical list of
-    cockpit modules. Config entries under ``config.mod`` (or the legacy
-    ``modules`` table) supply metadata for those modules without enabling them
-    implicitly. For legacy manifests that omit ``host.modules``, module
-    directives with a truthy ``launch`` flag are still respected.
+    cockpit modules. Config entries under ``config.mod`` supply metadata for
+    those modules without enabling them implicitly. When ``host.modules`` is
+    absent, module directives with a truthy ``launch`` flag are still
+    respected for compatibility with ad-hoc configurations.
     """
 
     if not config:
         return []
 
     modules: Dict[str, Mapping[str, Any]] = {}
-    modules.update(_normalize_module_entries(config.get("modules")))
-
     config_section = config.get("config")
     if isinstance(config_section, Mapping):
         modules.update(_normalize_module_entries(config_section.get("mod")))
@@ -243,52 +225,3 @@ def _modules_from_host_list(
             )
         )
     return result
-
-
-def _strip_json_comments(text: str) -> str:
-    """Remove C and C++-style comments from a JSONC document."""
-
-    result: list[str] = []
-    in_string = False
-    string_delimiter = ""
-    i = 0
-    length = len(text)
-
-    while i < length:
-        char = text[i]
-        if in_string:
-            result.append(char)
-            if char == "\\":
-                if i + 1 < length:
-                    result.append(text[i + 1])
-                    i += 1
-            elif char == string_delimiter:
-                in_string = False
-            i += 1
-            continue
-
-        if char in {'"', "'"}:
-            in_string = True
-            string_delimiter = char
-            result.append(char)
-            i += 1
-            continue
-
-        if char == "/" and i + 1 < length:
-            next_char = text[i + 1]
-            if next_char == "/":
-                i += 2
-                while i < length and text[i] not in "\r\n":
-                    i += 1
-                continue
-            if next_char == "*":
-                i += 2
-                while i + 1 < length and (text[i] != "*" or text[i + 1] != "/"):
-                    i += 1
-                i += 2
-                continue
-
-        result.append(char)
-        i += 1
-
-    return "".join(result)

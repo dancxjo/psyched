@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import importlib.util
 from pathlib import Path
 import sys
@@ -32,15 +31,19 @@ from pilot.server import PilotSettings, create_app
 
 @pytest.fixture()
 def config_file(tmp_path: Path) -> Iterator[Path]:
-    payload = {
-        "host": {"name": "api-test"},
-        "modules": {
-            "imu": {"launch": True},
-            "pilot": {"launch": True},
-        },
-    }
-    path = tmp_path / "api-test.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    text = """
+[host]
+name = "api-test"
+modules = ["imu", "pilot"]
+
+[config.mod.imu.launch]
+enabled = true
+
+[config.mod.pilot.launch]
+enabled = true
+"""
+    path = tmp_path / "api-test.toml"
+    path.write_text(text.strip() + "\n", encoding="utf-8")
     yield path
 
 

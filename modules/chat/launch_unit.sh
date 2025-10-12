@@ -7,30 +7,9 @@ export REPO_DIR
 HOST_SHORT="${HOST:-$(hostname -s)}"
 
 ARGS=()
-LEGACY_TOML="${REPO_DIR}/hosts/${HOST_SHORT}/config/chat.toml"
-if [[ -f "${LEGACY_TOML}" ]]; then
-  mapfile -t LEGACY_ARGS < <(python3 "${REPO_DIR}/tools/launch_args.py" "${LEGACY_TOML}" || true)
-  if [[ ${#LEGACY_ARGS[@]} -gt 0 ]]; then
-    ARGS+=("${LEGACY_ARGS[@]}")
-  fi
-fi
-
-DEFAULT_HOST_CONFIG=""
-for candidate in \
-  "${REPO_DIR}/hosts/${HOST_SHORT}.json" \
-  "${REPO_DIR}/hosts/${HOST_SHORT}.jsonc" \
-  "${REPO_DIR}/hosts/${HOST_SHORT}.yaml" \
-  "${REPO_DIR}/hosts/${HOST_SHORT}.yml" \
-  "${REPO_DIR}/hosts/${HOST_SHORT}.toml"
-do
-  if [[ -f "${candidate}" ]]; then
-    DEFAULT_HOST_CONFIG="${candidate}"
-    break
-  fi
-done
-
-if [[ -n "${DEFAULT_HOST_CONFIG}" ]]; then
-  mapfile -t HOST_ARGS < <(python3 "${REPO_DIR}/tools/launch_args.py" --module chat "${DEFAULT_HOST_CONFIG}" || true)
+CONFIG_FILE="${CHAT_CONFIG_FILE:-${REPO_DIR}/hosts/${HOST_SHORT}.toml}"
+if [[ -n "${CONFIG_FILE}" && -f "${CONFIG_FILE}" ]]; then
+  mapfile -t HOST_ARGS < <(python3 "${REPO_DIR}/tools/launch_args.py" --module chat "${CONFIG_FILE}" || true)
   if [[ ${#HOST_ARGS[@]} -gt 0 ]]; then
     ARGS+=("${HOST_ARGS[@]}")
   fi

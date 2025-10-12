@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, MutableMapping, Optional
 
-try:  # Python 3.11+
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - fallback for older interpreters
-    import tomli as tomllib  # type: ignore
+import tomllib
 
 __all__ = ["ModuleCatalog", "ModuleInfo"]
 

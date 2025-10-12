@@ -1,7 +1,5 @@
 import { extname, join, resolve } from "$std/path/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
-import { parse as parseJsonc } from "$std/jsonc/mod.ts";
-import { parse as parseYaml } from "$std/yaml/mod.ts";
 import { DepGraph } from "$deps/dependency-graph";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
@@ -11,18 +9,9 @@ import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
 import { buildRosEnv } from "./ros_env.ts";
 
-/**
- * Supported host manifest file extensions ordered by preference.
- *
- * TOML is the preferred format, but we continue to accept JSON and YAML so
- * existing deployments keep working while they migrate.
- */
+/** Supported host manifest file extension. */
 const HOST_CONFIG_EXTENSIONS = [
   ".toml",
-  ".json",
-  ".jsonc",
-  ".yaml",
-  ".yml",
 ] as const;
 
 type HostConfigExtension = typeof HOST_CONFIG_EXTENSIONS[number];

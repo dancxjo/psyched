@@ -37,8 +37,7 @@ def resolve_host_config(explicit: Optional[Path]) -> Path:
 
     repo_dir = Path(os.environ.get("REPO_DIR", Path.cwd()))
     host_short = os.environ.get("HOST", socket.gethostname().split(".")[0])
-    for suffix in (".json", ".jsonc", ".yaml", ".yml", ".toml"):
-        candidates.append(repo_dir / "hosts" / f"{host_short}{suffix}")
+    candidates.append(repo_dir / "hosts" / f"{host_short}.toml")
 
     for candidate in candidates:
         if candidate and candidate.exists():
