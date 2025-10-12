@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("yaml")
 
-from pilot.cli import resolve_frontend_root
+from pilot.cli import resolve_frontend_root, resolve_modules_root
 
 
 def test_resolve_frontend_root_accepts_explicit_directory(tmp_path: Path) -> None:
@@ -73,3 +73,41 @@ def test_resolve_frontend_root_defaults_to_package(monkeypatch: pytest.MonkeyPat
 
     package_frontend = Path(__file__).resolve().parents[1] / "pilot" / "frontend"
     assert result == package_frontend.resolve()
+
+
+def test_resolve_modules_root_prefers_repo_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The repository's modules directory should be preferred when available."""
+
+    repo_dir = tmp_path / "psyched"
+    modules_dir = repo_dir / "modules"
+    pilot_module_dir = modules_dir / "ear"
+    pilot_module_dir.mkdir(parents=True)
+    (pilot_module_dir / "module.toml").write_text("[pilot]\n", encoding="utf-8")
+
+    frontend_root = repo_dir / "modules" / "pilot" / "packages" / "pilot" / "pilot" / "frontend"
+    frontend_root.mkdir(parents=True)
+
+    monkeypatch.setenv("REPO_DIR", str(repo_dir))
+
+    result = resolve_modules_root(None, frontend_root)
+
+    assert result == modules_dir.resolve()
+
+
+def test_resolve_modules_root_falls_back_to_package_layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When running from an installed package, fall back to the bundled modules directory."""
+
+    package_root = tmp_path / "site-packages" / "pilot"
+    frontend_root = package_root / "frontend"
+    frontend_root.mkdir(parents=True)
+
+    bundled_modules = frontend_root.parent.parent / "modules"
+    sample_module = bundled_modules / "nav"
+    sample_module.mkdir(parents=True)
+    (sample_module / "module.toml").write_text("[pilot]\n", encoding="utf-8")
+
+    monkeypatch.delenv("REPO_DIR", raising=False)
+
+    result = resolve_modules_root(None, frontend_root)
+
+    assert result == bundled_modules.resolve()

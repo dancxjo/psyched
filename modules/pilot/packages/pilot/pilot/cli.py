@@ -77,21 +77,50 @@ def resolve_frontend_root(explicit: Optional[Path]) -> Path:
     raise SystemExit("Unable to locate cockpit frontend assets; set --frontend-root or PILOT_FRONTEND_ROOT")
 
 
+def _looks_like_modules_dir(path: Path) -> bool:
+    """Return ``True`` when *path* appears to contain module manifests."""
+
+    if not path.exists() or not path.is_dir():
+        return False
+
+    try:
+        for entry in path.iterdir():
+            if not entry.is_dir():
+                continue
+            if (entry / "module.toml").exists():
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def resolve_modules_root(explicit: Optional[Path], frontend_root: Path) -> Path:
     """Return the directory containing module manifests."""
 
     candidates: list[Path] = []
     if explicit:
         candidates.append(explicit)
+
     env_path = os.environ.get("PILOT_MODULES_ROOT")
     if env_path:
         candidates.append(Path(env_path))
-    candidates.append(frontend_root.parent.parent)
+
     repo_dir = Path(os.environ.get("REPO_DIR", frontend_root.parent.parent.parent))
     candidates.append(repo_dir / "modules")
+
+    # Packaged installations bundle the cockpit alongside a copy of the
+    # module manifests under ``modules/``.
+    candidates.append(frontend_root.parent.parent / "modules")
+
+    # Historical fall-back: assume the modules directory is two levels above the
+    # frontend bundle (modules/pilot/packages). This is only correct when the
+    # pilot package lives inside the repository checkout.
+    candidates.append(frontend_root.parent.parent)
+
     for candidate in candidates:
-        if candidate and candidate.exists() and candidate.is_dir():
+        if candidate and _looks_like_modules_dir(candidate):
             return candidate.resolve()
+
     raise SystemExit("Unable to locate modules directory; set --modules-root or PILOT_MODULES_ROOT")
 
 
