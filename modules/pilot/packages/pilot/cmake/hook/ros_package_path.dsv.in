@@ -1,0 +1,2 @@
+prepend-non-duplicate;ROS_PACKAGE_PATH;share
+prepend-non-duplicate;AMENT_PREFIX_PATH;

@@ -133,6 +133,27 @@ psyched::source_workspace() {
   psyched::source_file "${setup}" "${quiet}"
 }
 
+psyched::source_package_local_setup() {
+  local package="$1"
+  local quiet="${2:-1}"
+  if [[ -z "${package}" ]]; then
+    return 1
+  fi
+  local setup="${PSYCHED_WORKSPACE_INSTALL}/${package}/share/${package}/local_setup.bash"
+  if [[ ! -f "${setup}" ]]; then
+    return 1
+  fi
+  local had_nounset=0
+  if [[ -o nounset ]]; then
+    had_nounset=1
+    set +u
+  fi
+  psyched::source_file "${setup}" "${quiet}"
+  if [[ "${had_nounset}" == "1" ]]; then
+    set -u
+  fi
+}
+
 psyched::ros_setup_file() {
   local candidate="${1:-${PSYCHED_ROS_SETUP}}"
   if [[ -f "${candidate}" ]]; then
@@ -214,8 +235,11 @@ USAGE
 
   case "${mode}" in
     workspace)
-      psyched::source_workspace ${quiet_flag}
-      return $?
+      if psyched::source_workspace ${quiet_flag}; then
+        psyched::source_package_local_setup pilot "${quiet}"
+        return 0
+      fi
+      return 1
       ;;
     ros)
       psyched::source_ros2 ${quiet_flag}
@@ -223,6 +247,7 @@ USAGE
       ;;
     auto)
       if psyched::source_workspace ${quiet_flag}; then
+        psyched::source_package_local_setup pilot "${quiet}"
         return 0
       fi
       psyched::source_ros2 ${quiet_flag}
