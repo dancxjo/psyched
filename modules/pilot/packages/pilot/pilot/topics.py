@@ -138,9 +138,28 @@ class _TopicSession:
         self._cleanup()
 
     async def _send_loop(self, ws: web.WebSocketResponse) -> None:
-        while not ws.closed:
-            payload = await self._queue.get()
-            await ws.send_json({"event": "message", "data": payload})
+        try:
+            while True:
+                if ws.closed:
+                    break
+                try:
+                    payload = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+                if ws.closed:
+                    break
+                try:
+                    await ws.send_json({"event": "message", "data": payload})
+                except (ConnectionResetError, ConnectionError):
+                    break
+                except RuntimeError as exc:
+                    if "websocket connection is closing" in str(exc).lower():
+                        break
+                    raise
+        finally:
+            if not ws.closed:
+                with contextlib.suppress(Exception):
+                    await ws.close()
 
     async def _receive_loop(self, ws: web.WebSocketResponse) -> None:
         async for msg in ws:

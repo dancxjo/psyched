@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "viscera_monitor = viscera.cli:main",
+            "viscera_host_health = viscera.publisher:main",
         ]
     },
 )

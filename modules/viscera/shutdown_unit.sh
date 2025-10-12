@@ -1,20 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PATTERN="ros2 run viscera viscera_monitor"
+PATTERNS=(
+  "ros2 run viscera viscera_monitor"
+  "ros2 run viscera viscera_host_health"
+)
 
-if pgrep -f "$PATTERN" >/dev/null 2>&1; then
-  echo "[viscera/shutdown] Stopping $PATTERN"
-  pkill -TERM -f "$PATTERN" || true
-fi
+for pattern in "${PATTERNS[@]}"; do
+  if pgrep -f "$pattern" >/dev/null 2>&1; then
+    echo "[viscera/shutdown] Stopping $pattern"
+    pkill -TERM -f "$pattern" || true
+  fi
+done
 
 for _ in {1..10}; do
-  if ! pgrep -f "$PATTERN" >/dev/null 2>&1; then
-    echo "[viscera/shutdown] Viscera monitor stopped"
+  remaining=0
+  for pattern in "${PATTERNS[@]}"; do
+    if pgrep -f "$pattern" >/dev/null 2>&1; then
+      remaining=$((remaining + 1))
+    fi
+  done
+  if [[ $remaining -eq 0 ]]; then
+    echo "[viscera/shutdown] Viscera processes stopped"
     exit 0
   fi
   sleep 1
 done
 
-pkill -KILL -f "$PATTERN" || true
+for pattern in "${PATTERNS[@]}"; do
+  pkill -KILL -f "$pattern" || true
+done
 echo "[viscera/shutdown] Forced kill"
