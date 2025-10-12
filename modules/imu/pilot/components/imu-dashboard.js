@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
+import { surfaceStyles } from '/components/pilot-style.js';
 
 class ImuDashboard extends LitElement {
     static properties = {
@@ -11,66 +12,18 @@ class ImuDashboard extends LitElement {
         temperatureF: { state: true },
     };
 
-    static styles = css`
-    :host {
-      display: block;
-    }
-    .imu-grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    }
-    .imu-card {
-      background: var(--control-surface-bg);
-      border: 1px solid var(--control-surface-border);
-      border-radius: var(--control-surface-radius);
-      padding: var(--control-surface-padding);
-      box-shadow: var(--control-surface-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .imu-card h3 {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.9rem;
-      color: var(--metric-title-color);
-    }
-    .metric-pair {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 0.75rem;
-    }
-    .metric-pair .label {
-      font-size: 0.75rem;
-      color: var(--metric-label-color);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .metric-pair .value {
-      font-family: var(--metric-value-font);
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--lcars-text);
-    }
-    .status-bar {
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-      text-align: center;
-      font-size: 0.8rem;
-      color: var(--lcars-muted);
-      grid-column: 1 / -1;
-    }
-    .status-bar.live {
-      color: var(--lcars-success);
-    }
-    .status-bar.error {
-      color: var(--lcars-error);
-    }
-  `;
+    static styles = [
+        surfaceStyles,
+        css`
+      .imu-status {
+        grid-column: 1 / -1;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+      }
+    `,
+    ];
 
     constructor() {
         super();
@@ -150,74 +103,49 @@ class ImuDashboard extends LitElement {
     }
 
     render() {
-        const statusClass = this.status === 'Live' ? 'live' : this.status === 'Error' ? 'error' : '';
+        const statusVariant = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
         return html`
-      <div class="imu-grid">
-        <div class="status-bar ${statusClass}">Status: ${this.status}</div>
-        
-        <div class="imu-card">
-          <h3>Orientation (Quaternion)</h3>
-          <div class="metric-pair">
-            <span class="label">X</span>
-            <span class="value">${this.format(this.orientation.x, 3)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Y</span>
-            <span class="value">${this.format(this.orientation.y, 3)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Z</span>
-            <span class="value">${this.format(this.orientation.z, 3)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">W</span>
-            <span class="value">${this.format(this.orientation.w, 3)}</span>
-          </div>
-        </div>
+      <div class="surface-grid surface-grid--medium">
+        <p class="surface-status imu-status" data-variant="${statusVariant ?? ''}">Status: ${this.status}</p>
 
-        <div class="imu-card">
-          <h3>Angular Velocity (rad/s)</h3>
-          <div class="metric-pair">
-            <span class="label">X</span>
-            <span class="value">${this.format(this.angularVelocity.x)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Y</span>
-            <span class="value">${this.format(this.angularVelocity.y)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Z</span>
-            <span class="value">${this.format(this.angularVelocity.z)}</span>
-          </div>
-        </div>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Orientation (Quaternion)</h3>
+          ${['x', 'y', 'z', 'w'].map((axis) =>
+            html`<div class="surface-metric surface-metric--inline">
+              <span class="surface-metric__label">${axis.toUpperCase()}</span>
+              <span class="surface-metric__value">${this.format(this.orientation[axis], 3)}</span>
+            </div>`)}
+        </article>
 
-        <div class="imu-card">
-          <h3>Linear Acceleration (m/s²)</h3>
-          <div class="metric-pair">
-            <span class="label">X</span>
-            <span class="value">${this.format(this.linearAcceleration.x)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Y</span>
-            <span class="value">${this.format(this.linearAcceleration.y)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Z</span>
-            <span class="value">${this.format(this.linearAcceleration.z)}</span>
-          </div>
-        </div>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Angular Velocity (rad/s)</h3>
+          ${['x', 'y', 'z'].map((axis) =>
+            html`<div class="surface-metric surface-metric--inline">
+              <span class="surface-metric__label">${axis.toUpperCase()}</span>
+              <span class="surface-metric__value">${this.format(this.angularVelocity[axis])}</span>
+            </div>`)}
+        </article>
 
-        <div class="imu-card">
-          <h3>Temperature</h3>
-          <div class="metric-pair">
-            <span class="label">Celsius</span>
-            <span class="value">${this.temperatureC !== null ? this.format(this.temperatureC, 1) : '—'}</span>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Linear Acceleration (m/s²)</h3>
+          ${['x', 'y', 'z'].map((axis) =>
+            html`<div class="surface-metric surface-metric--inline">
+              <span class="surface-metric__label">${axis.toUpperCase()}</span>
+              <span class="surface-metric__value">${this.format(this.linearAcceleration[axis])}</span>
+            </div>`)}
+        </article>
+
+        <article class="surface-card">
+          <h3 class="surface-card__title">Temperature</h3>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Celsius</span>
+            <span class="surface-metric__value">${this.temperatureC !== null ? this.format(this.temperatureC, 1) : '—'}</span>
           </div>
-          <div class="metric-pair">
-            <span class="label">Fahrenheit</span>
-            <span class="value">${this.temperatureF !== null ? this.format(this.temperatureF, 1) : '—'}</span>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Fahrenheit</span>
+            <span class="surface-metric__value">${this.temperatureF !== null ? this.format(this.temperatureF, 1) : '—'}</span>
           </div>
-        </div>
+        </article>
       </div>
     `;
     }

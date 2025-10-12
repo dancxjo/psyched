@@ -1,161 +1,29 @@
 <!DOCTYPE html>
-<html lang="en" x-data="Voice.voiceDashboard()" x-init="init()">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Voice Control Surface</title>
     <link rel="stylesheet" href="/styles.css" />
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script type="module" src="/js/pilot.js"></script>
-    <script type="module" src="/modules/voice/js/voice.js"></script>
-    <style>
-      .voice-layout {
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.5rem;
-      }
+    <script type="module">
+      import '/js/pilot.js';
+      import '/modules/voice/components/voice-dashboard.js';
 
-      .voice-layout form {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-
-      .voice-layout textarea,
-      .voice-layout input,
-      .voice-layout button {
-        font: inherit;
-      }
-
-      .voice-layout textarea,
-      .voice-layout input[type='number'] {
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(88, 178, 220, 0.35);
-        background: rgba(15, 17, 26, 0.35);
-        color: inherit;
-      }
-
-      .voice-layout button {
-        align-self: flex-start;
-        padding: 0.5rem 1.25rem;
-        border-radius: 999px;
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .voice-layout button.primary {
-        background: var(--lcars-accent-secondary);
-        color: #05070d;
-      }
-
-      .voice-layout button.secondary {
-        background: rgba(88, 178, 220, 0.25);
-        color: var(--lcars-text);
-      }
-
-      .control-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 0.75rem;
-      }
-
-      .event-log {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        max-height: 360px;
-        overflow-y: auto;
-      }
-
-      .event-log li {
-        background: rgba(15, 17, 26, 0.35);
-        border: 1px solid rgba(88, 178, 220, 0.25);
-        border-radius: 0.75rem;
-        padding: 0.75rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-      }
-
-      .event-log strong {
-        color: var(--lcars-accent-secondary);
-      }
-
-      .status {
-        color: var(--lcars-muted);
-      }
-
-      .voice-last {
-        background: rgba(15, 17, 26, 0.35);
-        border: 1px solid rgba(88, 178, 220, 0.25);
-        border-radius: 0.5rem;
-        padding: 0.75rem;
-        min-height: 6rem;
-        overflow-wrap: anywhere;
-      }
-    </style>
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('voice-dashboard')) {
+          mount.appendChild(document.createElement('voice-dashboard'));
+        }
+      });
+    </script>
   </head>
-  <body>
-    <main>
-      <header>
+  <body class="pilot-solo">
+    <main class="pilot-solo__main">
+      <header class="pilot-solo__header">
         <h1>Voice Control Surface</h1>
-        <p>Control the text-to-speech module and monitor playback events exposed by the ROS topics in the voice stack.</p>
+        <p>Queue speech, manage playback, and observe ROS voice telemetry.</p>
       </header>
-      <section class="grid voice-layout">
-        <article class="card">
-          <h2>Speak via /voice</h2>
-          <p class="status">Status: <strong x-text="status"></strong></p>
-          <div class="voice-last" x-text="lastVoice || 'No speech enqueued yet.'"></div>
-          <form @submit.prevent="sendVoice">
-            <label>
-              Message
-              <textarea rows="5" x-model="voiceMessage" placeholder="What should Pete say?"></textarea>
-            </label>
-            <button type="submit" class="primary">Send to /voice</button>
-            <p class="status" x-text="voiceFeedback"></p>
-          </form>
-        </article>
-        <article class="card">
-          <h2>Playback Controls</h2>
-          <div class="control-buttons">
-            <button type="button" class="secondary" @click="sendInterrupt">Interrupt</button>
-            <button type="button" class="secondary" @click="sendResume">Resume</button>
-            <button type="button" class="secondary" @click="sendClear">Clear Queue</button>
-          </div>
-          <p class="status" x-text="commandFeedback"></p>
-          <form @submit.prevent="applyVolume">
-            <label>
-              Output volume (0-255)
-              <input type="range" min="0" max="255" x-model.number="volume" />
-              <input type="number" min="0" max="255" x-model.number="volume" />
-            </label>
-            <button type="submit" class="primary">Apply volume</button>
-            <p class="status" x-text="volumeFeedback"></p>
-          </form>
-        </article>
-        <article class="card">
-          <h2>Event Log</h2>
-          <ul class="event-log">
-            <template x-if="!eventLog.length">
-              <li>
-                <span>No playback events observed yet.</span>
-              </li>
-            </template>
-            <template x-for="event in eventLog" :key="event.id">
-              <li>
-                <strong x-text="event.label"></strong>
-                <span><code x-text="event.topic"></code></span>
-                <span x-text="event.timestamp"></span>
-              </li>
-            </template>
-          </ul>
-        </article>
-      </section>
+      <section id="module-root" class="pilot-solo__surface"></section>
     </main>
   </body>
 </html>

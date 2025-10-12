@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
+import { surfaceStyles } from '/components/pilot-style.js';
 
 function generateId() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -23,138 +24,87 @@ class ChatDashboard extends LitElement {
         voiceCommand: { state: true },
     };
 
-    static styles = css`
-    :host {
-      display: block;
-    }
-    .chat-layout {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1rem;
-    }
-    .chat-card {
-      background: var(--control-surface-bg);
-      border: 1px solid var(--control-surface-border);
-      border-radius: var(--control-surface-radius);
-      padding: var(--control-surface-padding);
-      box-shadow: var(--control-surface-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .chat-card h3 {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.9rem;
-      color: var(--metric-title-color);
-    }
-    .status {
-      font-size: 0.8rem;
-      color: var(--lcars-muted);
-    }
-    .status strong {
-      color: var(--lcars-text);
-    }
-    .conversation-log {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    .conversation-log li {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--control-surface-border);
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-    .conversation-log .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      font-size: 0.75rem;
-      color: var(--lcars-muted);
-    }
-    .conversation-log .role {
-      font-weight: 600;
-      color: var(--lcars-accent-secondary);
-    }
-    .conversation-log .content {
-      margin: 0;
-      white-space: pre-wrap;
-      line-height: 1.3;
-      font-size: 0.85rem;
-    }
-    .conversation-empty {
-      color: var(--lcars-muted);
-      font-style: italic;
-      text-align: center;
-      font-size: 0.85rem;
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--metric-label-color);
-    }
-    input, select, textarea {
-      font: inherit;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      border: 1px solid var(--control-surface-border);
-      background: rgba(0, 0, 0, 0.3);
-      color: var(--lcars-text);
-      font-family: var(--metric-value-font);
-    }
-    textarea {
-      resize: vertical;
-      min-height: 80px;
-      font-size: 0.85rem;
-    }
-    button {
-      align-self: flex-start;
-      padding: 0.5rem 1rem;
-      border-radius: 999px;
-      background: var(--lcars-accent-secondary);
-      color: #05070d;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      transition: background 120ms ease;
-    }
-    button:hover {
-      background: var(--lcars-accent);
-    }
-    pre {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--control-surface-border);
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      min-height: 3rem;
-      overflow-wrap: anywhere;
-      font-family: var(--metric-value-font);
-      font-size: 0.8rem;
-      margin: 0;
-    }
-  `;
+    static styles = [
+        surfaceStyles,
+        css`
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--metric-label-color);
+      }
+      input,
+      select,
+      textarea {
+        font: inherit;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--control-surface-border);
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--lcars-text);
+        font-family: var(--metric-value-font);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 80px;
+        font-size: 0.85rem;
+      }
+      .conversation-log {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .conversation-entry {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+      .conversation-entry__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+      .conversation-entry__role {
+        font-weight: 600;
+        color: var(--lcars-accent-secondary);
+      }
+      .conversation-entry__content {
+        margin: 0;
+        white-space: pre-wrap;
+        line-height: 1.35;
+        font-size: 0.85rem;
+      }
+      .conversation-empty {
+        color: var(--lcars-muted);
+        font-style: italic;
+        text-align: center;
+        font-size: 0.85rem;
+      }
+      .voice-log {
+        min-height: 3rem;
+        overflow-wrap: anywhere;
+      }
+    `,
+    ];
 
     constructor() {
         super();
@@ -324,32 +274,32 @@ class ChatDashboard extends LitElement {
     }
 
     render() {
+        const conversationStatus = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
+        const voiceStatusVariant = this.voiceStatus === 'Live' ? 'success' : this.voiceStatus === 'Error' ? 'error' : undefined;
         return html`
-      <div class="chat-layout">
-        <article class="chat-card">
-          <h3>Conversation Stream</h3>
-          <p class="status">Status: <strong>${this.status}</strong></p>
+      <div class="surface-grid surface-grid--wide">
+        <article class="surface-card">
+          <h3 class="surface-card__title">Conversation Stream</h3>
+          <p class="surface-status" data-variant="${conversationStatus ?? ''}">Status: ${this.status}</p>
           <ul class="conversation-log">
             ${this.messages.length === 0
                 ? html`<li class="conversation-empty">Waiting for conversation activity…</li>`
                 : this.messages.map(
-                    (message) => html`
-                    <li key="${message.id}">
-                      <div class="meta">
-                        <span class="role">${message.role}</span>
-                        <span class="speaker">${message.speaker || '—'}</span>
-                        <span>Conf: ${this.formatConfidence(message.confidence)}</span>
-                        <span>${message.timestamp}</span>
-                      </div>
-                      <p class="content">${message.content}</p>
-                    </li>
-                  `,
+                    (message) => html`<li class="conversation-entry" key="${message.id}">
+                <div class="conversation-entry__meta">
+                  <span class="conversation-entry__role">${message.role}</span>
+                  <span>${message.speaker || '—'}</span>
+                  <span>Conf: ${this.formatConfidence(message.confidence)}</span>
+                  <span>${message.timestamp}</span>
+                </div>
+                <p class="conversation-entry__content">${message.content}</p>
+              </li>`,
                 )}
           </ul>
         </article>
 
-        <article class="chat-card">
-          <h3>Send to /conversation</h3>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Send to /conversation</h3>
           <form @submit=${this.handleSendMessage}>
             <label>
               Role
@@ -372,24 +322,22 @@ class ChatDashboard extends LitElement {
               Message
               <textarea rows="4" .value=${this.composerContent} @input=${(e) => (this.composerContent = e.target.value)} placeholder="What would you like to say?"></textarea>
             </label>
-            <button type="submit">Send</button>
-            ${this.formFeedback ? html`<p class="status">${this.formFeedback}</p>` : ''}
+            <button class="surface-action" type="submit">Send</button>
+            ${this.formFeedback ? html`<p class="surface-status">${this.formFeedback}</p>` : ''}
           </form>
         </article>
 
-        <article class="chat-card">
-          <h3>Voice Bridge</h3>
-          <p class="status">Status: <strong>${this.voiceStatus}</strong></p>
-          <label style="margin-top: 0.5rem;">Latest /voice
-            <pre>${this.voiceLast || '—'}</pre>
-          </label>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Voice Bridge</h3>
+          <p class="surface-status" data-variant="${voiceStatusVariant ?? ''}">Status: ${this.voiceStatus}</p>
+          <div class="surface-panel surface-mono voice-log">${this.voiceLast || '—'}</div>
           <form @submit=${this.handleSendVoice}>
             <label>
               Speak this text
               <textarea rows="3" .value=${this.voiceCommand} @input=${(e) => (this.voiceCommand = e.target.value)} placeholder="Hello from chat"></textarea>
             </label>
-            <button type="submit">Send to /voice</button>
-            ${this.voiceFeedback ? html`<p class="status">${this.voiceFeedback}</p>` : ''}
+            <button class="surface-action" type="submit">Send to /voice</button>
+            ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
           </form>
         </article>
       </div>

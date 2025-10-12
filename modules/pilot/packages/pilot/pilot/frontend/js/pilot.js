@@ -5,6 +5,8 @@ const DEFAULT_BRIDGE = {
   video_port: 8089,
 };
 
+const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '', '0.0.0.0']);
+
 function mergeBridgeConfig(values = {}) {
   return {
     ...DEFAULT_BRIDGE,
@@ -22,19 +24,37 @@ function resolveBridge() {
 function resolveRosbridgeUrl() {
   const bridge = resolveBridge();
   const raw = bridge.rosbridge_uri || DEFAULT_BRIDGE.rosbridge_uri;
+  const page = typeof window !== 'undefined' ? window.location : undefined;
+  const fallbackProtocol = page && page.protocol === 'https:' ? 'wss:' : 'ws:';
+  const fallbackHost = page && page.hostname ? page.hostname : '127.0.0.1';
   try {
-    const url = new URL(raw, window.location.href);
-    if (url.protocol === 'http:') {
-      url.protocol = 'ws:';
-    } else if (url.protocol === 'https:') {
-      url.protocol = 'wss:';
+    const url = new URL(raw, page ? page.href : undefined);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    }
+    if (LOOPBACK_HOSTNAMES.has(url.hostname)) {
+      url.hostname = fallbackHost;
+    }
+    if (!url.port) {
+      const parsed = extractPort(raw);
+      url.port = parsed || '9090';
+    }
+    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+      url.protocol = fallbackProtocol;
     }
     return url.toString();
   } catch (error) {
     console.warn('Invalid rosbridge URI; falling back to current host with port 9090', error);
-    // Use the current host from window.location instead of hardcoding 127.0.0.1
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.hostname}:9090`;
+    return `${fallbackProtocol}//${fallbackHost}:9090`;
+  }
+}
+
+function extractPort(raw) {
+  try {
+    const url = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
+    return url.port;
+  } catch (_error) {
+    return '';
   }
 }
 

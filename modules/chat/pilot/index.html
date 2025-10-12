@@ -1,178 +1,29 @@
 <!DOCTYPE html>
-<html lang="en" x-data="Chat.chatDashboard()" x-init="init()">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Chat Control Console</title>
     <link rel="stylesheet" href="/styles.css" />
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script type="module" src="/js/pilot.js"></script>
-    <script type="module" src="/modules/chat/js/chat.js"></script>
-    <style>
-      .chat-layout {
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.5rem;
-      }
+    <script type="module">
+      import '/js/pilot.js';
+      import '/modules/chat/components/chat-dashboard.js';
 
-      .conversation-log ul {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        max-height: 480px;
-        overflow-y: auto;
-      }
-
-      .conversation-log li {
-        background: rgba(15, 17, 26, 0.35);
-        border: 1px solid rgba(88, 178, 220, 0.25);
-        border-radius: 0.75rem;
-        padding: 0.75rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-      }
-
-      .conversation-log .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        font-size: 0.9rem;
-        color: var(--lcars-muted);
-      }
-
-      .conversation-log .role {
-        font-weight: 600;
-        color: var(--lcars-accent-secondary);
-      }
-
-      .conversation-log .content {
-        margin: 0;
-        white-space: pre-wrap;
-        line-height: 1.4;
-      }
-
-      .composer form,
-      .voice-bridge form {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-
-      .composer textarea,
-      .voice-bridge textarea,
-      .composer select,
-      .composer input {
-        font: inherit;
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(88, 178, 220, 0.4);
-        background: rgba(15, 17, 26, 0.35);
-        color: inherit;
-      }
-
-      .composer button,
-      .voice-bridge button {
-        align-self: flex-start;
-        padding: 0.5rem 1.25rem;
-        border-radius: 999px;
-        background: var(--lcars-accent-secondary);
-        color: #05070d;
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .status {
-        color: var(--lcars-muted);
-      }
-
-      .voice-bridge pre {
-        background: rgba(15, 17, 26, 0.35);
-        border: 1px solid rgba(88, 178, 220, 0.25);
-        border-radius: 0.5rem;
-        padding: 0.75rem;
-        min-height: 6rem;
-        overflow-wrap: anywhere;
-      }
-    </style>
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('chat-dashboard')) {
+          mount.appendChild(document.createElement('chat-dashboard'));
+        }
+      });
+    </script>
   </head>
-  <body>
-    <main>
-      <header>
+  <body class="pilot-solo">
+    <main class="pilot-solo__main">
+      <header class="pilot-solo__header">
         <h1>Chat Control Console</h1>
-        <p>
-          Monitor the <code>/conversation</code> topic and inject prompts directly into the chat module. Use the
-          <code>/voice</code> bridge to broadcast text-to-speech messages for debugging.
-        </p>
+        <p>Inspect /conversation traffic and bridge prompts to downstream voice output.</p>
       </header>
-      <section class="grid chat-layout">
-        <article class="card conversation-log">
-          <h2>Conversation Stream</h2>
-          <p class="status">Status: <strong x-text="status"></strong></p>
-          <ul>
-            <template x-if="!messages.length">
-              <li>
-                <p class="content">Waiting for conversation activity…</p>
-              </li>
-            </template>
-            <template x-for="message in messages" :key="message.id">
-              <li>
-                <div class="meta">
-                  <span class="role" x-text="message.role"></span>
-                  <span class="speaker" x-text="message.speaker || '—'"></span>
-                  <span class="confidence">Confidence: <span x-text="formatConfidence(message.confidence)"></span></span>
-                  <span class="timestamp" x-text="message.timestamp"></span>
-                </div>
-                <p class="content" x-text="message.content"></p>
-              </li>
-            </template>
-          </ul>
-        </article>
-        <article class="card composer">
-          <h2>Send Message to /conversation</h2>
-          <form @submit.prevent="sendMessage">
-            <label>
-              Role
-              <select x-model="composer.role">
-                <template x-for="role in roles" :key="role">
-                  <option x-text="role"></option>
-                </template>
-              </select>
-            </label>
-            <label>
-              Speaker
-              <input type="text" x-model="composer.speaker" placeholder="pilot" />
-            </label>
-            <label>
-              Confidence
-              <input type="number" step="0.01" min="0" max="1" x-model="composer.confidence" />
-            </label>
-            <label>
-              Message
-              <textarea rows="6" x-model="composer.content" placeholder="What would you like to say?"></textarea>
-            </label>
-            <button type="submit">Send to /conversation</button>
-            <p class="status" x-text="formFeedback"></p>
-          </form>
-        </article>
-        <article class="card voice-bridge">
-          <h2>Voice Topic Bridge</h2>
-          <p class="status">Status: <strong x-text="voiceStatus"></strong></p>
-          <h3>Latest /voice payload</h3>
-          <pre x-text="voiceLast || '—'"></pre>
-          <form @submit.prevent="sendVoice">
-            <label>
-              Speak this text
-              <textarea rows="4" x-model="voiceCommand" placeholder="Hello from the chat console"></textarea>
-            </label>
-            <button type="submit">Send to /voice</button>
-            <p class="status" x-text="voiceFeedback"></p>
-          </form>
-        </article>
-      </section>
+      <section id="module-root" class="pilot-solo__surface"></section>
     </main>
   </body>
 </html>

@@ -401,6 +401,45 @@ body {
   justify-content: space-between;
 }
 
+.pilot-solo {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--lcars-bg);
+  color: var(--lcars-text);
+}
+
+.pilot-solo__main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 3.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pilot-solo__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pilot-solo__header h1 {
+  margin: 0;
+  font-size: 2.25rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.pilot-solo__header p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--lcars-muted);
+}
+
+.pilot-solo__surface {
+  display: block;
+}
+
 .command-groups {
   display: flex;
   flex-wrap: wrap;

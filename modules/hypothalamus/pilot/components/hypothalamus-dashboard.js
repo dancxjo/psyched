@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
+import { surfaceStyles } from '/components/pilot-style.js';
 
 function asNumber(value, fallback = null) {
     const number = Number(value);
@@ -16,66 +17,18 @@ class HypothalamusDashboard extends LitElement {
         lastUpdate: { state: true },
     };
 
-    static styles = css`
-    :host {
-      display: block;
-    }
-    .hypo-grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    }
-    .hypo-card {
-      background: var(--control-surface-bg);
-      border: 1px solid var(--control-surface-border);
-      border-radius: var(--control-surface-radius);
-      padding: var(--control-surface-padding);
-      box-shadow: var(--control-surface-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .hypo-card h3 {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.9rem;
-      color: var(--metric-title-color);
-    }
-    .metric-pair {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 0.75rem;
-    }
-    .metric-pair .label {
-      font-size: 0.75rem;
-      color: var(--metric-label-color);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .metric-pair .value {
-      font-family: var(--metric-value-font);
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--lcars-text);
-    }
-    .status-bar {
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-      text-align: center;
-      font-size: 0.8rem;
-      color: var(--lcars-muted);
-      grid-column: 1 / -1;
-    }
-    .status-bar.live {
-      color: var(--lcars-success);
-    }
-    .status-bar.error {
-      color: var(--lcars-error);
-    }
-  `;
+    static styles = [
+        surfaceStyles,
+        css`
+      .hypo-status {
+        grid-column: 1 / -1;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+      }
+    `,
+    ];
 
     constructor() {
         super();
@@ -199,42 +152,42 @@ class HypothalamusDashboard extends LitElement {
     }
 
     render() {
-        const statusClass = this.status === 'Live' ? 'live' : this.status === 'Error' ? 'error' : '';
+        const statusVariant = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
         return html`
-      <div class="hypo-grid">
-        <div class="status-bar ${statusClass}">Status: ${this.status}</div>
-        
-        <div class="hypo-card">
-          <h3>Temperature</h3>
-          <div class="metric-pair">
-            <span class="label">Celsius</span>
-            <span class="value">${this.format(this.temperatureC)}</span>
-          </div>
-          <div class="metric-pair">
-            <span class="label">Fahrenheit</span>
-            <span class="value">${this.format(this.temperatureF)}</span>
-          </div>
-        </div>
+      <div class="surface-grid surface-grid--medium">
+        <p class="surface-status hypo-status" data-variant="${statusVariant ?? ''}">Status: ${this.status}</p>
 
-        <div class="hypo-card">
-          <h3>Humidity</h3>
-          <div class="metric-pair">
-            <span class="label">Relative</span>
-            <span class="value">${this.format(this.humidityPercent)}%</span>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Temperature</h3>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Celsius</span>
+            <span class="surface-metric__value">${this.format(this.temperatureC)}</span>
           </div>
-        </div>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Fahrenheit</span>
+            <span class="surface-metric__value">${this.format(this.temperatureF)}</span>
+          </div>
+        </article>
 
-        <div class="hypo-card">
-          <h3>Diagnostics</h3>
-          <div class="metric-pair">
-            <span class="label">Backend</span>
-            <span class="value">${this.backend}</span>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Humidity</h3>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Relative</span>
+            <span class="surface-metric__value">${this.format(this.humidityPercent)}%</span>
           </div>
-          <div class="metric-pair">
-            <span class="label">Last update</span>
-            <span class="value">${this.lastUpdate}</span>
+        </article>
+
+        <article class="surface-card">
+          <h3 class="surface-card__title">Diagnostics</h3>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Backend</span>
+            <span class="surface-metric__value">${this.backend}</span>
           </div>
-        </div>
+          <div class="surface-metric surface-metric--inline">
+            <span class="surface-metric__label">Last update</span>
+            <span class="surface-metric__value">${this.lastUpdate}</span>
+          </div>
+        </article>
       </div>
     `;
     }

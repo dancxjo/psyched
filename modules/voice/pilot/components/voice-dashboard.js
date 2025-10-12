@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
+import { surfaceStyles } from '/components/pilot-style.js';
 
 function generateId() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -20,132 +21,56 @@ class VoiceDashboard extends LitElement {
         eventLog: { state: true },
     };
 
-    static styles = css`
-    :host {
-      display: block;
-    }
-    .voice-layout {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1rem;
-    }
-    .voice-card {
-      background: var(--control-surface-bg);
-      border: 1px solid var(--control-surface-border);
-      border-radius: var(--control-surface-radius);
-      padding: var(--control-surface-padding);
-      box-shadow: var(--control-surface-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .voice-card h3 {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.9rem;
-      color: var(--metric-title-color);
-    }
-    .status {
-      font-size: 0.8rem;
-      color: var(--lcars-muted);
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--metric-label-color);
-    }
-    textarea, input {
-      font: inherit;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      border: 1px solid var(--control-surface-border);
-      background: rgba(0, 0, 0, 0.3);
-      color: var(--lcars-text);
-      font-family: var(--metric-value-font);
-    }
-    textarea {
-      resize: vertical;
-      min-height: 60px;
-      font-size: 0.85rem;
-    }
-    button {
-      align-self: flex-start;
-      padding: 0.5rem 1rem;
-      border-radius: 999px;
-      background: var(--lcars-accent-secondary);
-      color: #05070d;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      transition: background 120ms ease;
-    }
-    button:hover {
-      background: var(--lcars-accent);
-    }
-    button.secondary {
-      background: rgba(88, 178, 220, 0.25);
-      color: var(--lcars-text);
-    }
-    .control-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-    .voice-last {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--control-surface-border);
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      min-height: 3rem;
-      overflow-wrap: anywhere;
-      font-family: var(--metric-value-font);
-      font-size: 0.8rem;
-    }
-    .event-log {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      max-height: 240px;
-      overflow-y: auto;
-    }
-    .event-log li {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--control-surface-border);
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: 0.85rem;
-    }
-    .event-log strong {
-      color: var(--lcars-accent-secondary);
-    }
-    .volume-control {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .volume-control input[type='number'] {
-      width: 80px;
-    }
-  `;
+    static styles = [
+        surfaceStyles,
+        css`
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--metric-label-color);
+      }
+      textarea,
+      input {
+        font: inherit;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--control-surface-border);
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--lcars-text);
+        font-family: var(--metric-value-font);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 60px;
+        font-size: 0.85rem;
+      }
+      .voice-last {
+        min-height: 3rem;
+        overflow-wrap: anywhere;
+      }
+      .volume-control {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .volume-control input[type='number'] {
+        width: 80px;
+      }
+      .voice-log__topic {
+        color: var(--lcars-muted);
+        font-size: 0.75rem;
+      }
+    `,
+    ];
 
     constructor() {
         super();
@@ -319,54 +244,52 @@ class VoiceDashboard extends LitElement {
     }
 
     render() {
+        const statusVariant = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
         return html`
-      <div class="voice-layout">
-        <article class="voice-card">
-          <h3>Speak Command</h3>
-          <p class="status">Status: <strong>${this.status}</strong></p>
+      <div class="surface-grid surface-grid--wide">
+        <article class="surface-card">
+          <h3 class="surface-card__title">Speak Command</h3>
+          <p class="surface-status" data-variant="${statusVariant ?? ''}">Status: ${this.status}</p>
           <form @submit=${this.handleSendVoice}>
             <label>
               Text to speak
               <textarea rows="3" .value=${this.voiceMessage} @input=${(e) => (this.voiceMessage = e.target.value)} placeholder="Type message"></textarea>
             </label>
-            <button type="submit">Send to /voice</button>
-            ${this.voiceFeedback ? html`<p class="status">${this.voiceFeedback}</p>` : ''}
+            <button class="surface-action" type="submit">Send to /voice</button>
+            ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
           </form>
-          <label style="margin-top: 0.5rem;">Last /voice
-            <div class="voice-last">${this.lastVoice || '—'}</div>
-          </label>
+          <div class="surface-panel surface-mono voice-last">${this.lastVoice || '—'}</div>
         </article>
 
-        <article class="voice-card">
-          <h3>Playback Controls</h3>
-          <div class="control-buttons">
-            <button class="secondary" @click=${this.sendInterrupt}>Interrupt</button>
-            <button class="secondary" @click=${this.sendResume}>Resume</button>
-            <button class="secondary" @click=${this.sendClear}>Clear Queue</button>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Playback Controls</h3>
+          <div class="surface-actions">
+            <button class="surface-action" type="button" @click=${this.sendInterrupt}>Interrupt</button>
+            <button class="surface-action" type="button" @click=${this.sendResume}>Resume</button>
+            <button class="surface-action" type="button" @click=${this.sendClear}>Clear Queue</button>
           </div>
-          ${this.commandFeedback ? html`<p class="status">${this.commandFeedback}</p>` : ''}
-          <label style="margin-top: 0.5rem;">
+          ${this.commandFeedback ? html`<p class="surface-status">${this.commandFeedback}</p>` : ''}
+          <label>
             Volume (0-255)
             <div class="volume-control">
-              <input type="number" min="0" max="255" .value=${this.volume} @input=${(e) => (this.volume = parseInt(e.target.value))} />
-              <button class="secondary" @click=${this.applyVolume}>Apply</button>
+              <input type="number" min="0" max="255" .value=${this.volume} @input=${(e) => (this.volume = Number(e.target.value || 0))} />
+              <button class="surface-action" type="button" @click=${this.applyVolume}>Apply</button>
             </div>
           </label>
-          ${this.volumeFeedback ? html`<p class="status">${this.volumeFeedback}</p>` : ''}
+          ${this.volumeFeedback ? html`<p class="surface-status">${this.volumeFeedback}</p>` : ''}
         </article>
 
-        <article class="voice-card">
-          <h3>Event Log</h3>
-          <ul class="event-log">
+        <article class="surface-card">
+          <h3 class="surface-card__title">Event Log</h3>
+          <ul class="surface-log">
             ${this.eventLog.length === 0
-                ? html`<li>No events yet</li>`
+                ? html`<li class="surface-log__entry">No events yet</li>`
                 : this.eventLog.map(
-                    (event) => html`
-                    <li key="${event.id}">
-                      <strong>${event.label}</strong>
-                      <span class="status">${event.topic} · ${event.timestamp}</span>
-                    </li>
-                  `,
+                    (event) => html`<li class="surface-log__entry" key="${event.id}">
+                <strong>${event.label}</strong>
+                <span class="voice-log__topic"><code>${event.topic}</code></span>
+                <span class="surface-muted">${event.timestamp}</span>
+              </li>`,
                 )}
           </ul>
         </article>

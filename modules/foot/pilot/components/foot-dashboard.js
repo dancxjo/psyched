@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
+import { surfaceStyles } from '/components/pilot-style.js';
 import '/components/joystick-control.js';
 
 const BATTERY_TOPICS = [
@@ -75,159 +76,72 @@ class FootDashboard extends LitElement {
         lastCommand: { state: true },
     };
 
-    static styles = css`
-    :host {
-      display: block;
-    }
-    .foot-grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    }
-    .foot-card {
-      background: var(--control-surface-bg);
-      border: 1px solid var(--control-surface-border);
-      border-radius: var(--control-surface-radius);
-      padding: var(--control-surface-padding);
-      box-shadow: var(--control-surface-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    .foot-card h3 {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.95rem;
-      color: var(--metric-title-color);
-    }
-    .battery-metrics {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.75rem;
-    }
-    .metric {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-    .metric .label {
-      font-size: 0.75rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--metric-label-color);
-    }
-    .metric .value {
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--lcars-text);
-      font-family: var(--metric-value-font);
-    }
-    .battery-gauge {
-      position: relative;
-      height: 16px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.07);
-      overflow: hidden;
-    }
-    .battery-gauge-fill {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, var(--lcars-accent), var(--lcars-success));
-      transform-origin: left center;
-      transition: transform 180ms ease;
-    }
-    .status-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.35rem 0.75rem;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      background: rgba(88, 178, 220, 0.2);
-      color: var(--lcars-text);
-      align-self: flex-start;
-    }
-    .status-chip[data-state='charging'] {
-      background: rgba(92, 209, 132, 0.25);
-    }
-    .status-chip[data-state='critical'] {
-      background: rgba(255, 111, 97, 0.25);
-    }
-    .drive-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      align-items: center;
-    }
-    .hint {
-      color: var(--lcars-muted);
-      font-size: 0.85rem;
-      text-align: center;
-    }
-    .drive-panel pre {
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 0.5rem;
-      padding: 0.5rem;
-      font-size: 0.75rem;
-      max-height: 100px;
-      overflow: auto;
-      font-family: var(--metric-value-font);
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .sensor-badges {
-      display: grid;
-      gap: 0.5rem;
-    }
-    .sensor-badge {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.85rem;
-    }
-    .sensor-badge[data-state='alert'] {
-      background: rgba(255, 111, 97, 0.2);
-      color: var(--lcars-error);
-    }
-    .sensor-badge .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--lcars-accent-secondary);
-    }
-    .sensor-badge[data-state='alert'] .status-dot {
-      background: var(--lcars-error);
-      box-shadow: 0 0 12px var(--lcars-error);
-    }
-    .action-grid {
-      display: grid;
-      gap: 0.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    }
-    .action-grid button {
-      background: rgba(88, 178, 220, 0.2);
-      border: 1px solid var(--control-surface-border);
-      border-radius: 0.5rem;
-      padding: 0.65rem 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--lcars-text);
-      cursor: pointer;
-      transition: background 120ms ease, transform 120ms ease;
-    }
-    .action-grid button:hover {
-      background: rgba(88, 178, 220, 0.35);
-      transform: translateY(-2px);
-    }
-  `;
+    static styles = [
+        surfaceStyles,
+        css`
+      .battery-gauge {
+        position: relative;
+        height: 16px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+      .battery-gauge__fill {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, var(--lcars-accent), var(--lcars-success));
+        transform-origin: left center;
+        transition: transform 180ms ease;
+      }
+      .drive-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+      }
+      .drive-panel__log {
+        width: 100%;
+        max-height: 120px;
+        overflow: auto;
+        font-size: 0.8rem;
+        box-sizing: border-box;
+      }
+      .sensor-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .sensor-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 0.75rem;
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        font-size: 0.85rem;
+      }
+      .sensor-item[data-state='alert'] {
+        background: rgba(255, 111, 97, 0.2);
+        color: var(--lcars-error);
+      }
+      .sensor-item__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--lcars-accent-secondary);
+      }
+      .sensor-item[data-state='alert'] .sensor-item__dot {
+        background: var(--lcars-error);
+        box-shadow: 0 0 12px var(--lcars-error);
+      }
+      .surface-actions--grid {
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      }
+    `,
+    ];
 
     constructor() {
         super();
@@ -402,78 +316,78 @@ class FootDashboard extends LitElement {
     }
 
     render() {
+        const gaugeFill = Math.max(0, Math.min(1, (this.battery.percent ?? 0) / 100));
+        const chipVariant = this.battery.state === 'critical' ? 'critical' : this.battery.state === 'charging' ? 'success' : undefined;
         return html`
-      <div class="foot-grid">
-        <article class="foot-card">
-          <h3>Battery</h3>
-          <div class="battery-gauge">
-            <div class="battery-gauge-fill" style="transform: scaleX(${(this.battery.percent ?? 0) / 100})"></div>
+      <div class="surface-grid surface-grid--wide">
+        <article class="surface-card">
+          <h3 class="surface-card__title">Battery</h3>
+          <div class="battery-gauge" role="meter" aria-valuenow="${this.battery.percent}" aria-valuemin="0" aria-valuemax="100">
+            <div class="battery-gauge__fill" style="transform: scaleX(${gaugeFill})"></div>
           </div>
-          <div class="status-chip" data-state="${this.battery.state}">
-            ${this.battery.status}
-          </div>
-          <div class="battery-metrics">
-            <div class="metric">
-              <span class="label">Charge</span>
-              <span class="value">${this.battery.chargeDisplay}</span>
+          <span class="surface-chip" data-variant="${chipVariant ?? ''}">${this.battery.status}</span>
+          <div class="surface-grid surface-grid--dense surface-grid--narrow">
+            <div class="surface-metric">
+              <span class="surface-metric__label">Charge</span>
+              <span class="surface-metric__value">${this.battery.chargeDisplay}</span>
             </div>
-            <div class="metric">
-              <span class="label">Voltage</span>
-              <span class="value">${this.battery.voltageDisplay}</span>
+            <div class="surface-metric">
+              <span class="surface-metric__label">Voltage</span>
+              <span class="surface-metric__value">${this.battery.voltageDisplay}</span>
             </div>
-            <div class="metric">
-              <span class="label">Current</span>
-              <span class="value">${this.battery.currentDisplay}</span>
+            <div class="surface-metric">
+              <span class="surface-metric__label">Current</span>
+              <span class="surface-metric__value">${this.battery.currentDisplay}</span>
             </div>
-            <div class="metric">
-              <span class="label">Temperature</span>
-              <span class="value">${this.battery.temperatureDisplay}</span>
+            <div class="surface-metric">
+              <span class="surface-metric__label">Temperature</span>
+              <span class="surface-metric__value">${this.battery.temperatureDisplay}</span>
             </div>
           </div>
         </article>
 
-        <article class="foot-card">
-          <h3>Drive</h3>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Drive</h3>
           <div class="drive-panel">
             <pilot-joystick-control></pilot-joystick-control>
-            <p class="hint">
-              Drag to send <code>/cmd_vel</code>
-            </p>
-            <pre>${this.lastCommand}</pre>
+            <p class="surface-status surface-mono">Drag to publish <code>/cmd_vel</code>.</p>
+            <pre class="surface-panel surface-mono drive-panel__log">${this.lastCommand}</pre>
           </div>
         </article>
 
-        <article class="foot-card">
-          <h3>Proximity &amp; Safety</h3>
-          <div class="sensor-badges">
-            <div class="sensor-badge" data-state="${this.sensors.bumpers ? 'alert' : 'ok'}">
-              <span>Bumpers</span>
-              <span class="status-dot"></span>
-            </div>
-            <div class="sensor-badge" data-state="${this.sensors.cliffs ? 'alert' : 'ok'}">
-              <span>Cliff Sensors</span>
-              <span class="status-dot"></span>
-            </div>
-            <div class="sensor-badge" data-state="${this.sensors.wheels ? 'alert' : 'ok'}">
-              <span>Wheel Drop</span>
-              <span class="status-dot"></span>
-            </div>
-          </div>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Proximity &amp; Safety</h3>
+          <ul class="sensor-list">
+            ${this.renderSensorRow('Bumpers', this.sensors.bumpers)}
+            ${this.renderSensorRow('Cliff Sensors', this.sensors.cliffs)}
+            ${this.renderSensorRow('Wheel Drop', this.sensors.wheels)}
+          </ul>
         </article>
 
-        <article class="foot-card">
-          <h3>Actions</h3>
-          <div class="action-grid">
-            <button @click=${() => this.sendSimple('dock')}>Dock</button>
-            <button @click=${() => this.sendSimple('undock')}>Undock</button>
-            <button @click=${() => this.sendSimple('clean_button')}>Clean</button>
-            <button @click=${() => this.sendSimple('spot_button')}>Spot</button>
-            <button @click=${() => this.sendSimple('dock_button')}>Dock Btn</button>
-            <button @click=${() => this.sendSimple('power_led', { data: [0, 255] })}>LED Max</button>
+        <article class="surface-card">
+          <h3 class="surface-card__title">Actions</h3>
+          <div class="surface-actions surface-actions--grid">
+            <button class="surface-action" @click=${() => this.sendSimple('dock')}>Dock</button>
+            <button class="surface-action" @click=${() => this.sendSimple('undock')}>Undock</button>
+            <button class="surface-action" @click=${() => this.sendSimple('clean_button')}>Clean</button>
+            <button class="surface-action" @click=${() => this.sendSimple('spot_button')}>Spot</button>
+            <button class="surface-action" @click=${() => this.sendSimple('dock_button')}>Dock Btn</button>
+            <button class="surface-action" @click=${() => this.sendSimple('power_led', { data: [0, 255] })}>LED Max</button>
           </div>
-          ${this.actionStatus ? html`<p class="hint">${this.actionStatus}</p>` : ''}
+          ${this.actionStatus
+            ? html`<p class="surface-status" data-variant="${this.actionStatus.includes('Unknown') ? 'error' : 'success'}">${this.actionStatus}</p>`
+            : ''}
         </article>
       </div>
+    `;
+    }
+
+    renderSensorRow(label, alert) {
+        return html`
+      <li class="sensor-item" data-state="${alert ? 'alert' : 'ok'}">
+        <span>${label}</span>
+        <span class="sensor-item__dot" aria-hidden="true"></span>
+      </li>
     `;
     }
 }

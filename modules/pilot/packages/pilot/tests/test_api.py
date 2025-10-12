@@ -34,12 +34,15 @@ def config_file(tmp_path: Path) -> Iterator[Path]:
     text = """
 [host]
 name = "api-test"
-modules = ["imu", "pilot"]
+modules = ["imu", "pilot", "foot"]
 
 [config.mod.imu.launch]
 enabled = true
 
 [config.mod.pilot.launch]
+enabled = true
+
+[config.mod.foot.launch]
 enabled = true
 """
     path = tmp_path / "api-test.toml"
@@ -75,7 +78,14 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
 
     modules = payload["modules"]
     module_names = {module["name"] for module in modules}
-    assert module_names == {"imu", "pilot"}
+    assert module_names == {"imu", "pilot", "foot"}
+
+    foot_entry = next(module for module in modules if module["name"] == "foot")
+    assert foot_entry["has_pilot"] is True
+    assert foot_entry["dashboard_url"].endswith("/modules/foot/")
+
+    imu_entry = next(module for module in modules if module["name"] == "imu")
+    assert imu_entry["has_pilot"] is True
 
     for module in modules:
         assert module.get("slug"), "modules should expose a slug"
