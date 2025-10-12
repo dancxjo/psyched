@@ -84,6 +84,13 @@ def test_discover_active_modules_handles_empty_config() -> None:
     assert modules == []
 
 
+def test_discover_active_modules_accepts_sequence_modules() -> None:
+    """Module lists expressed as sequences should mark each entry as active."""
+    modules = discover_active_modules({"modules": ["imu", "pilot"]})
+    names = {module.name for module in modules}
+    assert names == {"imu", "pilot"}
+
+
 def test_load_host_config_supports_jsonc(tmp_path: Path) -> None:
     """Trailing comments in JSONC host configs should be ignored."""
     text = dedent(

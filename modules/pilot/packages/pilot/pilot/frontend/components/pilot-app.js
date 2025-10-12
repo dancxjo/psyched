@@ -87,10 +87,13 @@ class PilotApp extends LitElement {
         });
       }
       for (const module of this.modules) {
+        const slug = module?.slug || module?.name;
+        if (!slug) continue;
         detail.push({
-          id: `module-${module.name}`,
+          id: `module-${slug}`,
           label: module.display_name || module.name,
           index: counter++,
+          url: module.dashboard_url || (module.has_pilot ? `/modules/${module.name}/` : undefined),
         });
       }
       window.dispatchEvent(new CustomEvent('pilot-sections', { detail }));
@@ -400,7 +403,7 @@ class PilotApp extends LitElement {
     return this.modules.map(
       (module) => html`
                                 <pilot-module-section
-                                        id=${`module-${module.name}`}
+                                        id=${`module-${module.slug || module.name}`}
 					.module=${module}
 					.activeRecords=${this.activeTopics}
 					@run-command=${(event) => this.runCommand(module.name, event.detail.scope, event.detail.command)}
@@ -427,7 +430,7 @@ class PilotApp extends LitElement {
                                         ${modulesWithPages.map(
       (module) => html`
                                                         <li>
-                                                                <a href=${`/modules/${module.name}/`} target="_blank" rel="noopener">
+                                                                <a href=${module.dashboard_url || `/modules/${module.name}/`} target="_blank" rel="noopener">
                                                                         ${module.display_name || module.name}
                                                                 </a>
                                                                 ${module.description

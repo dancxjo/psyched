@@ -123,7 +123,8 @@ class PilotModuleSection extends LitElement {
   }
 
   renderPilotLink() {
-    if (!this.module?.has_pilot) {
+    const dashboardUrl = this.module?.dashboard_url || (this.module?.has_pilot ? `/modules/${this.module?.name}/` : null);
+    if (!dashboardUrl) {
       return nothing;
     }
     const label = this.module.display_name || this.module.name;
@@ -134,7 +135,7 @@ class PilotModuleSection extends LitElement {
           <a
             class="control-button"
             data-variant="accent"
-            href=${`/modules/${this.module.name}/`}
+            href=${dashboardUrl}
             target="_blank"
             rel="noopener"
           >
@@ -274,8 +275,9 @@ class PilotModuleSection extends LitElement {
     if (!this.module) {
       return nothing;
     }
+    const slug = this.module.slug || this.module.name;
     return html`
-      <section class="module-section" id=${`module-${this.module.name}`}>
+      <section class="module-section" id=${`module-${slug}`}>
         <header class="module-header">
           <div>
             <h2>${this.module.display_name || this.module.name}</h2>

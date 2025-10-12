@@ -82,14 +82,7 @@ async def _modules_handler(request: web.Request) -> web.Response:
 
     active_descriptors = settings.active_modules()
     catalog.refresh()
-
-    if active_descriptors:
-        modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
-    else:
-        modules = [
-            _module_payload_from_info(info)
-            for info in catalog.list_modules()
-        ]
+    modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
     return web.json_response({"modules": modules})
 
 
@@ -272,6 +265,7 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
     if info is not None:
         data = info.to_dict()
         data["display_name"] = descriptor.display_name or data.get("display_name") or descriptor.name
+        dashboard_url = f"/modules/{info.name}/" if info.pilot_assets else None
     else:
         data = {
             "name": descriptor.name,
@@ -279,15 +273,16 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
             "description": "",
             "regimes": [],
             "topics": [],
-            "commands": {"mod": [], "system": []},
+            "commands": {
+                "mod": ["setup"],
+                "system": ["generate", "enable", "disable", "start", "stop", "restart", "debug"],
+            },
+            "has_pilot": False,
         }
+        dashboard_url = None
     data["slug"] = descriptor.slug
-    return data
-
-
-def _module_payload_from_info(info: ModuleInfo) -> Dict[str, Any]:
-    data = info.to_dict()
-    data["slug"] = info.name.replace("_", "-")
+    if dashboard_url:
+        data["dashboard_url"] = dashboard_url
     return data
 
 

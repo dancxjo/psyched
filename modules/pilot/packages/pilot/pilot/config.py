@@ -112,6 +112,10 @@ def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]
                 modules[key] = {"launch": value}
             elif value is None:
                 modules[key] = {}
+    elif isinstance(modules_section, Iterable) and not isinstance(modules_section, (str, bytes)):
+        for value in modules_section:
+            key = str(value)
+            modules[key] = {"launch": True}
 
     host_section = config.get("host")
     host_module_names: Iterable[str] = []

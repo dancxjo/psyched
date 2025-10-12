@@ -18,10 +18,15 @@
     <aside class="lcars-nav">
       <div class="nav-title">PSYCHED PILOT</div>
       <template x-for="section in sections" :key="section.id">
-        <button type="button" class="nav-button" :class="{ active: section.id === activeId }" @click="scrollTo(section.id)">
-          <span class="nav-index" x-text="padIndex(section.index)"></span>
-          <span class="nav-label" x-text="section.label"></span>
-        </button>
+        <div class="nav-item">
+          <button type="button" class="nav-button" :class="{ active: section.id === activeId }" @click="scrollTo(section.id)">
+            <span class="nav-index" x-text="padIndex(section.index)"></span>
+            <span class="nav-label" x-text="section.label"></span>
+          </button>
+          <template x-if="section.url">
+            <a class="nav-link" :href="section.url" target="_blank" rel="noopener" @click.stop>↗</a>
+          </template>
+        </div>
       </template>
     </aside>
 

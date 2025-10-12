@@ -47,9 +47,10 @@ class StubRosBridge:
 @pytest.fixture()
 def config_file(tmp_path: Path) -> Path:
     payload = {
-        "host": {"name": "api-test", "modules": ["pilot"]},
+        "host": {"name": "api-test"},
         "modules": {
             "imu": {"launch": True},
+            "pilot": {"launch": True},
         },
     }
     path = tmp_path / "api-test.json"
@@ -101,6 +102,12 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     modules = payload["modules"]
     module_names = {module["name"] for module in modules}
     assert module_names == {"imu", "pilot"}
+
+    for module in modules:
+        assert module.get("slug"), "modules should include a slug field"
+        assert isinstance(module.get("commands", {}), dict)
+        if module.get("has_pilot"):
+            assert module.get("dashboard_url"), "Modules with pilot assets should expose a dashboard URL"
 
 
 async def _exercise_websocket_endpoint(config_file: Path, tmp_path: Path) -> None:
