@@ -31,8 +31,10 @@ function resolveRosbridgeUrl() {
     }
     return url.toString();
   } catch (error) {
-    console.warn('Invalid rosbridge URI; falling back to ws://127.0.0.1:9090', error);
-    return 'ws://127.0.0.1:9090';
+    console.warn('Invalid rosbridge URI; falling back to current host with port 9090', error);
+    // Use the current host from window.location instead of hardcoding 127.0.0.1
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.hostname}:9090`;
   }
 }
 
