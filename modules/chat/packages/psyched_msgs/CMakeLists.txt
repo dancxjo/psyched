@@ -13,6 +13,8 @@ find_package(builtin_interfaces REQUIRED)
 set(msg_files
   "msg/HostHealth.msg"
   "msg/Message.msg"
+  "msg/FeelingIntent.msg"
+  "msg/SensationStamped.msg"
   "msg/TranscriptSegment.msg"
   "msg/TranscriptWord.msg"
   "msg/Transcript.msg"
