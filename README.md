@@ -220,7 +220,3 @@ Core principles:
 
 Licensed under the **MIT License**.
 See [`LICENSE`](./LICENSE).
-
----
-
-Would you like me to generate a **short tagline + shields-style header block** (e.g. badges for ROS 2 | Deno | Docker | MIT License) for the very top before the title? It can make the GitHub page pop a bit more.
