@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
+import tomli_w
 import tomllib
 
 __all__ = [
@@ -14,6 +15,8 @@ __all__ = [
     "ModuleDescriptor",
     "discover_active_modules",
     "load_host_config",
+    "save_host_config",
+    "set_module_config",
 ]
 
 
@@ -69,6 +72,48 @@ def load_host_config(path: Path | str) -> MutableMapping[str, Any]:
             f"Expected mapping at root of TOML config but received {type(data)!r}",
         )
     return data
+
+
+def save_host_config(path: Path | str, data: Mapping[str, Any]) -> None:
+    """Persist *data* to *path* in TOML format.
+
+    Parameters
+    ----------
+    path:
+        Filesystem path for the TOML document.
+    data:
+        Parsed host configuration that should be serialized back to disk.
+    """
+
+    resolved = Path(path)
+    text = tomli_w.dumps(_normalize_for_toml(data))
+    if not text.endswith("\n"):
+        text += "\n"
+    resolved.write_text(text, encoding="utf-8")
+
+
+def set_module_config(
+    config: MutableMapping[str, Any],
+    module_name: str,
+    module_config: Mapping[str, Any],
+) -> None:
+    """Replace the configuration block for ``module_name`` in ``config``.
+
+    Parameters
+    ----------
+    config:
+        Parsed host configuration data that will be mutated in place.
+    module_name:
+        Canonical module identifier.
+    module_config:
+        Mapping describing the module settings to persist.
+    """
+
+    if not module_name or not isinstance(module_name, str):
+        raise ValueError("module_name must be a non-empty string")
+
+    module_block = _ensure_module_mapping(config)
+    module_block[module_name] = _clone_config_value(module_config)
 
 
 def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]:
@@ -202,6 +247,43 @@ def _coerce_string_sequence(value: Any) -> List[str]:
         return result
     text = str(value).strip()
     return [text] if text else []
+
+
+def _ensure_module_mapping(config: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+    config_section = _ensure_mapping(config, "config")
+    mod_section = _ensure_mapping(config_section, "mod")
+    return mod_section
+
+
+def _ensure_mapping(
+    container: MutableMapping[str, Any], key: str
+) -> MutableMapping[str, Any]:
+    current = container.get(key)
+    if current is None:
+        mapping: MutableMapping[str, Any] = {}
+        container[key] = mapping
+        return mapping
+    if isinstance(current, MutableMapping):
+        return current
+    raise HostConfigError(
+        f"Expected mapping for '{key}' but received {type(current).__name__}"
+    )
+
+
+def _clone_config_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _clone_config_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_clone_config_value(item) for item in value]
+    return value
+
+
+def _normalize_for_toml(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _normalize_for_toml(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_for_toml(item) for item in value]
+    return value
 
 
 def _modules_from_host_list(

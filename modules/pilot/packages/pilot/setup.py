@@ -17,6 +17,7 @@ setup(
         'setuptools',
         'aiohttp>=3.9,<4',
         'PyYAML>=6.0',
+        'tomli-w>=1.0',
     ],
     zip_safe=False,
     maintainer='Psyched Maintainers',

@@ -86,8 +86,15 @@ class PilotApp extends LitElement {
     if (typeof window === 'undefined') {
       return;
     }
-    const detail = [];
-    let index = 0;
+    const detail = [
+      {
+        id: 'pilot-config',
+        label: 'Module Configuration',
+        index: 0,
+        url: '/config/',
+      },
+    ];
+    let index = 1;
     for (const module of this.modules) {
       const slug = module.slug || module.name;
       if (!slug) continue;

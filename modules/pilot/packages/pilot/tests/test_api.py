@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import asyncio
 import importlib.util
 from pathlib import Path
 import sys
-from typing import Any, Iterator
+from typing import Iterator
 
 import pytest
 
@@ -50,12 +51,51 @@ enabled = true
     yield path
 
 
+@pytest.fixture()
+def config_with_settings(tmp_path: Path) -> Iterator[Path]:
+    text = """
+[host]
+name = "config-test"
+modules = ["imu", "pilot", "foot"]
+
+[config.mod.imu.launch]
+enabled = true
+
+[config.mod.imu.env]
+RANGE = 12
+
+[config.mod.foot.launch]
+enabled = false
+
+[config.mod.foot.env]
+BALANCE_MODE = "conservative"
+
+[config.mod.pilot.launch]
+enabled = true
+"""
+    path = tmp_path / "config-test.toml"
+    path.write_text(text.strip() + "\n", encoding="utf-8")
+    yield path
+
+
 def test_modules_endpoint_reports_active_dashboards(config_file: Path, tmp_path: Path) -> None:
     asyncio.run(_exercise_modules_endpoint(config_file, tmp_path))
 
 
 def test_static_overlay_serves_module_assets(config_file: Path) -> None:
     asyncio.run(_exercise_static_overlay(config_file))
+
+
+def test_module_config_endpoint_reports_and_updates_settings(
+    config_with_settings: Path, tmp_path: Path
+) -> None:
+    asyncio.run(_exercise_module_config_endpoint(config_with_settings, tmp_path))
+
+
+def test_module_config_endpoint_rejects_null_values(
+    config_with_settings: Path, tmp_path: Path
+) -> None:
+    asyncio.run(_exercise_module_config_validation(config_with_settings, tmp_path))
 
 
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
@@ -129,6 +169,83 @@ async def _exercise_static_overlay(config_file: Path) -> None:
         assert missing.status == 404
 
 
+async def _exercise_module_config_endpoint(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get("/api/module-config")
+        assert response.status == 200
+        payload = await response.json()
+
+        modules = {module["name"]: module for module in payload["modules"]}
+        assert set(modules) == {"imu", "pilot", "foot"}
+
+        imu_entry = modules["imu"]
+        assert imu_entry["listed"] is True
+        assert imu_entry["active"] is True
+        assert imu_entry["config"]["env"]["RANGE"] == 12
+
+        update_payload = {
+            "env": {"RANGE": 42, "OFFSET": 3},
+            "launch": {"enabled": False},
+        }
+        update_response = await client.put(
+            "/api/module-config/imu",
+            json=update_payload,
+        )
+        assert update_response.status == 200
+        updated = await update_response.json()
+        assert updated["config"]["env"] == {"RANGE": 42, "OFFSET": 3}
+        assert updated["config"]["launch"]["enabled"] is False
+
+        follow_up = await client.get("/api/module-config")
+        assert follow_up.status == 200
+        follow_payload = await follow_up.json()
+        refreshed = {
+            module["name"]: module for module in follow_payload["modules"]
+        }
+        assert refreshed["imu"]["config"]["env"]["OFFSET"] == 3
+
+    text = config_file.read_text(encoding="utf-8")
+    assert "OFFSET" in text
+    assert "RANGE = 42" in text
+
+
+async def _exercise_module_config_validation(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.put(
+            "/api/module-config/foot",
+            json={"env": {"BALANCE_MODE": None}},
+        )
+        assert response.status == 400
+
+        bad_json = await client.request(
+            "PUT",
+            "/api/module-config/foot",
+            data="not-json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert bad_json.status == 400
+
+
 class _TestClient:
     def __init__(self, app: web.Application):
         self._app = app
@@ -156,9 +273,15 @@ class _TestClient:
         if self._runner:
             await self._runner.cleanup()
 
-    async def get(self, path: str) -> web.ClientResponse:
+    async def request(self, method: str, path: str, **kwargs) -> web.ClientResponse:
         assert self._session and self._address
-        return await self._session.get(self._address + path)
+        return await self._session.request(method, self._address + path, **kwargs)
+
+    async def get(self, path: str) -> web.ClientResponse:
+        return await self.request("GET", path)
+
+    async def put(self, path: str, **kwargs) -> web.ClientResponse:
+        return await self.request("PUT", path, **kwargs)
 
 
 def _run_app(app: web.Application) -> _TestClient:

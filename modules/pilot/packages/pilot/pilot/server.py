@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
+from datetime import date, datetime, time
 from pathlib import Path
-from typing import Dict, List, MutableMapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set
 
 from aiohttp import web
 
-from .module_catalog import ModuleCatalog
-from .config import ModuleDescriptor, discover_active_modules, load_host_config
+from .module_catalog import ModuleCatalog, ModuleInfo
+from .config import (
+    ModuleDescriptor,
+    discover_active_modules,
+    load_host_config,
+    save_host_config,
+    set_module_config,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +71,8 @@ def create_app(*, settings: PilotSettings) -> web.Application:
     app["module_catalog"] = catalog
 
     app.router.add_get("/api/modules", _modules_handler)
+    app.router.add_get("/api/module-config", _module_config_handler)
+    app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -86,6 +96,50 @@ async def _modules_handler(request: web.Request) -> web.Response:
         },
     }
     return web.json_response(payload)
+
+
+async def _module_config_handler(request: web.Request) -> web.Response:
+    """Return host configuration data for modules."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    catalog = _get_module_catalog(request.app)
+    catalog.refresh()
+    host_config = settings.load_config()
+    payload = {
+        "modules": _module_config_entries(host_config, catalog),
+    }
+    return web.json_response(payload)
+
+
+async def _module_config_update_handler(request: web.Request) -> web.Response:
+    """Persist updates to a module's configuration block."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    module_name = request.match_info.get("module_name", "").strip()
+    if not module_name:
+        raise web.HTTPBadRequest(text="Module name must be provided in the request path")
+
+    try:
+        payload = await request.json()
+    except Exception as exc:  # pragma: no cover - aiohttp raises for bad JSON
+        raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
+
+    if not isinstance(payload, Mapping):
+        raise web.HTTPBadRequest(text="Module configuration payload must be a JSON object")
+
+    sanitized = _validate_module_payload(payload)
+    config_data = settings.load_config()
+    set_module_config(config_data, module_name, sanitized)
+    save_host_config(settings.host_config_path, config_data)
+
+    catalog = _get_module_catalog(request.app)
+    catalog.refresh()
+    entry = _module_config_entry(
+        module_name,
+        config_data,
+        catalog,
+    )
+    return web.json_response(entry)
 
 
 def _normalize_parts(tail: str) -> List[str]:
@@ -234,3 +288,194 @@ def _get_module_catalog(app: web.Application) -> ModuleCatalog:
     if catalog is None:
         raise RuntimeError("Module catalog not configured on pilot application")
     return catalog
+
+
+def _module_config_entries(
+    config: Mapping[str, Any],
+    catalog: ModuleCatalog,
+) -> List[Dict[str, Any]]:
+    active = {descriptor.name: descriptor for descriptor in discover_active_modules(config)}
+    module_configs = _extract_module_configs(config)
+    host_modules = _extract_host_modules(config)
+    host_set = set(host_modules)
+    catalog_map = {info.name: info for info in catalog.list_modules()}
+
+    ordered_names = list(host_modules)
+    remaining: Set[str] = set(module_configs)
+    remaining.difference_update(host_set)
+    for name in sorted(remaining):
+        if name not in ordered_names:
+            ordered_names.append(name)
+
+    entries: List[Dict[str, Any]] = []
+    for name in ordered_names:
+        entries.append(
+            _module_config_entry_from_parts(
+                name=name,
+                raw_config=module_configs.get(name, {}),
+                descriptor=active.get(name),
+                catalog_info=catalog_map.get(name),
+                listed=name in host_set,
+            )
+        )
+    return entries
+
+
+def _module_config_entry(
+    module_name: str,
+    config: Mapping[str, Any],
+    catalog: ModuleCatalog,
+) -> Dict[str, Any]:
+    module_configs = _extract_module_configs(config)
+    host_modules = _extract_host_modules(config)
+    host_set = set(host_modules)
+    active = {descriptor.name: descriptor for descriptor in discover_active_modules(config)}
+    try:
+        catalog_info = catalog.get_module(module_name)
+    except KeyError:
+        catalog_info = None
+
+    return _module_config_entry_from_parts(
+        name=module_name,
+        raw_config=module_configs.get(module_name, {}),
+        descriptor=active.get(module_name),
+        catalog_info=catalog_info,
+        listed=module_name in host_set,
+    )
+
+
+def _module_config_entry_from_parts(
+    *,
+    name: str,
+    raw_config: Mapping[str, Any],
+    descriptor: ModuleDescriptor | None,
+    catalog_info: ModuleInfo | None,
+    listed: bool,
+) -> Dict[str, Any]:
+    display_name = (
+        descriptor.display_name
+        if descriptor is not None
+        else catalog_info.display_name
+        if catalog_info is not None
+        else name.replace("_", " ").title()
+    )
+    description = catalog_info.description if catalog_info is not None else ""
+    dashboard_url = catalog_info.dashboard_url if catalog_info is not None else None
+    has_pilot = bool(catalog_info.pilot_assets) if catalog_info is not None else False
+
+    return {
+        "name": name,
+        "display_name": display_name,
+        "description": description,
+        "slug": name.replace("_", "-"),
+        "listed": listed,
+        "active": descriptor is not None,
+        "has_pilot": has_pilot,
+        "dashboard_url": dashboard_url,
+        "config": _json_compatible(raw_config),
+    }
+
+
+def _extract_module_configs(config: Mapping[str, Any]) -> Dict[str, Mapping[str, Any]]:
+    result: Dict[str, Mapping[str, Any]] = {}
+    config_section = config.get("config")
+    if not isinstance(config_section, Mapping):
+        return result
+    modules_section = config_section.get("mod")
+    if not isinstance(modules_section, Mapping):
+        return result
+    for raw_name, raw_value in modules_section.items():
+        name = str(raw_name)
+        result[name] = _coerce_mapping(raw_value)
+    return result
+
+
+def _extract_host_modules(config: Mapping[str, Any]) -> List[str]:
+    host_section = config.get("host")
+    if not isinstance(host_section, Mapping):
+        return []
+    modules = host_section.get("modules")
+    if modules is None:
+        return []
+    if isinstance(modules, (str, bytes)):
+        text = modules.strip()
+        return [text] if text else []
+    if isinstance(modules, Iterable):
+        result: List[str] = []
+        for item in modules:
+            text = str(item).strip()
+            if text and text not in result:
+                result.append(text)
+        return result
+    return []
+
+
+def _coerce_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, bool):
+        return {"launch": value}
+    if value is None:
+        return {}
+    return {}
+
+
+def _json_compatible(value: Any) -> Any:
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return str(value)
+        return value
+    if isinstance(value, Mapping):
+        return {str(key): _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_compatible(item) for item in value]
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    return str(value)
+
+
+def _validate_module_payload(value: Any, path: str | None = None) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise web.HTTPBadRequest(text="Module configuration payload must be a JSON object")
+    return {
+        str(key): _validate_value(item, _extend_path(path, str(key)))
+        for key, item in value.items()
+    }
+
+
+def _validate_value(value: Any, path: str) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _validate_value(item, _extend_path(path, str(key)))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _validate_value(item, _extend_path(path, f"[{index}]"))
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            raise web.HTTPBadRequest(
+                text=f"Unsupported float value at {path or 'root'}"
+            )
+        return value
+    if value is None:
+        raise web.HTTPBadRequest(
+            text=f"Null values are not supported in module configs ({path or 'root'})"
+        )
+    raise web.HTTPBadRequest(
+        text=f"Unsupported value type {type(value).__name__} at {path or 'root'}"
+    )
+
+
+def _extend_path(root: str | None, segment: str) -> str:
+    if not root:
+        return segment
+    if segment.startswith("["):
+        return f"{root}{segment}"
+    return f"{root}.{segment}"
