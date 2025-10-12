@@ -10,6 +10,8 @@ import json
 
 import pytest
 
+pytest.importorskip("yaml")
+
 from pilot.config import HostConfigError, ModuleDescriptor, discover_active_modules, load_host_config
 
 

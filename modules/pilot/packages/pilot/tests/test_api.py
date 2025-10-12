@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+
+pytest.importorskip("aiohttp")
 from aiohttp import ClientSession, web
 
 from pilot.server import PilotSettings, create_app
@@ -48,6 +50,10 @@ def test_websocket_route_delegates_to_bridge(config_file: Path, tmp_path: Path) 
     asyncio.run(_exercise_websocket_endpoint(config_file, tmp_path))
 
 
+def test_legacy_ws_route_delegates_to_bridge(config_file: Path, tmp_path: Path) -> None:
+    asyncio.run(_exercise_legacy_websocket_endpoint(config_file, tmp_path))
+
+
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     settings = PilotSettings(
         host_config_path=config_file,
@@ -80,6 +86,28 @@ async def _exercise_websocket_endpoint(config_file: Path, tmp_path: Path) -> Non
 
     async with _run_app(app) as client:
         await client.ws_connect("/api/topics/bridge?topic=/imu/data&type=sensor_msgs/msg/Imu&role=subscribe")
+
+    assert bridge.subscriptions == [
+        {
+            "topic": "/imu/data",
+            "type": "sensor_msgs/msg/Imu",
+            "role": "subscribe",
+        }
+    ]
+
+
+async def _exercise_legacy_websocket_endpoint(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    bridge = StubRosBridge()
+    app = create_app(settings=settings, ros_bridge=bridge)
+
+    async with _run_app(app) as client:
+        await client.ws_connect("/ws?topic=/imu/data&type=sensor_msgs/msg/Imu&role=subscribe")
 
     assert bridge.subscriptions == [
         {
