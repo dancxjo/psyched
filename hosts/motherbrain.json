@@ -6,7 +6,9 @@
       "docker"
     ],
     "modules": [
-      "imu"
+      "imu",
+      "foot",
+      "pilot"
     ],
     "services": []
   },
