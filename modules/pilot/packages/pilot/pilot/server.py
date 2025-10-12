@@ -45,6 +45,7 @@ def create_app(*, settings: PilotSettings, ros_bridge: Any) -> web.Application:
 
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/topics/bridge", _topics_bridge_handler)
+    app.router.add_get("/ws", _topics_bridge_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)

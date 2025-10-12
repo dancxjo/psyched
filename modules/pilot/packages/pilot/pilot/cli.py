@@ -11,7 +11,6 @@ import socket
 from typing import Iterable, Optional
 
 from .server import CockpitServer, PilotSettings
-from .topics import RosTopicBridge
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,17 +45,22 @@ def resolve_host_config(explicit: Optional[Path]) -> Path:
 
 
 def resolve_frontend_root(explicit: Optional[Path]) -> Path:
-    if explicit and explicit.exists():
+    """Return a usable frontend directory or abort if none is available."""
+
+    if explicit and explicit.exists() and explicit.is_dir():
         return explicit.resolve()
+
     env_path = os.environ.get("PILOT_FRONTEND_ROOT")
     if env_path:
         path = Path(env_path)
-        if path.exists():
+        if path.exists() and path.is_dir():
             return path.resolve()
+
     repo_dir = Path(os.environ.get("REPO_DIR", Path.cwd()))
     fallback = repo_dir / "modules" / "pilot" / "frontend"
-    if fallback.exists():
+    if fallback.exists() and fallback.is_dir():
         return fallback.resolve()
+
     raise SystemExit("Unable to locate cockpit frontend assets; set --frontend-root or PILOT_FRONTEND_ROOT")
 
 
@@ -73,6 +77,9 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         listen_host=args.listen_host,
         listen_port=args.listen_port,
     )
+
+    # Import RosTopicBridge lazily so callers that only need helpers can avoid the ROS dependency.
+    from .topics import RosTopicBridge
 
     bridge = RosTopicBridge()
     server = CockpitServer(settings=settings, ros_bridge=bridge)

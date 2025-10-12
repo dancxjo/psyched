@@ -5,6 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 HOST_SHORT="${HOST:-$(hostname -s)}"
 
+if [[ -f "${REPO_DIR}/work/install/setup.bash" ]]; then
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/work/install/setup.bash"
+fi
+
 CONFIG_CANDIDATE="${PILOT_HOST_CONFIG:-}"
 if [[ -z "${CONFIG_CANDIDATE}" ]]; then
   for suffix in json jsonc yaml yml toml; do
@@ -17,6 +22,15 @@ if [[ -z "${CONFIG_CANDIDATE}" ]]; then
 fi
 
 FRONTEND_ROOT="${PILOT_FRONTEND_ROOT:-${REPO_DIR}/modules/pilot/frontend}"
+if [[ ! -d "${FRONTEND_ROOT}" ]]; then
+  ALT="${REPO_DIR}/modules/pilot/packages/pilot/pilot/frontend"
+  if [[ -d "${ALT}" ]]; then
+    FRONTEND_ROOT="${ALT}"
+  else
+    echo "ERROR: Could not find cockpit frontend assets." >&2
+    exit 1
+  fi
+fi
 
 ARGS=("--listen-host" "${PILOT_LISTEN_HOST:-0.0.0.0}" "--listen-port" "${PILOT_LISTEN_PORT:-8088}")
 
@@ -24,12 +38,10 @@ if [[ -n "${CONFIG_CANDIDATE}" ]]; then
   ARGS+=("--host-config" "${CONFIG_CANDIDATE}")
 fi
 
-if [[ -d "${FRONTEND_ROOT}" ]]; then
-  ARGS+=("--frontend-root" "${FRONTEND_ROOT}")
-fi
+ARGS+=("--frontend-root" "${FRONTEND_ROOT}")
 
 if [[ -n "${PILOT_LOG_LEVEL:-}" ]]; then
   ARGS+=("--log-level" "${PILOT_LOG_LEVEL}")
 fi
 
-exec ros2 run pilot cockpit "${ARGS[@]}"
+exec ros2 run pilot pilot_cockpit "${ARGS[@]}"
