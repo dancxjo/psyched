@@ -8,6 +8,26 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script type="module" src="/js/pilot.js"></script>
     <script type="module" src="/modules/foot/js/foot.js"></script>
+    <style>
+      .joystick-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .joystick-panel .joystick-control {
+        align-self: center;
+      }
+
+      .joystick-panel .status pre {
+        margin-top: 0.5rem;
+      }
+
+      .manual-command summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+    </style>
   </head>
   <body>
     <main>
@@ -21,22 +41,53 @@
             <h2 x-text="topic.name"></h2>
             <p><strong>Type:</strong> <span x-text="topic.type"></span></p>
             <p x-text="topic.description"></p>
-            <template x-if="topic.direction !== 'subscriber'">
-              <pre style="max-height: 200px; overflow: auto;" x-text="formatted(topic)"></pre>
-            </template>
-            <template x-if="topic.direction === 'subscriber'">
-              <div>
-                <textarea
-                  rows="6"
-                  style="width: 100%;"
-                  x-model="commands[topic.name]"
-                  :placeholder="example(topic) || '{ }'"
-                ></textarea>
-                <button type="button" @click="sendCommand(topic)" style="margin-top: 0.5rem;">
-                  Send command
-                </button>
+            <template x-if="topic.name === 'cmd_vel'">
+              <div class="joystick-panel">
+                <pilot-joystick-control class="joystick-control" x-ref="cmdVelJoystick"></pilot-joystick-control>
+                <p class="hint">
+                  Drag the thumbstick to drive the Create. Commands publish to <code>/cmd_vel</code> at up to
+                  <strong x-text="`${velocityLimits.linear.min.toFixed(2)} – ${velocityLimits.linear.max.toFixed(2)} m/s`"></strong>
+                  linear and
+                  <strong x-text="`${velocityLimits.angular.min.toFixed(2)} – ${velocityLimits.angular.max.toFixed(2)} rad/s`"></strong>
+                  angular velocity.
+                </p>
+                <div class="status">
+                  <strong>Last command:</strong>
+                  <pre style="max-height: 200px; overflow: auto;" x-text="formatted(topic)"></pre>
+                </div>
+                <details class="manual-command">
+                  <summary>Send a custom geometry_msgs/msg/Twist payload</summary>
+                  <textarea
+                    rows="6"
+                    style="width: 100%; margin-top: 0.5rem;"
+                    x-model="commands[topic.name]"
+                    :placeholder="example(topic) || '{ }'"
+                  ></textarea>
+                  <button type="button" @click="sendCommand(topic)" style="margin-top: 0.5rem;">
+                    Send command
+                  </button>
+                </details>
                 <p class="status" x-text="errors[topic.name] || ''"></p>
               </div>
+            </template>
+            <template x-if="topic.name !== 'cmd_vel'">
+              <template x-if="topic.direction !== 'subscriber'">
+                <pre style="max-height: 200px; overflow: auto;" x-text="formatted(topic)"></pre>
+              </template>
+              <template x-if="topic.direction === 'subscriber'">
+                <div>
+                  <textarea
+                    rows="6"
+                    style="width: 100%;"
+                    x-model="commands[topic.name]"
+                    :placeholder="example(topic) || '{ }'"
+                  ></textarea>
+                  <button type="button" @click="sendCommand(topic)" style="margin-top: 0.5rem;">
+                    Send command
+                  </button>
+                  <p class="status" x-text="errors[topic.name] || ''"></p>
+                </div>
+              </template>
             </template>
           </article>
         </template>

@@ -76,11 +76,23 @@ class PilotApp extends LitElement {
 
   emitNavUpdate() {
     try {
-      const detail = this.modules.map((module, index) => ({
-        id: `module-${module.name}`,
-        label: module.display_name || module.name,
-        index,
-      }));
+      const detail = [];
+      let counter = 0;
+      const modulesWithPilot = this.modules.filter((module) => module?.has_pilot);
+      if (modulesWithPilot.length) {
+        detail.push({
+          id: 'module-shortcuts',
+          label: 'Module Dashboards',
+          index: counter++,
+        });
+      }
+      for (const module of this.modules) {
+        detail.push({
+          id: `module-${module.name}`,
+          label: module.display_name || module.name,
+          index: counter++,
+        });
+      }
       window.dispatchEvent(new CustomEvent('pilot-sections', { detail }));
     } catch (error) {
       console.warn('Failed to emit pilot navigation update', error);
@@ -387,8 +399,8 @@ class PilotApp extends LitElement {
   renderModules() {
     return this.modules.map(
       (module) => html`
-				<pilot-module-section
-					id=${`module-${module.name}`}
+                                <pilot-module-section
+                                        id=${`module-${module.name}`}
 					.module=${module}
 					.activeRecords=${this.activeTopics}
 					@run-command=${(event) => this.runCommand(module.name, event.detail.scope, event.detail.command)}
@@ -398,6 +410,35 @@ class PilotApp extends LitElement {
 				></pilot-module-section>
 			`,
     );
+  }
+
+  renderModuleShortcuts() {
+    const modulesWithPages = this.modules.filter((module) => module?.has_pilot);
+    if (!modulesWithPages.length) {
+      return nothing;
+    }
+    return html`
+                        <section class="module-shortcuts control-surface" id="module-shortcuts">
+                                <h2>Module Dashboards</h2>
+                                <p class="module-shortcuts__intro">
+                                        Open dedicated dashboards for individual modules and experiment with their ROS topics in isolation.
+                                </p>
+                                <ul>
+                                        ${modulesWithPages.map(
+      (module) => html`
+                                                        <li>
+                                                                <a href=${`/modules/${module.name}/`} target="_blank" rel="noopener">
+                                                                        ${module.display_name || module.name}
+                                                                </a>
+                                                                ${module.description
+          ? html`<p class="module-shortcuts__description">${module.description}</p>`
+          : nothing}
+                                                        </li>
+                                                `,
+    )}
+                                </ul>
+                        </section>
+                `;
   }
 
   renderCommandLog() {
@@ -465,12 +506,13 @@ class PilotApp extends LitElement {
       return html`<div class="error">${this.errorMessage}</div>`;
     }
     return html`
-			<div class="pilot-layout">
-				${this.renderModules()}
-			</div>
-			${this.renderCommandLog()}
-			<footer class="status-bar">
-				<div>Active sockets: ${this.socketCount}</div>
+                        <div class="pilot-layout">
+                                ${this.renderModuleShortcuts()}
+                                ${this.renderModules()}
+                        </div>
+                        ${this.renderCommandLog()}
+                        <footer class="status-bar">
+                                <div>Active sockets: ${this.socketCount}</div>
 				<div>Total modules: ${this.modules.length}</div>
 			</footer>
 		`;

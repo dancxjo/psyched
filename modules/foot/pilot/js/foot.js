@@ -1,4 +1,5 @@
 import { createTopicSocket } from '/js/pilot.js';
+import '/components/joystick-control.js';
 
 const FOOT_TOPICS = [
   {
@@ -138,6 +139,7 @@ const FOOT_TOPICS = [
     type: 'geometry_msgs/msg/Twist',
     direction: 'subscriber',
     description: 'Command robot velocity.',
+    subscribe: true,
     example: {
       linear: { x: 0.1, y: 0.0, z: 0.0 },
       angular: { x: 0.0, y: 0.0, z: 0.0 },
@@ -225,10 +227,18 @@ export function footDashboard() {
     latest: {},
     errors: {},
     commands: {},
+    cmdVelPublisher: null,
+    velocityLimits: {
+      linear: { min: -0.5, max: 0.5 },
+      angular: { min: -4.25, max: 4.25 },
+    },
     init() {
       this.topics
-        .filter((topic) => topic.direction !== 'subscriber')
+        .filter((topic) => topic.direction !== 'subscriber' || topic.subscribe)
         .forEach((topic) => this.ensureSocket(topic, 'subscribe'));
+      this.$nextTick(() => {
+        this.setupJoystick();
+      });
     },
     ensureSocket(topic, role) {
       const key = `${topic.name}:${role}`;
@@ -248,9 +258,17 @@ export function footDashboard() {
           }
         });
       }
+      socket.addEventListener('open', () => {
+        if (role === 'publish') {
+          this.errors[topic.name] = '';
+        }
+      });
       socket.addEventListener('error', () => {
         this.errors[topic.name] = 'Connection error';
       });
+      if (topic.name === 'cmd_vel' && role === 'publish') {
+        this.cmdVelPublisher = socket;
+      }
       this.sockets[key] = socket;
       return socket;
     },
@@ -267,6 +285,27 @@ export function footDashboard() {
       }
       return JSON.stringify(topic.example, null, 2);
     },
+    setupJoystick() {
+      const joystick = this.$refs?.cmdVelJoystick;
+      const topic = this.topics.find((entry) => entry.name === 'cmd_vel');
+      if (!joystick || !topic) {
+        return;
+      }
+      const record = {
+        send: (message) => this.sendJoystickCommand(topic, message),
+      };
+      joystick.record = record;
+    },
+    sendJoystickCommand(topic, message) {
+      try {
+        const socket = this.cmdVelPublisher || this.ensureSocket(topic, 'publish');
+        socket.send(JSON.stringify(message));
+        this.latest[topic.name] = message;
+        this.errors[topic.name] = 'Command sent';
+      } catch (error) {
+        this.errors[topic.name] = error instanceof Error ? error.message : String(error);
+      }
+    },
     sendCommand(topic) {
       const socket = this.ensureSocket(topic, 'publish');
       const body = this.commands[topic.name] || this.example(topic);
@@ -278,6 +317,7 @@ export function footDashboard() {
         const parsed = JSON.parse(body);
         socket.send(JSON.stringify(parsed));
         this.errors[topic.name] = 'Command sent';
+        this.latest[topic.name] = parsed;
       } catch (error) {
         this.errors[topic.name] = error instanceof Error ? error.message : String(error);
       }

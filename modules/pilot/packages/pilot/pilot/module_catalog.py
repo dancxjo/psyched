@@ -91,6 +91,7 @@ class ModuleInfo:
     topics: List[ModuleTopic] = field(default_factory=list)
     commands: ModuleCommands = field(default_factory=ModuleCommands)
     regimes: List[str] = field(default_factory=list)
+    pilot_assets: bool = False
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -98,6 +99,7 @@ class ModuleInfo:
             "display_name": self.display_name,
             "description": self.description,
             "regimes": list(self.regimes),
+            "has_pilot": self.pilot_assets,
             "topics": [
                 {
                     "topic": topic.topic,
@@ -185,6 +187,8 @@ class ModuleCatalog:
                         )
                     )
 
+            has_pilot_assets = (entry / "pilot").is_dir()
+
             module_info = ModuleInfo(
                 name=str(name),
                 display_name=display_name,
@@ -192,6 +196,7 @@ class ModuleCatalog:
                 topics=topics,
                 commands=commands,
                 regimes=regimes,
+                pilot_assets=has_pilot_assets,
             )
             modules[module_info.name] = module_info
 

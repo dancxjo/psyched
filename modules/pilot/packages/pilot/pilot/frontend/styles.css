@@ -131,6 +131,64 @@ body {
   gap: 2rem;
 }
 
+.module-shortcuts {
+  display: block;
+  padding: 1.5rem;
+  border-radius: var(--control-surface-radius);
+  background: rgba(27, 31, 42, 0.75);
+  border: 1px solid rgba(88, 178, 220, 0.4);
+}
+
+.module-shortcuts h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  letter-spacing: 0.08rem;
+}
+
+.module-shortcuts__intro {
+  margin: 0 0 1rem;
+  color: var(--lcars-muted);
+  max-width: 60ch;
+}
+
+.module-shortcuts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.module-shortcuts li {
+  background: var(--metric-card-bg);
+  border: 1px solid var(--metric-card-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.module-shortcuts a {
+  color: var(--lcars-accent-secondary);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 1.1rem;
+}
+
+.module-shortcuts a:hover,
+.module-shortcuts a:focus {
+  text-decoration: underline;
+}
+
+.module-shortcuts__description {
+  margin: 0;
+  color: var(--lcars-muted);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
 .control-surface {
   background: var(--control-surface-bg);
   border: 1px solid var(--control-surface-border);

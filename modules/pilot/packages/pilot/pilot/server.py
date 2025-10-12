@@ -93,6 +93,45 @@ async def _modules_handler(request: web.Request) -> web.Response:
     return web.json_response({"modules": modules})
 
 
+def _normalize_parts(tail: str) -> List[str]:
+    """Return a list of safe path segments extracted from *tail*."""
+
+    return [part for part in tail.split("/") if part and part not in {".", ".."}]
+
+
+def _resolve_frontend_asset(frontend_root: Path, tail: str) -> Optional[Path]:
+    """Resolve *tail* within the pilot frontend root, if possible."""
+
+    parts = _normalize_parts(tail)
+    candidate = frontend_root.joinpath(*parts) if parts else frontend_root
+    if candidate.is_dir():
+        candidate = candidate / "index.html"
+    if candidate.exists() and candidate.is_file():
+        return candidate
+    return None
+
+
+def _resolve_overlay_asset(modules_root: Path, tail: str) -> Optional[Path]:
+    """Resolve *tail* inside a module's pilot overlay directory, if present."""
+
+    parts = _normalize_parts(tail)
+    if len(parts) < 2 or parts[0] != "modules":
+        return None
+
+    module_name = parts[1]
+    remainder = parts[2:]
+    base = modules_root / module_name / "pilot"
+    if not base.exists():
+        return None
+
+    candidate = base.joinpath(*remainder) if remainder else base
+    if candidate.is_dir():
+        candidate = candidate / "index.html"
+    if candidate.exists() and candidate.is_file():
+        return candidate
+    return None
+
+
 async def _modules_command_handler(request: web.Request) -> web.Response:
     module = request.match_info.get("module", "").strip()
     if not module:
@@ -162,14 +201,15 @@ async def _static_handler(request: web.Request) -> web.StreamResponse:
     if tail.startswith("api/"):
         raise web.HTTPNotFound()
 
-    target = settings.frontend_root / tail
-    if target.is_dir():
-        target = target / "index.html"
+    frontend_target = _resolve_frontend_asset(settings.frontend_root, tail)
+    if frontend_target:
+        return web.FileResponse(frontend_target)
 
-    if not target.exists() or not target.is_file():
-        raise web.HTTPNotFound()
+    overlay_target = _resolve_overlay_asset(settings.modules_root, tail)
+    if overlay_target:
+        return web.FileResponse(overlay_target)
 
-    return web.FileResponse(target)
+    raise web.HTTPNotFound()
 
 
 class CockpitServer:

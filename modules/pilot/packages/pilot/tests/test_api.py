@@ -77,6 +77,10 @@ def test_command_endpoint_rejects_unknown_command(config_file: Path, tmp_path: P
     asyncio.run(_exercise_command_endpoint_rejects(config_file, tmp_path))
 
 
+def test_static_handler_serves_module_pilot_assets(config_file: Path) -> None:
+    asyncio.run(_exercise_static_overlay(config_file))
+
+
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     settings = PilotSettings(
         host_config_path=config_file,
@@ -216,6 +220,33 @@ async def _exercise_command_endpoint_rejects(config_file: Path, tmp_path: Path) 
 
     assert executor.calls == []
     assert "Unsupported command" in error_text
+
+
+async def _exercise_static_overlay(config_file: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=REPO_ROOT / "modules" / "pilot" / "frontend",
+        modules_root=MODULES_ROOT,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    bridge = StubRosBridge()
+    app = create_app(settings=settings, ros_bridge=bridge)
+
+    async with _run_app(app) as client:
+        response = await client.get("/modules/foot/js/foot.js")
+        assert response.status == 200
+        script_body = await response.text()
+        assert "FOOT_TOPICS" in script_body
+
+        index_response = await client.get("/modules/foot/")
+        assert index_response.status == 200
+        index_html = await index_response.text()
+        assert "Create Base Dashboard" in index_html
+
+        missing_response = await client.get("/modules/unknown/page.html")
+        assert missing_response.status == 404
 
 
 class _TestClientContext:
