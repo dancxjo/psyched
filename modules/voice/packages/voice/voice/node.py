@@ -65,25 +65,48 @@ class VoiceNode(Node):
         if backend_name == "print":
             return PrintSpeechBackend()
         if backend_name == "espeak":
-            try:
-                return EspeakSpeechBackend()
-            except FileNotFoundError as error:
-                self.get_logger().warning(
-                    "espeak backend unavailable (%s); falling back to print backend",
-                    error,
-                )
-                return PrintSpeechBackend()
+            backend = self._initialise_espeak_backend(
+                "falling back to print backend",
+            )
+            if backend is not None:
+                return backend
+            return PrintSpeechBackend()
         if backend_name in {"websocket", "coqui"}:
             backend = self._create_websocket_backend()
             if backend is not None:
                 return backend
             self.get_logger().warning(
-                "Falling back to print backend after websocket backend initialisation failure",
+                "Falling back to espeak backend after websocket backend initialisation failure",
             )
+            espeak_backend = self._initialise_espeak_backend(
+                "falling back to print backend",
+            )
+            if espeak_backend is not None:
+                return espeak_backend
+            return PrintSpeechBackend()
         self.get_logger().warning(
             "Unknown backend '%s'; defaulting to print backend", backend_name
         )
         return PrintSpeechBackend()
+
+    def _initialise_espeak_backend(self, failure_hint: str) -> SpeechBackend | None:
+        """Attempt to create the espeak backend while logging useful diagnostics."""
+
+        try:
+            return EspeakSpeechBackend()
+        except FileNotFoundError as error:
+            self.get_logger().warning(
+                "espeak backend unavailable (%s); %s",
+                error,
+                failure_hint,
+            )
+        except Exception as error:
+            self.get_logger().error(
+                "Failed to initialise espeak backend: %s; %s",
+                error,
+                failure_hint,
+            )
+        return None
 
     def _create_websocket_backend(self) -> SpeechBackend | None:
         url_param = str(self.declare_parameter("tts_url", "").value).strip()
