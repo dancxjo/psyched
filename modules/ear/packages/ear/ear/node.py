@@ -69,26 +69,39 @@ class EarNode(Node):
             try:
                 import faster_whisper  # type: ignore[import-not-found]
             except ImportError:
-                self.get_logger().warning("faster-whisper backend requested but dependency is missing; falling back to console")
+                self.get_logger().warning(
+                    "faster-whisper backend requested but dependency is missing; falling back to console"
+                )
                 return ConsoleEarBackend()
-            model = str(self.declare_parameter("faster_whisper_model", "base").value).strip() or "base"
-            device = str(self.declare_parameter("faster_whisper_device", "cpu").value).strip() or "cpu"
-            compute_type = str(self.declare_parameter("faster_whisper_compute_type", "int8").value).strip() or "int8"
-            language_param = str(self.declare_parameter("faster_whisper_language", "").value).strip()
-            beam_size = self.declare_parameter("faster_whisper_beam_size", 5).value
-            beam_size_value = int(beam_size) if isinstance(beam_size, (int, float)) else 5
-            return FasterWhisperEarBackend(
-                model_size=model,
-                device=device,
-                compute_type=compute_type,
-                language=language_param or None,
-                beam_size=beam_size_value,
-            )
+            options = self._read_faster_whisper_options()
+            return FasterWhisperEarBackend(**options)
         if backend_name in {"service", "asr", "websocket"}:
             uri = str(self.declare_parameter("service_uri", "ws://127.0.0.1:8089/ws").value).strip() or "ws://127.0.0.1:8089/ws"
-            return ServiceASREarBackend(uri=uri)
+            options = self._read_faster_whisper_options()
+            return ServiceASREarBackend(uri=uri, fallback_factory=lambda: FasterWhisperEarBackend(**options))
         self.get_logger().warning("Unknown backend '%s'; defaulting to console backend", backend_name)
         return ConsoleEarBackend()
+
+    def _read_faster_whisper_options(self) -> dict[str, object]:
+        """Return configuration for the faster-whisper backend from ROS parameters."""
+
+        model = str(self.declare_parameter("faster_whisper_model", "base").value).strip() or "base"
+        device = str(self.declare_parameter("faster_whisper_device", "cpu").value).strip() or "cpu"
+        compute_type = str(self.declare_parameter("faster_whisper_compute_type", "int8").value).strip() or "int8"
+        language_param = str(self.declare_parameter("faster_whisper_language", "").value).strip()
+        beam_size_param = self.declare_parameter("faster_whisper_beam_size", 5).value
+        beam_size: int | None
+        if isinstance(beam_size_param, (int, float)):
+            beam_size = int(beam_size_param)
+        else:
+            beam_size = 5
+        return {
+            "model_size": model,
+            "device": device,
+            "compute_type": compute_type,
+            "language": language_param or None,
+            "beam_size": beam_size,
+        }
 
     def _handle_text(self, msg: String) -> None:
         text = msg.data.strip()

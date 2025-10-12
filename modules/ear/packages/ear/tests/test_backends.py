@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import pytest
 
-from ear.backends import ConsoleEarBackend
+from ear.backends import BackendUnavailableError, ConsoleEarBackend, ServiceASREarBackend
 from ear.worker import EarWorker
 
 
@@ -77,3 +77,74 @@ def test_worker_stops_backend_on_shutdown() -> None:
 
     assert collector.items == ["done"]
     assert backend.stop_event is not None and backend.stop_event.is_set()
+
+
+class _StubFallbackBackend:
+    """Audio-aware backend used to assert fallback behaviour."""
+
+    def __init__(self) -> None:
+        self.submissions: list[tuple[bytes, int, int]] = []
+        self.run_started = threading.Event()
+        self.closed = threading.Event()
+
+    def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
+        self.submissions.append((pcm, sample_rate, channels))
+
+    def close(self) -> None:  # pragma: no cover - trivial setter
+        self.closed.set()
+
+    def run(self, publish: Callable[[str], None], stop_event: threading.Event) -> None:
+        self.run_started.set()
+        while not stop_event.is_set():
+            stop_event.wait(0.01)
+
+
+def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The service backend should activate the fallback when `_transcribe` cannot connect."""
+
+    async def _raise_backend_unavailable(
+        self: ServiceASREarBackend,
+        publish: Callable[[str], None],
+        stop_event: threading.Event,
+    ) -> None:
+        raise BackendUnavailableError("simulated outage")
+
+    monkeypatch.setattr(
+        ServiceASREarBackend,
+        "_transcribe",
+        _raise_backend_unavailable,
+        raising=False,
+    )
+
+    fallback_backend = _StubFallbackBackend()
+    backend = ServiceASREarBackend(
+        uri="ws://127.0.0.1:65535/ws",
+        connect_timeout=0.01,
+        fallback_factory=lambda: fallback_backend,
+    )
+
+    # Audio submitted before the backend starts should be replayed into the fallback backend.
+    backend.submit_audio(b"first", 16000, 1)
+    collector = _PublishCollector()
+    stop_event = threading.Event()
+    thread = threading.Thread(
+        target=backend.run,
+        args=(collector, stop_event),
+        name="ServiceBackendTest",
+        daemon=True,
+    )
+    thread.start()
+
+    assert fallback_backend.run_started.wait(timeout=1.0)
+
+    backend.submit_audio(b"second", 16000, 1)
+    stop_event.set()
+    backend.close()
+    thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert fallback_backend.submissions == [
+        (b"first", 16000, 1),
+        (b"second", 16000, 1),
+    ]
+    assert fallback_backend.closed.is_set()
