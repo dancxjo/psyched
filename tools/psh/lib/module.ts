@@ -201,7 +201,7 @@ export function formatExitSummary(
   const summary = status.success
     ? `[${module}] exited cleanly (code ${status.code ?? 0})`
     : `[${module}] exited with code ${status.code ?? "unknown"}` +
-    (status.signal ? ` (signal ${status.signal})` : "");
+      (status.signal ? ` (signal ${status.signal})` : "");
   return status.success ? colors.yellow(summary) : colors.red(summary);
 }
 
@@ -236,8 +236,12 @@ export function composeLaunchCommand(
   };
 
   const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${composeStreamCommand("stdout")} | tee -a ${shellEscape(logFile)}) ` +
-    `2> >(${composeStreamCommand("stderr")} | tee -a ${shellEscape(logFile)} >&2)`;
+    `exec bash ${shellEscape(launchScript)} > >(${
+      composeStreamCommand("stdout")
+    } | tee -a ${shellEscape(logFile)}) ` +
+    `2> >(${composeStreamCommand("stderr")} | tee -a ${
+      shellEscape(logFile)
+    } >&2)`;
   const parts = [...envCommands, launch];
   return parts.join(" && ");
 }
@@ -300,38 +304,103 @@ function expandEnvPlaceholders(input: string): string {
   });
 }
 
-async function installAptPackages(
-  label: string,
-  packages: string[] = [],
-): Promise<void> {
-  if (!packages.length) return;
-  const expanded = packages.map((pkg) => expandEnvPlaceholders(pkg).trim())
-    .filter(Boolean);
-  if (!expanded.length) return;
+function formatSetupLabel(modules: string[]): string {
+  if (!modules.length) return "setup";
+  if (modules.length === 1) return `setup:${modules[0]}`;
+  return `setup:${modules.join(", ")}`;
+}
+
+interface AptInstallInvocation {
+  modules: string[];
+  packages: string[];
+}
+
+type AptInstallRunner = (invocation: AptInstallInvocation) => Promise<void>;
+
+const defaultAptInstallRunner: AptInstallRunner = async (
+  invocation: AptInstallInvocation,
+): Promise<void> => {
+  const label = formatSetupLabel(invocation.modules);
   console.log(
-    colors.cyan(`[${label}] Installing apt packages: ${expanded.join(", ")}`),
+    colors.cyan(
+      `[${label}] Installing apt packages: ${invocation.packages.join(", ")}`,
+    ),
   );
   const useSudo = await $`which sudo`.noThrow().stdout("null").then((
     res: { code: number },
   ) => res.code === 0);
   const cmd = useSudo
-    ? $`sudo apt-get install -y ${expanded}`
-    : $`apt-get install -y ${expanded}`;
+    ? $`sudo apt-get install -y ${invocation.packages}`
+    : $`apt-get install -y ${invocation.packages}`;
   await cmd.env({ DEBIAN_FRONTEND: "noninteractive" }).stdout("inherit").stderr(
     "inherit",
   );
+};
+
+export class AptPackagePlanner {
+  #modules: string[] = [];
+  #packages: string[] = [];
+  #runner: AptInstallRunner;
+
+  constructor(runner: AptInstallRunner = defaultAptInstallRunner) {
+    this.#runner = runner;
+  }
+
+  add(module: string, packages: string[]): void {
+    const expanded = packages.map((pkg) => expandEnvPlaceholders(pkg).trim())
+      .filter(Boolean);
+    if (!expanded.length) return;
+    if (!this.#modules.includes(module)) {
+      this.#modules.push(module);
+    }
+    for (const pkg of expanded) {
+      if (!this.#packages.includes(pkg)) {
+        this.#packages.push(pkg);
+      }
+    }
+  }
+
+  async execute(): Promise<void> {
+    if (!this.#packages.length) return;
+    await this.#runner({
+      modules: [...this.#modules],
+      packages: [...this.#packages],
+    });
+    this.#modules = [];
+    this.#packages = [];
+  }
 }
 
-async function installPipPackages(
-  label: string,
+async function installAptPackages(
+  module: string,
   packages: string[] = [],
+  planner?: AptPackagePlanner,
 ): Promise<void> {
   if (!packages.length) return;
-  const expanded = packages.map((pkg) => expandEnvPlaceholders(pkg).trim())
-    .filter(Boolean);
-  if (!expanded.length) return;
+  if (planner) {
+    planner.add(module, packages);
+    return;
+  }
+  const immediate = new AptPackagePlanner();
+  immediate.add(module, packages);
+  await immediate.execute();
+}
+
+interface PipInstallInvocation {
+  modules: string[];
+  packages: string[];
+}
+
+type PipInstallRunner = (invocation: PipInstallInvocation) => Promise<void>;
+
+const defaultPipInstallRunner: PipInstallRunner = async (
+  invocation: PipInstallInvocation,
+): Promise<void> => {
+  const label = formatSetupLabel(invocation.modules);
   console.log(
-    colors.cyan(`[${label}] Installing pip packages: ${expanded.join(", ")}`),
+    colors.cyan(
+      `[${label}] Installing pip packages: ${invocation.packages.join(", ")}`,
+    ),
   );
   const rosDistro = (Deno.env.get("ROS_DISTRO") ?? "kilted").trim();
   const colconPip = `/opt/ros/${rosDistro}/colcon-venv/bin/pip`;
@@ -340,16 +409,66 @@ async function installPipPackages(
       res: { code: number },
     ) => res.code === 0);
     const installer = useSudo
-      ? $`sudo ${colconPip} install --no-cache-dir --upgrade ${expanded}`
-      : $`${colconPip} install --no-cache-dir --upgrade ${expanded}`;
+      ? $`sudo ${colconPip} install --no-cache-dir --upgrade ${invocation.packages}`
+      : $`${colconPip} install --no-cache-dir --upgrade ${invocation.packages}`;
     await installer.stdout("inherit").stderr("inherit");
     return;
   }
   const pip = await $`which pip3`.noThrow().stdout("null");
   const pipCmd = pip.code === 0 ? "pip3" : "pip";
-  await $`${pipCmd} install --break-system-packages ${expanded}`.stdout(
-    "inherit",
-  ).stderr("inherit");
+  await $`${pipCmd} install --break-system-packages ${invocation.packages}`
+    .stdout(
+      "inherit",
+    ).stderr("inherit");
+};
+
+export class PipPackagePlanner {
+  #modules: string[] = [];
+  #packages: string[] = [];
+  #runner: PipInstallRunner;
+
+  constructor(runner: PipInstallRunner = defaultPipInstallRunner) {
+    this.#runner = runner;
+  }
+
+  add(module: string, packages: string[]): void {
+    const expanded = packages.map((pkg) => expandEnvPlaceholders(pkg).trim())
+      .filter(Boolean);
+    if (!expanded.length) return;
+    if (!this.#modules.includes(module)) {
+      this.#modules.push(module);
+    }
+    for (const pkg of expanded) {
+      if (!this.#packages.includes(pkg)) {
+        this.#packages.push(pkg);
+      }
+    }
+  }
+
+  async execute(): Promise<void> {
+    if (!this.#packages.length) return;
+    await this.#runner({
+      modules: [...this.#modules],
+      packages: [...this.#packages],
+    });
+    this.#modules = [];
+    this.#packages = [];
+  }
+}
+
+async function installPipPackages(
+  module: string,
+  packages: string[] = [],
+  planner?: PipPackagePlanner,
+): Promise<void> {
+  if (!packages.length) return;
+  if (planner) {
+    planner.add(module, packages);
+    return;
+  }
+  const immediate = new PipPackagePlanner();
+  immediate.add(module, packages);
+  await immediate.execute();
 }
 
 function deriveRepoDirname(url: string): string {
@@ -560,6 +679,8 @@ async function generatePilotManifest(frontendRoot: string): Promise<void> {
 }
 
 export interface ModuleSetupOptions {
+  aptPlanner?: AptPackagePlanner;
+  pipPlanner?: PipPackagePlanner;
   rosPlanner?: RosBuildPlanner;
 }
 
@@ -569,8 +690,16 @@ export async function setupModule(
 ): Promise<void> {
   const moduleDir = locateModuleDir(module);
   const config = loadModuleManifest(moduleDir, module);
-  await installAptPackages(`setup:${module}`, dedupePreserveOrder(config.apt));
-  await installPipPackages(`setup:${module}`, dedupePreserveOrder(config.pip));
+  await installAptPackages(
+    module,
+    dedupePreserveOrder(config.apt),
+    options.aptPlanner,
+  );
+  await installPipPackages(
+    module,
+    dedupePreserveOrder(config.pip),
+    options.pipPlanner,
+  );
   await syncGitRepos(module, config.git);
   linkModulePackages(module, moduleDir);
   if (config.patches) {
@@ -683,7 +812,9 @@ export class RosBuildPlanner {
   add(module: string, ros: RosBuildConfig): void {
     const workspace = this.#resolveWorkspaceBase(ros);
     if (!pathExists(workspace)) {
-      throw new Error(`ROS workspace ${workspace} not found for module '${module}'`);
+      throw new Error(
+        `ROS workspace ${workspace} not found for module '${module}'`,
+      );
     }
     const plan = this.#plans.get(workspace) ?? {
       workspace,
@@ -999,10 +1130,14 @@ function isPidRunning(pid: number): boolean {
 
 export async function setupModules(modules: string[]): Promise<void> {
   ensureRebootCompleted();
+  const aptPlanner = new AptPackagePlanner();
+  const pipPlanner = new PipPackagePlanner();
   const rosPlanner = new RosBuildPlanner();
   for (const module of modules) {
-    await setupModule(module, { rosPlanner });
+    await setupModule(module, { aptPlanner, pipPlanner, rosPlanner });
   }
+  await aptPlanner.execute();
+  await pipPlanner.execute();
   await rosPlanner.execute();
 }
 

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import signal
+import sys
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
 pytest.importorskip("yaml")
 
-from pilot.cli import resolve_frontend_root, resolve_modules_root
+from pilot.cli import (
+    _register_signal_handlers,
+    resolve_frontend_root,
+    resolve_modules_root,
+)
 
 
 def test_resolve_frontend_root_accepts_explicit_directory(tmp_path: Path) -> None:
@@ -111,3 +118,86 @@ def test_resolve_modules_root_falls_back_to_package_layout(tmp_path: Path, monke
     result = resolve_modules_root(None, frontend_root)
 
     assert result == bundled_modules.resolve()
+
+
+def test_register_signal_handlers_requests_shutdown_on_sigint(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """Signal handlers should request shutdown for SIGINT while ignoring SIGHUP."""
+
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    class DummyLoop:
+        def __init__(self) -> None:
+            self.handlers: dict[int, Callable[[], None]] = {}
+
+        def add_signal_handler(self, signum: int, callback: Callable[[], None]) -> None:
+            self.handlers[signum] = callback
+
+    loop = DummyLoop()
+    stop_requests: list[str] = []
+
+    _register_signal_handlers(loop, stop_callback=lambda: stop_requests.append("stop"))
+
+    assert signal.SIGINT in loop.handlers
+    assert signal.SIGTERM in loop.handlers
+    sighup = getattr(signal, "SIGHUP", None)
+    if sighup is not None:
+        assert sighup in loop.handlers
+
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        loop.handlers[signal.SIGINT]()
+
+    assert stop_requests == ["stop"]
+    assert any("SIGINT" in record.getMessage() for record in caplog.records)
+
+    if sighup is not None:
+        caplog.clear()
+        with caplog.at_level("INFO"):
+            loop.handlers[sighup]()
+
+        assert stop_requests == ["stop"], "SIGHUP should not trigger shutdown"
+        assert any("ignoring" in record.getMessage().lower() for record in caplog.records)
+
+
+def test_register_signal_handlers_windows_fallback(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """On Windows, signal.signal should be used instead of loop.add_signal_handler."""
+
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    recorded: dict[int, Callable[[int, object | None], None]] = {}
+
+    def fake_signal(signum: int, handler: Callable[[int, object | None], None]) -> None:
+        recorded[signum] = handler
+
+    monkeypatch.setattr(signal, "signal", fake_signal)
+
+    class DummyLoop:
+        def __init__(self) -> None:
+            self.handlers: dict[int, Callable[[], None]] = {}
+
+        def add_signal_handler(self, signum: int, callback: Callable[[], None]) -> None:
+            raise AssertionError("loop.add_signal_handler should not be used on Windows")
+
+    loop = DummyLoop()
+    stop_requests: list[str] = []
+
+    _register_signal_handlers(loop, stop_callback=lambda: stop_requests.append("stop"))
+
+    assert signal.SIGINT in recorded
+    assert signal.SIGTERM in recorded
+
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        recorded[signal.SIGTERM](signal.SIGTERM, None)
+
+    assert stop_requests == ["stop"]
+    assert any("SIGTERM" in record.getMessage() for record in caplog.records)
+
+    sighup = getattr(signal, "SIGHUP", None)
+    if sighup is not None:
+        caplog.clear()
+        with caplog.at_level("INFO"):
+            recorded[sighup](sighup, None)
+
+        assert stop_requests == ["stop"], "SIGHUP should not request shutdown"
+        assert any("ignoring" in record.getMessage().lower() for record in caplog.records)

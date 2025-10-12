@@ -9,6 +9,7 @@ import { delay } from "$std/async/delay.ts";
 import { join } from "$std/path/mod.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import {
+  AptPackagePlanner,
   awaitModuleStability,
   bringModulesUp,
   composeLaunchCommand,
@@ -16,6 +17,7 @@ import {
   formatLaunchDiagnostics,
   listModules,
   moduleStatuses,
+  PipPackagePlanner,
   RosBuildPlanner,
   RosBuildPlannerRunner,
 } from "./module.ts";
@@ -113,7 +115,11 @@ Deno.test("formatExitSummary highlights success and failure", () => {
 Deno.test(
   "awaitModuleStability reports early exit when the process stops immediately",
   async () => {
-    const status: Deno.CommandStatus = { success: false, code: 1, signal: null };
+    const status: Deno.CommandStatus = {
+      success: false,
+      code: 1,
+      signal: null,
+    };
     const result = await awaitModuleStability(Promise.resolve(status), 5);
     assertEquals(result, status);
     await delay(10);
@@ -245,3 +251,51 @@ Deno.test(
     }
   },
 );
+
+Deno.test("AptPackagePlanner batches modules and packages once", async () => {
+  const invocations: Array<{ modules: string[]; packages: string[] }> = [];
+  const planner = new AptPackagePlanner(async (invocation) => {
+    invocations.push(invocation);
+  });
+  planner.add("alpha", ["libfoo-dev", "libbar-dev", "libfoo-dev"]);
+  planner.add("beta", ["libbar-dev", "libbaz-dev"]);
+  await planner.execute();
+  assertEquals(invocations.length, 1);
+  const invocation = invocations[0];
+  assertEquals(invocation.modules, ["alpha", "beta"]);
+  assertEquals(invocation.packages, ["libfoo-dev", "libbar-dev", "libbaz-dev"]);
+});
+
+Deno.test("AptPackagePlanner skips execution when nothing queued", async () => {
+  let invoked = false;
+  const planner = new AptPackagePlanner(async () => {
+    invoked = true;
+  });
+  planner.add("alpha", []);
+  await planner.execute();
+  assertEquals(invoked, false);
+});
+
+Deno.test("PipPackagePlanner batches modules and packages once", async () => {
+  const invocations: Array<{ modules: string[]; packages: string[] }> = [];
+  const planner = new PipPackagePlanner(async (invocation) => {
+    invocations.push(invocation);
+  });
+  planner.add("alpha", ["numpy", "scipy", "numpy"]);
+  planner.add("beta", ["scipy", "pydantic"]);
+  await planner.execute();
+  assertEquals(invocations.length, 1);
+  const invocation = invocations[0];
+  assertEquals(invocation.modules, ["alpha", "beta"]);
+  assertEquals(invocation.packages, ["numpy", "scipy", "pydantic"]);
+});
+
+Deno.test("PipPackagePlanner skips execution when nothing queued", async () => {
+  let invoked = false;
+  const planner = new PipPackagePlanner(async () => {
+    invoked = true;
+  });
+  planner.add("alpha", []);
+  await planner.execute();
+  assertEquals(invoked, false);
+});

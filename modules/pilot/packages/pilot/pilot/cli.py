@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import logging
 import os
+import signal
 import site
 import socket
 import sys
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from .server import CockpitServer, PilotSettings
 
@@ -142,6 +144,54 @@ def resolve_repo_root(explicit: Optional[Path], modules_root: Path) -> Path:
     raise SystemExit("Unable to determine repository root; set --repo-root or REPO_DIR")
 
 
+def _register_signal_handlers(
+    loop: asyncio.AbstractEventLoop, *, stop_callback: Callable[[], None]
+) -> None:
+    """Register signal handlers so the cockpit shuts down gracefully.
+
+    POSIX platforms rely on :py:meth:`asyncio.AbstractEventLoop.add_signal_handler`
+    for ``SIGINT`` and ``SIGTERM`` while ``SIGHUP`` is logged and ignored so the
+    cockpit keeps running when the parent terminal disappears. Windows lacks
+    :py:meth:`add_signal_handler`, so the legacy :mod:`signal` API is used
+    instead.
+    """
+
+    supports_asyncio_signals = sys.platform != "win32" and hasattr(
+        loop, "add_signal_handler"
+    )
+
+    stop_signals: list[signal.Signals] = []
+    for name in ("SIGINT", "SIGTERM"):
+        candidate = getattr(signal, name, None)
+        if isinstance(candidate, signal.Signals):
+            stop_signals.append(candidate)
+
+    def request_shutdown(signal_name: str) -> None:
+        _LOGGER.info("Received %s signal; shutting down cockpit server", signal_name)
+        stop_callback()
+
+    def log_ignored(signal_name: str) -> None:
+        _LOGGER.info("Received %s signal; ignoring to keep cockpit server running", signal_name)
+
+    sighup = getattr(signal, "SIGHUP", None)
+    if supports_asyncio_signals:
+        for sig in stop_signals:
+            loop.add_signal_handler(sig, functools.partial(request_shutdown, sig.name))
+        if isinstance(sighup, signal.Signals):
+            loop.add_signal_handler(sighup, functools.partial(log_ignored, sighup.name))
+    else:
+        for sig in stop_signals:
+            signal.signal(
+                sig,
+                lambda *_args, sig=sig: request_shutdown(sig.name),
+            )
+        if isinstance(sighup, signal.Signals):
+            signal.signal(
+                sighup,
+                lambda *_args, sig=sighup: log_ignored(sig.name),
+            )
+
+
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
@@ -185,15 +235,21 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    stop_event = asyncio.Event()
+    _register_signal_handlers(
+        loop,
+        stop_callback=lambda: loop.call_soon_threadsafe(stop_event.set),
+    )
+
     async def run_server() -> None:
         async with server:
-            while True:
-                await asyncio.sleep(3600)
+            await stop_event.wait()
 
     try:
         loop.run_until_complete(run_server())
     except KeyboardInterrupt:
         _LOGGER.info("Shutting down cockpit server")
+        loop.call_soon_threadsafe(stop_event.set)
     finally:
         loop.run_until_complete(server.stop())
         loop.run_until_complete(loop.shutdown_asyncgens())
