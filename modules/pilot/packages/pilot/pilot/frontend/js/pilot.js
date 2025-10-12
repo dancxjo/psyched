@@ -49,4 +49,7 @@ if (typeof window !== 'undefined') {
   pilotGlobals.dashboard = pilotDashboard;
   window.Pilot = pilotGlobals;
   window.pilotDashboard = pilotDashboard;
+  if (typeof window.__startAlpineIfReady === 'function') {
+    window.__startAlpineIfReady();
+  }
 }
