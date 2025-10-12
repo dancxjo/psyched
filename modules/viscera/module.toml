@@ -13,9 +13,3 @@ packages = ["viscera"]
 display_name = "Viscera"
 description = "System telemetry and host health monitoring"
 regimes = ["system"]
-
-[[pilot.topics]]
-name = "host/health"
-type = "psyched_msgs/msg/HostHealth"
-access = "ro"
-presentation = "diagnostics"

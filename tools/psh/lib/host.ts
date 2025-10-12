@@ -14,18 +14,21 @@ import { buildRosEnv } from "./ros_env.ts";
 /**
  * Supported host manifest file extensions ordered by preference.
  *
- * JSON is the new default, but we continue to accept YAML and TOML so existing
- * deployments keep working while they migrate.
+ * TOML is the preferred format, but we continue to accept JSON and YAML so
+ * existing deployments keep working while they migrate.
  */
 const HOST_CONFIG_EXTENSIONS = [
+  ".toml",
   ".json",
   ".jsonc",
   ".yaml",
   ".yml",
-  ".toml",
 ] as const;
 
 type HostConfigExtension = typeof HOST_CONFIG_EXTENSIONS[number];
+
+export type HostConfigEntry = Record<string, unknown>;
+export type HostConfigScopes = Record<string, Record<string, HostConfigEntry>>;
 
 const moduleOps = {
   setup: setupModule,
@@ -49,6 +52,7 @@ export interface HostConfig {
   provision?: { scripts?: string[]; installers?: string[] };
   modules?: ModuleDirective[];
   services?: ServiceDirective[];
+  config?: HostConfigScopes;
 }
 
 export interface ModuleLaunchConfig {
@@ -99,6 +103,7 @@ type RawHostConfig = {
   provision?: unknown;
   modules?: unknown;
   services?: unknown;
+  config?: unknown;
   [key: string]: unknown;
 };
 
@@ -204,6 +209,7 @@ function normalizeModuleDirective(
   context: NormalizationContext,
   location: string,
   fallbackName?: string,
+  defaultLaunch?: boolean,
 ): ModuleDirective {
   if (raw === undefined || raw === null) {
     raw = {};
@@ -232,10 +238,15 @@ function normalizeModuleDirective(
     `${location}.launch`,
   );
 
-  if (launch === undefined) {
+  let launchValue = launch;
+  if (launchValue === undefined && defaultLaunch === true) {
+    launchValue = true;
+  }
+
+  if (launchValue === undefined) {
     delete normalized["launch"];
   } else {
-    normalized["launch"] = launch;
+    normalized["launch"] = launchValue;
   }
 
   if (launchConfig) {
@@ -271,6 +282,7 @@ function normalizeModuleDirectives(
   const result: ModuleDirective[] = [];
   const seen = new Set<string>();
   const declared = hostModuleNames ?? [];
+  const restrictToDeclared = hostModuleNames !== undefined;
 
   for (const moduleName of declared) {
     const name = coerceName(moduleName);
@@ -286,40 +298,43 @@ function normalizeModuleDirectives(
         context,
         `modules.${name}`,
         name,
+        true,
       ),
     );
   }
 
-  for (const moduleName of tableOrder) {
-    const name = coerceName(moduleName);
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    const rawEntry = byName.get(name);
-    if (rawEntry !== undefined) {
-      byName.delete(name);
+  if (!restrictToDeclared) {
+    for (const moduleName of tableOrder) {
+      const name = coerceName(moduleName);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      const rawEntry = byName.get(name);
+      if (rawEntry !== undefined) {
+        byName.delete(name);
+      }
+      result.push(
+        normalizeModuleDirective(
+          rawEntry,
+          context,
+          `modules.${name}`,
+          name,
+        ),
+      );
     }
-    result.push(
-      normalizeModuleDirective(
-        rawEntry,
-        context,
-        `modules.${name}`,
-        name,
-      ),
-    );
-  }
 
-  for (const [moduleName, rawEntry] of byName.entries()) {
-    const name = coerceName(moduleName);
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    result.push(
-      normalizeModuleDirective(
-        rawEntry,
-        context,
-        `modules.${name}`,
-        name,
-      ),
-    );
+    for (const [moduleName, rawEntry] of byName.entries()) {
+      const name = coerceName(moduleName);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      result.push(
+        normalizeModuleDirective(
+          rawEntry,
+          context,
+          `modules.${name}`,
+          name,
+        ),
+      );
+    }
   }
 
   return result;
@@ -397,6 +412,86 @@ function normalizeServiceDirectives(
           serviceName,
         ),
       );
+    }
+  }
+
+  return result;
+}
+
+function normalizeConfigScopes(
+  raw: unknown,
+  context: NormalizationContext,
+): HostConfigScopes | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!isRecord(raw)) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected 'config' to be a table, received ${describeType(raw)}.`,
+    );
+  }
+
+  const scopes: HostConfigScopes = {};
+  for (const [scopeName, scopeValue] of Object.entries(raw)) {
+    if (scopeValue === undefined || scopeValue === null) {
+      scopes[scopeName] = {};
+      continue;
+    }
+    if (!isRecord(scopeValue)) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected config.${scopeName} to be a table, received ${
+          describeType(scopeValue)
+        }.`,
+      );
+    }
+    const entries: Record<string, HostConfigEntry> = {};
+    for (const [entryName, entryValue] of Object.entries(scopeValue)) {
+      if (entryValue === undefined || entryValue === null) {
+        entries[entryName] = {};
+        continue;
+      }
+      if (!isRecord(entryValue)) {
+        throw new HostConfigFormatError(
+          context.path,
+          `Expected config.${scopeName}.${entryName} to be a table, received ${
+            describeType(entryValue)
+          }.`,
+        );
+      }
+      entries[entryName] = { ...entryValue };
+    }
+    scopes[scopeName] = entries;
+  }
+
+  return scopes;
+}
+
+function mergeDirectiveTables(
+  legacy: unknown,
+  scoped: Record<string, HostConfigEntry> | undefined,
+  context: NormalizationContext,
+  legacyLocation: string,
+): Record<string, unknown> | undefined {
+  let result: Record<string, unknown> | undefined;
+
+  if (legacy !== undefined && legacy !== null) {
+    if (!isRecord(legacy)) {
+      throw new HostConfigFormatError(
+        context.path,
+        `Expected ${legacyLocation} to be a table, received ${
+          describeType(legacy)
+        }.`,
+      );
+    }
+    result = { ...legacy };
+  }
+
+  if (scoped && Object.keys(scoped).length) {
+    if (!result) {
+      result = {};
+    }
+    for (const [key, value] of Object.entries(scoped)) {
+      result[key] = value;
     }
   }
 
@@ -484,14 +579,32 @@ function normalizeHostConfig(
   path: string,
   raw: RawHostConfig,
 ): HostConfig {
-  const { host: rawHost, modules: rawModules, services: rawServices, ...rest } =
-    raw;
+  const {
+    host: rawHost,
+    modules: rawModules,
+    services: rawServices,
+    config: rawConfig,
+    ...rest
+  } = raw;
   const context = { path };
   const host = normalizeHostSection(hostname, rawHost, context);
-  const modules = normalizeModuleDirectives(host.modules, rawModules, context);
+  const configScopes = normalizeConfigScopes(rawConfig, context);
+  const moduleTable = mergeDirectiveTables(
+    rawModules,
+    configScopes?.mod,
+    context,
+    "'modules'",
+  );
+  const serviceTable = mergeDirectiveTables(
+    rawServices,
+    configScopes?.srv,
+    context,
+    "'services'",
+  );
+  const modules = normalizeModuleDirectives(host.modules, moduleTable, context);
   const services = normalizeServiceDirectives(
     host.services,
-    rawServices,
+    serviceTable,
     context,
   );
   const config: HostConfig = {
@@ -500,6 +613,9 @@ function normalizeHostConfig(
     modules,
     services,
   } as HostConfig;
+  if (configScopes && Object.keys(configScopes).length) {
+    config.config = configScopes;
+  }
   return config;
 }
 

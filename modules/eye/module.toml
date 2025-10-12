@@ -36,17 +36,3 @@ packages = ["kinect_ros2"]
 display_name = "Eye"
 description = "RGB-D perception from the Kinect"
 regimes = ["perception"]
-
-[[pilot.topics]]
-name = "/image_raw"
-type = "sensor_msgs/msg/Image"
-access = "ro"
-presentation = "image"
-qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/camera/depth/image_raw"
-type = "sensor_msgs/msg/Image"
-access = "ro"
-presentation = "depth"
-qos = { history = "keep_last", depth = 3, reliability = "best_effort", durability = "volatile" }

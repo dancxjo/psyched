@@ -1,17 +1,15 @@
-"""HTTP server for the pilot cockpit."""
+"""HTTP server for the streamlined pilot frontend."""
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, MutableMapping, Optional, Sequence
+from typing import Dict, List, MutableMapping, Optional
 
 from aiohttp import web
 
-from .commands import CommandExecutor
-from .module_catalog import ModuleCatalog, ModuleInfo
+from .module_catalog import ModuleCatalog
 from .config import ModuleDescriptor, discover_active_modules, load_host_config
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +25,10 @@ class PilotSettings:
     repo_root: Optional[Path] = None
     listen_host: str = "0.0.0.0"
     listen_port: int = 8088
+    bridge_mode: str = "rosbridge"
+    rosbridge_uri: str = "ws://127.0.0.1:9090"
+    video_base: Optional[str] = None
+    video_port: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.repo_root is None:
@@ -43,33 +45,24 @@ class PilotSettings:
 
 PILOT_SETTINGS_KEY: web.AppKey[PilotSettings] = web.AppKey("pilot_settings")
 MODULE_CATALOG_KEY: web.AppKey[ModuleCatalog] = web.AppKey("module_catalog")
-COMMAND_EXECUTOR_KEY: web.AppKey[CommandExecutor] = web.AppKey("command_executor")
-ROS_BRIDGE_KEY: web.AppKey[Any] = web.AppKey("ros_bridge")
 
 
-def create_app(*, settings: PilotSettings, ros_bridge: Any) -> web.Application:
-    """Create the aiohttp application that powers the cockpit."""
+def create_app(*, settings: PilotSettings) -> web.Application:
+    """Create the aiohttp application serving the pilot assets."""
 
     app = web.Application()
     app[PILOT_SETTINGS_KEY] = settings
-    app[ROS_BRIDGE_KEY] = ros_bridge
     repo_root = settings.repo_root
     if repo_root is None:
         raise RuntimeError("PilotSettings.repo_root must be resolved before creating the app")
 
     catalog = ModuleCatalog(settings.modules_root)
-    executor = CommandExecutor(repo_root=repo_root)
 
     app[MODULE_CATALOG_KEY] = catalog
-    app[COMMAND_EXECUTOR_KEY] = executor
     # Fallback string keys for test harnesses that cannot import the AppKey constants.
     app["module_catalog"] = catalog
-    app["command_executor"] = executor
 
     app.router.add_get("/api/modules", _modules_handler)
-    app.router.add_get("/api/topics/bridge", _topics_bridge_handler)
-    app.router.add_get("/ws", _topics_bridge_handler)
-    app.router.add_post("/api/modules/{module}/commands", _modules_command_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -83,7 +76,16 @@ async def _modules_handler(request: web.Request) -> web.Response:
     active_descriptors = settings.active_modules()
     catalog.refresh()
     modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
-    return web.json_response({"modules": modules})
+    payload = {
+        "modules": modules,
+        "bridge": {
+            "mode": settings.bridge_mode,
+            "rosbridge_uri": settings.rosbridge_uri,
+            "video_base": settings.video_base,
+            "video_port": settings.video_port,
+        },
+    }
+    return web.json_response(payload)
 
 
 def _normalize_parts(tail: str) -> List[str]:
@@ -125,61 +127,6 @@ def _resolve_overlay_asset(modules_root: Path, tail: str) -> Optional[Path]:
     return None
 
 
-async def _modules_command_handler(request: web.Request) -> web.Response:
-    module = request.match_info.get("module", "").strip()
-    if not module:
-        raise web.HTTPBadRequest(text="Module name required")
-
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError as exc:
-        raise web.HTTPBadRequest(text=f"Invalid JSON payload: {exc}") from exc
-
-    if not isinstance(payload, MutableMapping):
-        raise web.HTTPBadRequest(text="Command payload must be a JSON object")
-
-    scope = str(payload.get("scope", "")).strip()
-    command = str(payload.get("command", "")).strip()
-    if not scope or not command:
-        raise web.HTTPBadRequest(text="Both 'scope' and 'command' fields are required")
-
-    args = payload.get("args") or []
-    if isinstance(args, Sequence) and not isinstance(args, (str, bytes, bytearray)):
-        coerced_args = [str(item) for item in args]
-    else:
-        raise web.HTTPBadRequest(text="'args' must be an array of arguments")
-
-    catalog = _get_module_catalog(request.app)
-    executor = _get_command_executor(request.app)
-
-    allowed_commands: Iterable[str] | None = None
-    try:
-        metadata = catalog.get_module(module)
-    except KeyError:
-        metadata = None
-
-    if metadata is not None:
-        if scope.lower() == "mod":
-            allowed_commands = metadata.commands.mod
-        elif scope.lower() == "sys":
-            allowed_commands = metadata.commands.system
-        if allowed_commands is not None and command not in allowed_commands:
-            raise web.HTTPBadRequest(text=f"Unsupported command '{command}' for module '{module}'")
-
-    result = await executor.run(scope, module, command, coerced_args)
-    return web.json_response({"result": result})
-
-
-async def _topics_bridge_handler(request: web.Request) -> web.StreamResponse:
-    ros_bridge = request.app[ROS_BRIDGE_KEY]
-    if ros_bridge is None:
-        return web.Response(status=501, text="ROS bridge unavailable")
-    handler = getattr(ros_bridge, "handle_websocket", None)
-    if handler is None:
-        raise web.HTTPInternalServerError(text="ROS bridge lacks websocket handler")
-    return await handler(request)
-
-
 async def _index_handler(request: web.Request) -> web.StreamResponse:
     settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
     index_path = settings.frontend_root / "index.html"
@@ -208,10 +155,9 @@ async def _static_handler(request: web.Request) -> web.StreamResponse:
 class CockpitServer:
     """Manage the aiohttp web server lifecycle."""
 
-    def __init__(self, settings: PilotSettings, ros_bridge: Any) -> None:
+    def __init__(self, settings: PilotSettings) -> None:
         self._settings = settings
-        self._ros_bridge = ros_bridge
-        self._app = create_app(settings=settings, ros_bridge=ros_bridge)
+        self._app = create_app(settings=settings)
         self._runner: Optional[web.AppRunner] = None
         self._site: Optional[web.TCPSite] = None
 
@@ -265,24 +211,19 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
     if info is not None:
         data = info.to_dict()
         data["display_name"] = descriptor.display_name or data.get("display_name") or descriptor.name
-        dashboard_url = f"/modules/{info.name}/" if info.pilot_assets else None
+        dashboard_url = info.dashboard_url
     else:
         data = {
             "name": descriptor.name,
             "display_name": descriptor.display_name or descriptor.name,
             "description": "",
-            "regimes": [],
-            "topics": [],
-            "commands": {
-                "mod": ["setup", "up", "down", "teardown"],
-                "system": [],
-            },
             "has_pilot": False,
         }
         dashboard_url = None
     data["slug"] = descriptor.slug
     if dashboard_url:
         data["dashboard_url"] = dashboard_url
+    return data
     return data
 
 
@@ -293,12 +234,3 @@ def _get_module_catalog(app: web.Application) -> ModuleCatalog:
     if catalog is None:
         raise RuntimeError("Module catalog not configured on pilot application")
     return catalog
-
-
-def _get_command_executor(app: web.Application) -> CommandExecutor:
-    executor = app.get("command_executor")
-    if executor is None:
-        executor = app.get(COMMAND_EXECUTOR_KEY)
-    if executor is None:
-        raise RuntimeError("Command executor not configured on pilot application")
-    return executor

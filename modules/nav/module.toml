@@ -24,24 +24,3 @@ packages = ["psyched_nav"]
 display_name = "Nav"
 description = "Autonomous navigation stack"
 regimes = ["navigation"]
-
-[[pilot.topics]]
-name = "/map"
-type = "nav_msgs/msg/OccupancyGrid"
-access = "ro"
-presentation = "map"
-qos = { history = "keep_last", depth = 1, reliability = "reliable", durability = "transient_local" }
-
-[[pilot.topics]]
-name = "/plan"
-type = "nav_msgs/msg/Path"
-access = "ro"
-presentation = "path"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/amcl_pose"
-type = "geometry_msgs/msg/PoseWithCovarianceStamped"
-access = "ro"
-presentation = "pose"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }

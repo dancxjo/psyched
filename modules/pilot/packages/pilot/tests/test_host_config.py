@@ -17,7 +17,36 @@ from pilot.config import HostConfigError, ModuleDescriptor, discover_active_modu
 
 @pytest.fixture()
 def host_config_path(tmp_path: Path) -> Path:
-    """Create a temporary host configuration file for use in tests."""
+    """Create a temporary TOML host configuration using the new schema."""
+
+    text = dedent(
+        """
+        [host]
+        name = "testbot"
+        modules = ["imu", "foot"]
+
+        [config.mod.foot]
+        display_name = "Create Base"
+
+        [config.mod.foot.launch.arguments]
+        foo = "bar"
+
+        [config.mod.legacy]
+        launch = true
+
+        [config.mod.memory]
+        launch = true
+        """
+    )
+    path = tmp_path / "testbot.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+@pytest.fixture()
+def legacy_host_config_path(tmp_path: Path) -> Path:
+    """Create a temporary JSON host configuration for legacy behaviour tests."""
+
     payload = {
         "host": {
             "name": "testbot",
@@ -29,16 +58,16 @@ def host_config_path(tmp_path: Path) -> Path:
             "legacy": {},
         },
     }
-    path = tmp_path / "testbot.json"
+    path = tmp_path / "legacy.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
 
-def test_load_host_config_reads_json(host_config_path: Path) -> None:
-    """Given a JSON host file, the loader should return its parsed content."""
+def test_load_host_config_reads_toml(host_config_path: Path) -> None:
+    """Given a TOML host file, the loader should return its parsed content."""
     config = load_host_config(host_config_path)
     assert config["host"]["name"] == "testbot"
-    assert "modules" in config
+    assert "config" in config
 
 
 def test_load_host_config_rejects_missing_file(tmp_path: Path) -> None:
@@ -48,14 +77,21 @@ def test_load_host_config_rejects_missing_file(tmp_path: Path) -> None:
         load_host_config(missing_path)
 
 
-def test_discover_active_modules_selects_launch_enabled_entries(host_config_path: Path) -> None:
-    """Modules should be marked active when launch is enabled in the module directive."""
+def test_load_host_config_reads_json(legacy_host_config_path: Path) -> None:
+    """JSON host files remain supported for backwards compatibility."""
+    config = load_host_config(legacy_host_config_path)
+    assert config["host"]["name"] == "testbot"
+    assert "modules" in config
+
+
+def test_discover_active_modules_use_host_module_list(host_config_path: Path) -> None:
+    """Modules listed in host.modules should surface in the reported order."""
     config = load_host_config(host_config_path)
 
     modules: List[ModuleDescriptor] = discover_active_modules(config)
-    names = {module.name for module in modules}
+    names = [module.name for module in modules]
 
-    assert names == {"imu", "foot"}
+    assert names == ["imu", "foot"]
 
     foot_module = next(module for module in modules if module.name == "foot")
     assert foot_module.display_name == "Create Base"
@@ -63,19 +99,19 @@ def test_discover_active_modules_selects_launch_enabled_entries(host_config_path
     imu_module = next(module for module in modules if module.name == "imu")
     assert imu_module.display_name == "Imu"
 
+    assert all(module.name != "legacy" for module in modules)
 
-def test_discover_active_modules_supports_legacy_host_list(host_config_path: Path) -> None:
-    """Host manifests that still rely on host.modules continue to work."""
-    config = load_host_config(host_config_path)
-    config["host"]["modules"] = ["legacy", "imu"]  # type: ignore[index]
+
+def test_discover_active_modules_supports_legacy_launch_entries(
+    legacy_host_config_path: Path,
+) -> None:
+    """Legacy manifests without host.modules rely on launch directives."""
+    config = load_host_config(legacy_host_config_path)
 
     modules: List[ModuleDescriptor] = discover_active_modules(config)
     names = {module.name for module in modules}
 
-    assert names == {"imu", "foot", "legacy"}
-
-    legacy_module = next(module for module in modules if module.name == "legacy")
-    assert legacy_module.display_name == "Legacy"
+    assert names == {"imu", "foot"}
 
 
 def test_discover_active_modules_handles_empty_config() -> None:
@@ -86,9 +122,9 @@ def test_discover_active_modules_handles_empty_config() -> None:
 
 def test_discover_active_modules_accepts_sequence_modules() -> None:
     """Module lists expressed as sequences should mark each entry as active."""
-    modules = discover_active_modules({"modules": ["imu", "pilot"]})
-    names = {module.name for module in modules}
-    assert names == {"imu", "pilot"}
+    modules = discover_active_modules({"host": {"modules": ["imu", "pilot"]}})
+    names = [module.name for module in modules]
+    assert names == ["imu", "pilot"]
 
 
 def test_load_host_config_supports_jsonc(tmp_path: Path) -> None:

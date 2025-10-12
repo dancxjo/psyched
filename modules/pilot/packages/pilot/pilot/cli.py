@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import socket
 import logging
 import os
 from pathlib import Path
-import socket
 from typing import Iterable, Optional
 
 from .server import CockpitServer, PilotSettings
@@ -121,6 +121,20 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     modules_root = resolve_modules_root(args.modules_root, frontend_root)
     repo_root = resolve_repo_root(args.repo_root, modules_root)
 
+    bridge_mode = os.environ.get("PILOT_BRIDGE_MODE", "rosbridge").lower()
+    rosbridge_uri = os.environ.get("PILOT_ROSBRIDGE_URI", "ws://127.0.0.1:9090")
+    video_base = os.environ.get("PILOT_VIDEO_BASE")
+    video_port_env = os.environ.get("PILOT_VIDEO_PORT")
+    video_port = None
+    if video_port_env:
+        try:
+            parsed_port = int(video_port_env)
+        except ValueError:
+            parsed_port = None
+            _LOGGER.warning("Invalid PILOT_VIDEO_PORT value '%s'", video_port_env)
+        if parsed_port is not None and parsed_port > 0:
+            video_port = parsed_port
+
     settings = PilotSettings(
         host_config_path=host_config,
         frontend_root=frontend_root,
@@ -128,13 +142,13 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         repo_root=repo_root,
         listen_host=args.listen_host,
         listen_port=args.listen_port,
+        bridge_mode=bridge_mode,
+        rosbridge_uri=rosbridge_uri,
+        video_base=video_base,
+        video_port=video_port,
     )
 
-    # Import RosTopicBridge lazily so callers that only need helpers can avoid the ROS dependency.
-    from .topics import RosTopicBridge
-
-    bridge = RosTopicBridge()
-    server = CockpitServer(settings=settings, ros_bridge=bridge)
+    server = CockpitServer(settings=settings)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -150,7 +164,6 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         _LOGGER.info("Shutting down cockpit server")
     finally:
         loop.run_until_complete(server.stop())
-        bridge.shutdown()
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
 

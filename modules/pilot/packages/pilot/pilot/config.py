@@ -90,58 +90,43 @@ def load_host_config(path: Path | str) -> MutableMapping[str, Any]:
 def discover_active_modules(config: Mapping[str, Any]) -> List[ModuleDescriptor]:
     """Return module descriptors for modules active on the host.
 
-    The canonical definition of an active module comes from the module's
-    configuration table. A module is considered active when its directive
-    contains a ``launch`` field that evaluates to ``true``. Legacy host
-    manifests that still rely on ``host.modules`` are also supported, but no
-    longer required.
+    When ``host.modules`` is declared, it is treated as the canonical list of
+    cockpit modules. Config entries under ``config.mod`` (or the legacy
+    ``modules`` table) supply metadata for those modules without enabling them
+    implicitly. For legacy manifests that omit ``host.modules``, module
+    directives with a truthy ``launch`` flag are still respected.
     """
 
     if not config:
         return []
 
-    modules_section = config.get("modules")
     modules: Dict[str, Mapping[str, Any]] = {}
-    if isinstance(modules_section, Mapping):
-        modules = {}
-        for name, value in modules_section.items():
-            key = str(name)
-            if isinstance(value, Mapping):
-                modules[key] = value
-            elif isinstance(value, bool):
-                modules[key] = {"launch": value}
-            elif value is None:
-                modules[key] = {}
-    elif isinstance(modules_section, Iterable) and not isinstance(modules_section, (str, bytes)):
-        for value in modules_section:
-            key = str(value)
-            modules[key] = {"launch": True}
+    modules.update(_normalize_module_entries(config.get("modules")))
+
+    config_section = config.get("config")
+    if isinstance(config_section, Mapping):
+        modules.update(_normalize_module_entries(config_section.get("mod")))
 
     host_section = config.get("host")
-    host_module_names: Iterable[str] = []
-    if isinstance(host_section, Mapping):
-        declared = host_section.get("modules")
-        if isinstance(declared, Iterable) and not isinstance(declared, (str, bytes)):
-            host_module_names = [str(name) for name in declared]
+    use_host_list = False
+    host_module_names: List[str] = []
+    if isinstance(host_section, Mapping) and "modules" in host_section:
+        use_host_list = True
+        host_module_names = _coerce_string_sequence(host_section.get("modules"))
+
+    if use_host_list:
+        return _modules_from_host_list(host_module_names, modules)
 
     active: Dict[str, ModuleDescriptor] = {}
 
     for name, raw in modules.items():
         if _launch_enabled(raw):
+            materialized = dict(raw)
             active[name] = ModuleDescriptor(
                 name=name,
-                display_name=_display_name_for(name, raw),
-                raw_config=raw,
+                display_name=_display_name_for(name, materialized),
+                raw_config=materialized,
             )
-
-    for name in host_module_names:
-        if name in active:
-            continue
-        active[name] = ModuleDescriptor(
-            name=name,
-            display_name=_display_name_for(name, modules.get(name, {})),
-            raw_config=modules.get(name, {}),
-        )
 
     return sorted(active.values(), key=lambda module: module.display_name.lower())
 
@@ -189,6 +174,75 @@ def _coerce_bool(value: Any) -> Optional[bool]:
             return None
         return value != 0
     return None
+
+
+def _normalize_module_entries(raw: Any) -> Dict[str, Mapping[str, Any]]:
+    modules: Dict[str, Mapping[str, Any]] = {}
+    if isinstance(raw, Mapping):
+        for name, value in raw.items():
+            key = str(name)
+            modules[key] = _coerce_module_mapping(value)
+    elif isinstance(raw, Iterable) and not isinstance(raw, (str, bytes)):
+        for value in raw:
+            key = str(value)
+            if not key:
+                continue
+            modules[key] = {"launch": True}
+    elif isinstance(raw, (str, bytes)):
+        key = raw.strip()
+        if key:
+            modules[key] = {"launch": True}
+    return modules
+
+
+def _coerce_module_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, bool):
+        return {"launch": value}
+    if value is None:
+        return {}
+    return {}
+
+
+def _coerce_string_sequence(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes)):
+        normalized = value.strip()
+        return [normalized] if normalized else []
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+        result: List[str] = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                result.append(text)
+        return result
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _modules_from_host_list(
+    names: Iterable[str],
+    modules: Mapping[str, Mapping[str, Any]],
+) -> List[ModuleDescriptor]:
+    result: List[ModuleDescriptor] = []
+    seen: set[str] = set()
+    for raw_name in names:
+        name = str(raw_name).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        raw_config = modules.get(name, {})
+        materialized = dict(raw_config)
+        result.append(
+            ModuleDescriptor(
+                name=name,
+                display_name=_display_name_for(name, materialized),
+                raw_config=materialized,
+            )
+        )
+    return result
 
 
 def _strip_json_comments(text: str) -> str:

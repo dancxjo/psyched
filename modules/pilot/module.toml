@@ -2,6 +2,10 @@
 apt = [
     "python3-aiohttp",
     "python3-yaml",
+    "ros-${ROS_DISTRO}-image-transport-plugins",
+    "ros-${ROS_DISTRO}-rosbridge-suite",
+    "ros-${ROS_DISTRO}-tf2-web-republisher",
+    "ros-${ROS_DISTRO}-web-video-server",
 ]
 pip = []
 launch = "modules/pilot/launch_unit.sh"
@@ -17,31 +21,3 @@ display_name = "Pilot"
 description = "Teleoperation dashboard and ROS 2 bridge"
 mod_commands = ["setup", "up", "down", "teardown"]
 regimes = ["system"]
-
-[[pilot.topics]]
-name = "/cmd_vel"
-type = "geometry_msgs/msg/Twist"
-access = "rw"
-presentation = "joystick"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/imu"
-type = "sensor_msgs/msg/Imu"
-access = "ro"
-presentation = "imu"
-qos = { history = "keep_last", depth = 20, reliability = "reliable", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/host/health"
-type = "psyched_msgs/msg/HostHealth"
-access = "ro"
-presentation = "status"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }
-
-[[pilot.topics]]
-name = "/diagnostics"
-type = "diagnostic_msgs/msg/DiagnosticArray"
-access = "ro"
-presentation = "diagnostics"
-qos = { history = "keep_last", depth = 5, reliability = "reliable", durability = "volatile" }

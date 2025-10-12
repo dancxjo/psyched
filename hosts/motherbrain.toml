@@ -1,0 +1,69 @@
+[host]
+name = "motherbrain"
+installers = ["ros2", "docker"]
+modules = [
+  "pilot",
+  "imu",
+  "foot",
+  "eye",
+  "ear",
+  "faces",
+  "gps",
+  "nav",
+  "voice",
+  "viscera",
+  "hypothalamus",
+]
+
+[config.mod.ear.env]
+EAR_BACKEND = "service"
+EAR_SERVICE_URI = "ws://forebrain.local:5003/asr"
+
+[[config.mod.ear.dependencies]]
+service = "forebrain.asr"
+port = "ws"
+via = "ws://forebrain.local:5003/asr"
+bind_env = "EAR_SERVICE_URI"
+summary = "Consumes Whisper websocket for speech recognition"
+
+[config.mod.faces.launch.arguments]
+camera_topic = "/camera/color/image_raw"
+faces_topic = "/vision/faces"
+face_detected_topic = "/vision/face_detected"
+
+[config.mod.gps.launch.arguments]
+frame_id = "gps_link"
+
+[config.mod.nav.launch.arguments]
+kinect_rgb_topic = "/camera/color/image_raw"
+kinect_depth_topic = "/camera/depth/image_rect_raw"
+camera_frame = "camera_link"
+
+[config.mod.voice.env]
+VOICE_BACKEND = "websocket"
+VOICE_TTS_URL = "ws://forebrain.local:5002/tts"
+
+[[config.mod.voice.dependencies]]
+service = "forebrain.tts"
+port = "ws"
+via = "ws://forebrain.local:5002/tts"
+bind_env = "VOICE_TTS_URL"
+summary = "Streams synthesized speech from the forebrain TTS service"
+
+[config.mod.hypothalamus]
+display_name = "Hypothalamus"
+
+[config.mod.hypothalamus.env]
+HYPOTHALAMUS_SENSOR_TYPE = "DHT11"
+HYPOTHALAMUS_GPIO_PIN = "D4"
+
+[config.mod.wifi.env]
+WIFI_INTERFACE = "wlan1"
+WIFI_CHANNEL = "11"
+WIFI_COUNTRY_CODE = "US"
+WIFI_SSID = "Pete-Net"
+WIFI_ENABLE_NAT = "true"
+WIFI_UPLINK_INTERFACE = "wlan0"
+
+[config.mod.will.env]
+WILL_DEFAULT_REGIME = "idle"
