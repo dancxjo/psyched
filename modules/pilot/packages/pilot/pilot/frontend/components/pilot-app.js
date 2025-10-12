@@ -76,6 +76,12 @@ class PilotApp extends LitElement {
     window.dispatchEvent(new CustomEvent('pilot-sections', { detail }));
   }
 
+  updated(changedProperties) {
+    if (changedProperties.has('modules')) {
+      this.updateComplete.then(() => this._bootstrapFrames());
+    }
+  }
+
   render() {
     if (this.loading) {
       return html`<section class="pilot-loading">Loading module dashboards…</section>`;
@@ -87,32 +93,106 @@ class PilotApp extends LitElement {
         <button type="button" @click=${() => this.refresh()}>Retry</button>
       </section>`;
     }
+    if (!this.modules.length) {
+      return html`<section class="pilot-empty">
+        <h2>No modules are currently active</h2>
+        <p>The host configuration does not surface any pilot dashboards. Confirm host.modules is populated.</p>
+      </section>`;
+    }
+
     return html`
-      <section class="pilot-directory">
-        <h2>Available Dashboards</h2>
-        <p>Select a module to open its dedicated control surface.</p>
-        <ul class="pilot-directory__list">
-          ${this.modules.map((module) => this.renderModuleCard(module))}
-        </ul>
+      <div class="module-stack">
+        ${this.modules.map((module) => this.renderModuleSurface(module))}
+      </div>
+    `;
+  }
+
+  renderModuleSurface(module) {
+    const slug = module.slug || module.name;
+    const fallbackUrl = module.has_pilot ? `/modules/${module.name}/` : null;
+    const dashboardUrl = module.dashboard_url || fallbackUrl;
+    const displayName = module.display_name || module.name;
+
+    return html`
+      <section class="module-section" id=${`module-${slug}`}>
+        <header class="module-section__header">
+          <div class="module-section__meta">
+            <h2>${displayName}</h2>
+            ${module.description ? html`<p>${module.description}</p>` : ''}
+          </div>
+          ${dashboardUrl
+        ? html`<a class="module-section__link" href=${dashboardUrl} target="_blank" rel="noopener">Open standalone ↗</a>`
+        : ''}
+        </header>
+        ${dashboardUrl
+        ? html`<div class="module-surface">
+              <iframe
+                src=${dashboardUrl}
+                title=${`${displayName} dashboard`}
+                loading="lazy"
+                allow="autoplay; clipboard-read; clipboard-write"
+                data-module=${slug}
+              ></iframe>
+            </div>`
+        : html`<div class="module-placeholder">
+              <p>This module does not expose pilot assets yet.</p>
+            </div>`}
       </section>
     `;
   }
 
-  renderModuleCard(module) {
-    const href = module.dashboard_url || (module.has_pilot ? `/modules/${module.name}/` : null);
-    return html`
-      <li class="pilot-directory__item" id=${`module-${module.slug || module.name}`}>
-        <div class="pilot-card">
-          <div class="pilot-card__body">
-            <h3>${module.display_name || module.name}</h3>
-            ${module.description ? html`<p>${module.description}</p>` : ''}
-          </div>
-          ${href
-            ? html`<a class="pilot-card__link" href=${href} target="_blank" rel="noopener">Open dashboard ↗</a>`
-            : html`<span class="pilot-card__link pilot-card__link--disabled">No pilot assets</span>`}
-        </div>
-      </li>
-    `;
+  _bootstrapFrames() {
+    const frames = this.querySelectorAll('iframe[data-module]');
+    frames.forEach((frame) => {
+      if (frame.dataset.bootstrap === 'true') {
+        return;
+      }
+      frame.dataset.bootstrap = 'true';
+      frame.addEventListener('load', () => {
+        this._resizeFrame(frame);
+        this._attachResizeObserver(frame);
+      });
+    });
+  }
+
+  _attachResizeObserver(frame) {
+    try {
+      const win = frame.contentWindow;
+      const doc = win?.document;
+      if (!win || !doc || typeof win.ResizeObserver === 'undefined') {
+        return;
+      }
+      const target = doc.body || doc.documentElement;
+      if (!target) {
+        return;
+      }
+      const observer = new win.ResizeObserver(() => this._resizeFrame(frame));
+      observer.observe(target);
+      frame._pilotResizeObserver = observer;
+    } catch (error) {
+      // Cross-origin frames cannot be observed; ignore safely.
+    }
+  }
+
+  _resizeFrame(frame) {
+    const minHeight = 640;
+    try {
+      const doc = frame.contentDocument || frame.contentWindow?.document;
+      if (!doc) {
+        frame.style.height = `${minHeight}px`;
+        return;
+      }
+      const body = doc.body;
+      const html = doc.documentElement;
+      const measured = Math.max(
+        body ? body.scrollHeight : 0,
+        html ? html.scrollHeight : 0,
+        minHeight,
+      );
+      frame.style.height = `${measured}px`;
+    } catch (error) {
+      frame.style.height = `${minHeight}px`;
+    }
   }
 }
 

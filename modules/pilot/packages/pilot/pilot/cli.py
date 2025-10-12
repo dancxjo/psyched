@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import socket
 import logging
 import os
+import site
+import socket
+import sys
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -149,6 +151,8 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     modules_root = resolve_modules_root(args.modules_root, frontend_root)
     repo_root = resolve_repo_root(args.repo_root, modules_root)
 
+    _bootstrap_ros_environment(repo_root)
+
     bridge_mode = os.environ.get("PILOT_BRIDGE_MODE", "rosbridge").lower()
     rosbridge_uri = os.environ.get("PILOT_ROSBRIDGE_URI", "ws://127.0.0.1:9090")
     video_base = os.environ.get("PILOT_VIDEO_BASE")
@@ -194,6 +198,61 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         loop.run_until_complete(server.stop())
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+
+
+def _bootstrap_ros_environment(repo_root: Path) -> None:
+    """Ensure colcon overlays from *repo_root* are available to Python imports."""
+
+    install_root = repo_root / "work" / "install"
+    if not install_root.exists():
+        return
+
+    _augment_pythonpath(install_root)
+    _ensure_ament_prefix_path(install_root)
+
+
+def _augment_pythonpath(install_root: Path) -> None:
+    """Add colcon-generated site-packages directories under *install_root* to sys.path."""
+
+    python_tag = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    candidates = [install_root / "lib" / python_tag / "site-packages"]
+    candidates.extend(install_root.glob("*/lib/python*/site-packages"))
+
+    normalized_sys_path = {Path(entry).resolve() for entry in sys.path if entry}
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except FileNotFoundError:
+            continue
+        if not resolved.exists() or resolved in normalized_sys_path:
+            continue
+        site.addsitedir(str(resolved))
+        normalized_sys_path.add(resolved)
+        _LOGGER.debug("Added site-packages directory %s", resolved)
+
+
+def _ensure_ament_prefix_path(install_root: Path) -> None:
+    """Prepend *install_root* and package-specific prefixes to AMENT_PREFIX_PATH."""
+
+    existing_raw = os.environ.get("AMENT_PREFIX_PATH", "")
+    existing_paths = [Path(entry).resolve() for entry in existing_raw.split(os.pathsep) if entry]
+    normalized = {path for path in existing_paths}
+
+    prefixes = [install_root]
+    prefixes.extend(path for path in install_root.iterdir() if path.is_dir())
+
+    updated = list(existing_paths)
+    for prefix in prefixes:
+        try:
+            resolved = prefix.resolve()
+        except FileNotFoundError:
+            continue
+        if not resolved.exists() or resolved in normalized:
+            continue
+        updated.insert(0, resolved)
+        normalized.add(resolved)
+
+    os.environ["AMENT_PREFIX_PATH"] = os.pathsep.join(str(path) for path in updated)
 
 
 if __name__ == "__main__":  # pragma: no cover
