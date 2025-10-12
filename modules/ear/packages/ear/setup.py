@@ -17,7 +17,6 @@ setup(
     maintainer_email='pete@psyched.local',
     description='Ear module that collects text from multiple transcription backends.',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'ear_service = ear.cli:main',

@@ -16,7 +16,6 @@ setup(
     maintainer_email="pete@psyched.local",
     description="Biologically inspired narratives for Pete's internal state.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "viscera_monitor = viscera.cli:main",

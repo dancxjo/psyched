@@ -12,7 +12,6 @@ setup(
     maintainer_email="devnull@example.com",
     description="Face detection and embedding pipeline for the Psyched robots",
     license="Apache-2.0",
-    tests_require=["pytest"],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/faces"]),
         (f"share/{package_name}", ["package.xml"]),

@@ -17,7 +17,6 @@ setup(
     maintainer_email='tdreed@gmail.com',
     description='u-blox GPS node using gpsd, publishing NavSatFix and related topics',
     license='MIT',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'ublox_gps_node = ublox_gps.node:main',

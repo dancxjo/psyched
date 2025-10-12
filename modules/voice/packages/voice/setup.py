@@ -17,7 +17,6 @@ setup(
     maintainer_email='pete@psyched.local',
     description='Voice module that serializes and plays back spoken text.',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'speech_service = voice.cli:main',

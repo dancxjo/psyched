@@ -17,7 +17,6 @@ setup(
     maintainer_email='tdreed@gmail.com',
     description='Chat node that listens to conversation and queries Ollama, coordinating with voice output',
     license='MIT',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'chat_node = chat.node:main',

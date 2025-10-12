@@ -16,7 +16,6 @@ setup(
     maintainer_email='pete@psyched.local',
     description='Memory module connecting Qdrant vector storage with Neo4j.',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'memory_node = memory.node:main',

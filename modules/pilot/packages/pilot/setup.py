@@ -23,7 +23,6 @@ setup(
     maintainer_email='pete@psyched.local',
     description='Pilot cockpit server for Psyched robots.',
     license='Apache-2.0',
-    tests_require=['pytest', 'aiohttp'],
     entry_points={
         'console_scripts': [
             'cockpit = pilot.cli:main',

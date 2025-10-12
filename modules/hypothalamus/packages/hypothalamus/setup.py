@@ -16,7 +16,6 @@ setup(
     maintainer_email="pete@psyched.local",
     description="Temperature and humidity telemetry bridge for Pete's hypothalamus module.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "hypothalamus_node = hypothalamus.node:main",

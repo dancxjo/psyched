@@ -12,7 +12,6 @@ setup(
     maintainer_email="devnull@example.com",
     description="Navigation bringup helpers for the Psyched robots",
     license="Apache-2.0",
-    tests_require=["pytest"],
     data_files=[
         (f"share/{package_name}/launch", [
             "nav_bringup.launch.py",
