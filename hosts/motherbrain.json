@@ -8,7 +8,8 @@
     "modules": [
       "imu",
       "foot",
-      "pilot"
+      "pilot",
+      "hypothalamus"
     ],
     "services": []
   },
@@ -99,6 +100,14 @@
     },
     "viscera": {
       "launch": true
+    },
+    "hypothalamus": {
+      "display_name": "Hypothalamus",
+      "launch": true,
+      "env": {
+        "HYPOTHALAMUS_SENSOR_TYPE": "DHT11",
+        "HYPOTHALAMUS_GPIO_PIN": "D4"
+      }
     }
   }
 }

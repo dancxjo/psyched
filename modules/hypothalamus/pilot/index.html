@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" x-data="Hypothalamus.dashboard()" x-init="init()">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Thermal Regulation</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script type="module" src="/js/pilot.js"></script>
+    <script type="module" src="/modules/hypothalamus/js/hypothalamus.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Hypothalamus</h1>
+        <p x-text="status"></p>
+      </header>
+      <section class="grid">
+        <article class="card">
+          <h2>Temperature</h2>
+          <p>Celsius: <strong x-text="format(temperatureC)"></strong></p>
+          <p>Fahrenheit: <strong x-text="format(temperatureF)"></strong></p>
+        </article>
+        <article class="card">
+          <h2>Humidity</h2>
+          <p>Relative: <strong x-text="format(humidityPercent)"></strong>%</p>
+        </article>
+        <article class="card">
+          <h2>Diagnostics</h2>
+          <p>Backend: <strong x-text="backend"></strong></p>
+          <p>Last update: <strong x-text="lastUpdate"></strong></p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

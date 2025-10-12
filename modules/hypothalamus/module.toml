@@ -1,0 +1,19 @@
+[unit.hypothalamus]
+apt = [
+    "python3-smbus2",
+]
+pip = [
+    "adafruit-circuitpython-dht",
+    "adafruit-blinka",
+]
+launch = "modules/hypothalamus/launch_unit.sh"
+shutdown = "modules/hypothalamus/shutdown_unit.sh"
+pilot_control = "modules/hypothalamus/pilot/index.html"
+
+[[unit.hypothalamus.git]]
+url = "https://github.com/adafruit/Adafruit_CircuitPython_DHT.git"
+path = "external/Adafruit_CircuitPython_DHT"
+
+[unit.hypothalamus.ros]
+workspace = "."
+packages = ["hypothalamus"]
