@@ -18,6 +18,10 @@ _LOGGER = logging.getLogger(__name__)
 PublishCallback = Callable[[str], None]
 
 
+class BackendUnavailableError(RuntimeError):
+    """Raised when a backend cannot connect to an upstream dependency."""
+
+
 class EarBackend(Protocol):
     """Protocol implemented by all ear transcription backends."""
 
@@ -175,7 +179,7 @@ class FasterWhisperEarBackend(AudioAwareBackend):
 
 
 class ServiceASREarBackend(AudioAwareBackend):
-    """Backend that streams audio frames to the `/service/asr` websocket."""
+    """Backend that streams audio frames to the `/service/asr` websocket with optional fallback."""
 
     def __init__(
         self,
@@ -183,62 +187,101 @@ class ServiceASREarBackend(AudioAwareBackend):
         *,
         loop: asyncio.AbstractEventLoop | None = None,
         connect_timeout: float = 5.0,
+        fallback_factory: Callable[[], AudioAwareBackend] | None = None,
     ) -> None:
         self._uri = uri
         self._loop = loop
         self._connect_timeout = connect_timeout
         self._queue: "queue.Queue[tuple[bytes, int, int] | None]" = queue.Queue()
+        self._fallback_factory = fallback_factory
+        self._delegate: AudioAwareBackend | None = None
 
     def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
-        """Queue audio to forward to the websocket service."""
+        """Queue audio to forward to the websocket service or fallback backend."""
 
+        if self._delegate is not None:
+            self._delegate.submit_audio(pcm, sample_rate, channels)
+            return
         self._queue.put((pcm, sample_rate, channels))
 
     def close(self) -> None:
-        """Signal the streaming task to finish."""
+        """Signal the active backend to finish processing."""
 
+        if self._delegate is not None:
+            self._delegate.close()
         self._queue.put(None)
+
+    def _ensure_fallback(self) -> AudioAwareBackend:
+        """Instantiate the fallback backend and replay queued audio chunks."""
+
+        if self._delegate is not None:
+            return self._delegate
+        if self._fallback_factory is None:
+            raise BackendUnavailableError(
+                f"ASR service at {self._uri} is unavailable and no fallback is configured"
+            )
+        fallback = self._fallback_factory()
+        self._delegate = fallback
+        while not self._queue.empty():
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:  # pragma: no cover - race guard
+                break
+            if item is None:
+                continue
+            pcm, sample_rate, channels = item
+            fallback.submit_audio(pcm, sample_rate, channels)
+        return fallback
 
     async def _transcribe(self, publish: PublishCallback, stop_event: threading.Event) -> None:
         import websockets
+        from websockets.exceptions import WebSocketException
 
-        async with websockets.connect(self._uri, open_timeout=self._connect_timeout) as ws:
-            while not stop_event.is_set():
-                try:
-                    item = await asyncio.to_thread(self._queue.get, True, 0.1)
-                except queue.Empty:
-                    continue
-                if item is None:
-                    break
-                pcm, sample_rate, channels = item
-                payload = {
-                    "type": "chunk",
-                    "sample_rate": sample_rate,
-                    "channels": channels,
-                    "pcm": base64.b64encode(pcm).decode("ascii"),
-                }
-                await ws.send(json.dumps(payload))
-                response = await ws.recv()
-                if isinstance(response, bytes):
-                    continue
-                if not response:
-                    continue
-                try:
-                    decoded = json.loads(response)
-                except json.JSONDecodeError:
-                    text = response.strip()
-                else:
-                    text = str(decoded.get("text", "")).strip()
-                if text:
-                    publish(text)
+        try:
+            async with websockets.connect(self._uri, open_timeout=self._connect_timeout) as ws:
+                while not stop_event.is_set():
+                    try:
+                        item = await asyncio.to_thread(self._queue.get, True, 0.1)
+                    except queue.Empty:
+                        continue
+                    if item is None:
+                        break
+                    pcm, sample_rate, channels = item
+                    payload = {
+                        "type": "chunk",
+                        "sample_rate": sample_rate,
+                        "channels": channels,
+                        "pcm": base64.b64encode(pcm).decode("ascii"),
+                    }
+                    await ws.send(json.dumps(payload))
+                    response = await ws.recv()
+                    if isinstance(response, bytes):
+                        continue
+                    if not response:
+                        continue
+                    try:
+                        decoded = json.loads(response)
+                    except json.JSONDecodeError:
+                        text = response.strip()
+                    else:
+                        text = str(decoded.get("text", "")).strip()
+                    if text:
+                        publish(text)
+        except (OSError, asyncio.TimeoutError, WebSocketException) as error:
+            raise BackendUnavailableError(
+                f"Failed to connect to ASR service at {self._uri}"
+            ) from error
 
     def run(self, publish: PublishCallback, stop_event: threading.Event) -> None:
         """Bridge the websocket transcription service to the publish callback."""
 
         loop = self._loop or asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        fallback_error: BackendUnavailableError | None = None
         try:
             loop.run_until_complete(self._transcribe(publish, stop_event))
+        except BackendUnavailableError as error:
+            fallback_error = error
         finally:
             pending = asyncio.all_tasks(loop=loop)
             for task in pending:
@@ -247,3 +290,11 @@ class ServiceASREarBackend(AudioAwareBackend):
                 loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.stop()
             loop.close()
+        if fallback_error is not None:
+            fallback = self._ensure_fallback()
+            _LOGGER.warning(
+                "ASR service unavailable at %s; using %s fallback",
+                self._uri,
+                fallback.__class__.__name__,
+            )
+            fallback.run(publish, stop_event)
