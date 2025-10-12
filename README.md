@@ -1,39 +1,60 @@
 # psyched
 
-Psyched is Pete Rizzlington’s modular robotics stack: a ROS 2 workspace, a collection of hardware-specific modules, and a web-based “pilot” console that lets you drive a robot from any browser. The repo doubles as a reference for building your own robot—swap out the hardware-specific bits, keep the orchestration.
+**Psyched** is a modular robotics stack: a ROS 2 workspace, a collection of hardware-specific modules, and a web-based **Pilot** console that lets you drive and monitor a robot from any browser.
+The repository doubles as a reference implementation for building your own robot—swap out the hardware modules, keep the orchestration.
+
+Pete itself is an embodied experiment in cognition and autonomy: an iRobot Create 1 base (**foot**) topped with sensors, a Raspberry Pi (**motherbrain**) running ROS 2 and coordination logic, and remote **forebrain** servers handling speech, perception, and memory.
+
+---
 
 ## Table of contents
 
-- [Project overview](#project-overview)
-- [Quick start](#quick-start)
-- [Repository layout](#repository-layout)
-- [Modules](#modules)
-	- [IMU](#imu)
-	- [Foot](#foot)
-- [Services](#services)
-	- [TTS](#tts)
-	- [Language](#language)
-	- [Graphs](#graphs)
-	- [Vectors](#vectors)
-	- [ASR](#asr)
-- [Development workflows](#development-workflows)
-        - [Python + ROS backend](#python--ros-backend)
-        - [Using the `psh` CLI](#using-the-psh-cli)
-        - [Workspace cleanup](#workspace-cleanup)
-- [Docker dev container](#docker-dev-container)
-- [Testing & validation](#testing--validation)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
-- [License](#license)
+* [Project overview](#project-overview)
+* [Quick start](#quick-start)
+* [Repository layout](#repository-layout)
+* [Modules](#modules)
+* [Services](#services)
+* [Development workflows](#development-workflows)
+* [Shell environment helpers](#shell-environment-helpers)
+* [Testing & validation](#testing--validation)
+* [Troubleshooting](#troubleshooting)
+* [Roadmap](#roadmap)
+* [Design principles](#design-principles)
+* [License](#license)
+
+---
 
 ## Project overview
 
 Psyched is organized around three ideas:
 
-1. **Composable modules.** Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`). Modules can surface UI controls inside the pilot console without modifying the core frontend.
-2. **Containerised services.** Cross-cutting capabilities (speech stacks, perception pipelines, etc.) live in `services/<name>` alongside a `service.toml` manifest and Docker Compose stack. They boot via `psh svc ...` and share helper assets under `tools/`.
+1. **Composable modules.**
+   Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`).
+   Modules can add UI panels to the Pilot console without changing its core frontend.
 
-Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orchestrator that provisions hosts, manages modules, and coordinates service lifecycles.
+2. **Containerized services.**
+   Cross-cutting capabilities (speech stacks, perception pipelines, databases) live in `services/<name>` with a `service.toml` manifest and Docker Compose stack.
+   They boot via `psh svc …` and share helper assets under `tools/`.
+
+3. **Unified orchestration.**
+   The Deno-based **`psh`** CLI provisions hosts, manages modules, and coordinates both ROS 2 and container lifecycles.
+   It abstracts away platform differences between **motherbrain** (the robot) and **forebrain** (remote servers).
+
+### System architecture
+
+| Layer           | Role                                                                          | Typical host         |
+| --------------- | ----------------------------------------------------------------------------- | -------------------- |
+| **motherbrain** | Primary ROS 2 host; manages sensors, actuators, and local modules.            | Raspberry Pi 4 / 5   |
+| **forebrain**   | Remote inference stack; runs ASR / TTS / LLM / memory services in containers. | GPU laptop or server |
+| **pilot**       | Browser-based cockpit for driving, diagnostics, and conversation.             | Any web client       |
+
+### Cognitive intent
+
+Beyond robotics, **Psyched** prototypes a modular cognition framework:
+sensors feed **ear** and **eye** modules; impressions move through **chat**, **voice**, and planned **memory** services (Neo4j + Qdrant) to form a persistent autobiographical record.
+In time, Pete’s “psyche” will be able to recall, reason, and act across sessions.
+
+---
 
 ## Quick start
 
@@ -42,206 +63,164 @@ Supporting utilities live under `tools/` and the `psh` CLI: a Deno-powered orche
 ```bash
 git clone https://github.com/dancxjo/psyched.git
 cd psyched
-./setup  # installs core dependencies, registers the Deno-based psh CLI, and provisions host prerequisites
+./setup
 ```
 
-`./setup` installs the tooling required to run `psh`, configures mDNS, prepares Deno, and runs `psh host setup` for the current machine. Host provisioning skips module and service lifecycle steps so you can finish configuration once your shell sources the ROS environment. When the script completes, open a new terminal (or `source ~/.bashrc`) before running `psh setup` to orchestrate `host`, `mod`, and `srv` provisioning (or fall back to `psh mod setup` / `psh srv setup` if you only need part of the workflow).
+The bootstrap script installs prerequisites, registers the Deno-based `psh` CLI, configures mDNS, and runs initial host provisioning.
+After it completes, open a new terminal or `source ~/.bashrc` before continuing.
 
-### 2. Provision additional machines (optional)
+### 2. Provision hosts
 
 ```bash
 psh host setup motherbrain
 psh host setup forebrain
 ```
 
-Each host file lists shell scripts under `tools/bootstrap/` (or `tools/provision/`) to install ROS 2, CUDA, Docker, and Deno.
-
-Host configs can also declare module directives so provisioning automatically installs and launches the right services. `depends_on` fields let modules and services wait for other tasks – installers (`"docker"`), other services (`"service:ros2"`), or even module launches (`"module:pilot"`). For example:
-
-```json
-{
-  "host": {
-    "name": "motherbrain",
-    "installers": ["ros2", "docker"],
-    "modules": ["imu", "foot"],
-    "services": ["tts", "ros2"]
-  },
-  "modules": {
-    "imu": {
-      "launch": true
-    },
-    "foot": {
-      "launch": true,
-      "depends_on": ["service:ros2"]
-    }
-  },
-  "services": {
-    "tts": {
-      "setup": true,
-      "up": true
-    },
-    "ros2": {
-      "up": true,
-      "depends_on": ["docker"]
-    }
-  }
-}
-```
-
-When you add `--include-modules` or `--include-services`, `psh host setup` will run the corresponding lifecycle commands (`psh mod setup <name>` or `psh svc setup <name>`) and optionally launch/start the targets. Without those flags the command only runs installers and scripts, printing reminders to finish provisioning later.
-
-ROS 2 domain settings are managed globally via `config/ros_domain_id` and are applied automatically when modules and services run.
+Each host file under `hosts/` declares its installers (ROS 2, Docker, CUDA, Deno, etc.), modules, and dependent services.
+Provisioning automatically applies those directives and sets the ROS 2 domain ID from `config/ros_domain_id`.
 
 ### 3. Bring modules online
 
 ```bash
-psh mod setup pilot   # prepare dependencies
-psh up pilot          # start the cockpit (websocket bridge + HTTP server)
+psh mod setup pilot
+psh up pilot
 ```
 
-Add other modules with `psh mod setup <name>` followed by `psh up <name>`. Use `psh down <name>` to stop a module or `psh down` to stop everything that is running. When you're ready for the full stack, `psh up` without arguments launches every module and service.
+Then visit **http://<host>:8088/** to access the cockpit (HTTP + WebSocket bridge).
+Launch other modules or services using `psh up <name>`; stop them with `psh down <name>`.
 
-Once the cockpit is running, browse to `http://<host>:8088/` to access the dashboard. The same server exposes the WebSocket bridge under `/api/topics/bridge`.
-
-## Docker dev container
-
-Prefer to run everything inside a ROS 2 container for tests? A ready‑to‑use dev image and Compose stack are included. Pick a hostname (matching `hosts/<name>.json`), build, and start:
-
-```bash
-export PSY_HOSTNAME=motherbrain   # or forebrain
-docker compose -f docker/compose.yml up --build
-```
-
-The container sets its hostname so `psh` applies the selected host profile, runs `./setup` automatically for an informative provisioning flow, and exposes port `8088` (unified cockpit server for both UI and websocket). See `docs/docker.md` for details.
+---
 
 ## Repository layout
 
 ```
-├── modules/                       # Module definitions (pilot, foot, imu, …)
-│   └── <name>/
-│       ├── module.toml            # Manifest consumed by psh
-│       └── packages/              # ROS/Python packages linked into work/src/
-├── services/                      # Containerised microservices (tts, language, graphs, vectors, …)
-│   └── <name>/
-│       ├── service.toml           # Manifest consumed by psh svc
-│       └── docker-compose.yml     # Compose stack plus supporting assets
-├── tools/                         # Host bootstrap & provisioning scripts
-│   └── psh/                       # Deno CLI for provisioning + module orchestration
-├── hosts/                         # Host configuration JSON/YAML files
-├── setup                          # Top-level bootstrap script (see above)
-└── work/                          # Colcon workspace (src/, build/, install/, log/) created by tools/clean_workspace
+├── modules/         # ROS or Python modules (pilot, foot, imu, …)
+├── services/        # Containerized microservices (tts, language, graphs, vectors, …)
+├── tools/           # Provisioning scripts + Deno-based psh CLI
+├── hosts/           # Host configuration JSON/YAML profiles
+├── config/          # Global settings (ROS domain, etc.)
+├── setup            # Top-level bootstrap script
+└── work/            # Colcon workspace (src/, build/, install/, log/)
 ```
+
+---
 
 ## Modules
 
-### IMU
+| Module                                   | Purpose                                                                                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **IMU**                                  | Interfaces with an MPU-6050 sensor via [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver); provides orientation data and optional Pilot UI widget. |
+| **Foot**                                 | Controls the iRobot Create 1 drive base using upstream ROS 2 packages (`create_robot`, `libcreate`).                                                                       |
+| **Pilot**                                | Unified cockpit webserver and topic bridge.                                                                                                                                |
+| *(planned)* **Ear**, **Chat**, **Voice** | Speech perception and expression modules built atop ASR / LLM / TTS services.                                                                                              |
 
-Hardware module for an MPU6050 IMU. The module pulls in [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver) and exposes pilot UI components under `modules/imu/pilot/`. Launch it with `psh up imu` once the hardware is attached.
+Launch any module with `psh up <module>` once configured.
 
-### Foot
-
-Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`). Launch via `psh up foot`.
-Integrates the iRobot Create 1 drive base. The module checks out upstream ROS packages (`create_robot`, `libcreate`). Launch via `psh up foot`.
+---
 
 ## Services
 
-Services complement modules by packaging long-running capabilities (speech, perception, data pipelines) as Docker Compose stacks under `services/<name>`. Each service has a `service.toml` manifest that `psh svc ...` understands. The manifest points at a Compose file plus any setup scripts required to fetch assets such as model checkpoints.
+Containerized long-running capabilities under `services/<name>`:
 
-Use the `psh svc` subcommands to interact with services:
+| Service      | Description                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| **tts**      | 🐸 Coqui TTS websocket on `5002`; run `psh svc setup tts` to fetch models.                  |
+| **language** | [Ollama](https://ollama.com/) LLM runtime (GPU-enabled) on `11434`.                         |
+| **graphs**   | [Neo4j](https://neo4j.com/) graph DB for relational memory.                                 |
+| **vectors**  | [Qdrant](https://qdrant.tech/) vector DB for embeddings.                                    |
+| **asr**      | Custom Rust websocket server using [`whisper-rs`](https://github.com/tazz4843/whisper-rs`). |
+| **ros2**     | Dev-container shell with mounted workspace for isolated ROS builds.                         |
 
-- `psh svc setup <service>` – run any declarative setup scripts (for example, download models)
-- `psh up <service>` / `psh down <service>` – start or stop the Compose stack (add `--service` if a module shares the name). The legacy `psh svc up|down` commands continue to work.
-- `psh svc list` – inspect available services and their status
-- `psh svc shell <service> [command]` – ensure the Compose stack is up then open an interactive shell inside the container (defaults to `bash`)
+Start or stop them with `psh up <service>` / `psh down <service>`.
 
-### TTS
-
-`services/tts` hosts a streaming text-to-speech websocket based on 🐸Coqui TTS. The Compose stack builds a slim Python image (`services/tts/docker/tts-websocket.Dockerfile`) that runs `tools/tts_websocket/websocket_server.py` and exposes port `5002`.
-
-Model assets live under `services/tts/models` and are mounted into the container at `/models`. Run `psh svc setup tts` (or execute `services/tts/setup.sh` manually) to pull the default English voice. Once prepared, start the service with `psh up tts` (or `psh svc up tts`) and connect clients to `ws://<host>:5002/tts`.
-
-### Language
-
-`services/language` provides a GPU-enabled [Ollama](https://ollama.com/) runtime. The Compose stack binds Ollama's data directory from `/usr/share/ollama/.ollama` so models persist across container restarts and exposes the standard API on port `11434`.
-
-Before starting the stack, ensure `/usr/share/ollama/.ollama` exists on the host (create it and grant write access to the Docker daemon user if needed). Bring the service online with `psh up language` (or `psh svc up language`); stop it via `psh down language`. GPU access requires Docker's NVIDIA runtime—verify that `nvidia-smi` works on the host and the Docker daemon has `default-runtime=nvidia` or an equivalent device mapping configured. After the first run, load desired models inside the container using `ollama run <model>` or the HTTP API.
-
-### Graphs
-
-`services/graphs` runs a standalone [Neo4j](https://neo4j.com/) graph database. Ports `7474` (HTTP UI) and `7687` (Bolt) are exposed, and named volumes back `/data`, `/logs`, `/import`, and `/plugins` to persist graph state between restarts. Start and stop it with `psh up graphs` / `psh down graphs` (or the legacy `psh svc up|down graphs`). The `NEO4J_AUTH` environment variable defaults to `neo4j/password`; override this in production by editing the Compose file or passing environment overrides in your host configuration.
-
-### Vectors
-
-`services/vectors` offers a [Qdrant](https://qdrant.tech/) vector database useful for retrieval-augmented generation pipelines. It publishes HTTP and gRPC endpoints on `6333` and `6334` respectively and persists storage under the `vectors_data` named volume. Use `psh up vectors` to launch it and `psh down vectors` to stop (legacy `psh svc up|down vectors` still works). Populate the collection schema via Qdrant's REST API, the CLI, or any of the official client libraries.
-
-### ASR
-
-`services/asr` exposes a custom Rust websocket server that streams speech-to-text using [`whisper-rs`](https://github.com/tazz4843/whisper-rs). Send 16-bit little-endian PCM frames (default `16 kHz`) to `/asr`; the service buffers audio, emits partial transcripts with token-level timings as the model converges, and publishes finalised chunks alongside a WAV payload once segments stabilise. Mount pretrained Whisper models into `services/asr/models` (run `psh svc setup asr` to download defaults) and bring the stack online with `psh up asr`.
-
-### ROS 2 (container shell)
-
-`services/ros2` ships a prebuilt [osrf/ros:humble-desktop](https://hub.docker.com/r/osrf/ros/) workspace with the repository mounted at `/workspace/psyched`. Start the stack with `psh up ros2` (or `psh svc up ros2`) and drop into the container using `psh svc shell ros2`. By default the shell runs `/ros_entrypoint.sh bash`, giving you a ROS-ready prompt without touching the host install. ROS 2 domain IDs inherit from `config/ros_domain_id`; override temporarily by exporting `PSYCHED_ROS_DOMAIN_ID` (or `ROS_DOMAIN_ID`) before launching. Set `ROS_DISTRO` to select a different ROS distribution.
+---
 
 ## Development workflows
 
-### Workspace cleanup
-
-Use `psh clean` (or run `tools/clean_workspace` directly) to stop active modules and services before recreating the ROS workspace from scratch. The helper wipes `work/` and leaves an empty `src/` directory so disabled modules stay out of the build graph; rerun `psh mod setup <module>` afterwards to link the packages you need. Pass `--skip-modules`, `--skip-services`, or `--skip-workspace` to tailor the reset when you only need part of the cleanup.
-
 ### Python + ROS backend
 
-- Build the cockpit bridge: `colcon build --packages-select pilot`
-- Run unit tests: `colcon test --packages-select pilot`
-- Launch the websocket bridge: `ros2 run pilot cockpit`
-
-ROS packages live under `modules/*/packages/` and are symlinked into `work/src/` during `psh mod setup`. Use `psh build` to compile ROS nodes without invoking `colcon` directly:
-
 ```bash
-psh build                 # builds the entire workspace
-psh build mpu6050driver   # optionally target specific packages
+psh build            # builds all packages
+psh build pilot      # or target one
 source install/setup.bash
+ros2 run pilot cockpit
 ```
 
 ### Using the `psh` CLI
 
-`psh` wraps common workflows:
+`psh` unifies module and service lifecycles:
 
-- `psh host setup [host]` – execute the bootstrap scripts for the detected host or the named profile in `hosts/<host>.json`
-- `psh setup` – provision the host, modules, and services in one shot
-- `psh teardown` – tear down modules/services and reset the ROS workspace
-- `psh clean` – aggressively tear down modules/services and rebuild the ROS workspace in one step
-- `psh mod list` – inspect module status
-- `psh mod setup|teardown [module]` – manage symlinks + prep work
-- `psh up|down [target]` – start/stop modules and services (use `--service` to disambiguate names shared with modules)
-- `psh srv list` – inspect containerised services and their status
-- `psh srv setup|up|down [service]` – prepare assets (model downloads, etc.) and manage Docker Compose stacks
-- `psh sys setup|teardown|enable|disable|up|down <module>` – install and control user-level systemd units for module launch scripts
+```bash
+psh setup            # full host + module + service provisioning
+psh mod list         # view module status
+psh up ear voice     # start modules
+psh down             # stop all
+psh sys enable pilot # register systemd units
+```
+
+### Workspace cleanup
+
+`psh clean` tears down everything and rebuilds the ROS 2 workspace.
+It wipes `work/`, re-creates `src/`, and relinks active modules.
+
+---
 
 ## Shell environment helpers
 
-- `env/psyched_env.sh` centralises workspace variables and ROS fallbacks. Source it in automation and call `psyched::activate` to ensure the right setup script is loaded.
-- The bootstrapper injects a `psyched` function into `.bashrc` that sources the workspace (or your ROS distro when no workspace exists). Run `psyched --workspace-only` or `psyched --ros-only` to force a mode. Set `PSYCHED_AUTO_ACTIVATE=0` before login to skip the automatic call.
+`env/psyched_env.sh` centralizes environment variables and provides helper functions such as `psyched::activate`.
+A lightweight `psyched` function in `.bashrc` ensures correct sourcing on login.
+
+---
 
 ## Testing & validation
 
-- **ROS nodes:** Build via `colcon build` then run `ros2 test` or module-specific launch files as needed.
+* Build ROS packages via `colcon build`.
+* Run unit tests with `colcon test`.
+* Manual integration tests through Pilot dashboard.
 
-CI is currently manual; prefer running the commands above before pushing.
+---
 
 ## Troubleshooting
 
-- Missing ROS dependencies: ensure `ROS_DISTRO` is exported (defaults to `kilted` in scripts). Source `env/psyched_env.sh` and run `psyched --ros-only` after changing the distro.
-- Cockpit server unreachable: verify `ros2 run pilot cockpit` logs "unified server listening on http://..." and that port `8088` is open on the host.
-- Pilot frontend cannot type-check: delete `modules/pilot/frontend/deno.lock` and re-run `deno task cache` if your Deno version is older than the lockfile format.
-- Module assets not visible in the UI: re-run `psh mod setup <module>` to regenerate symlinks.
+| Symptom                  | Fix                                                                       |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Missing ROS dependencies | Ensure `$ROS_DISTRO` is set (default `kilted`). Run `psyched --ros-only`. |
+| Cockpit unreachable      | Confirm `ros2 run pilot cockpit` prints its URL and port 8088 is open.    |
+| Frontend type errors     | Delete `modules/pilot/frontend/deno.lock` and rerun `deno task cache`.    |
+
+---
 
 ## Roadmap
 
-- Expand cockpit topics beyond `/conversation`
-- Ship IMU + drive base dashboards in the pilot UI
-- Add ear/chat/voice modules (see `modules/` placeholders)
-- Automate CI for cargo, deno, and colcon builds
+* Expand Pilot topics beyond `/conversation`.
+* Add full **ear/chat/voice** stack.
+* Integrate Neo4j + Qdrant memory daemons.
+* CI for Cargo + Deno + Colcon builds.
+* Declarative `pete.toml` hardware manifest for auto-introspection.
+
+---
+
+## Design principles
+
+Psyched was created collaboratively between humans and AI agents.
+Development has involved **Codex**, **Copilot**, **ChatGPT**, and other large-language models as active contributors—writing, refactoring, and documenting much of the code you see here.
+This experiment in *co-development* treats the software itself as an emergent conversation between toolmakers, machines, and meaning.
+
+Core principles:
+
+1. **Transparency** – Every action can be inspected: modules declare their lifecycle, services their containers, hosts their profiles.
+2. **Composability** – Each part stands alone; orchestration glues them into a coherent body.
+3. **Embodiment** – Code runs on real hardware; cognition is grounded in sensors and motion.
+4. **Narrative continuity** – Logs, memory, and dialogue are all one timeline.
+5. **Collaboration** – Psyched acknowledges its mixed authorship: *a mind assembled in dialogue.*
+
+---
 
 ## License
 
-Licensed under the MIT License. See [`LICENSE`](./LICENSE).
+Licensed under the **MIT License**.
+See [`LICENSE`](./LICENSE).
+
+---
+
+Would you like me to generate a **short tagline + shields-style header block** (e.g. badges for ROS 2 | Deno | Docker | MIT License) for the very top before the title? It can make the GitHub page pop a bit more.
