@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, MutableMapping, Optional
+from typing import Any, Dict, List, MutableMapping, Optional, Sequence
 
 from aiohttp import web
 
@@ -43,8 +45,99 @@ class PilotSettings:
         return discover_active_modules(self.load_config())
 
 
+@dataclass(slots=True)
+class PilotOperation:
+    """Definition for an operator-triggered cockpit command.
+
+    Parameters
+    ----------
+    identifier:
+        Unique key used by the HTTP API and frontend to reference the operation.
+    label:
+        Human-readable description surfaced to the cockpit operator.
+    command:
+        Sequence of arguments executed from the repository root when triggered.
+    description:
+        Additional context shown to the operator alongside the trigger button.
+    """
+
+    identifier: str
+    label: str
+    command: tuple[str, ...]
+    description: str
+
+    def to_dict(self) -> Dict[str, object]:
+        """Return a JSON-serialisable payload describing the operation."""
+
+        return {
+            "id": self.identifier,
+            "label": self.label,
+            "description": self.description,
+            "command": list(self.command),
+            "command_preview": " ".join(self.command),
+        }
+
+
+@dataclass(slots=True)
+class OperationResult:
+    """Result of executing a cockpit-triggered shell command."""
+
+    exit_code: int
+    stdout: str
+    stderr: str
+
+
 PILOT_SETTINGS_KEY: web.AppKey[PilotSettings] = web.AppKey("pilot_settings")
 MODULE_CATALOG_KEY: web.AppKey[ModuleCatalog] = web.AppKey("module_catalog")
+
+PILOT_OPERATIONS: tuple[PilotOperation, ...] = (
+    PilotOperation(
+        identifier="gut-pull",
+        label="Gut pull",
+        command=("gut", "pull"),
+        description="Synchronise Pete's gut instrumentation by running `gut pull`.",
+    ),
+    PilotOperation(
+        identifier="psh-setup",
+        label="psh setup",
+        command=("psh", "setup"),
+        description="Provision hosts, modules, and services using `psh setup`.",
+    ),
+    PilotOperation(
+        identifier="psh-up",
+        label="psh up",
+        command=("psh", "up"),
+        description="Launch the default module and service stack via `psh up`.",
+    ),
+    PilotOperation(
+        identifier="psh-down",
+        label="psh down",
+        command=("psh", "down"),
+        description="Stop running modules and services with `psh down`.",
+    ),
+    PilotOperation(
+        identifier="psh-teardown",
+        label="psh teardown",
+        command=("psh", "teardown"),
+        description="Tear down modules, services, and workspace using `psh teardown`.",
+    ),
+    PilotOperation(
+        identifier="psh-clean",
+        label="psh clean",
+        command=("psh", "clean"),
+        description="Reset modules and workspace artefacts with `psh clean`.",
+    ),
+    PilotOperation(
+        identifier="psh-build",
+        label="psh build",
+        command=("psh", "build"),
+        description="Invoke `psh build` to run colcon for active overlays.",
+    ),
+)
+
+_OPERATION_INDEX: Dict[str, PilotOperation] = {
+    operation.identifier: operation for operation in PILOT_OPERATIONS
+}
 
 
 def create_app(*, settings: PilotSettings) -> web.Application:
@@ -63,6 +156,8 @@ def create_app(*, settings: PilotSettings) -> web.Application:
     app["module_catalog"] = catalog
 
     app.router.add_get("/api/modules", _modules_handler)
+    app.router.add_get("/api/operations", _operations_handler)
+    app.router.add_post("/api/operations", _operations_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -86,6 +181,81 @@ async def _modules_handler(request: web.Request) -> web.Response:
         },
     }
     return web.json_response(payload)
+
+
+async def _operations_handler(request: web.Request) -> web.Response:
+    """Expose and invoke cockpit-triggered maintenance commands."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+
+    if request.method == "GET":
+        operations = [operation.to_dict() for operation in PILOT_OPERATIONS]
+        return web.json_response({"operations": operations})
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError as exc:  # pragma: no cover - aiohttp handles parsing
+        raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
+
+    operation_id = str(body.get("operation", "")).strip()
+    if not operation_id:
+        raise web.HTTPBadRequest(text="Field 'operation' is required")
+
+    operation = _OPERATION_INDEX.get(operation_id)
+    if operation is None:
+        raise web.HTTPBadRequest(text=f"Unknown operation: {operation_id}")
+
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Repository root is not configured")
+
+    try:
+        result = await _run_command(operation.command, cwd=repo_root)
+    except FileNotFoundError:
+        message = f"Executable not found: {operation.command[0]}"
+        _LOGGER.error("%s", message)
+        payload = {
+            "operation": operation.identifier,
+            "command": list(operation.command),
+            "status": "error",
+            "exit_code": 127,
+            "stdout": "",
+            "stderr": message,
+        }
+        return web.json_response(payload, status=500)
+
+    status = "ok" if result.exit_code == 0 else "error"
+    payload = {
+        "operation": operation.identifier,
+        "command": list(operation.command),
+        "status": status,
+        "exit_code": result.exit_code,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+    return web.json_response(payload)
+
+
+async def _run_command(command: Sequence[str], *, cwd: Path) -> OperationResult:
+    """Execute *command* from *cwd* and capture stdout/stderr streams."""
+
+    if not command:
+        raise ValueError("command must contain at least one argument")
+
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=str(cwd),
+    )
+    stdout_bytes, stderr_bytes = await process.communicate()
+    stdout_text = stdout_bytes.decode("utf-8", "replace")
+    stderr_text = stderr_bytes.decode("utf-8", "replace")
+    exit_code = int(process.returncode or 0)
+    _LOGGER.info(
+        "Operation %s finished with exit code %s", " ".join(command), exit_code
+    )
+    return OperationResult(exit_code=exit_code, stdout=stdout_text, stderr=stderr_text)
 
 
 def _normalize_parts(tail: str) -> List[str]:

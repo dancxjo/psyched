@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
+import os
 from pathlib import Path
 import sys
+import textwrap
 from typing import Any, Iterator
 
 import pytest
@@ -56,6 +59,20 @@ def test_modules_endpoint_reports_active_dashboards(config_file: Path, tmp_path:
 
 def test_static_overlay_serves_module_assets(config_file: Path) -> None:
     asyncio.run(_exercise_static_overlay(config_file))
+
+
+def test_operations_endpoint_lists_available_commands(
+    config_file: Path, tmp_path: Path
+) -> None:
+    asyncio.run(_exercise_operations_catalog(config_file, tmp_path))
+
+
+def test_operations_endpoint_executes_known_commands(
+    config_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asyncio.run(
+        _exercise_operation_execution(config_file, tmp_path, monkeypatch)
+    )
 
 
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
@@ -160,6 +177,119 @@ class _TestClient:
         assert self._session and self._address
         return await self._session.get(self._address + path)
 
+    async def post(self, path: str, *, json: Any) -> web.ClientResponse:
+        assert self._session and self._address
+        return await self._session.post(self._address + path, json=json)
+
 
 def _run_app(app: web.Application) -> _TestClient:
     return _TestClient(app)
+
+
+async def _exercise_operations_catalog(
+    config_file: Path, tmp_path: Path
+) -> None:
+    repo_root = tmp_path / "repo"
+    frontend_root = tmp_path / "frontend"
+    modules_root = repo_root / "modules"
+    frontend_root.mkdir(parents=True, exist_ok=True)
+    modules_root.mkdir(parents=True, exist_ok=True)
+
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=frontend_root,
+        modules_root=modules_root,
+        repo_root=repo_root,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get("/api/operations")
+        assert response.status == 200
+        payload = await response.json()
+
+    operations = {entry["id"]: entry for entry in payload["operations"]}
+    assert "gut-pull" in operations
+    assert "psh-build" in operations
+    gut = operations["gut-pull"]
+    assert gut["command"] == ["gut", "pull"]
+    assert operations["psh-build"]["command"] == ["psh", "build"]
+
+
+async def _exercise_operation_execution(
+    config_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_root = tmp_path / "repo"
+    frontend_root = tmp_path / "frontend"
+    modules_root = repo_root / "modules"
+    frontend_root.mkdir(parents=True, exist_ok=True)
+    modules_root.mkdir(parents=True, exist_ok=True)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log_file = repo_root / "operation-log.jsonl"
+
+    _write_stub_command(bin_dir / "gut", log_file)
+    _write_stub_command(bin_dir / "psh", log_file)
+
+    original_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{bin_dir}:{original_path}")
+
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=frontend_root,
+        modules_root=modules_root,
+        repo_root=repo_root,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        gut_response = await client.post(
+            "/api/operations", json={"operation": "gut-pull"}
+        )
+        assert gut_response.status == 200
+        gut_payload = await gut_response.json()
+        assert gut_payload["operation"] == "gut-pull"
+        assert gut_payload["status"] == "ok", gut_payload
+        assert gut_payload["exit_code"] == 0
+
+        build_response = await client.post(
+            "/api/operations", json={"operation": "psh-build"}
+        )
+        assert build_response.status == 200
+        build_payload = await build_response.json()
+        assert build_payload["operation"] == "psh-build"
+        assert build_payload["status"] == "ok", build_payload
+        assert build_payload["exit_code"] == 0
+
+    entries = [
+        json.loads(line)
+        for line in log_file.read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(entry["argv"][0].endswith("gut") for entry in entries)
+    assert any(entry["argv"][0].endswith("psh") for entry in entries)
+    for entry in entries:
+        assert entry["cwd"] == str(repo_root)
+
+
+def _write_stub_command(path: Path, log_file: Path) -> None:
+    log_literal = json.dumps(str(log_file))
+    script = textwrap.dedent(
+        f"""
+        #!/usr/bin/env python3
+        import json
+        import os
+        import sys
+
+        entry = {{"argv": sys.argv, "cwd": os.getcwd()}}
+        with open({log_literal}, "a", encoding="utf-8") as fh:
+            json.dump(entry, fh)
+            fh.write("\\n")
+        """
+    ).strip()
+    path.write_text(script + "\n", encoding="utf-8")
+    path.chmod(0o755)

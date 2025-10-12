@@ -1,5 +1,7 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
+import './pilot-operations.js';
+
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
   foot: 'foot-dashboard',
@@ -102,6 +104,13 @@ class PilotApp extends LitElement {
   }
 
   render() {
+    return html`
+      <pilot-operations-panel></pilot-operations-panel>
+      ${this.renderModuleContent()}
+    `;
+  }
+
+  renderModuleContent() {
     if (this.loading) {
       return html`<section class="pilot-loading">Loading module dashboards…</section>`;
     }
