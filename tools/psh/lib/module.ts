@@ -201,7 +201,7 @@ export function formatExitSummary(
   const summary = status.success
     ? `[${module}] exited cleanly (code ${status.code ?? 0})`
     : `[${module}] exited with code ${status.code ?? "unknown"}` +
-      (status.signal ? ` (signal ${status.signal})` : "");
+    (status.signal ? ` (signal ${status.signal})` : "");
   return status.success ? colors.yellow(summary) : colors.red(summary);
 }
 
@@ -443,11 +443,23 @@ export async function resolveModuleScript(
 }
 
 function locatePilotFrontend(): string {
-  const target = join(repoRoot(), "modules", "pilot", "frontend");
-  if (!pathExists(target)) {
-    throw new Error("pilot frontend not found; run within repository");
+  const primary = join(repoRoot(), "modules", "pilot", "frontend");
+  if (pathExists(primary)) {
+    return primary;
   }
-  return target;
+  const fallback = join(
+    repoRoot(),
+    "modules",
+    "pilot",
+    "packages",
+    "pilot",
+    "pilot",
+    "frontend",
+  );
+  if (pathExists(fallback)) {
+    return fallback;
+  }
+  throw new Error("pilot frontend not found; run within repository");
 }
 
 function link(target: string, destination: string): void {

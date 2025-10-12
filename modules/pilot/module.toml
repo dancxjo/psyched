@@ -6,7 +6,7 @@ apt = [
 pip = []
 launch = "modules/pilot/launch_unit.sh"
 shutdown = "modules/pilot/shutdown_unit.sh"
-pilot_control = "modules/pilot/frontend/index.html"
+pilot_control = "modules/pilot/packages/pilot/pilot/frontend/index.html"
 
 [unit.pilot.ros]
 workspace = "."
@@ -15,8 +15,7 @@ packages = ["pilot"]
 [pilot]
 display_name = "Pilot"
 description = "Teleoperation dashboard and ROS 2 bridge"
-mod_commands = ["setup", "build", "launch", "restart", "shutdown"]
-system_commands = ["start", "stop", "restart", "status"]
+mod_commands = ["setup", "up", "down", "teardown"]
 regimes = ["system"]
 
 [[pilot.topics]]

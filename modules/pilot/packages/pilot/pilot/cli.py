@@ -49,8 +49,10 @@ def resolve_host_config(explicit: Optional[Path]) -> Path:
 def resolve_frontend_root(explicit: Optional[Path]) -> Path:
     """Return a usable frontend directory or abort if none is available."""
 
-    if explicit and explicit.exists() and explicit.is_dir():
-        return explicit.resolve()
+    if explicit:
+        if explicit.exists() and explicit.is_dir():
+            return explicit.resolve()
+        raise SystemExit("Frontend root must reference a directory")
 
     env_path = os.environ.get("PILOT_FRONTEND_ROOT")
     if env_path:
@@ -58,10 +60,20 @@ def resolve_frontend_root(explicit: Optional[Path]) -> Path:
         if path.exists() and path.is_dir():
             return path.resolve()
 
+    repo_dir_env = os.environ.get("REPO_DIR")
+    if repo_dir_env:
+        repo_frontend = Path(repo_dir_env) / "modules" / "pilot" / "packages" / "pilot" / "pilot" / "frontend"
+        if repo_frontend.exists() and repo_frontend.is_dir():
+            return repo_frontend.resolve()
+
+    package_frontend = Path(__file__).resolve().parent / "frontend"
+    if package_frontend.exists() and package_frontend.is_dir():
+        return package_frontend.resolve()
+
     repo_dir = Path(os.environ.get("REPO_DIR", Path.cwd()))
-    fallback = repo_dir / "modules" / "pilot" / "frontend"
-    if fallback.exists() and fallback.is_dir():
-        return fallback.resolve()
+    repo_frontend = repo_dir / "modules" / "pilot" / "packages" / "pilot" / "pilot" / "frontend"
+    if repo_frontend.exists() and repo_frontend.is_dir():
+        return repo_frontend.resolve()
 
     raise SystemExit("Unable to locate cockpit frontend assets; set --frontend-root or PILOT_FRONTEND_ROOT")
 

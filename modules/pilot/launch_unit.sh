@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
+export REPO_DIR
 HOST_SHORT="${HOST:-$(hostname -s)}"
 
 if [[ -f "${REPO_DIR}/work/install/setup.bash" ]]; then
@@ -24,15 +25,15 @@ if [[ -z "${CONFIG_CANDIDATE}" ]]; then
   done
 fi
 
-FRONTEND_ROOT="${PILOT_FRONTEND_ROOT:-${REPO_DIR}/modules/pilot/frontend}"
+FRONTEND_ROOT="${PILOT_FRONTEND_ROOT:-${REPO_DIR}/modules/pilot/packages/pilot/pilot/frontend}"
+export PILOT_FRONTEND_ROOT="${FRONTEND_ROOT}"
 if [[ ! -d "${FRONTEND_ROOT}" ]]; then
-  ALT="${REPO_DIR}/modules/pilot/packages/pilot/pilot/frontend"
-  if [[ -d "${ALT}" ]]; then
-    FRONTEND_ROOT="${ALT}"
-  else
-    echo "ERROR: Could not find cockpit frontend assets." >&2
-    exit 1
-  fi
+  echo "ERROR: Could not find cockpit frontend assets." >&2
+  exit 1
+fi
+
+if [[ -z "${PILOT_MODULES_ROOT:-}" ]]; then
+  export PILOT_MODULES_ROOT="${REPO_DIR}/modules"
 fi
 
 ARGS=("--listen-host" "${PILOT_LISTEN_HOST:-0.0.0.0}" "--listen-port" "${PILOT_LISTEN_PORT:-8088}")

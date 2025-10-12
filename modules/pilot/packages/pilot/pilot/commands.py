@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 from typing import Iterable, List, Mapping
+import shutil
 
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
@@ -48,47 +49,52 @@ class CommandExecutor:
     ) -> Mapping[str, object]:
         """Execute a psh command and return structured output."""
 
-        args = list(args or [])
-        deno = os.environ.get("DENO", "deno")
-        psh_path = self._psh_entrypoint()
+        args = [str(item) for item in (args or [])]
 
         scope_normalized = (scope or "").strip().lower()
         module_arg: List[str] = [module] if module else []
 
-        if scope_normalized == "mod":
-            command_args = [
-                "run",
-                "-A",
-                str(psh_path),
-                "mod",
-                *module_arg,
-                command,
-                *args,
-            ]
-        elif scope_normalized == "sys":
-            command_args = [
-                "run",
-                "-A",
-                str(psh_path),
-                "sys",
-                command,
-                *module_arg,
-                *args,
-            ]
+        psh_cli = os.environ.get("PSH_CLI")
+        resolved_cli = None
+        if psh_cli:
+            resolved_cli = shutil.which(psh_cli)
+            if resolved_cli is None:
+                candidate = Path(psh_cli)
+                if candidate.exists():
+                    resolved_cli = str(candidate)
         else:
-            command_args = [
-                "run",
-                "-A",
-                str(psh_path),
-                scope,
-                *module_arg,
-                command,
-                *args,
-            ]
+            resolved_cli = shutil.which("psh")
+        use_cli = resolved_cli is not None
+
+        if use_cli:
+            command_args: List[str] = [resolved_cli]  # type: ignore[list-item]
+        else:
+            deno = os.environ.get("DENO", "deno")
+            psh_path = self._psh_entrypoint()
+            command_args = ["run", "-A", str(psh_path)]
+
+        if scope_normalized == "mod":
+            command_args.extend(["mod", command, *module_arg, *args])
+        elif scope_normalized == "sys":
+            command_args.extend(["sys", command, *module_arg, *args])
+        else:
+            scoped = (scope or "").strip()
+            if scoped:
+                command_args.append(scoped)
+            command_args.extend(module_arg)
+            command_args.append(command)
+            command_args.extend(args)
+
+        if use_cli:
+            executable = command_args[0]
+            run_args = command_args[1:]
+        else:
+            executable = os.environ.get("DENO", "deno")
+            run_args = command_args
 
         process = await asyncio.create_subprocess_exec(
-            deno,
-            *command_args,
+            executable,
+            *run_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(self._repo_root),

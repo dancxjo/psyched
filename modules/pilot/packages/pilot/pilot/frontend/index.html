@@ -12,9 +12,6 @@
   </head>
 
   <body x-data="pilotNav()" x-init="init()" class="lcars-body">
-    <!-- Advanced mode toggle (no JS): checking #advanced-mode enables advanced UI elements -->
-    <input type="checkbox" id="advanced-mode" aria-hidden="false" />
-    <label for="advanced-mode" class="advanced-toggle" title="Toggle advanced view" aria-hidden="false">⚙</label>
     <aside class="lcars-nav">
       <div class="nav-title">PSYCHED PILOT</div>
       <template x-for="section in sections" :key="section.id">

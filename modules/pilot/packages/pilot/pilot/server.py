@@ -274,8 +274,8 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
             "regimes": [],
             "topics": [],
             "commands": {
-                "mod": ["setup"],
-                "system": ["generate", "enable", "disable", "start", "stop", "restart", "debug"],
+                "mod": ["setup", "up", "down", "teardown"],
+                "system": [],
             },
             "has_pilot": False,
         }

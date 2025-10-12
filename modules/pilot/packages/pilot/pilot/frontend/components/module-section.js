@@ -100,7 +100,7 @@ class PilotModuleSection extends LitElement {
     return nothing;
   }
 
-  renderCommands(scope, commands) {
+  renderCommands(commands) {
     if (!commands?.length) {
       return html`<div class="button-row empty">No commands</div>`;
     }
@@ -112,7 +112,7 @@ class PilotModuleSection extends LitElement {
               type="button"
               class="control-button"
               data-variant="ghost"
-              @click=${() => this.command(scope, name)}
+              @click=${() => this.command('mod', name)}
             >
               ${name}
             </button>
@@ -284,20 +284,34 @@ class PilotModuleSection extends LitElement {
             ${this.module.description ? html`<p>${this.module.description}</p>` : nothing}
             ${this.renderRegimeTags()}
           </div>
-          <div class="command-groups">
-            ${this.renderPilotLink()}
-            <div class="command-set">
-              <h3>Module Commands</h3>
-              ${this.renderCommands('mod', this.module.commands?.mod ?? [])}
-            </div>
-            <div class="command-set">
-              <h3>System Commands</h3>
-              ${this.renderCommands('sys', this.module.commands?.system ?? [])}
-            </div>
-          </div>
+          ${this.renderCommandGroups()}
         </header>
         ${this.renderTopics()}
       </section>
+    `;
+  }
+
+  renderCommandGroups() {
+    const hasPilotLink = Boolean(this.module?.dashboard_url || this.module?.has_pilot);
+    const pilotLink = hasPilotLink ? this.renderPilotLink() : nothing;
+    const modCommands = Array.isArray(this.module?.commands?.mod)
+      ? this.module.commands.mod.filter(Boolean)
+      : [];
+    if (!pilotLink && !modCommands.length) {
+      return nothing;
+    }
+    return html`
+      <div class="command-groups">
+        ${pilotLink}
+        ${modCommands.length
+      ? html`
+              <div class="command-set">
+                <h3>Module Commands</h3>
+                ${this.renderCommands(modCommands)}
+              </div>
+            `
+      : nothing}
+      </div>
     `;
   }
 }

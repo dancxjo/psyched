@@ -21,6 +21,23 @@ def _as_list(value: object | None) -> List[str]:
     return [str(value)]
 
 
+_DEFAULT_MOD_COMMANDS: List[str] = ["setup", "up", "down", "teardown"]
+
+
+def _canonical_mod_commands(values: List[str]) -> List[str]:
+    allowed = {"setup", "up", "down", "teardown"}
+    ordered: List[str] = []
+    for value in values:
+        command = value.strip().lower()
+        if not command or command not in allowed:
+            continue
+        if command not in ordered:
+            ordered.append(command)
+    if not ordered:
+        return list(_DEFAULT_MOD_COMMANDS)
+    return ordered
+
+
 from .qos import QosConfig
 
 
@@ -77,8 +94,8 @@ class ModuleTopic:
 class ModuleCommands:
     """Command metadata for a module."""
 
-    mod: List[str] = field(default_factory=lambda: ["setup"])
-    system: List[str] = field(default_factory=lambda: ["generate", "enable", "disable", "start", "stop", "restart", "debug"])
+    mod: List[str] = field(default_factory=lambda: list(_DEFAULT_MOD_COMMANDS))
+    system: List[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -152,8 +169,8 @@ class ModuleCatalog:
             regimes = _as_list(pilot_cfg.get("regimes")) or ["general"]
 
             commands = ModuleCommands(
-                mod=_as_list(pilot_cfg.get("mod_commands")) or list(default_commands.mod),
-                system=_as_list(pilot_cfg.get("system_commands")) or list(default_commands.system),
+                mod=_canonical_mod_commands(_as_list(pilot_cfg.get("mod_commands"))),
+                system=[],
             )
 
             topics_cfg = pilot_cfg.get("topics", [])

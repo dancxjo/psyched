@@ -49,16 +49,27 @@ def test_resolve_frontend_root_prefers_environment_variable(tmp_path: Path, monk
     assert result == env_dir.resolve()
 
 
-def test_resolve_frontend_root_falls_back_to_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """When no overrides exist, the repo modules/pilot/frontend directory is used."""
-
-    repo_dir = tmp_path / "repo"
-    fallback = repo_dir / "modules" / "pilot" / "frontend"
-    fallback.mkdir(parents=True)
+def test_resolve_frontend_root_prefers_repo_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """When REPO_DIR is set, prefer the repo source frontend."""
 
     monkeypatch.delenv("PILOT_FRONTEND_ROOT", raising=False)
+    repo_dir = tmp_path / "workspace"
+    frontend = repo_dir / "modules" / "pilot" / "packages" / "pilot" / "pilot" / "frontend"
+    frontend.mkdir(parents=True)
     monkeypatch.setenv("REPO_DIR", str(repo_dir))
 
     result = resolve_frontend_root(None)
 
-    assert result == fallback.resolve()
+    assert result == frontend.resolve()
+
+
+def test_resolve_frontend_root_defaults_to_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without overrides the packaged frontend should be used."""
+
+    monkeypatch.delenv("PILOT_FRONTEND_ROOT", raising=False)
+    monkeypatch.delenv("REPO_DIR", raising=False)
+
+    result = resolve_frontend_root(None)
+
+    package_frontend = Path(__file__).resolve().parents[1] / "pilot" / "frontend"
+    assert result == package_frontend.resolve()
