@@ -27,45 +27,8 @@ class ChatDashboard extends LitElement {
     static styles = [
         surfaceStyles,
         css`
-      form {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--metric-label-color);
-      }
-      input,
-      select,
-      textarea {
-        font: inherit;
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--control-surface-border);
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--lcars-text);
-        font-family: var(--metric-value-font);
-      }
-      textarea {
-        resize: vertical;
-        min-height: 80px;
-        font-size: 0.85rem;
-      }
       .conversation-log {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
         max-height: 300px;
-        overflow-y: auto;
       }
       .conversation-entry {
         background: rgba(0, 0, 0, 0.3);
@@ -277,11 +240,11 @@ class ChatDashboard extends LitElement {
         const conversationStatus = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
         const voiceStatusVariant = this.voiceStatus === 'Live' ? 'success' : this.voiceStatus === 'Error' ? 'error' : undefined;
         return html`
-      <div class="surface-grid surface-grid--wide">
-        <article class="surface-card">
+      <div class="surface-grid surface-grid--wide surface-grid--dense">
+        <article class="surface-card surface-card--compact">
           <h3 class="surface-card__title">Conversation Stream</h3>
           <p class="surface-status" data-variant="${conversationStatus ?? ''}">Status: ${this.status}</p>
-          <ul class="conversation-log">
+          <ul class="surface-list surface-list--scrollable conversation-log">
             ${this.messages.length === 0
                 ? html`<li class="conversation-empty">Waiting for conversation activity…</li>`
                 : this.messages.map(
@@ -298,45 +261,79 @@ class ChatDashboard extends LitElement {
           </ul>
         </article>
 
-        <article class="surface-card">
+        <article class="surface-card surface-card--compact">
           <h3 class="surface-card__title">Send to /conversation</h3>
-          <form @submit=${this.handleSendMessage}>
-            <label>
-              Role
-              <select .value=${this.composerRole} @change=${(e) => (this.composerRole = e.target.value)}>
+          <form class="surface-form surface-form--compact" @submit=${this.handleSendMessage}>
+            <label class="surface-field">
+              <span class="surface-label">Role</span>
+              <select
+                class="surface-select"
+                .value=${this.composerRole}
+                @change=${(e) => (this.composerRole = e.target.value)}
+              >
                 <option value="user">user</option>
                 <option value="assistant">assistant</option>
                 <option value="system">system</option>
                 <option value="pilot">pilot</option>
               </select>
             </label>
-            <label>
-              Speaker
-              <input type="text" .value=${this.composerSpeaker} @input=${(e) => (this.composerSpeaker = e.target.value)} placeholder="pilot" />
+            <label class="surface-field">
+              <span class="surface-label">Speaker</span>
+              <input
+                class="surface-input"
+                type="text"
+                .value=${this.composerSpeaker}
+                @input=${(e) => (this.composerSpeaker = e.target.value)}
+                placeholder="pilot"
+              />
             </label>
-            <label>
-              Confidence
-              <input type="number" step="0.01" min="0" max="1" .value=${this.composerConfidence} @input=${(e) => (this.composerConfidence = parseFloat(e.target.value))} />
+            <label class="surface-field">
+              <span class="surface-label">Confidence</span>
+              <input
+                class="surface-input surface-input--small"
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                .value=${this.composerConfidence}
+                @input=${(e) => (this.composerConfidence = parseFloat(e.target.value))}
+              />
             </label>
-            <label>
-              Message
-              <textarea rows="4" .value=${this.composerContent} @input=${(e) => (this.composerContent = e.target.value)} placeholder="What would you like to say?"></textarea>
+            <label class="surface-field">
+              <span class="surface-label">Message</span>
+              <textarea
+                class="surface-textarea"
+                rows="4"
+                .value=${this.composerContent}
+                @input=${(e) => (this.composerContent = e.target.value)}
+                placeholder="What would you like to say?"
+              ></textarea>
             </label>
-            <button class="surface-action" type="submit">Send</button>
+            <div class="surface-actions">
+              <button class="surface-button" type="submit">Send</button>
+            </div>
             ${this.formFeedback ? html`<p class="surface-status">${this.formFeedback}</p>` : ''}
           </form>
         </article>
 
-        <article class="surface-card">
+        <article class="surface-card surface-card--compact">
           <h3 class="surface-card__title">Voice Bridge</h3>
           <p class="surface-status" data-variant="${voiceStatusVariant ?? ''}">Status: ${this.voiceStatus}</p>
           <div class="surface-panel surface-mono voice-log">${this.voiceLast || '—'}</div>
-          <form @submit=${this.handleSendVoice}>
-            <label>
-              Speak this text
-              <textarea rows="3" .value=${this.voiceCommand} @input=${(e) => (this.voiceCommand = e.target.value)} placeholder="Hello from chat"></textarea>
+          <form class="surface-form surface-form--compact" @submit=${this.handleSendVoice}>
+            <label class="surface-field">
+              <span class="surface-label">Speak this text</span>
+              <textarea
+                class="surface-textarea"
+                rows="3"
+                .value=${this.voiceCommand}
+                @input=${(e) => (this.voiceCommand = e.target.value)}
+                placeholder="Hello from chat"
+              ></textarea>
             </label>
-            <button class="surface-action" type="submit">Send to /voice</button>
+            <div class="surface-actions">
+              <button class="surface-button" type="submit">Send to /voice</button>
+            </div>
             ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
           </form>
         </article>

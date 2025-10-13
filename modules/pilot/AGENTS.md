@@ -4,4 +4,5 @@
 - Run `PYTHONPATH=modules/pilot/packages/pilot:$PYTHONPATH pytest modules/pilot/packages/pilot/tests` after modifying backend code in this module.
 - Ensure test environments provide the runtime dependencies listed in `setup.py` (notably `aiohttp` and `PyYAML`) so pytest runs without skipping coverage.
 - Keep the cockpit frontend lightweight: static HTML, CSS, and browser JavaScript only (no bundlers or frameworks that require a build step).
+- Reuse the shared utilities in `/components/pilot-style.js` for layout, forms, and controls so dashboards stay visually consistent and compact.
 - Ensure HTTP endpoints have corresponding unit tests for their request/response contracts where practical.
