@@ -567,8 +567,8 @@ class FootDashboard extends LitElement {
   updateDiagnostics(message) {
     const status = Array.isArray(message?.status) && message.status.length
       ? message.status
-          .map((entry) => `${entry.name ?? 'Unknown'}: ${entry.message ?? ''}`)
-          .join('\n')
+        .map((entry) => `${entry.name ?? 'Unknown'}: ${entry.message ?? ''}`)
+        .join('\n')
       : 'Awaiting diagnostic messages…';
     this.telemetry = {
       ...this.telemetry,
@@ -835,7 +835,6 @@ class FootDashboard extends LitElement {
           <div class="drive-panel">
             <pilot-joystick-control></pilot-joystick-control>
             <p class="surface-status surface-mono">Drag to publish <code>/cmd_vel</code>.</p>
-            <pre class="surface-panel surface-mono drive-panel__log">${this.lastCommand}</pre>
           </div>
         </article>
 
@@ -855,8 +854,8 @@ class FootDashboard extends LitElement {
             <button class="surface-action" @click=${() => this.sendSimple('undock')}>Undock</button>
           </div>
           ${this.actionStatus
-            ? html`<p class="surface-status" data-variant="${this.actionStatus.includes('Unknown') ? 'error' : 'success'}">${this.actionStatus}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="${this.actionStatus.includes('Unknown') ? 'error' : 'success'}">${this.actionStatus}</p>`
+        : ''}
         </article>
       </div>
 
@@ -865,9 +864,9 @@ class FootDashboard extends LitElement {
           <h3 class="surface-card__title">LED controls</h3>
           <div class="led-grid">
             ${Object.entries(LED_TOPICS).map(([name, spec]) => {
-              const label = `${name} LED`.replace('_', ' ');
-              const checked = Boolean(this.displayState.ledOverrides[name]);
-              return html`
+          const label = `${name} LED`.replace('_', ' ');
+          const checked = Boolean(this.displayState.ledOverrides[name]);
+          return html`
                 <label>
                   ${label}
                   <input
@@ -878,7 +877,7 @@ class FootDashboard extends LitElement {
                   />
                 </label>
               `;
-            })}
+        })}
           </div>
         </article>
 
@@ -956,41 +955,7 @@ class FootDashboard extends LitElement {
           ${this.songStatus ? html`<p class="surface-status">${this.songStatus}</p>` : ''}
         </article>
 
-        <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Create parameters</h3>
-          <p class="surface-status">Updates are forwarded to <code>${this.parameterForm.node}</code><code>/set_parameters</code>.</p>
-          <form @submit=${(event) => this.submitParameters(event)}>
-            <label>
-              Target node
-              <input
-                .value=${this.parameterForm.node}
-                @input=${(event) => this.updateParameterField('node', event.target.value)}
-                required
-              />
-            </label>
-            <fieldset>
-              <legend>Core parameters</legend>
-              <div class="surface-grid surface-grid--dense surface-grid--narrow">
-                ${['dev', 'base_frame', 'odom_frame', 'latch_cmd_duration', 'loop_hz', 'publish_tf', 'robot_model', 'baud', 'oi_mode_workaround', 'desc', 'config'].map(
-                  (field) => html`
-                    <label>
-                      ${field.replace(/_/g, ' ')}
-                      <input
-                        .value=${this.parameterForm[field] ?? ''}
-                        @input=${(event) => this.updateParameterField(field, event.target.value)}
-                      />
-                    </label>
-                  `,
-                )}
               </div>
-            </fieldset>
-            <div class="surface-actions">
-              <button class="surface-action" type="submit" ?disabled=${this.parameterBusy}>Apply parameters</button>
-            </div>
-          </form>
-          ${this.parameterStatus ? html`<p class="surface-status">${this.parameterStatus}</p>` : ''}
-        </article>
-      </div>
 
       <div class="surface-grid surface-grid--wide" style="margin-top: 1rem;">
         <article class="surface-card">
@@ -1051,8 +1016,8 @@ class FootDashboard extends LitElement {
               <h4 class="surface-subtitle">Buttons</h4>
               <ul class="log-list">
                 ${this.buttonLog.length
-                  ? this.buttonLog.map(
-                      (entry) => html`
+        ? this.buttonLog.map(
+          (entry) => html`
                         <li class="log-entry">
                           <div class="log-entry__meta">
                             <span>${entry.label}</span>
@@ -1061,16 +1026,16 @@ class FootDashboard extends LitElement {
                           <code class="surface-mono">/${entry.topic}</code>
                         </li>
                       `,
-                    )
-                  : html`<li class="surface-muted">No button presses observed.</li>`}
+        )
+        : html`<li class="surface-muted">No button presses observed.</li>`}
               </ul>
             </section>
             <section>
               <h4 class="surface-subtitle">Parameter events</h4>
               <ul class="log-list">
                 ${this.parameterLog.length
-                  ? this.parameterLog.map(
-                      (entry) => html`
+        ? this.parameterLog.map(
+          (entry) => html`
                         <li class="log-entry">
                           <div class="log-entry__meta">
                             <span>${entry.time}</span>
@@ -1078,8 +1043,8 @@ class FootDashboard extends LitElement {
                           <div>${entry.detail}</div>
                         </li>
                       `,
-                    )
-                  : html`<li class="surface-muted">No parameter changes received.</li>`}
+        )
+        : html`<li class="surface-muted">No parameter changes received.</li>`}
               </ul>
             </section>
           </div>
