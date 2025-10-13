@@ -31,3 +31,15 @@ def test_nav_module_reports_pilot_dashboard() -> None:
 
     assert nav_info.pilot_assets is True
     assert nav_info.dashboard_url.endswith("/modules/nav/")
+
+
+def test_pilot_module_surfaces_self_dashboard() -> None:
+    """Pilot should expose a cockpit dashboard for its own orchestration tools."""
+
+    modules_root = REPO_ROOT / "modules"
+    catalog = ModuleCatalog(modules_root)
+
+    pilot_info = catalog.get_module("pilot")
+
+    assert pilot_info.pilot_assets is True
+    assert pilot_info.dashboard_url.endswith("/modules/pilot/")

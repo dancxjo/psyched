@@ -15,6 +15,7 @@ const MODULE_COMPONENTS = {
   imu: 'imu-dashboard',
   memory: 'memory-dashboard',
   nav: 'nav-dashboard',
+  pilot: 'pilot-dashboard',
   viscera: 'viscera-dashboard',
   voice: 'voice-dashboard',
 };
@@ -183,6 +184,7 @@ class PilotApp extends LitElement {
       'imu-dashboard': html`<imu-dashboard></imu-dashboard>`,
       'memory-dashboard': html`<memory-dashboard></memory-dashboard>`,
       'nav-dashboard': html`<nav-dashboard></nav-dashboard>`,
+      'pilot-dashboard': html`<pilot-dashboard></pilot-dashboard>`,
       'viscera-dashboard': html`<viscera-dashboard></viscera-dashboard>`,
       'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
     };
