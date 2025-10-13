@@ -170,6 +170,10 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     imu_entry = next(module for module in modules if module["name"] == "imu")
     assert imu_entry["has_pilot"] is True
 
+    pilot_entry = next(module for module in modules if module["name"] == "pilot")
+    assert pilot_entry["has_pilot"] is True
+    assert pilot_entry["dashboard_url"].endswith("/modules/pilot/")
+
     viscera_entry = next(module for module in modules if module["name"] == "viscera")
     assert viscera_entry["has_pilot"] is True
     assert viscera_entry["dashboard_url"].endswith("/modules/viscera/")
