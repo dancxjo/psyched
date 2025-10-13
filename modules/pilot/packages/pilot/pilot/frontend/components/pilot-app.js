@@ -1,4 +1,5 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { buildNavigationSections } from '../utils/navigation.js';
 
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
@@ -107,26 +108,16 @@ class PilotApp extends LitElement {
     if (typeof window === 'undefined') {
       return;
     }
-    const detail = [
-      {
-        id: 'pilot-config',
-        label: 'Module Configuration',
-        index: 0,
-        url: '/config/',
-      },
-    ];
-    let index = 1;
-    for (const module of this.modules) {
-      const slug = module.slug || module.name;
-      if (!slug) continue;
-      detail.push({
-        id: `module-${slug}`,
-        label: module.display_name || module.name,
-        index: index++,
-        url: module.dashboard_url || (module.has_pilot ? `/modules/${module.name}/` : undefined),
-      });
-    }
-    window.dispatchEvent(new CustomEvent('pilot-sections', { detail }));
+
+    const sections = buildNavigationSections(this.modules);
+    const pilotGlobals = window.Pilot ? { ...window.Pilot } : {};
+    pilotGlobals.navigation = {
+      ...(pilotGlobals.navigation || {}),
+      sections,
+    };
+    window.Pilot = pilotGlobals;
+
+    window.dispatchEvent(new CustomEvent('pilot-sections', { detail: sections }));
   }
 
   render() {
