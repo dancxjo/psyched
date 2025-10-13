@@ -8,3 +8,4 @@
 - Ensure HTTP endpoints have corresponding unit tests for their request/response contracts where practical.
 - When introducing new module dashboards, register the component tag in `pilot/frontend/components/pilot-app.js` so the cockpit can render it.
 - Frontend navigation helpers now have Node-based tests—run `node --test modules/pilot/packages/pilot/pilot/frontend/utils/navigation.test.js` after editing them to keep the pilot sidebar aligned with the rendered modules.
+- After editing `pilot/frontend/index.html`, run `node --test modules/pilot/packages/pilot/pilot/frontend/index.test.js` to verify the Alpine-bound navigation stays connected to its data scope.

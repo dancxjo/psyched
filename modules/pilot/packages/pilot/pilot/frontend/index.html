@@ -11,8 +11,8 @@
     <script type="module" src="/app.js"></script>
   </head>
 
-  <body x-data="pilotNav()" x-init="init()" class="lcars-body">
-    <aside class="lcars-nav">
+  <body class="lcars-body">
+    <nav x-data="pilotNav()" x-init="init()" class="lcars-nav" aria-label="Pilot navigation">
       <div class="nav-title">PSYCHED PILOT</div>
       <template x-for="section in sections" :key="section.id">
         <div class="nav-item">
@@ -36,7 +36,7 @@
           </template>
         </div>
       </template>
-    </aside>
+    </nav>
 
     <main class="lcars-main">
       <header class="lcars-hero" id="pilot-config">
@@ -107,5 +107,4 @@
       }
     </script>
   </body>
-</html>
 </html>
