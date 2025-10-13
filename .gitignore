@@ -81,3 +81,14 @@ services/tts/models/*
 # Local machine configs
 # ------------------------------
 hosts/*.local.toml
+modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
+modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
+modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.js
+modules/pilot/packages/pilot/pilot/frontend/components/hypothalamus-dashboard.js
+modules/pilot/packages/pilot/pilot/frontend/components/imu-dashboard.js
+modules/pilot/packages/pilot/pilot/frontend/components/voice-dashboard.js
+modules/pilot/packages/pilot/pilot/frontend/js/foot.js
+modules/pilot/packages/pilot/pilot/frontend/js/hypothalamus.js
+modules/pilot/packages/pilot/pilot/frontend/js/imu.js
+modules/pilot/packages/pilot/pilot/frontend/js/voice.js
+modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json

@@ -13,6 +13,7 @@ patches = [
     "modules/eye/scripts/install_kinect_deps.sh",
     "modules/eye/scripts/patch_kinect_cv_bridge.sh",
     "modules/eye/scripts/replace_cv_bridge_headers.sh",
+    "modules/eye/scripts/remove_libfreenect_dependency.sh",
     "modules/eye/scripts/build_libfreenect.sh",
 ]
 launch = "modules/eye/launch_unit.sh"
