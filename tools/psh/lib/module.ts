@@ -212,37 +212,16 @@ function logExitSummary(module: string, status: Deno.CommandStatus): void {
 /**
  * Build the shell pipeline used to bootstrap a module launch.
  *
- * The returned command performs environment setup, executes the module's
- * launch script, and mirrors stdout/stderr to both the console and log file
- * via the prefixing helper.
+ * The returned command performs environment setup and hands control to the
+ * module's launch script so it can manage its own lifecycle and logging.
  */
 export function composeLaunchCommand(
   options: ComposeLaunchCommandOptions,
 ): string {
-  const { envCommands, launchScript, logFile, module } = options;
-  const prefixScript = join(
-    repoRoot(),
-    "tools",
-    "psh",
-    "scripts",
-    "prefix_logs.sh",
-  );
-  const composeStreamCommand = (stream: "stdout" | "stderr") => {
-    return [
-      shellEscape(prefixScript),
-      shellEscape(module),
-      shellEscape(stream),
-    ].join(" ");
-  };
-
-  const launch =
-    `exec bash ${shellEscape(launchScript)} > >(${
-      composeStreamCommand("stdout")
-    } | tee -a ${shellEscape(logFile)}) ` +
-    `2> >(${composeStreamCommand("stderr")} | tee -a ${
-      shellEscape(logFile)
-    } >&2)`;
-  const parts = [...envCommands, launch];
+  const parts = [
+    ...options.envCommands,
+    `exec ${shellEscape(options.launchScript)}`,
+  ];
   return parts.join(" && ");
 }
 
