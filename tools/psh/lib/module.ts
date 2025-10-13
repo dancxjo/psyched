@@ -644,38 +644,6 @@ async function linkPilotAssets(
     ensureDirectory(dirname(destination));
     link(entry.path, destination);
   }
-  await rebuildPilotManifest(overlayRoot);
-}
-
-async function rebuildPilotManifest(frontendRoot: string): Promise<void> {
-  await generatePilotManifest(frontendRoot);
-}
-
-async function generatePilotManifest(frontendRoot: string): Promise<void> {
-  const modulesDir = join(frontendRoot, "modules");
-  const modules: string[] = [];
-  try {
-    for await (const entry of Deno.readDir(modulesDir)) {
-      if (entry.isDirectory) {
-        modules.push(entry.name);
-      }
-    }
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) {
-      throw error;
-    }
-  }
-  modules.sort();
-  const manifestPath = join(frontendRoot, "pilot.manifest.json");
-  const payload = JSON.stringify(
-    {
-      generated_at: new Date().toISOString(),
-      modules,
-    },
-    null,
-    2,
-  );
-  await Deno.writeTextFile(manifestPath, payload);
 }
 
 export interface ModuleSetupOptions {
@@ -953,7 +921,6 @@ async function unlinkPilotAssets(
     const destination = join(overlayRoot, relativePath);
     unlink(destination);
   }
-  await rebuildPilotManifest(overlayRoot);
 }
 
 export async function bringModuleUp(
