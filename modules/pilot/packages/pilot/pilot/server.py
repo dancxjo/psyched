@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
 import socket
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import (
     Any,
@@ -115,6 +116,14 @@ PILOT_SETTINGS_KEY: web.AppKey[PilotSettings] = web.AppKey("pilot_settings")
 MODULE_CATALOG_KEY: web.AppKey[ModuleCatalog] = web.AppKey("module_catalog")
 
 
+# Streamlined log handling -------------------------------------------------
+
+#: Maximum number of log lines returned to the cockpit for a single request.
+MODULE_LOG_LINE_LIMIT: int = 200
+
+_MODULE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
 def create_app(*, settings: PilotSettings) -> web.Application:
     """Create the aiohttp application serving the pilot assets."""
 
@@ -131,6 +140,7 @@ def create_app(*, settings: PilotSettings) -> web.Application:
     app["module_catalog"] = catalog
 
     app.router.add_get("/api/modules", _modules_handler)
+    app.router.add_get("/api/modules/{module_name}/logs", _module_log_handler)
     app.router.add_get("/api/module-config", _module_config_handler)
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
     app.router.add_post("/api/ops/git-pull", _git_pull_handler)
@@ -158,6 +168,38 @@ async def _modules_handler(request: web.Request) -> web.Response:
             "video_port": settings.video_port,
         },
         "host": _host_metadata(config),
+    }
+    return web.json_response(payload)
+
+
+async def _module_log_handler(request: web.Request) -> web.Response:
+    """Return recent log lines for the requested module."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    module_name = (request.match_info.get("module_name") or "").strip()
+    if not module_name:
+        raise web.HTTPBadRequest(text="Module name must be provided in the request path")
+    if not _MODULE_NAME_PATTERN.fullmatch(module_name):
+        raise web.HTTPBadRequest(text="Module name contains invalid characters")
+
+    catalog = _get_module_catalog(request.app)
+    catalog.refresh()
+    try:
+        module_info = catalog.get_module(module_name)
+    except KeyError as exc:
+        raise web.HTTPNotFound(text=f"Module not found: {module_name}") from exc
+
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Pilot repository root is not configured")
+
+    lines, truncated, updated_at = _read_module_log(repo_root, module_name)
+    payload: Dict[str, Any] = {
+        "module": module_name,
+        "display_name": module_info.display_name,
+        "lines": lines,
+        "truncated": truncated,
+        "updated_at": updated_at.isoformat() if updated_at else None,
     }
     return web.json_response(payload)
 
@@ -408,6 +450,63 @@ class CockpitServer:
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.stop()
+
+
+def _read_module_log(
+    repo_root: Path, module_name: str
+) -> tuple[List[str], bool, Optional[datetime]]:
+    """Return a bounded snapshot of a module's log file.
+
+    Parameters
+    ----------
+    repo_root:
+        Base directory for the repository. The helper inspects the
+        ``log/modules`` folder beneath this location.
+    module_name:
+        Name of the module whose log should be read.
+
+    Returns
+    -------
+    tuple[list[str], bool, Optional[datetime]]
+        A tuple containing the collected lines (newest last), a flag that
+        indicates whether the log was truncated to :data:`MODULE_LOG_LINE_LIMIT`,
+        and the timestamp of the last modification if available.
+
+    Examples
+    --------
+    >>> repo = Path("/tmp/psyched-test")
+    >>> repo.mkdir(exist_ok=True)
+    >>> (repo / "log" / "modules").mkdir(parents=True, exist_ok=True)
+    >>> lines, truncated, updated_at = _read_module_log(repo, "nav")
+    >>> lines
+    []
+    >>> truncated
+    False
+    >>> updated_at is None
+    True
+    """
+
+    log_path = repo_root / "log" / "modules" / f"{module_name}.log"
+    if not log_path.exists():
+        return [], False, None
+
+    try:
+        text = log_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+
+    all_lines = text.splitlines()
+    truncated = len(all_lines) > MODULE_LOG_LINE_LIMIT
+    lines = all_lines[-MODULE_LOG_LINE_LIMIT:] if truncated else all_lines
+
+    try:
+        stat = log_path.stat()
+    except FileNotFoundError:
+        updated_at: Optional[datetime] = None
+    else:
+        updated_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+
+    return lines, truncated, updated_at
 
 
 def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dict[str, Any]:

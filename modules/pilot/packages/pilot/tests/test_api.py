@@ -26,7 +26,7 @@ module = importlib.util.module_from_spec(spec)
 sys.modules["pilot"] = module
 spec.loader.exec_module(module)
 
-from pilot.server import CommandResult, PilotSettings, create_app
+from pilot.server import CommandResult, PilotSettings, create_app, MODULE_LOG_LINE_LIMIT
 
 
 @pytest.fixture()
@@ -95,6 +95,18 @@ def test_module_config_endpoint_rejects_null_values(
     config_with_settings: Path, tmp_path: Path
 ) -> None:
     asyncio.run(_exercise_module_config_validation(config_with_settings, tmp_path))
+
+
+def test_module_logs_endpoint_returns_recent_lines(tmp_path: Path) -> None:
+    asyncio.run(_exercise_module_logs_endpoint(tmp_path))
+
+
+def test_module_logs_endpoint_handles_missing_file(tmp_path: Path) -> None:
+    asyncio.run(_exercise_module_logs_missing_file(tmp_path))
+
+
+def test_module_logs_endpoint_rejects_invalid_name(tmp_path: Path) -> None:
+    asyncio.run(_exercise_module_logs_invalid_name(tmp_path))
 
 
 def test_git_pull_endpoint_invokes_repo_update(
@@ -293,6 +305,53 @@ async def _exercise_module_config_validation(config_file: Path, tmp_path: Path) 
         assert bad_json.status == 400
 
 
+async def _exercise_module_logs_endpoint(tmp_path: Path) -> None:
+    module_name = "nav"
+    total_lines = MODULE_LOG_LINE_LIMIT + 4
+    lines = [f"log line {index}" for index in range(1, total_lines + 1)]
+    settings = _build_minimal_settings(tmp_path, module_name=module_name, log_lines=lines)
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get(f"/api/modules/{module_name}/logs")
+        assert response.status == 200
+        payload = await response.json()
+
+    assert payload["module"] == module_name
+    assert payload["display_name"] == "Nav"
+    assert payload["truncated"] is True
+    assert len(payload["lines"]) == MODULE_LOG_LINE_LIMIT
+    assert payload["lines"][0] == lines[-MODULE_LOG_LINE_LIMIT]
+    assert payload["lines"][-1] == lines[-1]
+    assert payload["updated_at"] is not None
+
+
+async def _exercise_module_logs_missing_file(tmp_path: Path) -> None:
+    module_name = "imu"
+    settings = _build_minimal_settings(tmp_path, module_name=module_name, log_lines=None)
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get(f"/api/modules/{module_name}/logs")
+        assert response.status == 200
+        payload = await response.json()
+
+    assert payload["module"] == module_name
+    assert payload["lines"] == []
+    assert payload["truncated"] is False
+    assert payload["updated_at"] is None
+
+
+async def _exercise_module_logs_invalid_name(tmp_path: Path) -> None:
+    module_name = "nav"
+    settings = _build_minimal_settings(tmp_path, module_name=module_name, log_lines=None)
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get("/api/modules/nav!/logs")
+        assert response.status == 400
+
+
 async def _exercise_git_pull_endpoint(
     config_file: Path, tmp_path: Path, calls: list[tuple[tuple[str, ...], Path]]
 ) -> None:
@@ -359,6 +418,56 @@ async def _exercise_psh_rejection(config_file: Path, tmp_path: Path) -> None:
             json={"operation": "unknown"},
         )
         assert response.status == 400
+
+
+def _build_minimal_settings(
+    tmp_path: Path,
+    *,
+    module_name: str,
+    log_lines: list[str] | None,
+) -> PilotSettings:
+    modules_root = tmp_path / "modules"
+    modules_root.mkdir(parents=True, exist_ok=True)
+    module_dir = modules_root / module_name
+    module_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = module_dir / "module.toml"
+    manifest.write_text(
+        (
+            f"name = \"{module_name}\"\n"
+            "\n"
+            "[pilot]\n"
+            f"display_name = \"{module_name.title()}\"\n"
+            "description = \"Test module\"\n"
+        ),
+        encoding="utf-8",
+    )
+
+    config_text = (
+        "[host]\n"
+        "name = \"logs-test\"\n"
+        f"modules = [\"{module_name}\"]\n"
+        "\n"
+        f"[config.mod.{module_name}.launch]\n"
+        "enabled = true\n"
+    )
+    config_path = tmp_path / "logs-test.toml"
+    config_path.write_text(config_text, encoding="utf-8")
+
+    if log_lines is not None:
+        log_dir = tmp_path / "log" / "modules"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / f"{module_name}.log"
+        log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
+
+    return PilotSettings(
+        host_config_path=config_path,
+        frontend_root=tmp_path,
+        modules_root=modules_root,
+        repo_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
 
 
 class _TestClient:

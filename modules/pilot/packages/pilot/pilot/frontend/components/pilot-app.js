@@ -1,5 +1,6 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { buildNavigationSections } from '../utils/navigation.js';
+import './module-log-viewer.js';
 
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
@@ -157,7 +158,10 @@ class PilotApp extends LitElement {
           ${module.description ? html`<p class="module-description">${module.description}</p>` : ''}
         </header>
         ${componentTag
-        ? html`<div class="module-surface">${this.renderComponent(componentTag)}</div>`
+        ? html`<div class="module-surface">
+              ${this.renderComponent(componentTag)}
+              <pilot-module-logs module=${module.name}></pilot-module-logs>
+            </div>`
         : html`<div class="module-placeholder">
               <p>This module does not expose pilot assets yet.</p>
             </div>`}
