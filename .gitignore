@@ -92,3 +92,8 @@ modules/pilot/packages/pilot/pilot/frontend/js/hypothalamus.js
 modules/pilot/packages/pilot/pilot/frontend/js/imu.js
 modules/pilot/packages/pilot/pilot/frontend/js/voice.js
 modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
+modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.helpers.js
+modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.helpers.test.js
+modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.js
+modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.test.js
+modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.js
