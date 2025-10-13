@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/chat/pilot/js/chat.js

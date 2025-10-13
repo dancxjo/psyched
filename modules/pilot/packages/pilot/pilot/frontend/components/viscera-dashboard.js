@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/viscera/pilot/components/viscera-dashboard.js

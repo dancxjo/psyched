@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/faces/pilot/components/faces-dashboard.js
