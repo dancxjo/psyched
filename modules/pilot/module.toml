@@ -7,7 +7,9 @@ apt = [
     "ros-${ROS_DISTRO}-tf2-web-republisher",
     "ros-${ROS_DISTRO}-web-video-server",
 ]
-pip = []
+pip = [
+    "tomli-w>=1.0",
+]
 launch = "modules/pilot/launch_unit.sh"
 shutdown = "modules/pilot/shutdown_unit.sh"
 pilot_control = "modules/pilot/packages/pilot/pilot/frontend/index.html"
