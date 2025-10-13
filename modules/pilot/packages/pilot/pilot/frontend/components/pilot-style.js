@@ -109,6 +109,11 @@ export const surfaceStyles = css`
     color: var(--lcars-error);
   }
 
+  .surface-chip[data-variant='warning'] {
+    background: rgba(255, 192, 76, 0.25);
+    color: var(--lcars-warning);
+  }
+
   .surface-metric {
     display: flex;
     flex-direction: column;
@@ -133,6 +138,10 @@ export const surfaceStyles = css`
     font-family: var(--metric-value-font);
     font-weight: 600;
     color: var(--lcars-text);
+  }
+
+  .surface-metric__value--large {
+    font-size: 1.4rem;
   }
 
   .surface-form {

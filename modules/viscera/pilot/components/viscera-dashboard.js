@@ -33,30 +33,29 @@ class VisceraDashboard extends LitElement {
   static styles = [
     surfaceStyles,
     css`
-      .surface-status {
+      .dashboard-status {
         grid-column: 1 / -1;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
       }
 
-      .metric-value {
-        font-size: 2.5rem;
-        font-weight: 600;
-        margin: 0.5rem 0 0;
+      .dashboard-status__note {
+        margin: 0;
       }
 
-      .metric-subtext {
-        margin: 0.25rem 0 0;
-        color: rgba(255, 255, 255, 0.75);
+      .metric-card {
+        gap: 0.5rem;
       }
 
-      .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-        gap: 1rem;
+      .metric-card .surface-metric__value {
+        font-size: 1.35rem;
       }
 
-      .uptime {
-        font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      .metric-card .surface-note {
+        margin: 0;
       }
     `,
   ];
@@ -164,12 +163,15 @@ class VisceraDashboard extends LitElement {
     }
   }
 
-  #renderStatusVariant() {
+  #renderStatusChipVariant() {
     if (this.status === 'Live') {
       return 'success';
     }
     if (this.status === 'Error') {
-      return 'error';
+      return 'critical';
+    }
+    if (this.status === 'Disconnected') {
+      return 'warning';
     }
     return '';
   }
@@ -217,37 +219,61 @@ class VisceraDashboard extends LitElement {
 
   render() {
     return html`
-      <section class="surface-grid surface-grid--medium">
-        <p class="surface-status" data-variant="${this.#renderStatusVariant()}">
-          Status: ${this.status} · Last update ${this.lastUpdate}
-        </p>
-        <div class="metric-grid">
-          <article class="surface-card">
-            <h2>CPU Load</h2>
-            <p class="metric-value">${this.#formatPercent(this.metrics.cpuPercent)}</p>
-            <p class="metric-subtext">Load averages: ${this.#formatLoad()}</p>
-          </article>
-          <article class="surface-card">
-            <h2>Memory Usage</h2>
-            <p class="metric-value">${this.#formatPercent(this.metrics.memPercent)}</p>
-            <p class="metric-subtext">${this.#formatMemory()}</p>
-          </article>
-          <article class="surface-card">
-            <h2>Disk Utilisation</h2>
-            <p class="metric-value">${this.#formatPercent(this.metrics.diskPercent)}</p>
-            <p class="metric-subtext">Root filesystem consumption</p>
-          </article>
-          <article class="surface-card">
-            <h2>Temperature</h2>
-            <p class="metric-value">${this.#formatTemperature(this.metrics.tempC)}</p>
-            <p class="metric-subtext">Reported by sensors_temperatures</p>
-          </article>
-          <article class="surface-card">
-            <h2>Uptime</h2>
-            <p class="metric-value uptime">${this.#formatUptime(this.metrics.uptimeSec)}</p>
-            <p class="metric-subtext">Hours · Minutes · Seconds</p>
-          </article>
+      <section class="surface-grid surface-grid--medium surface-grid--dense">
+        <div class="dashboard-status">
+          <span class="surface-chip" data-variant="${this.#renderStatusChipVariant()}">${this.status}</span>
+          <p class="surface-note dashboard-status__note">Last update ${this.lastUpdate}</p>
         </div>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">CPU load</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Utilisation</span>
+            <span class="surface-metric__value surface-metric__value--large">
+              ${this.#formatPercent(this.metrics.cpuPercent)}
+            </span>
+          </div>
+          <p class="surface-note surface-mono">Load averages ${this.#formatLoad()}</p>
+        </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Memory usage</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Utilisation</span>
+            <span class="surface-metric__value surface-metric__value--large">
+              ${this.#formatPercent(this.metrics.memPercent)}
+            </span>
+          </div>
+          <p class="surface-note surface-mono">${this.#formatMemory()}</p>
+        </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Disk utilisation</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Utilisation</span>
+            <span class="surface-metric__value surface-metric__value--large">
+              ${this.#formatPercent(this.metrics.diskPercent)}
+            </span>
+          </div>
+          <p class="surface-note">Root filesystem consumption</p>
+        </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Temperature</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Sensor reading</span>
+            <span class="surface-metric__value surface-metric__value--large">
+              ${this.#formatTemperature(this.metrics.tempC)}
+            </span>
+          </div>
+          <p class="surface-note">Reported by sensors_temperatures</p>
+        </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Uptime</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Elapsed</span>
+            <span class="surface-metric__value surface-metric__value--large surface-mono">
+              ${this.#formatUptime(this.metrics.uptimeSec)}
+            </span>
+          </div>
+          <p class="surface-note">Hours · Minutes · Seconds</p>
+        </article>
       </section>
     `;
   }
