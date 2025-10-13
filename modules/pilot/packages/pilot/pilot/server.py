@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+)
 
 from aiohttp import web
 
@@ -21,6 +32,54 @@ from .config import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class CommandResult:
+    """Outcome of a shell command executed by the cockpit server.
+
+    The helper centralises command execution diagnostics so HTTP handlers can
+    serialise the result consistently. ``stdout`` and ``stderr`` are decoded as
+    UTF-8 with surrogate escaping to avoid crashes when the subprocess emits
+    binary output.
+
+    Example
+    -------
+    >>> result = CommandResult(["echo", "hello"], 0, "hello\n", "")
+    >>> result.success
+    True
+    >>> result.to_payload()["command"]
+    ['echo', 'hello']
+    """
+
+    command: List[str]
+    returncode: int
+    stdout: str
+    stderr: str
+
+    @property
+    def success(self) -> bool:
+        """Return ``True`` when the subprocess completed successfully."""
+
+        return self.returncode == 0
+
+    def to_payload(self) -> Dict[str, Any]:
+        """Serialise the command outcome for JSON responses."""
+
+        return {
+            "command": self.command,
+            "returncode": self.returncode,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "success": self.success,
+        }
+
+
+_PSH_BULK_OPERATIONS: Dict[str, Sequence[str]] = {
+    "module-setup": ("mod", "setup"),
+    "module-up": ("mod", "up"),
+    "module-down": ("mod", "down"),
+}
 
 
 @dataclass(slots=True)
@@ -73,6 +132,8 @@ def create_app(*, settings: PilotSettings) -> web.Application:
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/module-config", _module_config_handler)
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
+    app.router.add_post("/api/ops/git-pull", _git_pull_handler)
+    app.router.add_post("/api/ops/psh", _psh_operation_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -140,6 +201,95 @@ async def _module_config_update_handler(request: web.Request) -> web.Response:
         catalog,
     )
     return web.json_response(entry)
+
+
+async def _git_pull_handler(request: web.Request) -> web.Response:
+    """Run ``git pull --ff-only`` inside the workspace and expose the result."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Repository root is not configured")
+
+    try:
+        result = await _run_command(command=["git", "pull", "--ff-only"], cwd=repo_root)
+    except FileNotFoundError as exc:
+        _LOGGER.error("git binary not found while handling git pull", exc_info=True)
+        raise web.HTTPInternalServerError(text="git binary is not available on this host") from exc
+    except OSError as exc:  # pragma: no cover - defensive guard for unexpected OS errors
+        _LOGGER.error("git pull failed to spawn", exc_info=True)
+        raise web.HTTPInternalServerError(text="Failed to execute git pull") from exc
+
+    payload = result.to_payload()
+    return web.json_response(payload)
+
+
+async def _psh_operation_handler(request: web.Request) -> web.Response:
+    """Execute approved bulk ``psh`` operations requested by the cockpit."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Repository root is not configured")
+
+    try:
+        payload = await request.json()
+    except Exception as exc:  # pragma: no cover - aiohttp raises for bad JSON
+        raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
+
+    if not isinstance(payload, Mapping):
+        raise web.HTTPBadRequest(text="Request payload must be a JSON object")
+
+    raw_operation = payload.get("operation")
+    if not isinstance(raw_operation, str) or not raw_operation.strip():
+        raise web.HTTPBadRequest(text="operation must be a non-empty string")
+
+    operation = raw_operation.strip()
+    command = _resolve_psh_command(operation)
+    if command is None:
+        raise web.HTTPBadRequest(text=f"Unsupported psh operation: {operation}")
+
+    try:
+        result = await _run_command(command=["psh", *command], cwd=repo_root)
+    except FileNotFoundError as exc:
+        _LOGGER.error("psh binary not found while handling %s", operation, exc_info=True)
+        raise web.HTTPInternalServerError(text="psh binary is not available on this host") from exc
+    except OSError as exc:  # pragma: no cover - defensive guard for unexpected OS errors
+        _LOGGER.error("psh operation %s failed to spawn", operation, exc_info=True)
+        raise web.HTTPInternalServerError(text="Failed to execute psh operation") from exc
+
+    response_payload = result.to_payload()
+    response_payload["operation"] = operation
+    return web.json_response(response_payload)
+
+
+def _resolve_psh_command(operation: str) -> Optional[List[str]]:
+    """Return the command tuple for a whitelisted ``psh`` operation."""
+
+    command = _PSH_BULK_OPERATIONS.get(operation)
+    if command is None:
+        return None
+    return list(command)
+
+
+async def _run_command(*, command: Sequence[str], cwd: Path) -> CommandResult:
+    """Execute *command* inside *cwd* and capture stdout/stderr."""
+
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=str(cwd),
+    )
+    stdout_bytes, stderr_bytes = await process.communicate()
+    stdout_text = stdout_bytes.decode("utf-8", "replace")
+    stderr_text = stderr_bytes.decode("utf-8", "replace")
+    return CommandResult(
+        command=list(command),
+        returncode=process.returncode,
+        stdout=stdout_text,
+        stderr=stderr_text,
+    )
 
 
 def _normalize_parts(tail: str) -> List[str]:

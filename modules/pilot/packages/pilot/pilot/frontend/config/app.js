@@ -10,6 +10,14 @@ const moduleState = new Map();
 const root = document.getElementById('config-app');
 const statusNode = document.querySelector('.config-status');
 const refreshButton = document.querySelector('[data-role="refresh"]');
+const gitPullButton = document.querySelector('[data-role="git-pull"]');
+const pshButtons = Array.from(document.querySelectorAll('[data-role="psh-operation"]'));
+
+const PSH_OPERATION_LABELS = {
+  'module-setup': 'psh mod setup',
+  'module-up': 'psh mod up',
+  'module-down': 'psh mod down',
+};
 
 if (!root) {
   throw new Error('Configuration root element not found');
@@ -17,6 +25,16 @@ if (!root) {
 
 if (refreshButton) {
   refreshButton.addEventListener('click', () => loadModules({ announce: true }));
+}
+
+if (gitPullButton) {
+  gitPullButton.addEventListener('click', () => runGitPull(gitPullButton));
+}
+
+for (const button of pshButtons) {
+  const operation = button.dataset.operation;
+  if (!operation) continue;
+  button.addEventListener('click', () => runPshOperation(operation, button));
 }
 
 loadModules();
@@ -55,6 +73,152 @@ async function loadModules(options = {}) {
       'error',
     );
   }
+}
+
+/**
+ * Execute ``git pull --ff-only`` via the cockpit API and broadcast the result.
+ *
+ * @param {HTMLButtonElement} button Button used to trigger the action.
+ */
+async function runGitPull(button) {
+  await withActionState(button, async () => {
+    setGlobalStatus('Fetching latest workspace changes…', 'info');
+    try {
+      const response = await fetch('/api/ops/git-pull', { method: 'POST' });
+      const payload = await parseCommandResponse(response);
+      logCommandResult('git pull', payload);
+      if (payload.success) {
+        setGlobalStatus('Repository updated from origin.', 'success');
+      } else {
+        const detail = extractCommandFailure(payload) || 'git pull failed.';
+        setGlobalStatus(detail, 'error');
+      }
+    } catch (error) {
+      console.error('Failed to run git pull', error);
+      setGlobalStatus(formatErrorMessage(error, 'Unable to run git pull.'), 'error');
+    }
+  });
+}
+
+/**
+ * Invoke a permitted ``psh`` command on behalf of the operator.
+ *
+ * @param {string} operation Operation identifier (e.g. ``module-up``).
+ * @param {HTMLButtonElement} button Button used to trigger the action.
+ */
+async function runPshOperation(operation, button) {
+  const label = PSH_OPERATION_LABELS[operation] || `psh ${operation}`;
+  await withActionState(button, async () => {
+    setGlobalStatus(`Running ${label}…`, 'info');
+    try {
+      const response = await fetch('/api/ops/psh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation }),
+      });
+      const payload = await parseCommandResponse(response);
+      logCommandResult(label, payload);
+      if (payload.success) {
+        setGlobalStatus(`${label} completed.`, 'success');
+      } else {
+        const detail = extractCommandFailure(payload) || `${label} failed.`;
+        setGlobalStatus(detail, 'error');
+      }
+    } catch (error) {
+      console.error(`Failed to run ${label}`, error);
+      setGlobalStatus(formatErrorMessage(error, `Unable to run ${label}.`), 'error');
+    }
+  });
+}
+
+/**
+ * Disable a button during an asynchronous action and re-enable afterwards.
+ *
+ * @template T
+ * @param {HTMLButtonElement | null} button Button to toggle.
+ * @param {() => Promise<T>} callback Action to perform.
+ * @returns {Promise<T>}
+ */
+async function withActionState(button, callback) {
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+  }
+  try {
+    return await callback();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+  }
+}
+
+/**
+ * Parse a ``fetch`` response from a command endpoint.
+ *
+ * @param {Response} response Response returned by ``fetch``.
+ * @returns {Promise<Record<string, any>>}
+ */
+async function parseCommandResponse(response) {
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Request failed with status ${response.status}`);
+  }
+  return /** @type {Promise<Record<string, any>>} */ (response.json());
+}
+
+/**
+ * Log the output of a command execution for operators and developers.
+ *
+ * @param {string} label Friendly label for the command.
+ * @param {Record<string, any>} result Command payload from the API.
+ */
+function logCommandResult(label, result) {
+  const command = Array.isArray(result.command) ? result.command.join(' ') : String(result.command || label);
+  const header = `${label} → exit ${result.returncode}`;
+  if (typeof console.groupCollapsed === 'function') {
+    console.groupCollapsed(header, `(${command})`);
+    if (result.stdout) console.log('stdout:\n', result.stdout);
+    if (result.stderr) console.error('stderr:\n', result.stderr);
+    console.groupEnd();
+  } else {
+    console.log(header, command);
+    if (result.stdout) console.log(result.stdout);
+    if (result.stderr) console.error(result.stderr);
+  }
+}
+
+/**
+ * Derive a human-readable failure summary from a command payload.
+ *
+ * @param {Record<string, any>} result Command payload from the API.
+ * @returns {string | null}
+ */
+function extractCommandFailure(result) {
+  const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+  const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+  if (stderr) {
+    return stderr.split('\n').slice(-1)[0];
+  }
+  if (stdout) {
+    return stdout.split('\n').slice(-1)[0];
+  }
+  return null;
+}
+
+/**
+ * Render a consistent error message for exceptions.
+ *
+ * @param {unknown} error Error value caught from ``fetch`` or JSON parsing.
+ * @param {string} fallback Message to use when *error* lacks detail.
+ * @returns {string}
+ */
+function formatErrorMessage(error, fallback) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 /**

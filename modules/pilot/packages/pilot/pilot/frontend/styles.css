@@ -1563,11 +1563,27 @@ h5.audio-oscilloscope {
 
 .config-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
 }
 
-.config-refresh {
+.config-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.config-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid rgba(88, 178, 220, 0.25);
+}
+
+.config-action {
   border: none;
   padding: 0.6rem 1.1rem;
   border-radius: 999px;
@@ -1575,15 +1591,27 @@ h5.audio-oscilloscope {
   color: var(--lcars-text);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
-.config-refresh:hover,
-.config-refresh:focus {
+.config-action:hover,
+.config-action:focus {
   background: rgba(88, 178, 220, 0.35);
+  transform: translateY(-1px);
+}
+
+.config-action:active {
+  transform: translateY(0);
+}
+
+.config-action[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .config-status {
+  flex: 1 1 220px;
   min-height: 1.25rem;
   font-size: 0.95rem;
   color: var(--lcars-muted);
