@@ -1,0 +1,70 @@
+/**
+ * Build navigation section descriptors for the pilot sidebar.
+ *
+ * The helper mirrors the module sections rendered by <pilot-app> so the
+ * Alpine-powered navigation can keep pace even when the custom element fires
+ * its update event before Alpine attaches listeners.
+ *
+ * @example
+ * buildNavigationSections([{ name: 'imu', slug: 'imu', has_pilot: true }])
+ * // => [
+ * //      { id: 'pilot-config', label: 'Module Configuration', index: 0, url: '/config/' },
+ * //      { id: 'module-imu', label: 'imu', index: 1, url: '/modules/imu/' }
+ * //    ]
+ *
+ * @param {Array<object>} modules - Module payloads from the /api/modules endpoint.
+ * @returns {Array<object>} Ordered navigation section descriptors.
+ */
+export function buildNavigationSections(modules) {
+  const sections = [
+    {
+      id: 'pilot-config',
+      label: 'Module Configuration',
+      index: 0,
+      url: '/config/',
+    },
+  ];
+
+  if (!Array.isArray(modules)) {
+    return sections;
+  }
+
+  let index = 1;
+  for (const module of modules) {
+    if (!module || typeof module !== 'object') {
+      continue;
+    }
+
+    const name = typeof module.name === 'string' ? module.name : '';
+    const slugCandidate = typeof module.slug === 'string' ? module.slug.trim() : '';
+    const slug = slugCandidate || name;
+    if (!slug) {
+      continue;
+    }
+
+    const displayName = typeof module.display_name === 'string' && module.display_name.trim()
+      ? module.display_name.trim()
+      : name || slug;
+
+    const entry = {
+      id: `module-${slug}`,
+      label: displayName,
+      index: index++,
+    };
+
+    const dashboardUrl = typeof module.dashboard_url === 'string' && module.dashboard_url.trim()
+      ? module.dashboard_url.trim()
+      : '';
+    const hasPilot = Boolean(module.has_pilot);
+
+    if (dashboardUrl) {
+      entry.url = dashboardUrl;
+    } else if (hasPilot && name) {
+      entry.url = `/modules/${name}/`;
+    }
+
+    sections.push(entry);
+  }
+
+  return sections;
+}

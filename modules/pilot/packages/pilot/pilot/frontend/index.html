@@ -69,6 +69,17 @@
                 }
               }
             };
+            const applySections = (sections) => {
+              if (!Array.isArray(sections)) {
+                return;
+              }
+              this.sections = sections.map((section) => ({ ...section }));
+              this.topSectionId = this.sections.length ? this.sections[0].id : null;
+              if (this.sections.length && !this.activeId) {
+                this.activeId = this.sections[0].id;
+              }
+              updateActive();
+            };
             this.scrollTo = (id) => {
               const node = document.getElementById(id);
               if (node) {
@@ -82,14 +93,15 @@
             };
             this.padIndex = (value) => String(value + 1).padStart(2, '0');
             window.addEventListener('pilot-sections', (event) => {
-              this.sections = event.detail || [];
-              this.topSectionId = this.sections.length ? this.sections[0].id : null;
-              if (this.sections.length && !this.activeId) {
-                this.activeId = this.sections[0].id;
-              }
-              updateActive();
+              applySections(event.detail);
             });
             window.addEventListener('scroll', updateActive, { passive: true });
+            const cachedSections = window.Pilot && window.Pilot.navigation && Array.isArray(window.Pilot.navigation.sections)
+              ? window.Pilot.navigation.sections
+              : null;
+            if (cachedSections && cachedSections.length) {
+              applySections(cachedSections);
+            }
           },
         };
       }
