@@ -11,7 +11,7 @@ pip = [
 patches = []
 launch = "modules/faces/launch_unit.sh"
 shutdown = "modules/faces/shutdown_unit.sh"
-pilot_control = "modules/faces/pilot/components/FacesModulePanel.tsx"
+pilot_control = "modules/faces/pilot/index.html"
 
 [unit.faces.ros]
 workspace = "."

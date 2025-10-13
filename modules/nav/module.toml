@@ -17,7 +17,7 @@ patches = [
 # build_psyched_nav.sh runs colcon build --packages-select psyched_nav to compile the overlay package.
 launch = "modules/nav/launch_unit.sh"
 shutdown = "modules/nav/shutdown_unit.sh"
-pilot_control = "modules/nav/pilot/components/NavModulePanel.tsx"
+pilot_control = "modules/nav/pilot/index.html"
 
 [unit.nav.ros]
 workspace = "."

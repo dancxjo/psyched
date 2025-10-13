@@ -3,7 +3,7 @@ apt = []
 pip = []
 launch = "modules/memory/launch_unit.sh"
 shutdown = "modules/memory/shutdown_unit.sh"
-pilot_control = "modules/memory/pilot/components/MemoryModulePanel.tsx"
+pilot_control = "modules/memory/pilot/index.html"
 
 [unit.memory.ros]
 workspace = "."

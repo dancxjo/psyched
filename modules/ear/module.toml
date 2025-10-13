@@ -6,7 +6,7 @@ apt = [
 pip = []
 launch = "modules/ear/launch_unit.sh"
 shutdown = "modules/ear/shutdown_unit.sh"
-pilot_control = "modules/ear/pilot/components/EarModulePanel.tsx"
+pilot_control = "modules/ear/pilot/index.html"
 
 [unit.ear.ros]
 workspace = "."

@@ -8,7 +8,7 @@ patches = [
 ]
 launch = "modules/chat/launch_unit.sh"
 shutdown = "modules/chat/shutdown_unit.sh"
-pilot_control = "modules/chat/pilot/components/ChatModulePanel.tsx"
+pilot_control = "modules/chat/pilot/index.html"
 
 [unit.chat.ros]
 workspace = "."

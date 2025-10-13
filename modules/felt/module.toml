@@ -3,7 +3,7 @@ apt = []
 pip = []
 launch = "modules/felt/launch_unit.sh"
 shutdown = "modules/felt/shutdown_unit.sh"
-pilot_control = "modules/felt/pilot/components/FeltModulePanel.tsx"
+pilot_control = "modules/felt/pilot/index.html"
 
 [unit.felt.ros]
 workspace = "."

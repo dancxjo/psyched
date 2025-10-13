@@ -5,7 +5,7 @@ pip = []
 patches = ["modules/foot/apply_patches.sh"]
 launch = "modules/foot/launch_unit.sh"
 shutdown = "modules/foot/shutdown_unit.sh"
-pilot_control = "modules/foot/pilot/components/FootControlPanel.tsx"
+pilot_control = "modules/foot/pilot/index.html"
 
 [[unit.foot.git]]
 url = "https://github.com/autonomylab/create_robot.git"

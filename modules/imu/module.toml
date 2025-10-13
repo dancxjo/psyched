@@ -15,7 +15,7 @@ patches = ["modules/imu/apply_patches.sh"]
 # Service control
 launch = "modules/imu/launch_unit.sh"
 shutdown = "modules/imu/shutdown_unit.sh"
-pilot_control = "modules/imu/pilot/components/ImuReadout.tsx"
+pilot_control = "modules/imu/pilot/index.html"
 
 [[unit.imu.git]]
 url = "https://github.com/hiwad-aziz/ros2_mpu6050_driver.git"
