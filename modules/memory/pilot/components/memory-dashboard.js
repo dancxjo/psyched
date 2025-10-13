@@ -33,58 +33,6 @@ class MemoryDashboard extends LitElement {
   static styles = [
     surfaceStyles,
     css`
-      form {
-        display: grid;
-        gap: 0.75rem;
-      }
-
-      .form-row {
-        display: grid;
-        gap: 0.5rem;
-      }
-
-      .form-row--split {
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 0.75rem;
-      }
-
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--metric-label-color);
-      }
-
-      input,
-      textarea {
-        font: inherit;
-        padding: 0.6rem 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--control-surface-border);
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--lcars-text);
-        font-family: var(--metric-value-font);
-      }
-
-      textarea {
-        resize: vertical;
-        min-height: 90px;
-      }
-
-      .results-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        max-height: 280px;
-        overflow-y: auto;
-      }
-
       .result-entry {
         background: rgba(0, 0, 0, 0.35);
         border: 1px solid var(--control-surface-border);
@@ -119,24 +67,26 @@ class MemoryDashboard extends LitElement {
 
   render() {
     return html`
-      <div class="surface-grid surface-grid--wide">
-        <article class="surface-card surface-card--wide">
+      <div class="surface-grid surface-grid--wide surface-grid--dense">
+        <article class="surface-card surface-card--wide surface-card--compact">
           <h3 class="surface-card__title">Memory search</h3>
           <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
-          <form @submit=${this.handleQuerySubmit}>
-            <label>
-              Query text
+          <form class="surface-form surface-form--compact" @submit=${this.handleQuerySubmit}>
+            <label class="surface-field">
+              <span class="surface-label">Query text</span>
               <textarea
+                class="surface-textarea"
                 name="query"
                 placeholder="e.g. What did Pete observe during the afternoon patrol?"
                 .value=${this.queryText}
                 @input=${(event) => (this.queryText = event.target.value)}
               ></textarea>
             </label>
-            <div class="form-row form-row--split">
-              <label>
-                Results
+            <div class="surface-grid surface-grid--dense surface-grid--narrow">
+              <label class="surface-field">
+                <span class="surface-label">Results</span>
                 <input
+                  class="surface-input surface-input--small"
                   type="number"
                   min="1"
                   max="20"
@@ -156,7 +106,7 @@ class MemoryDashboard extends LitElement {
             </div>
           </form>
           ${this.queryResults.length
-            ? html`<ol class="results-list">
+            ? html`<ol class="surface-list surface-list--scrollable">
                 ${this.queryResults.map(
                   (entry) => html`<li class="result-entry">
                     <div class="result-entry__meta">
@@ -174,32 +124,35 @@ class MemoryDashboard extends LitElement {
             : html`<p class="surface-empty">No query results yet.</p>`}
         </article>
 
-        <article class="surface-card surface-card--wide">
+        <article class="surface-card surface-card--wide surface-card--compact">
           <h3 class="surface-card__title">Store new memory</h3>
           ${this.storeFeedback
             ? html`<p class="surface-status" data-variant="error">${this.storeFeedback}</p>`
             : ''}
-          <form @submit=${this.handleStoreSubmit}>
-            <label>
-              Title
+          <form class="surface-form surface-form--compact" @submit=${this.handleStoreSubmit}>
+            <label class="surface-field">
+              <span class="surface-label">Title</span>
               <input
+                class="surface-input"
                 type="text"
                 name="title"
                 .value=${this.storeTitle}
                 @input=${(event) => (this.storeTitle = event.target.value)}
               />
             </label>
-            <label>
-              Details
+            <label class="surface-field">
+              <span class="surface-label">Details</span>
               <textarea
+                class="surface-textarea"
                 name="body"
                 .value=${this.storeBody}
                 @input=${(event) => (this.storeBody = event.target.value)}
               ></textarea>
             </label>
-            <label>
-              Tags
+            <label class="surface-field">
+              <span class="surface-label">Tags</span>
               <input
+                class="surface-input"
                 type="text"
                 name="tags"
                 placeholder="comma,separated,tags"
