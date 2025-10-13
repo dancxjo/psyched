@@ -217,6 +217,96 @@ export function createTopicSocket(options) {
   return new TopicSocket(options);
 }
 
+/**
+ * Call a ROS service through rosbridge and return the response payload.
+ *
+ * @param {{ service: string, type?: string, args?: object, timeoutMs?: number }} options
+ * @returns {Promise<object>}
+ */
+export function callRosService(options) {
+  if (!options || !options.service) {
+    return Promise.reject(new Error('Service name is required'));
+  }
+
+  const service = options.service;
+  const type = options.type;
+  const args = options.args || {};
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? Number(options.timeoutMs) : 8000;
+
+  return new Promise((resolve, reject) => {
+    const requestId = `svc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const ws = new WebSocket(resolveRosbridgeUrl());
+    let settled = false;
+
+    const cleanup = () => {
+      ws.removeEventListener('open', handleOpen);
+      ws.removeEventListener('message', handleMessage);
+      ws.removeEventListener('error', handleError);
+      ws.removeEventListener('close', handleClose);
+    };
+
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      try {
+        ws.close();
+      } catch (_error) {
+        // ignore socket shutdown errors
+      }
+      callback(value);
+    };
+
+    const handleOpen = () => {
+      const payload = {
+        op: 'call_service',
+        service,
+        args,
+        id: requestId,
+      };
+      if (type) {
+        payload.type = type;
+      }
+      ws.send(JSON.stringify(payload));
+    };
+
+    const handleMessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.op === 'service_response' && payload.id === requestId) {
+          if (payload.result === false) {
+            finish(reject, new Error(payload.values?.message || `Service ${service} returned an error`));
+            return;
+          }
+          finish(resolve, payload.values ?? {});
+        }
+      } catch (error) {
+        finish(reject, error instanceof Error ? error : new Error('Failed to parse service response'));
+      }
+    };
+
+    const handleError = () => {
+      finish(reject, new Error(`Service call to ${service} failed`));
+    };
+
+    const handleClose = () => {
+      finish(reject, new Error(`Service ${service} connection closed before a response was received`));
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error(`Timed out waiting for ${service}`));
+    }, timeoutMs);
+
+    ws.addEventListener('open', handleOpen);
+    ws.addEventListener('message', handleMessage);
+    ws.addEventListener('error', handleError);
+    ws.addEventListener('close', handleClose);
+  });
+}
+
 export function pilotDashboard() {
   return {
     modules: [],
