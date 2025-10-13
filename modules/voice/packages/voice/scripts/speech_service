@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Entry point used by ros2 run to launch the voice speech service."""
+
+from __future__ import annotations
+
+from voice.cli import main
+
+
+if __name__ == "__main__":
+    main()

@@ -8,10 +8,13 @@ pip = [
     "numpy",
 ]
 patches = [
+    # install_nav2_deps.sh installs ros-${ROS_DISTRO}-nav2-amcl, ros-${ROS_DISTRO}-nav2-bringup,
+    # and related Nav2 packages while skipping RTAB-Map to keep the stack lean.
     "modules/nav/scripts/install_nav2_deps.sh",
     "modules/nav/scripts/link_nav2_sources.sh",
     "modules/nav/scripts/build_psyched_nav.sh",
 ]
+# build_psyched_nav.sh runs colcon build --packages-select psyched_nav to compile the overlay package.
 launch = "modules/nav/launch_unit.sh"
 shutdown = "modules/nav/shutdown_unit.sh"
 pilot_control = "modules/nav/pilot/components/NavModulePanel.tsx"

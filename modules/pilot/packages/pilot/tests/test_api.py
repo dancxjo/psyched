@@ -34,7 +34,7 @@ def config_file(tmp_path: Path) -> Iterator[Path]:
     text = """
 [host]
 name = "api-test"
-modules = ["imu", "pilot", "foot"]
+modules = ["imu", "pilot", "foot", "viscera"]
 
 [config.mod.imu.launch]
 enabled = true
@@ -55,7 +55,7 @@ def config_with_settings(tmp_path: Path) -> Iterator[Path]:
     text = """
 [host]
 name = "config-test"
-modules = ["imu", "pilot", "foot"]
+modules = ["imu", "pilot", "foot", "viscera"]
 
 [config.mod.imu.launch]
 enabled = true
@@ -149,7 +149,7 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
 
     modules = payload["modules"]
     module_names = {module["name"] for module in modules}
-    assert module_names == {"imu", "pilot", "foot"}
+    assert module_names == {"imu", "pilot", "foot", "viscera"}
 
     foot_entry = next(module for module in modules if module["name"] == "foot")
     assert foot_entry["has_pilot"] is True
@@ -157,6 +157,10 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
 
     imu_entry = next(module for module in modules if module["name"] == "imu")
     assert imu_entry["has_pilot"] is True
+
+    viscera_entry = next(module for module in modules if module["name"] == "viscera")
+    assert viscera_entry["has_pilot"] is True
+    assert viscera_entry["dashboard_url"].endswith("/modules/viscera/")
 
     for module in modules:
         assert module.get("slug"), "modules should expose a slug"
@@ -170,6 +174,12 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
         "rosbridge_uri": settings.rosbridge_uri,
         "video_base": settings.video_base,
         "video_port": settings.video_port,
+    }
+
+    host_meta = payload.get("host")
+    assert host_meta == {
+        "name": "api-test",
+        "shortname": "api-test",
     }
 
 
@@ -196,6 +206,12 @@ async def _exercise_static_overlay(config_file: Path) -> None:
         html = await index_response.text()
         assert "Create Base Control" in html
 
+        viscera_dashboard = await client.get("/modules/viscera/components/viscera-dashboard.js")
+        assert viscera_dashboard.status == 200
+
+        viscera_index = await client.get("/modules/viscera/")
+        assert viscera_index.status == 200
+
         missing = await client.get("/modules/unknown/widget.html")
         assert missing.status == 404
 
@@ -217,7 +233,7 @@ async def _exercise_module_config_endpoint(config_file: Path, tmp_path: Path) ->
         payload = await response.json()
 
         modules = {module["name"]: module for module in payload["modules"]}
-        assert set(modules) == {"imu", "pilot", "foot"}
+        assert set(modules) == {"imu", "pilot", "foot", "viscera"}
 
         imu_entry = modules["imu"]
         assert imu_entry["listed"] is True

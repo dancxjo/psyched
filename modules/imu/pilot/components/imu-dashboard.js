@@ -8,8 +8,6 @@ class ImuDashboard extends LitElement {
         orientation: { state: true },
         angularVelocity: { state: true },
         linearAcceleration: { state: true },
-        temperatureC: { state: true },
-        temperatureF: { state: true },
     };
 
     static styles = [
@@ -31,15 +29,12 @@ class ImuDashboard extends LitElement {
         this.orientation = { x: 0, y: 0, z: 0, w: 0 };
         this.angularVelocity = { x: 0, y: 0, z: 0 };
         this.linearAcceleration = { x: 0, y: 0, z: 0 };
-        this.temperatureC = null;
-        this.temperatureF = null;
         this.sockets = [];
     }
 
     connectedCallback() {
         super.connectedCallback();
         this.connectImu();
-        this.connectTemperature();
     }
 
     disconnectedCallback() {
@@ -54,6 +49,12 @@ class ImuDashboard extends LitElement {
         this.sockets.length = 0;
     }
 
+    /**
+     * Subscribe to the IMU data stream and propagate orientation and motion updates.
+     *
+     * The IMU hardware does not expose a temperature sensor, so the cockpit only
+     * renders the core kinematic telemetry delivered by this topic.
+     */
     connectImu() {
         const socket = createTopicSocket({
             topic: '/imu/data',
@@ -75,25 +76,6 @@ class ImuDashboard extends LitElement {
         });
         socket.addEventListener('error', () => {
             this.status = 'Error';
-        });
-        this.sockets.push(socket);
-    }
-
-    connectTemperature() {
-        const socket = createTopicSocket({
-            topic: '/imu/temperature',
-            type: 'std_msgs/msg/Float32',
-            role: 'subscribe',
-        });
-        socket.addEventListener('message', (event) => {
-            const payload = JSON.parse(event.data);
-            if (payload.event === 'message' && payload.data && 'data' in payload.data) {
-                const celsius = Number(payload.data.data);
-                if (!Number.isNaN(celsius)) {
-                    this.temperatureC = celsius;
-                    this.temperatureF = celsius * (9 / 5) + 32;
-                }
-            }
         });
         this.sockets.push(socket);
     }
@@ -133,18 +115,6 @@ class ImuDashboard extends LitElement {
               <span class="surface-metric__label">${axis.toUpperCase()}</span>
               <span class="surface-metric__value">${this.format(this.linearAcceleration[axis])}</span>
             </div>`)}
-        </article>
-
-        <article class="surface-card">
-          <h3 class="surface-card__title">Temperature</h3>
-          <div class="surface-metric surface-metric--inline">
-            <span class="surface-metric__label">Celsius</span>
-            <span class="surface-metric__value">${this.temperatureC !== null ? this.format(this.temperatureC, 1) : '—'}</span>
-          </div>
-          <div class="surface-metric surface-metric--inline">
-            <span class="surface-metric__label">Fahrenheit</span>
-            <span class="surface-metric__value">${this.temperatureF !== null ? this.format(this.temperatureF, 1) : '—'}</span>
-          </div>
         </article>
       </div>
     `;

@@ -233,6 +233,12 @@ export function pilotDashboard() {
         if (typeof window !== 'undefined') {
           const pilotGlobals = window.Pilot ? { ...window.Pilot } : {};
           pilotGlobals.bridge = mergeBridgeConfig(payload.bridge);
+          if (payload.host && typeof payload.host === 'object') {
+            pilotGlobals.host = {
+              ...(pilotGlobals.host || {}),
+              ...payload.host,
+            };
+          }
           window.Pilot = pilotGlobals;
         }
       } catch (error) {

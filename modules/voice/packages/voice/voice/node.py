@@ -46,10 +46,8 @@ class VoiceNode(Node):
         self.create_subscription(Empty, clear_topic, self._handle_clear, 10)
 
         self.get_logger().info(
-            "Voice node ready (backend=%s, input_topic=%s, spoken_topic=%s)",
-            backend.__class__.__name__,
-            input_topic,
-            self._spoken_pub.topic_name,
+            f"Voice node ready (backend={backend.__class__.__name__}, "
+            f"input_topic={input_topic}, spoken_topic={self._spoken_pub.topic_name})",
         )
 
     # ------------------------------------------------------------------ helpers
@@ -85,7 +83,7 @@ class VoiceNode(Node):
                 return espeak_backend
             return PrintSpeechBackend()
         self.get_logger().warning(
-            "Unknown backend '%s'; defaulting to print backend", backend_name
+            f"Unknown backend '{backend_name}'; defaulting to print backend"
         )
         return PrintSpeechBackend()
 
@@ -96,15 +94,11 @@ class VoiceNode(Node):
             return EspeakSpeechBackend()
         except FileNotFoundError as error:
             self.get_logger().warning(
-                "espeak backend unavailable (%s); %s",
-                error,
-                failure_hint,
+                f"espeak backend unavailable ({error}); {failure_hint}",
             )
         except Exception as error:
             self.get_logger().error(
-                "Failed to initialise espeak backend: %s; %s",
-                error,
-                failure_hint,
+                f"Failed to initialise espeak backend: {error}; {failure_hint}",
             )
         return None
 
@@ -143,8 +137,7 @@ class VoiceNode(Node):
             )
         except Exception as error:
             self.get_logger().error(
-                "Failed to initialise websocket speech backend: %s",
-                error,
+                f"Failed to initialise websocket speech backend: {error}",
             )
             return None
 
@@ -154,7 +147,7 @@ class VoiceNode(Node):
         text = msg.data.strip()
         if not text:
             return
-        self.get_logger().debug("Queueing text: %s", text)
+        self.get_logger().debug(f"Queueing text: {text}")
         self._queue.enqueue(text)
 
     def _handle_pause(self, _: Empty) -> None:
@@ -179,7 +172,7 @@ class VoiceNode(Node):
         msg = String()
         msg.data = text
         self._spoken_pub.publish(msg)
-        self.get_logger().info("Spoken: %s", text)
+        self.get_logger().info(f"Spoken: {text}")
 
     # ---------------------------------------------------------------- lifecycle
     def destroy_node(self) -> bool:

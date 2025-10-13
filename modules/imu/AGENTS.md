@@ -1,3 +1,3 @@
 # IMU module notes
 
-- Mirror Celsius telemetry with Fahrenheit readouts in cockpit components so operators can scan both units at a glance.
+- The hardware stack no longer exposes IMU temperature telemetry; keep cockpit surfaces scoped to orientation and motion data only.

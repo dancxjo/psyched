@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/chat/pilot/components/chat-dashboard.js

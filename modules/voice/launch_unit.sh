@@ -15,42 +15,41 @@ VOICE_TTS_PATH=${VOICE_TTS_PATH:-}
 VOICE_TTS_SPEAKER=${VOICE_TTS_SPEAKER:-}
 VOICE_TTS_LANGUAGE=${VOICE_TTS_LANGUAGE:-}
 
-ROS_ARGS=(
-  -p backend:="${BACKEND}"
-  -p input_topic:="${VOICE_INPUT_TOPIC}"
-  -p spoken_topic:="${VOICE_SPOKEN_TOPIC}"
-  -p pause_topic:="${VOICE_PAUSE_TOPIC}"
-  -p resume_topic:="${VOICE_RESUME_TOPIC}"
-  -p clear_topic:="${VOICE_CLEAR_TOPIC}"
+LAUNCH_ARGS=(
+  "backend:=${BACKEND}"
+  "input_topic:=${VOICE_INPUT_TOPIC}"
+  "spoken_topic:=${VOICE_SPOKEN_TOPIC}"
+  "pause_topic:=${VOICE_PAUSE_TOPIC}"
+  "resume_topic:=${VOICE_RESUME_TOPIC}"
+  "clear_topic:=${VOICE_CLEAR_TOPIC}"
 )
 
 if [[ -n "${VOICE_TTS_URL}" ]]; then
-  ROS_ARGS+=(-p tts_url:="${VOICE_TTS_URL}")
+  LAUNCH_ARGS+=("tts_url:=${VOICE_TTS_URL}")
 else
   if [[ -n "${VOICE_TTS_SCHEME}" ]]; then
-    ROS_ARGS+=(-p tts_scheme:="${VOICE_TTS_SCHEME}")
+    LAUNCH_ARGS+=("tts_scheme:=${VOICE_TTS_SCHEME}")
   fi
   if [[ -n "${VOICE_TTS_HOST}" ]]; then
-    ROS_ARGS+=(-p tts_host:="${VOICE_TTS_HOST}")
+    LAUNCH_ARGS+=("tts_host:=${VOICE_TTS_HOST}")
   fi
   if [[ -n "${VOICE_TTS_PORT}" ]]; then
-    ROS_ARGS+=(-p tts_port:=${VOICE_TTS_PORT})
+    LAUNCH_ARGS+=("tts_port:=${VOICE_TTS_PORT}")
   fi
   if [[ -n "${VOICE_TTS_PATH}" ]]; then
-    ROS_ARGS+=(-p tts_path:="${VOICE_TTS_PATH}")
+    LAUNCH_ARGS+=("tts_path:=${VOICE_TTS_PATH}")
   fi
 fi
 
 if [[ -n "${VOICE_TTS_SPEAKER}" ]]; then
-  ROS_ARGS+=(-p tts_speaker:="${VOICE_TTS_SPEAKER}")
+  LAUNCH_ARGS+=("tts_speaker:=${VOICE_TTS_SPEAKER}")
 fi
 
 if [[ -n "${VOICE_TTS_LANGUAGE}" ]]; then
-  ROS_ARGS+=(-p tts_language:="${VOICE_TTS_LANGUAGE}")
+  LAUNCH_ARGS+=("tts_language:=${VOICE_TTS_LANGUAGE}")
 fi
 
-ros2 run voice speech_service \
-  --ros-args \
-    "${ROS_ARGS[@]}" &
+ros2 launch voice speech.launch.py \
+  "${LAUNCH_ARGS[@]}" &
 
 wait -n

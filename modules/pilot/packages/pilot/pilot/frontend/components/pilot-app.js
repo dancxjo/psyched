@@ -7,6 +7,8 @@ const MODULE_COMPONENTS = {
   chat: 'chat-dashboard',
   voice: 'voice-dashboard',
   hypothalamus: 'hypothalamus-dashboard',
+  viscera: 'viscera-dashboard',
+  nav: 'nav-dashboard',
 };
 
 /**
@@ -47,6 +49,7 @@ class PilotApp extends LitElement {
       const payload = await response.json();
       this.modules = Array.isArray(payload.modules) ? payload.modules : [];
       this.broadcastNavigation();
+      this.updateHostGlobals(payload.host);
       this.updateBridgeGlobals(payload.bridge);
       await this.loadModuleComponents();
     } catch (error) {
@@ -78,6 +81,18 @@ class PilotApp extends LitElement {
     pilotGlobals.bridge = {
       ...(pilotGlobals.bridge || {}),
       ...(bridge || {}),
+    };
+    window.Pilot = pilotGlobals;
+  }
+
+  updateHostGlobals(host) {
+    if (typeof window === 'undefined' || !host || typeof host !== 'object') {
+      return;
+    }
+    const pilotGlobals = window.Pilot ? { ...window.Pilot } : {};
+    pilotGlobals.host = {
+      ...(pilotGlobals.host || {}),
+      ...host,
     };
     window.Pilot = pilotGlobals;
   }
@@ -161,6 +176,8 @@ class PilotApp extends LitElement {
       'chat-dashboard': html`<chat-dashboard></chat-dashboard>`,
       'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
       'hypothalamus-dashboard': html`<hypothalamus-dashboard></hypothalamus-dashboard>`,
+      'viscera-dashboard': html`<viscera-dashboard></viscera-dashboard>`,
+      'nav-dashboard': html`<nav-dashboard></nav-dashboard>`,
     };
     return tagMap[tagName] || html`<p>Component ${tagName} not found</p>`;
   }

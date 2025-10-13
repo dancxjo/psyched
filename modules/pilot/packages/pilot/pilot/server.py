@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import socket
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
@@ -144,7 +145,8 @@ async def _modules_handler(request: web.Request) -> web.Response:
     settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
     catalog = _get_module_catalog(request.app)
 
-    active_descriptors = settings.active_modules()
+    config = settings.load_config()
+    active_descriptors = discover_active_modules(config)
     catalog.refresh()
     modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
     payload = {
@@ -155,6 +157,7 @@ async def _modules_handler(request: web.Request) -> web.Response:
             "video_base": settings.video_base,
             "video_port": settings.video_port,
         },
+        "host": _host_metadata(config),
     }
     return web.json_response(payload)
 
@@ -428,7 +431,41 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
     if dashboard_url:
         data["dashboard_url"] = dashboard_url
     return data
-    return data
+
+
+def _host_metadata(config: Mapping[str, Any]) -> Dict[str, str]:
+    """Return host metadata that helps dashboards connect to telemetry feeds.
+
+    The helper prefers the ``[host].name`` entry from the TOML configuration
+    and falls back to :func:`socket.gethostname` when the value is absent.
+
+    Examples
+    --------
+    >>> _host_metadata({"host": {"name": "pete.local"}})["shortname"]
+    'pete'
+    >>> _host_metadata({"host": {}})["name"]  # doctest: +SKIP
+    'pete'
+    """
+
+    host_section = config.get("host")
+    raw_name = ""
+    if isinstance(host_section, Mapping):
+        name_value = host_section.get("name")
+        if isinstance(name_value, str):
+            raw_name = name_value.strip()
+        elif name_value is not None:
+            raw_name = str(name_value).strip()
+
+    shortname = raw_name.split(".")[0] if raw_name else ""
+    if not shortname:
+        fallback = socket.gethostname()
+        shortname = fallback.split(".")[0] if fallback else "host"
+
+    if not shortname:
+        shortname = "host"
+
+    name = raw_name or shortname
+    return {"name": name, "shortname": shortname}
 
 
 def _get_module_catalog(app: web.Application) -> ModuleCatalog:
