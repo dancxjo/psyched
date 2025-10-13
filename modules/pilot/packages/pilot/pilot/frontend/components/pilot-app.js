@@ -2,13 +2,19 @@ import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
-  foot: 'foot-dashboard',
-  imu: 'imu-dashboard',
   chat: 'chat-dashboard',
-  voice: 'voice-dashboard',
+  ear: 'ear-dashboard',
+  eye: 'eye-dashboard',
+  faces: 'faces-dashboard',
+  felt: 'felt-dashboard',
+  foot: 'foot-dashboard',
+  gps: 'gps-dashboard',
   hypothalamus: 'hypothalamus-dashboard',
-  viscera: 'viscera-dashboard',
+  imu: 'imu-dashboard',
+  memory: 'memory-dashboard',
   nav: 'nav-dashboard',
+  viscera: 'viscera-dashboard',
+  voice: 'voice-dashboard',
 };
 
 /**
@@ -171,13 +177,19 @@ class PilotApp extends LitElement {
   renderComponent(tagName) {
     // Create the component element dynamically based on tag name
     const tagMap = {
-      'foot-dashboard': html`<foot-dashboard></foot-dashboard>`,
-      'imu-dashboard': html`<imu-dashboard></imu-dashboard>`,
       'chat-dashboard': html`<chat-dashboard></chat-dashboard>`,
-      'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
+      'ear-dashboard': html`<ear-dashboard></ear-dashboard>`,
+      'eye-dashboard': html`<eye-dashboard></eye-dashboard>`,
+      'faces-dashboard': html`<faces-dashboard></faces-dashboard>`,
+      'felt-dashboard': html`<felt-dashboard></felt-dashboard>`,
+      'foot-dashboard': html`<foot-dashboard></foot-dashboard>`,
+      'gps-dashboard': html`<gps-dashboard></gps-dashboard>`,
       'hypothalamus-dashboard': html`<hypothalamus-dashboard></hypothalamus-dashboard>`,
-      'viscera-dashboard': html`<viscera-dashboard></viscera-dashboard>`,
+      'imu-dashboard': html`<imu-dashboard></imu-dashboard>`,
+      'memory-dashboard': html`<memory-dashboard></memory-dashboard>`,
       'nav-dashboard': html`<nav-dashboard></nav-dashboard>`,
+      'viscera-dashboard': html`<viscera-dashboard></viscera-dashboard>`,
+      'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
     };
     return tagMap[tagName] || html`<p>Component ${tagName} not found</p>`;
   }

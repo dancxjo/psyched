@@ -6,3 +6,4 @@
 - Keep the cockpit frontend lightweight: static HTML, CSS, and browser JavaScript only (no bundlers or frameworks that require a build step).
 - Reuse the shared utilities in `/components/pilot-style.js` for layout, forms, and controls so dashboards stay visually consistent and compact.
 - Ensure HTTP endpoints have corresponding unit tests for their request/response contracts where practical.
+- When introducing new module dashboards, register the component tag in `pilot/frontend/components/pilot-app.js` so the cockpit can render it.
