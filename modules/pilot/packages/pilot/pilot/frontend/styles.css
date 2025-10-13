@@ -114,6 +114,27 @@ body {
   font-size: 0.9rem;
 }
 
+.nav-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 1px solid rgba(248, 128, 60, 0.45);
+  background: rgba(248, 128, 60, 0.12);
+  color: var(--lcars-accent);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-shortcut:hover,
+.nav-shortcut:focus {
+  background: rgba(248, 128, 60, 0.25);
+  color: #fff;
+}
+
 .nav-link:hover,
 .nav-link:focus {
   background: rgba(88, 178, 220, 0.2);

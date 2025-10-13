@@ -15,6 +15,7 @@ modules = [
   "hypothalamus",
   "memory",
   "chat",
+  "felt",
 ]
 
 [config.mod.ear.env]
