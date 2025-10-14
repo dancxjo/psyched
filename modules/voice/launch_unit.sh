@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
+export REPO_DIR
+
 BACKEND=${VOICE_BACKEND:-coqui}
 VOICE_INPUT_TOPIC=${VOICE_INPUT_TOPIC:-/voice}
 VOICE_SPOKEN_TOPIC=${VOICE_SPOKEN_TOPIC:-/voice/spoken}
@@ -48,6 +52,59 @@ fi
 if [[ -n "${VOICE_TTS_LANGUAGE}" ]]; then
   LAUNCH_ARGS+=("tts_language:=${VOICE_TTS_LANGUAGE}")
 fi
+
+if [[ -f "${REPO_DIR}/work/install/setup.bash" ]]; then
+  # colcon's setup scripts read unset vars, so relax -u while sourcing.
+  set +u
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/work/install/setup.bash"
+  set -u
+fi
+
+if [[ -f "${REPO_DIR}/work/install/voice/share/voice/local_setup.bash" ]]; then
+  set +u
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/work/install/voice/share/voice/local_setup.bash"
+  set -u
+fi
+
+find_and_prepend_websockets() {
+  # Candidate site-packages where a newer 'websockets' may be installed.
+  candidates=(
+    "${REPO_DIR}/work/install/voice/lib/python3.12/site-packages"
+    "/opt/ros/*/colcon-venv/lib/python3.12/site-packages"
+  )
+
+  for cand in "${candidates[@]}"; do
+    # Expand globs
+    for path in $cand; do
+      if [[ -d "$path" ]]; then
+        # Check whether importing websockets from this path yields a __version__ >= 12
+        if python3 - <<PY >/dev/null 2>&1
+import sys
+sys.path.insert(0, "$path")
+try:
+    import websockets
+    ver = getattr(websockets, '__version__', '0')
+    # simple numeric check: major version >=12
+    major = int(ver.split('.')[0]) if ver and ver.split('.')[0].isdigit() else 0
+    sys.exit(0) if major >= 12 else sys.exit(2)
+except Exception:
+    sys.exit(3)
+PY
+        then
+          echo "[voice/launch] Prepending $path to PYTHONPATH to prefer modern websockets" >&2
+          export PYTHONPATH="$path:${PYTHONPATH:-}"
+          return 0
+        fi
+      fi
+    done
+  done
+  return 1
+}
+
+# Try to prefer a workspace/venv-installed websockets package if present.
+find_and_prepend_websockets || true
 
 ros2 launch voice speech.launch.py \
   "${LAUNCH_ARGS[@]}" &
