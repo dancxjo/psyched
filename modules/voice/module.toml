@@ -1,17 +1,13 @@
 [unit.voice]
-apt = [
-    "espeak",
-]
-pip = []
+apt = ["espeak"]
+pip = ["websockets>=11.0.0"]
 launch = "modules/voice/launch_unit.sh"
 shutdown = "modules/voice/shutdown_unit.sh"
 pilot_control = "modules/voice/pilot/index.html"
 
 [unit.voice.ros]
 workspace = "."
-packages = ["voice"]
-
-[pilot]
+pip = ["websockets>=12,<13"]
 display_name = "Voice"
 description = "Text-to-speech synthesis"
 regimes = ["audio"]

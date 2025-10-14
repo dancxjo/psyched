@@ -245,8 +245,30 @@ class WebsocketTTSSpeechBackend:
         self._speaker = speaker
         self._language = language
         self._connect_timeout = connect_timeout
+        # Diagnostic logging: surface user-provided configuration so failures
+        # during initialisation are easier to debug in the logs.
+        _LOGGER.debug(
+            "Initialising WebsocketTTSSpeechBackend(url=%s, speaker=%s, language=%s, player_command=%r, connect_timeout=%s)",
+            self._url,
+            self._speaker,
+            self._language,
+            player_command,
+            self._connect_timeout,
+        )
+
         self._connection_factory = connection_factory or self._default_connection_factory
-        self._player_factory = player_factory or self._build_player_factory(player_command)
+        # Build a player factory, but capture and log any initialisation errors
+        # with the provided player_command so the deployment logs show the root
+        # cause rather than a generic exception.
+        try:
+            self._player_factory = player_factory or self._build_player_factory(player_command)
+        except Exception as exc:  # pragma: no cover - surface runtime diagnostics
+            _LOGGER.error(
+                "Failed to build player factory in WebsocketTTSSpeechBackend: %s; player_command=%r",
+                exc,
+                player_command,
+            )
+            raise
 
     # ----------------------------------------------------------------- protocol
     def speak(
@@ -294,37 +316,278 @@ class WebsocketTTSSpeechBackend:
 
     # ------------------------------------------------------------------ internals
     def _default_connection_factory(self) -> AbstractContextManager[_WebsocketConnection]:
+        sync_import_failed = False
         try:
             from websockets.sync.client import connect  # type: ignore import
         except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
-            raise RuntimeError(
-                "The websockets package is required for WebsocketTTSSpeechBackend"
-            ) from exc
+            # Provide richer diagnostics so we can see which Python paths are
+            # visible to the running process and whether a websockets module
+            # exists in any of them. Don't raise here; fall back to the async
+            # API wrapper implemented below.
+            sync_import_failed = True
+            _LOGGER.error("websockets.sync client not available: %s", exc)
+            try:
+                import sys as _sys
+                _LOGGER.debug("Python sys.path: %s", _sys.path)
+            except Exception:
+                pass
+            try:
+                import importlib
+                websockets_mod = importlib.import_module("websockets")
+            except Exception as import_exc:
+                _LOGGER.debug("Importing 'websockets' failed: %s", import_exc)
+            else:
+                try:
+                    ver = getattr(websockets_mod, "__version__", "<unknown>")
+                    src = getattr(websockets_mod, "__file__", "<unknown>")
+                    _LOGGER.debug("Found websockets module version=%s at %s", ver, src)
+                except Exception:
+                    pass
 
-        return connect(self._url, open_timeout=self._connect_timeout, close_timeout=5, max_size=None)
+        _LOGGER.debug("Creating websocket connection factory for URL %s (timeout=%s)", self._url, self._connect_timeout)
+        try:
+            # Newer 'websockets' exposes a sync client API which we prefer.
+            return connect(self._url, open_timeout=self._connect_timeout, close_timeout=5, max_size=None)
+        except NameError:
+            # connect is not defined in this scope; fall through to async fallback
+            pass
+
+        # Fallback for older websockets versions that only provide an async
+        # connect coroutine. We'll run an asyncio loop in a background thread
+        # and expose a synchronous context manager that provides the minimal
+        # send/recv/close methods the backend expects.
+        try:
+            import asyncio
+            import inspect
+
+            import importlib
+
+            # Try a few common locations for the async connect API. Older
+            # websockets releases sometimes provide a connect that is not a
+            # coroutine function but instead returns an async context manager
+            # object. We'll detect both possibilities by calling the candidate
+            # with the URL and inspecting the result.
+            async_connect = None
+            async_returns_cm = False
+            tried: list[str] = []
+            for mod_name in ("websockets.client", "websockets"):
+                try:
+                    mod = importlib.import_module(mod_name)
+                except Exception:
+                    tried.append(mod_name + ":import_failed")
+                    continue
+                cand = getattr(mod, "connect", None)
+                if cand is None:
+                    tried.append(mod_name + ":no_connect")
+                    continue
+                # Determine whether the candidate is a coroutine function
+                # (the modern async connect) or a callable that returns an
+                # async context manager (older versions). We avoid calling
+                # the candidate at detection time because some implementations
+                # may require an event loop in the current thread.
+                if inspect.iscoroutinefunction(cand):
+                    async_connect = cand
+                    async_returns_cm = False
+                    break
+                # Otherwise, assume it returns an async context manager when
+                # called inside an event loop.
+                async_connect = cand
+                async_returns_cm = True
+                break
+            if async_connect is None:
+                _LOGGER.debug("Tried websockets locations: %s", tried)
+                raise RuntimeError("websockets does not expose a compatible connect API")
+
+            class _ThreadedWSConnection(AbstractContextManager):
+                def __init__(self, url: str, timeout: float):
+                    self._url = url
+                    self._timeout = timeout
+                    self._loop: asyncio.AbstractEventLoop | None = None
+                    self._thread: threading.Thread | None = None
+                    self._ws = None
+
+                def __enter__(self):
+                    # Start background event loop
+                    self._loop = asyncio.new_event_loop()
+
+                    def run_loop(loop: asyncio.AbstractEventLoop) -> None:
+                        asyncio.set_event_loop(loop)
+                        loop.run_forever()
+
+                    self._thread = threading.Thread(target=run_loop, args=(self._loop,), daemon=True)
+                    self._thread.start()
+
+                    # Open connection in the background loop
+                    # Build a coroutine that either awaits the connect
+                    # coroutine or enters the async context manager and
+                    # returns the underlying websocket/protocol object plus
+                    # the context manager so we can exit later.
+                    async def _enter_connect():
+                        cm = async_connect(self._url)
+                        # If cm has __aenter__, it's an async context manager
+                        if hasattr(cm, "__aenter__"):
+                            ws = await cm.__aenter__()
+                            return ws, cm
+                        # Otherwise cm is an awaitable returning ws
+                        ws = await cm
+                        return ws, None
+
+                    ws_obj, cm_obj = asyncio.run_coroutine_threadsafe(_enter_connect(), self._loop).result(timeout=self._timeout + 2)
+                    self._ws = ws_obj
+                    self._cm = cm_obj
+
+                    class _Conn:
+                        def __init__(self, ws, loop):
+                            self._ws = ws
+                            self._loop = loop
+
+                        def send(self, message: str | bytes) -> None:
+                            asyncio.run_coroutine_threadsafe(self._ws.send(message), self._loop).result()
+
+                        def recv(self) -> str | bytes:
+                            return asyncio.run_coroutine_threadsafe(self._ws.recv(), self._loop).result()
+
+                        def close(self) -> None:
+                            try:
+                                if hasattr(self, "_cm") and self._cm is not None:
+                                    asyncio.run_coroutine_threadsafe(self._cm.__aexit__(None, None, None), self._loop).result(timeout=2)
+                                else:
+                                    asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop).result(timeout=2)
+                            except Exception:
+                                pass
+
+                    return _Conn(self._ws, self._loop)
+
+                def __exit__(self, exc_type, exc, tb):
+                    try:
+                        if getattr(self, "_cm", None) is not None:
+                            try:
+                                asyncio.run_coroutine_threadsafe(self._cm.__aexit__(None, None, None), self._loop).result(timeout=2)
+                            except Exception:
+                                pass
+                        elif self._ws is not None:
+                            try:
+                                asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop).result(timeout=2)
+                            except Exception:
+                                pass
+                    finally:
+                        try:
+                            if self._loop is not None:
+                                self._loop.call_soon_threadsafe(self._loop.stop)
+                        except Exception:
+                            pass
+                        try:
+                            if self._thread is not None:
+                                self._thread.join(timeout=1)
+                        except Exception:
+                            pass
+
+            return _ThreadedWSConnection(self._url, self._connect_timeout)
+        except Exception as exc:  # pragma: no cover - runtime guards
+            _LOGGER.error("Failed to create async fallback websocket connection factory: %s", exc)
+            raise
 
     def _build_player_factory(
         self, player_command: Sequence[str] | None
     ) -> PlayerFactory:
+
+        # Treat an empty sequence the same as ``None``: prefer system players
+        # (aplay, then ffplay, then ffmpeg). This avoids erroring when the
+        # tts_player_command parameter is an empty list coming from the launch
+        # system.
+        requested_cmd: list[str] | None
         if player_command is None:
-            executable = shutil.which("aplay")
-            if executable is None:
-                raise FileNotFoundError("Unable to locate 'aplay' for PCM playback")
-            base_command = [executable, "-q"]
+            requested_cmd = None
         else:
-            base_command = list(player_command)
-            if not base_command:
-                raise ValueError("player_command must contain at least one element")
-            executable = shutil.which(base_command[0])
-            if executable is None:
-                raise FileNotFoundError(f"Unable to locate playback command '{base_command[0]}'")
-            base_command[0] = executable
+            requested_cmd = list(player_command)
+            if not requested_cmd:
+                requested_cmd = None
+
+        player_type: str | None = None
+        base_executable: str | None = None
+
+        if requested_cmd is None:
+            # Try aplay first
+            exe = shutil.which("aplay")
+            if exe:
+                player_type = "aplay"
+                base_executable = exe
+            else:
+                # Try ffplay (part of ffmpeg)
+                exe = shutil.which("ffplay")
+                if exe:
+                    player_type = "ffplay"
+                    base_executable = exe
+                else:
+                    exe = shutil.which("ffmpeg")
+                    if exe:
+                        player_type = "ffmpeg"
+                        base_executable = exe
+                    else:
+                        raise FileNotFoundError(
+                            "Unable to locate 'aplay', 'ffplay' or 'ffmpeg' for PCM playback"
+                        )
+        else:
+            # User supplied a command; resolve its executable
+            exe = shutil.which(requested_cmd[0])
+            if exe is None:
+                raise FileNotFoundError(f"Unable to locate playback command '{requested_cmd[0]}'")
+            player_type = "custom"
+            base_executable = exe
+            # preserve any additional args provided by the user
+            requested_cmd[0] = exe
 
         def factory(sample_rate: int, channels: int) -> _PlayerProcess:
-            command = [*base_command, "-f", "S16_LE", "-c", str(channels), "-r", str(sample_rate)]
+            # Build the platform-specific command using the resolved executable
+            if player_type == "aplay":
+                command = [base_executable, "-q", "-f", "S16_LE", "-c", str(channels), "-r", str(sample_rate)]
+            elif player_type == "ffplay":
+                # ffplay reads from stdin with -i - ; set format and sample params
+                command = [
+                    base_executable,
+                    "-nodisp",
+                    "-autoexit",
+                    "-loglevel",
+                    "panic",
+                    "-f",
+                    "s16le",
+                    "-ar",
+                    str(sample_rate),
+                    "-ac",
+                    str(channels),
+                    "-i",
+                    "-",
+                ]
+            elif player_type == "ffmpeg":
+                # Use ffmpeg to play raw PCM to the default ALSA device. This
+                # is a best-effort fallback; system configuration may vary.
+                command = [
+                    base_executable,
+                    "-f",
+                    "s16le",
+                    "-ar",
+                    str(sample_rate),
+                    "-ac",
+                    str(channels),
+                    "-i",
+                    "-",
+                    "-f",
+                    "alsa",
+                    "default",
+                    "-hide_banner",
+                    "-loglevel",
+                    "panic",
+                ]
+            else:
+                # custom: use the user supplied command verbatim, appending
+                # sample format arguments similar to aplay behaviour.
+                command = [*requested_cmd, "-f", "S16_LE", "-c", str(channels), "-r", str(sample_rate)]
+
             process = subprocess.Popen(command, stdin=subprocess.PIPE)
             assert process.stdin is not None  # pragma: no cover - type checker hint
             return process  # type: ignore[return-value]
+
+        return factory
 
         return factory
 
