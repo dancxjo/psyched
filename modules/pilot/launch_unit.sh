@@ -8,6 +8,8 @@ HOST_SHORT="${HOST:-$(hostname -s)}"
 PID_DIR="${REPO_DIR}/work/run/pilot"
 mkdir -p "${PID_DIR}"
 
+BACKGROUND_PIDS=()
+
 start_background() {
   local key="$1"
   shift
@@ -18,7 +20,30 @@ start_background() {
   "$@" >>"${log}" 2>&1 &
   local child=$!
   echo "${child}" > "${pid_file}"
+  BACKGROUND_PIDS+=("${child}")
 }
+
+cleanup() {
+  local code=$?
+  trap - EXIT INT TERM
+
+  if [[ -n "${PILOT_PID:-}" ]] && kill -0 "${PILOT_PID}" 2>/dev/null; then
+    echo "[pilot/launch] Stopping cockpit (PID ${PILOT_PID})" >&2
+    kill "${PILOT_PID}" 2>/dev/null || true
+  fi
+
+  for pid in "${BACKGROUND_PIDS[@]}"; do
+    if kill -0 "${pid}" 2>/dev/null; then
+      echo "[pilot/launch] Stopping helper process (PID ${pid})" >&2
+      kill "${pid}" 2>/dev/null || true
+    fi
+  done
+
+  wait || true
+  exit "${code}"
+}
+
+trap cleanup EXIT INT TERM
 
 if [[ -f "${REPO_DIR}/work/install/setup.bash" ]]; then
   # colcon's setup scripts read unset vars, so relax -u while sourcing.
@@ -97,4 +122,9 @@ if [[ -f "${REPO_DIR}/work/install/pilot/share/pilot/local_setup.bash" ]]; then
   set -u
 fi
 
-exec ros2 run pilot pilot_cockpit "${ARGS[@]}"
+echo "[pilot/launch] Starting cockpit: ros2 run pilot pilot_cockpit ${ARGS[*]}" >&2
+ros2 run pilot pilot_cockpit "${ARGS[@]}" &
+PILOT_PID=$!
+echo "${PILOT_PID}" > "${PID_DIR}/cockpit.pid"
+
+wait "${PILOT_PID}"
