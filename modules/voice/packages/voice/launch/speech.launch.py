@@ -36,7 +36,7 @@ def generate_launch_description() -> LaunchDescription:
 
     declare_arguments = [
         _declare_argument("backend", "print", "Voice playback backend ('print', 'espeak', or 'websocket')."),
-        _declare_argument("input_topic", "/voice/text", "Input topic that provides text to speak."),
+        _declare_argument("input_topic", "/voice", "Input topic that provides text to speak."),
         _declare_argument("spoken_topic", "/voice/spoken", "Topic used to publish spoken acknowledgements."),
         _declare_argument("pause_topic", "/voice/pause", "Topic that pauses queued speech when a message is received."),
         _declare_argument("resume_topic", "/voice/resume", "Topic that resumes queued speech."),

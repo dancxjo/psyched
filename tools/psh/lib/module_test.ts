@@ -7,6 +7,7 @@ import {
 } from "$std/testing/asserts.ts";
 import { delay } from "$std/async/delay.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
+import { join } from "$std/path/mod.ts";
 import {
   AptPackagePlanner,
   awaitModuleStability,
@@ -20,6 +21,7 @@ import {
   RosBuildPlanner,
   RosBuildPlannerRunner,
 } from "./module.ts";
+import { repoRoot } from "./paths.ts";
 
 Deno.test("listModules discovers known modules", () => {
   const modules = listModules();
@@ -46,7 +48,25 @@ Deno.test("composeLaunchCommand prepares a direct module launch", () => {
     logFile: "/var/log/demo module.log",
     module: "demo module",
   });
-  assertEquals(command, "source /tmp/env && exec '/tmp/launch.sh'");
+  const prefix = join(
+    repoRoot(),
+    "tools",
+    "psh",
+    "scripts",
+    "prefix_logs.sh",
+  );
+  assertStringIncludes(
+    command,
+    "source /tmp/env && exec '/tmp/launch.sh' > >(",
+  );
+  assertStringIncludes(
+    command,
+    `'${prefix}' 'demo module' stdout | tee -a '/var/log/demo module.log'`,
+  );
+  assertStringIncludes(
+    command,
+    `'${prefix}' 'demo module' stderr | tee -a '/var/log/demo module.log'`,
+  );
 });
 
 Deno.test("composeLaunchCommand escapes single quotes", () => {

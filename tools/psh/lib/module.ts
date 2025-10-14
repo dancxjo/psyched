@@ -218,9 +218,23 @@ function logExitSummary(module: string, status: Deno.CommandStatus): void {
 export function composeLaunchCommand(
   options: ComposeLaunchCommandOptions,
 ): string {
+  const prefixLogs = join(
+    repoRoot(),
+    "tools",
+    "psh",
+    "scripts",
+    "prefix_logs.sh",
+  );
+  const moduleName = shellEscape(options.module);
+  const logFile = shellEscape(options.logFile);
+  const prefixScript = shellEscape(prefixLogs);
+  const stdoutPipe =
+    `${prefixScript} ${moduleName} stdout | tee -a ${logFile}`;
+  const stderrPipe =
+    `${prefixScript} ${moduleName} stderr | tee -a ${logFile}`;
   const parts = [
     ...options.envCommands,
-    `exec ${shellEscape(options.launchScript)}`,
+    `exec ${shellEscape(options.launchScript)} > >(${stdoutPipe}) 2> >(${stderrPipe})`,
   ];
   return parts.join(" && ");
 }

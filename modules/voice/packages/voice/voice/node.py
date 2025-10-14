@@ -35,7 +35,7 @@ class VoiceNode(Node):
         backend = self._create_backend()
         self._queue = SpeechQueue(backend, on_spoken=self._publish_spoken)
 
-        input_topic = self._declare_topic("input_topic", "/voice/text")
+        input_topic = self._declare_topic("input_topic", "/voice")
         pause_topic = self._declare_topic("pause_topic", "/voice/pause")
         resume_topic = self._declare_topic("resume_topic", "/voice/resume")
         clear_topic = self._declare_topic("clear_topic", "/voice/clear")
