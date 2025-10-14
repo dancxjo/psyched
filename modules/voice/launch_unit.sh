@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND=${VOICE_BACKEND:-print}
+BACKEND=${VOICE_BACKEND:-coqui}
 VOICE_INPUT_TOPIC=${VOICE_INPUT_TOPIC:-/voice}
 VOICE_SPOKEN_TOPIC=${VOICE_SPOKEN_TOPIC:-/voice/spoken}
 VOICE_PAUSE_TOPIC=${VOICE_PAUSE_TOPIC:-/voice/pause}
