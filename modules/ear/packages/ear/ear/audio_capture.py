@@ -81,7 +81,7 @@ class AudioCaptureNode(Node):
             process = subprocess.Popen(
                 self._command,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 bufsize=0,
             )
         except FileNotFoundError:
@@ -115,15 +115,27 @@ class AudioCaptureNode(Node):
                     break
                 if not chunk:
                     return_code = process.poll()
-                    if return_code is not None:
-                        self.get_logger().warning(f"Audio source exited with code {return_code}")
-                    else:
+                    if return_code is None:
                         self.get_logger().warning("Audio source produced empty chunk; restarting")
+                    else:
+                        stderr = None
+                        if process.stderr is not None:
+                            try:
+                                stderr = process.stderr.read().decode().strip()
+                            except Exception:  # pragma: no cover - best effort diagnostics
+                                stderr = None
+                        message = f"Audio source exited with code {return_code}"
+                        if stderr:
+                            message = f"{message}: {stderr}"
+                        self.get_logger().warning(message)
                     break
                 msg = UInt8MultiArray()
                 msg.layout = MultiArrayLayout(dim=[MultiArrayDimension(label="pcm", size=len(chunk), stride=1)], data_offset=0)
                 msg.data = list(chunk)
                 self._publisher.publish(msg)
+                self.get_logger().debug(
+                    f"Published audio chunk bytes={len(chunk)} sample={chunk[:8]!r}",
+                )
             if process.poll() is None:
                 process.terminate()
                 try:
