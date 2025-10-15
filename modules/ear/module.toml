@@ -1,9 +1,6 @@
 [unit.ear]
-apt = [
-    "python3-websockets",
-    "python3-numpy",
-]
-pip = []
+apt = ["python3-websockets", "python3-numpy", "alsa-utils"]
+pip = ["webrtcvad"]
 launch = "modules/ear/launch_unit.sh"
 shutdown = "modules/ear/shutdown_unit.sh"
 pilot_control = "modules/ear/pilot/index.html"

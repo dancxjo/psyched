@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PATTERN="ros2 run ear ear_service"
+PATTERN="ros2 launch ear ear.launch.py"
 
 if pgrep -f "$PATTERN" >/dev/null 2>&1; then
   echo "[ear/shutdown] Stopping $PATTERN"

@@ -1,88 +1,86 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { createTopicSocket } from '/js/pilot.js';
 import { surfaceStyles } from '/components/pilot-style.js';
-import {
-  buildEarConfigPayload,
-  normalizeBackend,
-} from './ear-dashboard.helpers.js';
+import { sampleRateFromMessage } from '/components/utils/audio.js';
+import '/components/audio-oscilloscope.js';
 
-function timestamp() {
-  const now = new Date();
-  return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const AUDIO_TOPIC = '/audio/raw';
+const SPEECH_TOPIC = '/ear/speech_active';
+const SILENCE_TOPIC = '/ear/silence';
+const TRANSCRIPT_TOPIC = '/ear/hole';
+const MAX_TRANSCRIPTS = 40;
+
+function uniqueId(prefix = 'ear') {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-/**
- * Ear module dashboard that exposes backend controls and transcript telemetry.
- *
- * Example usage:
- * ```html
- * <ear-dashboard></ear-dashboard>
- * ```
- *
- * Events dispatched for backend integration:
- * - ``ear-config-request`` with `{ detail: EarConfigPayload }` when the
- *   configuration form is submitted successfully.
- * - ``ear-transcript-submit`` with `{ detail: { text: string } }` whenever the
- *   operator injects a manual transcript.
- */
-class EarDashboard extends LitElement {
-  static properties = {
-    backend: { state: true },
-    serviceUri: { state: true },
-    language: { state: true },
-    beamSize: { state: true },
-    sampleRate: { state: true },
-    channels: { state: true },
-    configFeedback: { state: true },
-    configTone: { state: true },
-    transcriptDraft: { state: true },
-    transcriptFeedback: { state: true },
-    vadActive: { state: true },
-    transcripts: { state: true },
-  };
+function safeToString(value) {
+    if (value == null) {
+        return '';
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    return String(value);
+}
 
-  static styles = [
-    surfaceStyles,
-    css`
-      form {
-        display: grid;
-        gap: 0.75rem;
+function byteLengthFromMessage(message) {
+    const candidate = message?.data ?? message?.bytes ?? message;
+    if (candidate == null) {
+        return 0;
+    }
+    if (candidate instanceof ArrayBuffer) {
+        return candidate.byteLength;
+    }
+    if (candidate && typeof candidate.byteLength === 'number') {
+        return candidate.byteLength;
+    }
+    if (ArrayBuffer.isView(candidate)) {
+        return candidate.byteLength;
+    }
+    if (Array.isArray(candidate)) {
+        return candidate.length;
+    }
+    if (typeof candidate === 'string') {
+        return candidate.length;
+    }
+    return 0;
+}
+
+class EarDashboard extends LitElement {
+    static properties = {
+        audioRecord: { state: true },
+        audioStatus: { state: true },
+        audioMonitoringEnabled: { state: true },
+        lastAudioTimestamp: { state: true },
+        audioSampleRate: { state: true },
+        lastFrameByteLength: { state: true },
+        speechActive: { state: true },
+        silenceDetected: { state: true },
+        transcripts: { state: true },
+    };
+
+    static styles = [
+        surfaceStyles,
+        css`
+      .indicator-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
       }
 
-      .form-row {
+      .oscilloscope-wrapper {
         display: grid;
         gap: 0.5rem;
       }
 
-      .form-row--split {
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 0.75rem;
-      }
-
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--metric-label-color);
-      }
-
-      input,
-      select,
-      textarea {
-        font: inherit;
-        padding: 0.55rem 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--control-surface-border);
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--lcars-text);
-        font-family: var(--metric-value-font);
-      }
-
-      textarea {
-        min-height: 90px;
-        resize: vertical;
+      .oscilloscope-wrapper[data-state='idle'] {
+        min-height: 200px;
       }
 
       .transcript-log {
@@ -92,7 +90,7 @@ class EarDashboard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-        max-height: 280px;
+        max-height: 320px;
         overflow-y: auto;
       }
 
@@ -112,233 +110,277 @@ class EarDashboard extends LitElement {
         color: var(--lcars-muted);
       }
 
-      .surface-status {
-        margin-bottom: 0.5rem;
+      .surface-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
       }
     `,
-  ];
+    ];
 
-  constructor() {
-    super();
-    this.backend = 'console';
-    this.serviceUri = 'ws://127.0.0.1:8089/ws';
-    this.language = '';
-    this.beamSize = 5;
-    this.sampleRate = 16000;
-    this.channels = 1;
-    this.configFeedback = 'Adjust backend settings and press apply to queue changes.';
-    this.configTone = 'info';
-    this.transcriptDraft = '';
-    this.transcriptFeedback = '';
-    this.vadActive = false;
-    this.transcripts = [];
-  }
+    constructor() {
+        super();
+        this.audioRecord = null;
+        this.audioStatus = 'Connecting…';
+        this.audioMonitoringEnabled = true;
+        this.lastAudioTimestamp = 'Never';
+        this.audioSampleRate = 16000;
+        this.lastFrameByteLength = 0;
+        this.speechActive = false;
+        this.silenceDetected = true;
+        this.transcripts = [];
+        this._sockets = new Map();
+    }
 
-  render() {
-    return html`
+    connectedCallback() {
+        super.connectedCallback();
+        this._subscribeSpeech();
+        this._subscribeSilence();
+        this._subscribeTranscripts();
+        if (this.audioMonitoringEnabled) {
+            this._subscribeAudio();
+        } else {
+            this.audioStatus = 'Paused';
+        }
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this._teardownAll();
+    }
+
+    toggleAudioMonitoring() {
+        if (this.audioMonitoringEnabled) {
+            this.audioMonitoringEnabled = false;
+            this.audioStatus = 'Paused';
+            this._closeSocket('audio');
+            this.audioRecord = null;
+            this.lastFrameByteLength = 0;
+            return;
+        }
+        this.audioMonitoringEnabled = true;
+        this.audioStatus = 'Connecting…';
+        this._subscribeAudio();
+    }
+
+    clearTranscripts() {
+        this.transcripts = [];
+    }
+
+    _subscribeAudio() {
+        if (!this.audioMonitoringEnabled) {
+            return;
+        }
+        this._openSocket(
+            'audio',
+            {
+                topic: AUDIO_TOPIC,
+                type: 'std_msgs/msg/UInt8MultiArray',
+                role: 'subscribe',
+            },
+            (message) => {
+                this.audioStatus = 'Live';
+                const sampleRate = sampleRateFromMessage(message, this.audioSampleRate || 16000);
+                this.audioSampleRate = sampleRate;
+                this.lastFrameByteLength = byteLengthFromMessage(message);
+                this.lastAudioTimestamp = new Date().toLocaleTimeString();
+                this.audioRecord = {
+                    last: message,
+                    topic: { name: AUDIO_TOPIC },
+                };
+            },
+        );
+    }
+
+    _subscribeSpeech() {
+        this._openSocket(
+            'speech',
+            {
+                topic: SPEECH_TOPIC,
+                type: 'std_msgs/msg/Bool',
+                role: 'subscribe',
+            },
+            (message) => {
+                this.speechActive = Boolean(message?.data);
+            },
+        );
+    }
+
+    _subscribeSilence() {
+        this._openSocket(
+            'silence',
+            {
+                topic: SILENCE_TOPIC,
+                type: 'std_msgs/msg/Bool',
+                role: 'subscribe',
+            },
+            (message) => {
+                if (typeof message?.data === 'boolean') {
+                    this.silenceDetected = message.data;
+                } else {
+                    this.silenceDetected = Boolean(message?.data ?? true);
+                }
+            },
+        );
+    }
+
+    _subscribeTranscripts() {
+        this._openSocket(
+            'transcripts',
+            {
+                topic: TRANSCRIPT_TOPIC,
+                type: 'std_msgs/msg/String',
+                role: 'subscribe',
+            },
+            (message) => {
+                const text = safeToString(message?.data).trim();
+                if (!text) {
+                    return;
+                }
+                const entry = {
+                    id: uniqueId('transcript'),
+                    text,
+                    timestamp: new Date().toLocaleTimeString(),
+                };
+                this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+            },
+        );
+    }
+
+    _openSocket(key, options, handleMessage) {
+        this._closeSocket(key);
+        try {
+            const socket = createTopicSocket(options);
+            socket.addEventListener('open', () => {
+                if (key === 'audio' && this.audioMonitoringEnabled) {
+                    this.audioStatus = 'Live';
+                }
+            });
+            socket.addEventListener('close', () => {
+                if (key === 'audio') {
+                    this.audioStatus = this.audioMonitoringEnabled ? 'Disconnected' : 'Paused';
+                }
+            });
+            socket.addEventListener('error', (event) => {
+                console.warn(`Ear dashboard socket error for ${options.topic}`, event);
+                if (key === 'audio') {
+                    this.audioStatus = 'Error';
+                }
+            });
+            socket.addEventListener('message', (event) => {
+                const payload = this._decodeTopicPayload(event);
+                if (!payload) {
+                    return;
+                }
+                handleMessage(payload);
+            });
+            this._sockets.set(key, socket);
+        } catch (error) {
+            console.warn(`Ear dashboard failed to open socket for ${options.topic}`, error);
+            if (key === 'audio') {
+                this.audioStatus = 'Error';
+            }
+        }
+    }
+
+    _closeSocket(key) {
+        const socket = this._sockets.get(key);
+        if (!socket) {
+            return;
+        }
+        try {
+            socket.close();
+        } catch (_error) {
+            // ignored
+        }
+        this._sockets.delete(key);
+    }
+
+    _teardownAll() {
+        for (const key of this._sockets.keys()) {
+            this._closeSocket(key);
+        }
+    }
+
+    _decodeTopicPayload(event) {
+        try {
+            const payload = JSON.parse(event.data);
+            if (!payload || payload.event !== 'message') {
+                return null;
+            }
+            return payload.data;
+        } catch (error) {
+            console.warn('Ear dashboard failed to parse topic payload', error);
+            return null;
+        }
+    }
+
+    render() {
+        const speechVariant = this.speechActive ? 'success' : 'muted';
+        const silenceVariant = this.silenceDetected ? 'muted' : 'warning';
+        const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
+        return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
-          <h3 class="surface-card__title">Backend configuration</h3>
-          <p class="surface-status" data-variant="${this.configTone}">${this.configFeedback}</p>
-          <form @submit=${this.handleConfigSubmit}>
-            <div class="form-row form-row--split">
-              <label>
-                Backend
-                <select name="backend" .value=${this.backend} @change=${this.handleBackendChange}>
-                  <option value="console">Console</option>
-                  <option value="faster_whisper">Faster Whisper</option>
-                  <option value="service">Streaming service</option>
-                </select>
-              </label>
-              <label>
-                Sample rate (Hz)
-                <input
-                  type="number"
-                  name="sampleRate"
-                  min="8000"
-                  max="192000"
-                  step="1000"
-                  .value=${String(this.sampleRate)}
-                  @input=${(event) => (this.sampleRate = Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Channels
-                <input
-                  type="number"
-                  name="channels"
-                  min="1"
-                  max="8"
-                  .value=${String(this.channels)}
-                  @input=${(event) => (this.channels = Number(event.target.value))}
-                />
-              </label>
-            </div>
-            <div class="form-row form-row--split">
-              <label>
-                Beam size
-                <input
-                  type="number"
-                  name="beamSize"
-                  min="1"
-                  max="20"
-                  .value=${String(this.beamSize)}
-                  @input=${(event) => (this.beamSize = Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Language hint
-                <input
-                  type="text"
-                  name="language"
-                  placeholder="auto"
-                  .value=${this.language}
-                  @input=${(event) => (this.language = event.target.value)}
-                />
-              </label>
-              <label ?hidden=${this.backend !== 'service'}>
-                Service URI
-                <input
-                  type="url"
-                  name="serviceUri"
-                  placeholder="ws://host:port/ws"
-                  .value=${this.serviceUri}
-                  @input=${(event) => (this.serviceUri = event.target.value)}
-                />
-              </label>
-            </div>
-            <div class="surface-actions">
-              <button type="submit" class="surface-button">Apply configuration</button>
-            </div>
-          </form>
-        </article>
-
-        <article class="surface-card">
-          <header class="surface-card__title">
-            <span>Voice activity</span>
-            <span class="surface-pill" data-variant=${this.vadActive ? 'success' : 'muted'}>
-              ${this.vadActive ? 'Detected' : 'Idle'}
+          <h3 class="surface-card__title">Stream status</h3>
+          <p class="surface-note">Audio stream: <strong>${this.audioStatus}</strong></p>
+          <p class="surface-note">Last frame: ${this.lastAudioTimestamp}</p>
+          <div class="indicator-row">
+            <span class="surface-pill" data-variant=${speechVariant}>
+              ${this.speechActive ? 'Speech detected' : 'No speech'}
             </span>
-          </header>
-          <p class="surface-card__subtitle">
-            Toggle the indicator to mark observed speech bursts while testing hardware levels.
-          </p>
+            <span class="surface-pill" data-variant=${silenceVariant}>
+              ${this.silenceDetected ? 'Silence' : 'Audio energy'}
+            </span>
+          </div>
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${this.toggleVad}>
-              ${this.vadActive ? 'Mark silence' : 'Mark speech'}
+            <button type="button" class="surface-button" @click=${() => this.toggleAudioMonitoring()}>
+              ${this.audioMonitoringEnabled ? 'Pause audio monitor' : 'Resume audio monitor'}
+            </button>
+            <button
+              type="button"
+              class="surface-button surface-button--ghost"
+              @click=${() => this.clearTranscripts()}
+              ?disabled=${this.transcripts.length === 0}
+            >
+              Clear transcript log
             </button>
           </div>
         </article>
 
         <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Manual transcript injection</h3>
-          ${this.transcriptFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.transcriptFeedback}</p>`
-            : ''}
-          <form @submit=${this.handleTranscriptSubmit}>
-            <label>
-              Transcript text
-              <textarea
-                name="transcript"
-                .value=${this.transcriptDraft}
-                @input=${(event) => (this.transcriptDraft = event.target.value)}
-              ></textarea>
-            </label>
-            <div class="surface-actions">
-              <button type="submit" class="surface-button">Inject transcript</button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.clearTranscriptDraft}>
-                Clear
-              </button>
-            </div>
-          </form>
+          <h3 class="surface-card__title">PCM oscilloscope</h3>
+          <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
+          <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
+            <pilot-audio-oscilloscope
+              width="640"
+              height="200"
+              .record=${this.audioRecord ?? {}}
+            ></pilot-audio-oscilloscope>
+            <p class="surface-note surface-mono">
+              Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
+            </p>
+          </div>
         </article>
 
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Transcript log</h3>
           ${this.transcripts.length === 0
-            ? html`<p class="surface-empty">Awaiting audio events…</p>`
-            : html`<ol class="transcript-log">
+                ? html`<p class="surface-empty">Awaiting transcripts…</p>`
+                : html`<ol class="transcript-log">
                 ${this.transcripts.map(
-                  (entry) => html`<li class="transcript-entry">
+                    (entry) => html`<li class="transcript-entry" key=${entry.id}>
                     <div class="transcript-entry__meta">
                       <span>${entry.timestamp}</span>
-                      <span>${entry.origin}</span>
                     </div>
                     <p class="transcript-entry__text">${entry.text}</p>
-                  </li>`
+                  </li>`,
                 )}
               </ol>`}
         </article>
       </div>
     `;
-  }
-
-  handleBackendChange(event) {
-    this.backend = normalizeBackend(event.target.value);
-    this.requestUpdate();
-  }
-
-  handleConfigSubmit(event) {
-    event.preventDefault();
-    const payload = buildEarConfigPayload({
-      backend: this.backend,
-      serviceUri: this.serviceUri,
-      language: this.language,
-      beamSize: this.beamSize,
-      sampleRate: this.sampleRate,
-      channels: this.channels,
-    });
-    if (!payload.ok) {
-      this.configFeedback = payload.error;
-      this.configTone = 'error';
-      return;
     }
-    this.dispatchEvent(
-      new CustomEvent('ear-config-request', {
-        detail: payload.value,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    this.configFeedback = 'Configuration submitted for backend reconciliation.';
-    this.configTone = 'success';
-  }
-
-  handleTranscriptSubmit(event) {
-    event.preventDefault();
-    const text = this.transcriptDraft.trim();
-    if (!text) {
-      this.transcriptFeedback = 'Transcript text is required.';
-      return;
-    }
-    this.dispatchEvent(
-      new CustomEvent('ear-transcript-submit', {
-        detail: { text },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    this.transcriptFeedback = '';
-    this.transcripts = [
-      {
-        id: crypto.randomUUID ? crypto.randomUUID() : `ear-${Date.now()}`,
-        text,
-        timestamp: timestamp(),
-        origin: 'pilot override',
-      },
-      ...this.transcripts,
-    ].slice(0, 50);
-    this.transcriptDraft = '';
-  }
-
-  clearTranscriptDraft() {
-    this.transcriptDraft = '';
-    this.transcriptFeedback = '';
-  }
-
-  toggleVad() {
-    this.vadActive = !this.vadActive;
-  }
 }
 
 customElements.define('ear-dashboard', EarDashboard);
