@@ -97,3 +97,6 @@ modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.helpers.te
 modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.js
 modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.test.js
 modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.js
+modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.helpers.js
+modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.helpers.test.js
+modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.js
