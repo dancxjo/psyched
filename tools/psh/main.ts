@@ -311,11 +311,10 @@ async function main() {
         const state = status.status === "running"
           ? colors.green("running")
           : status.status === "stopped"
-          ? colors.yellow("stopped")
-          : colors.red("error");
+            ? colors.yellow("stopped")
+            : colors.red("error");
         console.log(
-          `- ${status.name}: ${state}${
-            status.description ? ` – ${status.description}` : ""
+          `- ${status.name}: ${state}${status.description ? ` – ${status.description}` : ""
           }`,
         );
       }

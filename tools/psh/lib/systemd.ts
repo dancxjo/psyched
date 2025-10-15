@@ -161,6 +161,16 @@ function moduleEnv(module: string): Record<string, string> {
   );
 }
 
+function moduleExecCommand(script: string): string {
+  const envScript = join(repoRoot(), "env", "psyched_env.sh");
+  const steps = [
+    `source "${envScript}"`,
+    "psyched::activate --quiet",
+    `exec "${script}"`,
+  ];
+  return `/usr/bin/env bash -lc '${steps.join(" && ")}'`;
+}
+
 function serviceEnv(
   service: string,
   baseEnv: Record<string, string>,
@@ -201,10 +211,10 @@ export async function setupSystemd(module: string): Promise<void> {
     `User=${user}`,
     `Group=${group}`,
     `WorkingDirectory=${moduleDir}`,
-    `ExecStart=/usr/bin/env bash ${launch}`,
+    `ExecStart=${moduleExecCommand(launch)}`,
   ];
   if (shutdown) {
-    lines.push(`ExecStop=/usr/bin/env bash ${shutdown}`);
+    lines.push(`ExecStop=${moduleExecCommand(shutdown)}`);
   }
   lines.push(...environmentLines(env));
   lines.push("Restart=on-failure");
