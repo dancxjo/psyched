@@ -7,6 +7,8 @@ const {
   sanitizeEnvRecord,
   moduleUnitName,
   serviceUnitName,
+  getCurrentUser,
+  getCurrentGroup,
 } = __test__;
 
 Deno.test("environmentLines sorts keys", () => {
@@ -36,4 +38,18 @@ Deno.test("sanitizeEnvRecord stringifies non-string values", () => {
 Deno.test("unit name helpers add prefixes", () => {
   assertEquals(moduleUnitName("pilot"), "psh-module-pilot.service");
   assertEquals(serviceUnitName("tts"), "psh-service-tts.service");
+});
+
+Deno.test("getCurrentUser returns a string", () => {
+  // Should return the current user without throwing
+  const user = getCurrentUser();
+  assertEquals(typeof user, "string");
+  assertEquals(user.length > 0, true);
+});
+
+Deno.test("getCurrentGroup returns a string", () => {
+  // Should return the current group without throwing
+  const group = getCurrentGroup();
+  assertEquals(typeof group, "string");
+  assertEquals(group.length > 0, true);
 });

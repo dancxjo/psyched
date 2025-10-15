@@ -155,8 +155,10 @@ psh setup            # full host + module + service provisioning
 psh mod list         # view module status
 psh up ear voice     # start modules
 psh down             # stop all
-psh sys enable pilot # register systemd units
+psh sys enable pilot # register systemd units (auto-starts at boot)
 ```
+
+For details on systemd integration, see [docs/psh-sys.md](docs/psh-sys.md).
 
 ### Workspace cleanup
 
