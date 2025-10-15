@@ -772,7 +772,7 @@ class FootDashboard extends LitElement {
     }
     try {
       const socket = this.ensurePublisher('play_song', 'create_msgs/msg/PlaySong');
-      socket.send(JSON.stringify({ id }));
+      socket.send(JSON.stringify({ song: id }));
       this.songStatus = `Play request sent for song ${id}.`;
     } catch (error) {
       this.songStatus = error instanceof Error ? error.message : String(error);
