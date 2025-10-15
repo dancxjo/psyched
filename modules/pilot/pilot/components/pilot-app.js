@@ -1,5 +1,5 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { buildNavigationSections } from '/components/utils/navigation.js';
+import { buildNavigationSections } from '/utils/navigation.js';
 import './module-log-viewer.js';
 
 // Component registry - maps module names to their component tag names

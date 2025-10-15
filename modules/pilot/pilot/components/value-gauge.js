@@ -1,6 +1,6 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { extractNumeric } from '/components/utils/metrics.js';
+import { extractNumeric } from '/utils/metrics.js';
 
 function inferRange(topicName) {
   if (!topicName) {

@@ -1,6 +1,6 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { extractText } from '/components/utils/metrics.js';
+import { extractText } from '/utils/metrics.js';
 
 /**
  * Present diagnostics output inside a collapsible details element.

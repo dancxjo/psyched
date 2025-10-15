@@ -45,7 +45,7 @@ If you're creating a component for a specific module (e.g., foot, imu, voice):
 - **Shared components/utilities**: Use absolute paths
   ```javascript
   import { surfaceStyles } from '/components/pilot-style.js';
-  import { extractNumeric } from '/components/utils/metrics.js';
+  import { extractNumeric } from '/utils/metrics.js';
   ```
 
 - **Module-specific utilities**: Use relative paths

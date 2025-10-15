@@ -1,6 +1,6 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
-import { extractText } from '/components/utils/metrics.js';
+import { extractText } from '/utils/metrics.js';
 
 /**
  * Display a rolling list of event payloads.
@@ -30,10 +30,10 @@ class PilotEventLog extends LitElement {
     return html`
       <ol class="event-log">
         ${messages.slice(0, 5).map((entry, index) => {
-          const label = `Event ${messages.length - index}`;
-          const text = extractText(entry);
-          return html`<li><strong>${label}:</strong> ${text}</li>`;
-        })}
+      const label = `Event ${messages.length - index}`;
+      const text = extractText(entry);
+      return html`<li><strong>${label}:</strong> ${text}</li>`;
+    })}
       </ol>
     `;
   }
