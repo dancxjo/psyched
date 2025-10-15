@@ -7,8 +7,8 @@ const {
   sanitizeEnvRecord,
   moduleUnitName,
   serviceUnitName,
-  isLingerEnabled,
-  enableLinger,
+  getCurrentUser,
+  getCurrentGroup,
 } = __test__;
 
 Deno.test("environmentLines sorts keys", () => {
@@ -40,25 +40,16 @@ Deno.test("unit name helpers add prefixes", () => {
   assertEquals(serviceUnitName("tts"), "psh-service-tts.service");
 });
 
-Deno.test("isLingerEnabled checks loginctl output", async () => {
-  // This is an integration test that checks the actual system state
-  // It should not fail if loginctl is not available
-  const result = await isLingerEnabled();
-  // Just verify it returns a boolean without throwing
-  assertEquals(typeof result, "boolean");
+Deno.test("getCurrentUser returns a string", () => {
+  // Should return the current user without throwing
+  const user = getCurrentUser();
+  assertEquals(typeof user, "string");
+  assertEquals(user.length > 0, true);
 });
 
-Deno.test("enableLinger can be called without error", async () => {
-  // This test verifies that enableLinger handles missing USER gracefully
-  const originalUser = Deno.env.get("USER");
-  try {
-    // Test with USER unset
-    Deno.env.delete("USER");
-    await enableLinger(); // Should not throw, just warn
-  } finally {
-    // Restore USER if it was set
-    if (originalUser) {
-      Deno.env.set("USER", originalUser);
-    }
-  }
+Deno.test("getCurrentGroup returns a string", () => {
+  // Should return the current group without throwing
+  const group = getCurrentGroup();
+  assertEquals(typeof group, "string");
+  assertEquals(group.length > 0, true);
 });

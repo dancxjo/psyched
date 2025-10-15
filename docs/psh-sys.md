@@ -1,13 +1,14 @@
 # `psh sys` Commands - Systemd Integration
 
-The `psh sys` commands manage systemd user services for modules and services in the Psyched stack.
+The `psh sys` commands manage systemd system services for modules and services in the Psyched stack.
 
 ## Overview
 
-`psh sys` creates and manages systemd user service units that allow modules and services to:
-- Start automatically at system boot
+`psh sys` creates and manages systemd system service units that allow modules and services to:
+- Start automatically at system boot (as early as possible)
+- Run as the user who installed them (not root)
 - Restart on failure
-- Be controlled via `systemctl` commands
+- Be controlled via `systemctl` commands (with sudo)
 - Appear in system logs (`journalctl`)
 
 ## Commands
@@ -52,26 +53,22 @@ psh sys down --service <service-name>
 
 ## Technical Details
 
-### User Services
+### System Services
 
-`psh sys` creates **user systemd services** rather than system services. This means:
-- Service files are stored in `~/.config/systemd/user/`
-- Services run with user permissions
-- Services use `systemctl --user` commands
+`psh sys` creates **system systemd services** that run as the installing user. This means:
+- Service files are stored in `/etc/systemd/system/`
+- Services start at boot automatically (no lingering required)
+- Services run with the permissions of the user who installed them
+- Services use `sudo systemctl` commands
+- Services are visible system-wide
 
-### Lingering Requirement
+### Security Model
 
-For user services to start automatically at boot and remain running across login/logout, **lingering** must be enabled for the user. The `psh sys setup` command automatically enables lingering by running:
-
-```bash
-loginctl enable-linger $USER
-```
-
-If you see a warning about lingering failing, you may need to enable it manually with sudo:
-
-```bash
-sudo loginctl enable-linger $USER
-```
+Services are created as system services but include `User=` and `Group=` directives to ensure they run as the non-root user who installed them. This provides:
+- Automatic startup at boot time
+- Better visibility in system logs
+- Proper security isolation (not running as root)
+- Access to user's environment and permissions
 
 ### Verifying Services
 
@@ -79,28 +76,32 @@ After setting up and enabling a service, you can verify it with:
 
 ```bash
 # Check service status
-systemctl --user status psh-module-<name>.service
-systemctl --user status psh-service-<name>.service
+sudo systemctl status psh-module-<name>.service
+sudo systemctl status psh-service-<name>.service
 
-# View logs
-journalctl --user -u psh-module-<name>.service -f
+# View logs (no sudo needed for reading logs)
+journalctl -u psh-module-<name>.service -f
 
 # List all psh-managed services
-systemctl --user list-units 'psh-*'
+systemctl list-units 'psh-*'
 ```
 
 ### Service Files
 
 Module services are named `psh-module-<name>.service` and include:
+- `User=` and `Group=` directives to run as the installing user
 - Automatic restart on failure
 - Environment variables from host configuration
 - Working directory set to the module directory
 - Proper ordering with network targets
+- `WantedBy=multi-user.target` for early boot startup
 
 Service (container) services are named `psh-service-<name>.service` and include:
+- `User=` and `Group=` directives to run as the installing user
 - Docker Compose integration for container management
-- Network dependency (waits for network-online.target)
+- Network and Docker service dependencies
 - One-shot type with RemainAfterExit for proper lifecycle
+- `WantedBy=multi-user.target` for early boot startup
 
 ## Troubleshooting
 
@@ -108,56 +109,56 @@ Service (container) services are named `psh-service-<name>.service` and include:
 
 **Symptom:** Services work when manually started but don't start after system reboot.
 
-**Solution:** Ensure lingering is enabled:
+**Solution:** Ensure the service is enabled:
 ```bash
-loginctl show-user $USER | grep Linger
-# Should show: Linger=yes
+sudo systemctl is-enabled psh-module-<name>.service
+# Should show: enabled
 ```
 
 If not enabled:
 ```bash
-sudo loginctl enable-linger $USER
+sudo systemctl enable psh-module-<name>.service
 ```
 
 ### Services not visible in systemctl
 
-**Symptom:** `systemctl --user list-units` doesn't show psh services.
+**Symptom:** `systemctl list-units` doesn't show psh services.
 
 **Solution:** 
 1. Ensure the service file exists:
    ```bash
-   ls -la ~/.config/systemd/user/psh-*
+   ls -la /etc/systemd/system/psh-*
    ```
 2. Reload systemd:
    ```bash
-   systemctl --user daemon-reload
+   sudo systemctl daemon-reload
    ```
 3. Check for errors:
    ```bash
-   systemctl --user status psh-module-<name>.service
+   sudo systemctl status psh-module-<name>.service
    ```
 
-### Permission errors with loginctl
+### Permission errors
 
-**Symptom:** `psh sys setup` shows warnings about failing to enable lingering.
+**Symptom:** `psh sys setup` fails with permission errors.
 
-**Solution:** This is often not critical. The setup will still work, but you may need to manually enable lingering with sudo:
+**Solution:** The commands require sudo access to write to `/etc/systemd/system/`. Ensure your user has sudo privileges:
 ```bash
-sudo loginctl enable-linger $USER
+sudo -v  # Verify sudo access
 ```
 
 ## System Requirements
 
 - **systemd**: Must have systemd as the init system (standard on most modern Linux distributions)
-- **loginctl**: Must be available for lingering management
-- **User session**: Services run in the user session, not as root
+- **sudo**: User must have sudo privileges to create and manage system services
+- **User account**: Services run as the user who installed them, not as root
 
 ## Examples
 
 ### Setting up a module with systemd
 
 ```bash
-# Generate unit file and enable lingering
+# Generate unit file (requires sudo)
 psh sys setup pilot
 
 # Enable to start at boot
@@ -167,16 +168,16 @@ psh sys enable pilot
 psh sys up pilot
 
 # Check status
-systemctl --user status psh-module-pilot.service
+sudo systemctl status psh-module-pilot.service
 
-# View logs
-journalctl --user -u psh-module-pilot.service -f
+# View logs (no sudo needed)
+journalctl -u psh-module-pilot.service -f
 ```
 
 ### Setting up a service with systemd
 
 ```bash
-# Generate unit file for a containerized service
+# Generate unit file for a containerized service (requires sudo)
 psh sys setup --service tts
 
 # Enable and start
@@ -184,7 +185,7 @@ psh sys enable --service tts
 psh sys up --service tts
 
 # Check status
-systemctl --user status psh-service-tts.service
+sudo systemctl status psh-service-tts.service
 ```
 
 ### Removing a service
