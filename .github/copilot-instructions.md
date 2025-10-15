@@ -7,7 +7,7 @@ These hints help GitHub Copilot generate higher-quality suggestions inside this 
 - Robotics control stack for the robot **Pete**.
 - Rust + ROS 2 backend (`psyched` crate) with a websocket cockpit bridge.
 - Deno Fresh + Preact frontend (`modules/pilot/frontend`).
-- `psh` Rust CLI orchestrates host provisioning and module lifecycles.
+- `psh` Deno/TypeScript CLI orchestrates host provisioning and module lifecycles.
 - Modules live in `modules/<name>` and may expose pilot UI overlays under `pilot/`.
 
 ## Authoring conventions
