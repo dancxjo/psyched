@@ -2,7 +2,7 @@
   "imports": {
     "$std/": "https://deno.land/std@0.206.0/",
     "$cliffy/": "https://deno.land/x/cliffy@v1.0.0-rc.4/",
-    "$dax": "https://deno.land/x/dax@0.38.0/mod.ts",
+    "$dax": "https://deno.land/x/dax@0.39.2/mod.ts",
     "$fresh/dev/mod.ts": "https://deno.land/x/fresh@1.7.3/src/dev/mod.ts",
     "$deps/dependency-graph": "npm:dependency-graph@1.0.0"
   },

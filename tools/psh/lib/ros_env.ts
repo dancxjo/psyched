@@ -51,6 +51,23 @@ export function buildRosEnv(): Record<string, string> {
   };
 }
 
+export async function sourcePsychedEnv(): Promise<Record<string, string>> {
+  const psychedEnvPath = join(repoRoot(), "env", "psyched_env.sh");
+  const command = new Deno.Command("bash", {
+    args: ["-c", `source ${psychedEnvPath} && env`],
+  });
+  const { stdout } = await command.output();
+  const output = new TextDecoder().decode(stdout);
+  const env: Record<string, string> = {};
+  for (const line of output.split("\n")) {
+    const [key, ...value] = line.split("=");
+    if (key && value.length > 0) {
+      env[key] = value.join("=");
+    }
+  }
+  return { ...env, ...buildRosEnv() };
+}
+
 export function resetRosDomainCache(): void {
   cachedDomainId = undefined;
 }

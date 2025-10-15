@@ -44,6 +44,7 @@ import {
   teardownSystemd,
 } from "./lib/systemd.ts";
 import { runSetupWorkflow, runTeardownWorkflow } from "./lib/workflow.ts";
+import { publishString } from "./lib/ros.ts";
 
 const version = "0.2.0";
 
@@ -54,6 +55,13 @@ async function main() {
     .description("psyched shell – Deno edition")
     .action(async () => {
       await runWizard();
+    });
+
+  root
+    .command("say <text...:string>")
+    .description("Publish a string to the /voice topic")
+    .action(async (_, ...text: string[]) => {
+      await publishString("/voice", text.join(" "));
     });
 
   root
@@ -301,11 +309,10 @@ async function main() {
         const state = status.status === "running"
           ? colors.green("running")
           : status.status === "stopped"
-          ? colors.yellow("stopped")
-          : colors.red("error");
+            ? colors.yellow("stopped")
+            : colors.red("error");
         console.log(
-          `- ${status.name}: ${state}${
-            status.description ? ` – ${status.description}` : ""
+          `- ${status.name}: ${state}${status.description ? ` – ${status.description}` : ""
           }`,
         );
       }
@@ -385,88 +392,94 @@ async function main() {
   const systemCommand = new Command()
     .description("Systemd integration for modules and services");
 
-  const targetOption = (cmd: Command) =>
+  const addTargetOptions = (cmd: Command) =>
     cmd
       .option("--service", "Operate on a service instead of a module")
       .option("--module", "Force module mode (default)");
 
-  targetOption(
-    systemCommand
-      .command("setup <target:string>")
-      .description("Generate a systemd unit for a module or service"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await setupSystemd(target);
-    } else {
-      await setupServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("setup <target:string>")
+    .description("Generate a systemd unit for a module or service")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await setupSystemd(target);
+      } else {
+        await setupServiceSystemd(target);
+      }
+    });
 
-  targetOption(
-    systemCommand
-      .command("teardown <target:string>")
-      .description("Remove the systemd unit for a module or service"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await teardownSystemd(target);
-    } else {
-      await teardownServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("teardown <target:string>")
+    .description("Remove the systemd unit for a module or service")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await teardownSystemd(target);
+      } else {
+        await teardownServiceSystemd(target);
+      }
+    });
 
-  targetOption(
-    systemCommand
-      .command("enable <target:string>")
-      .description("Enable the systemd unit for a module or service"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await enableSystemd(target);
-    } else {
-      await enableServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("enable <target:string>")
+    .description("Enable the systemd unit for a module or service")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await enableSystemd(target);
+      } else {
+        await enableServiceSystemd(target);
+      }
+    });
 
-  targetOption(
-    systemCommand
-      .command("disable <target:string>")
-      .description("Disable the systemd unit for a module or service"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await disableSystemd(target);
-    } else {
-      await disableServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("disable <target:string>")
+    .description("Disable the systemd unit for a module or service")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await disableSystemd(target);
+      } else {
+        await disableServiceSystemd(target);
+      }
+    });
 
-  targetOption(
-    systemCommand
-      .command("up <target:string>")
-      .description("Start a module or service via systemd"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await startSystemd(target);
-    } else {
-      await startServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("up <target:string>")
+    .description("Start a module or service via systemd")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await startSystemd(target);
+      } else {
+        await startServiceSystemd(target);
+      }
+    });
 
-  targetOption(
-    systemCommand
-      .command("down <target:string>")
-      .description("Stop a module or service via systemd"),
-  ).action(async (options: SystemdTargetOptions, target: string) => {
-    const kind = resolveSystemdTarget(target, options);
-    if (kind === "module") {
-      await stopSystemd(target);
-    } else {
-      await stopServiceSystemd(target);
-    }
-  });
+  systemCommand
+    .command("down <target:string>")
+    .description("Stop a module or service via systemd")
+    .option("--service", "Operate on a service instead of a module")
+    .option("--module", "Force module mode (default)")
+    .action(async (options: SystemdTargetOptions, target: string) => {
+      const kind = resolveSystemdTarget(target, options);
+      if (kind === "module") {
+        await stopSystemd(target);
+      } else {
+        await stopServiceSystemd(target);
+      }
+    });
 
   root.command("sys", systemCommand);
 
