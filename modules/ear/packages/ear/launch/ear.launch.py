@@ -76,6 +76,7 @@ def generate_launch_description() -> LaunchDescription:
                 "aggressiveness": ParameterValue(vad_aggressiveness, value_type=int),
                 "smoothing_window": ParameterValue(vad_smoothing_window, value_type=int),
                 "publish_on_change": ParameterValue(vad_publish_on_change, value_type=bool),
+                "reliability": reliability,
             }
         ],
     )
@@ -94,6 +95,7 @@ def generate_launch_description() -> LaunchDescription:
                 "rms_threshold": ParameterValue(silence_rms_threshold, value_type=float),
                 "average_window": ParameterValue(silence_average_window, value_type=int),
                 "publish_on_change": ParameterValue(silence_publish_on_change, value_type=bool),
+                "reliability": reliability,
             }
         ],
     )
@@ -112,6 +114,7 @@ def generate_launch_description() -> LaunchDescription:
                 "audio_topic": audio_topic,
                 "audio_sample_rate": ParameterValue(sample_rate, value_type=int),
                 "audio_channels": ParameterValue(channels, value_type=int),
+                "audio_reliability": reliability,
                 "service_uri": service_uri,
                 "faster_whisper_model": whisper_model,
                 "faster_whisper_device": whisper_device,
@@ -141,7 +144,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("chunk_size", default_value="0"),
             DeclareLaunchArgument("restart_delay", default_value="1.0"),
             DeclareLaunchArgument("enable_audio_capture", default_value="true"),
-            DeclareLaunchArgument("audio_reliability", default_value="best_effort"),
+            DeclareLaunchArgument("audio_reliability", default_value="reliable"),
             DeclareLaunchArgument("speech_topic", default_value="/ear/speech_active"),
             DeclareLaunchArgument("vad_frame_duration_ms", default_value="20"),
             DeclareLaunchArgument("vad_aggressiveness", default_value="2"),

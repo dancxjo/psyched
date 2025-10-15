@@ -7,6 +7,7 @@ from typing import Sequence
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String, UInt8MultiArray
 
 from .backends import (
@@ -44,13 +45,19 @@ class TranscriberNode(Node):
         self._audio_subscription = None
         self._audio_sample_rate = int(self.declare_parameter("audio_sample_rate", 16000).value)
         self._audio_channels = int(self.declare_parameter("audio_channels", 1).value)
+        reliability_param = str(self.declare_parameter("audio_reliability", "best_effort").value).strip().lower()
+        audio_qos = QoSProfile(depth=10)
+        if reliability_param == "reliable":
+            audio_qos.reliability = QoSReliabilityPolicy.RELIABLE
+        else:
+            audio_qos.reliability = QoSReliabilityPolicy.BEST_EFFORT
         if isinstance(backend, AudioAwareBackend):
             audio_topic = self._declare_topic("audio_topic", "/audio/raw")
             self._audio_subscription = self.create_subscription(
                 UInt8MultiArray,
                 audio_topic,
                 self._handle_audio,
-                10,
+                audio_qos,
             )
 
         self.get_logger().info(
@@ -120,7 +127,7 @@ class TranscriberNode(Node):
         ros_msg = String()
         ros_msg.data = text
         self._publisher.publish(ros_msg)
-    self.get_logger().info(f"Heard: {text}")
+        self.get_logger().info(f"Heard: {text}")
 
     def destroy_node(self) -> bool:
         self._worker.stop()

@@ -44,6 +44,7 @@ class VadNode(Node):
         if self._frame_duration_ms not in (10, 20, 30):
             raise ValueError("frame_duration_ms must be 10, 20, or 30")
         self._publish_on_change = bool(self.declare_parameter("publish_on_change", True).value)
+        reliability_param = str(self.declare_parameter("reliability", "reliable").value).strip().lower()
         aggressiveness = int(self.declare_parameter("aggressiveness", 2).value)
         self._vad = webrtcvad.Vad(aggressiveness)
         self._frame_bytes = int(self._sample_rate * (self._frame_duration_ms / 1000.0) * 2 * max(self._channels, 1))
@@ -53,7 +54,10 @@ class VadNode(Node):
         self._recent: deque[bool] = deque(maxlen=smoothing_param)
         self._last_state: bool | None = None
         qos_profile = QoSProfile(depth=20)
-        qos_profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+        if reliability_param == "best_effort":
+            qos_profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+        else:
+            qos_profile.reliability = QoSReliabilityPolicy.RELIABLE
         self._publisher = self.create_publisher(Bool, self._speech_topic, qos_profile)
         self.create_subscription(UInt8MultiArray, self._audio_topic, self._handle_audio, qos_profile)
 
