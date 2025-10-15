@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
+export REPO_DIR
+
+if [[ -f "${REPO_DIR}/work/install/setup.bash" ]]; then
+  # colcon setup scripts expect some env vars to be unset.
+  set +u
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/work/install/setup.bash"
+  set -u
+fi
+
+if [[ -f "${REPO_DIR}/work/install/ear/share/ear/local_setup.bash" ]]; then
+  set +u
+  # shellcheck disable=SC1091
+  source "${REPO_DIR}/work/install/ear/share/ear/local_setup.bash"
+  set -u
+fi
+
 BACKEND=${EAR_BACKEND:-console}
 HOLE_TOPIC=${EAR_HOLE_TOPIC:-/ear/hole}
 AUDIO_TOPIC=${EAR_AUDIO_TOPIC:-/audio/raw}
