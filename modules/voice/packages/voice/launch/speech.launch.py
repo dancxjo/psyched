@@ -73,6 +73,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="speech_service",
         name="voice",
         output="screen",
+        emulate_tty=True,
         parameters=parameters,
     )
 

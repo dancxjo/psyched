@@ -24,7 +24,4 @@ trap cleanup EXIT
 ros2 run viscera viscera_host_health -- --interval "${HEALTH_INTERVAL}" &
 HEALTH_PID=$!
 
-ros2 run viscera viscera_monitor -- --interval "${INTERVAL}" "${LIMIT_ARGS[@]}" &
-MONITOR_PID=$!
-
-wait -n
+exec ros2 run viscera viscera_monitor -- --interval "${INTERVAL}" "${LIMIT_ARGS[@]}"
