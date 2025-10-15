@@ -226,8 +226,8 @@ class PilotDashboard extends LitElement {
         <span class="surface-metric__value">${this.bridge.mode}</span>
         <span class="surface-status">Primary: ${this.bridge.effectiveRosbridgeUri}</span>
         ${this.bridge.videoBase
-          ? html`<span class="surface-status">Video base: ${this.bridge.videoBase}${this.bridge.videoPort ? `:${this.bridge.videoPort}` : ''}</span>`
-          : ''}
+        ? html`<span class="surface-status">Video base: ${this.bridge.videoBase}${this.bridge.videoPort ? `:${this.bridge.videoPort}` : ''}</span>`
+        : ''}
       </section>
     `;
   }
@@ -291,23 +291,23 @@ class PilotDashboard extends LitElement {
           </span>
         </div>
         ${module.description
-          ? html`<p class="module-list__description">${module.description}</p>`
-          : ''}
+        ? html`<p class="module-list__description">${module.description}</p>`
+        : ''}
         <div class="module-list__meta">
           <span>Slug: ${module.slug}</span>
           ${module.dashboardUrl
-            ? html`<a class="module-list__link" href="${module.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
-            : ''}
+        ? html`<a class="module-list__link" href="${module.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
+        : ''}
         </div>
         <div class="module-systemd">
           <span class="surface-chip" data-variant=${activeVariant}>${activeLabel}</span>
           <span class="surface-chip" data-variant=${enabledVariant}>${enabledLabel}</span>
           ${systemd.unit
-            ? html`<span class="surface-status">${systemd.unit}</span>`
-            : ''}
+        ? html`<span class="surface-status">${systemd.unit}</span>`
+        : ''}
         </div>
         ${canControl
-          ? html`<div class="module-actions">
+        ? html`<div class="module-actions">
               <button
                 type="button"
                 class="surface-action"
@@ -315,8 +315,8 @@ class PilotDashboard extends LitElement {
                 ?disabled=${Boolean(busyAction)}
               >
                 ${busyAction === 'up' || busyAction === 'down'
-                  ? 'Working…'
-                  : systemd.active ? 'Stop' : 'Start'}
+            ? 'Working…'
+            : systemd.active ? 'Stop' : 'Start'}
               </button>
               <button
                 type="button"
@@ -325,17 +325,17 @@ class PilotDashboard extends LitElement {
                 ?disabled=${Boolean(busyAction)}
               >
                 ${busyAction === 'enable' || busyAction === 'disable'
-                  ? 'Working…'
-                  : systemd.enabled ? 'Disable' : 'Enable'}
+            ? 'Working…'
+            : systemd.enabled ? 'Disable' : 'Enable'}
               </button>
               ${systemd.exists
-                ? html`<button
+            ? html`<button
                       type="button"
                       class="surface-action"
                       @click=${() => this._runSystemdAction(module.name, 'teardown')}
                       ?disabled=${Boolean(busyAction)}
                     >${busyAction === 'teardown' ? 'Working…' : 'Remove unit'}</button>`
-                : html`<button
+            : html`<button
                       type="button"
                       class="surface-action"
                       @click=${() => this._runSystemdAction(module.name, 'setup')}
@@ -350,13 +350,13 @@ class PilotDashboard extends LitElement {
                 ${busyAction === 'debug' ? 'Collecting…' : 'Debug'}
               </button>
             </div>`
-          : html`<p class="module-status-message">Systemd integration unavailable on this host.</p>`}
+        : html`<p class="module-status-message">Systemd integration unavailable on this host.</p>`}
         ${systemd.message
-          ? html`<p class="module-status-message">${systemd.message}</p>`
-          : ''}
+        ? html`<p class="module-status-message">${systemd.message}</p>`
+        : ''}
         ${errorMessage
-          ? html`<p class="module-error">${errorMessage}</p>`
-          : ''}
+        ? html`<p class="module-error">${errorMessage}</p>`
+        : ''}
       </li>
     `;
   }
@@ -377,10 +377,10 @@ class PilotDashboard extends LitElement {
       const modules = Array.isArray(payload.modules) ? payload.modules : [];
       this.host = normaliseHostMetadata(payload.host);
       this.bridge = normaliseBridgeSettings(payload.bridge);
-  this.modules = modules;
-  this.summary = summariseModules(modules);
-  this.systemdErrors = {};
-  this.systemdBusy = {};
+      this.modules = modules;
+      this.summary = summariseModules(modules);
+      this.systemdErrors = {};
+      this.systemdBusy = {};
       this.lastUpdated = new Date();
     } catch (error) {
       if (controller.signal.aborted) {
