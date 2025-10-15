@@ -501,7 +501,7 @@ def _read_module_log(
     Returns
     -------
     tuple[list[str], bool, Optional[datetime]]
-        A tuple containing the collected lines (newest last), a flag that
+        A tuple containing the collected lines (newest first), a flag that
         indicates whether the log was truncated to :data:`MODULE_LOG_LINE_LIMIT`,
         and the timestamp of the last modification if available.
 
@@ -531,6 +531,8 @@ def _read_module_log(
     all_lines = text.splitlines()
     truncated = len(all_lines) > MODULE_LOG_LINE_LIMIT
     lines = all_lines[-MODULE_LOG_LINE_LIMIT:] if truncated else all_lines
+    # Reverse to show newest first
+    lines = list(reversed(lines))
 
     try:
         stat = log_path.stat()

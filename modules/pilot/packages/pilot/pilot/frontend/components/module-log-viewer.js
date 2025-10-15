@@ -60,7 +60,7 @@ class PilotModuleLogs extends LitElement {
         max-height: 240px;
         overflow: auto;
         font-family: var(--metric-value-font);
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         line-height: 1.3;
         white-space: pre-wrap;
         word-break: break-word;
@@ -190,7 +190,8 @@ class PilotModuleLogs extends LitElement {
       return html`<p class="surface-log__empty">No log entries captured yet.</p>`;
     }
     const ansiText = this.lines.join('\n');
-    const htmlContent = ansiText ? this._ansi.ansi_to_html(ansiText) : '';
+    // Convert ANSI codes to HTML, then remove <br/> tags since we're using <pre>
+    const htmlContent = ansiText ? this._ansi.ansi_to_html(ansiText).replace(/<br\s*\/?>/gi, '\n') : '';
     return html`
       <div class="surface-log__meta">
         <span>Showing ${this.lines.length} line${this.lines.length === 1 ? '' : 's'}.</span>
