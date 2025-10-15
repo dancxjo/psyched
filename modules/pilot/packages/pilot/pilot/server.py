@@ -141,6 +141,7 @@ def create_app(*, settings: PilotSettings) -> web.Application:
 
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/modules/{module_name}/logs", _module_log_handler)
+    app.router.add_delete("/api/modules/{module_name}/logs", _module_log_clear_handler)
     app.router.add_get("/api/module-config", _module_config_handler)
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
     app.router.add_post("/api/ops/git-pull", _git_pull_handler)
@@ -202,6 +203,38 @@ async def _module_log_handler(request: web.Request) -> web.Response:
         "updated_at": updated_at.isoformat() if updated_at else None,
     }
     return web.json_response(payload)
+
+
+async def _module_log_clear_handler(request: web.Request) -> web.Response:
+    """Truncate a module's log file on demand."""
+
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    module_name = (request.match_info.get("module_name") or "").strip()
+    if not module_name:
+        raise web.HTTPBadRequest(text="Module name must be provided in the request path")
+    if not _MODULE_NAME_PATTERN.fullmatch(module_name):
+        raise web.HTTPBadRequest(text="Module name contains invalid characters")
+
+    catalog = _get_module_catalog(request.app)
+    catalog.refresh()
+    try:
+        catalog.get_module(module_name)
+    except KeyError as exc:
+        raise web.HTTPNotFound(text=f"Module not found: {module_name}") from exc
+
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Pilot repository root is not configured")
+
+    log_path = repo_root / "log" / "modules" / f"{module_name}.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("", encoding="utf-8")
+    except OSError as exc:  # pragma: no cover - filesystem errors are environment specific
+        _LOGGER.exception("Failed to clear module log for module %s", module_name)
+        raise web.HTTPInternalServerError(text="Failed to clear module log") from exc
+
+    return web.json_response({"module": module_name, "cleared": True})
 
 
 async def _module_config_handler(request: web.Request) -> web.Response:

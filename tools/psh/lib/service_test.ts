@@ -2,6 +2,7 @@ import { assert, assertEquals } from "$std/testing/asserts.ts";
 import {
   __test__,
   listServices,
+  resolveServiceContext,
   ServiceConfig,
   ServiceShellOptions,
 } from "./service.ts";
@@ -80,5 +81,19 @@ Deno.test("listServices picks up ros2", () => {
   assert(
     services.includes("ros2"),
     "ros2 service should be discoverable",
+  );
+});
+
+Deno.test("resolveServiceContext merges environment", () => {
+  const context = resolveServiceContext("ros2");
+  assertEquals(context.name, "ros2");
+  assert(
+    Object.prototype.hasOwnProperty.call(context.env, "ROS_DOMAIN_ID"),
+    "ROS_DOMAIN_ID should be present in resolved environment",
+  );
+  assert(
+    context.composePath.endsWith(".yml") ||
+      context.composePath.endsWith(".yaml"),
+    "Compose path should point to a YAML file",
   );
 });

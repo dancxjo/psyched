@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-
+import { unsafeHTML } from 'https://unpkg.com/lit@3.1.4/directives/unsafe-html.js?module';
+import { AnsiUp } from 'https://esm.sh/ansi_up@6.0.2';
 import { surfaceStyles } from './pilot-style.js';
 
 /**
@@ -20,6 +21,7 @@ class PilotModuleLogs extends LitElement {
     lines: { state: true },
     truncated: { state: true },
     loading: { state: true },
+    clearing: { state: true },
     errorMessage: { state: true },
     updatedAt: { state: true },
   };
@@ -58,8 +60,8 @@ class PilotModuleLogs extends LitElement {
         max-height: 240px;
         overflow: auto;
         font-family: var(--metric-value-font);
-        font-size: 0.8rem;
-        line-height: 1.4;
+        font-size: 0.7rem;
+        line-height: 1.3;
         white-space: pre-wrap;
         word-break: break-word;
       }
@@ -73,6 +75,22 @@ class PilotModuleLogs extends LitElement {
       .surface-log__actions {
         display: flex;
         justify-content: flex-end;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .surface-log__details {
+        margin-top: 0.5rem;
+      }
+
+      .surface-log__summary {
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--lcars-link, #f8c77c);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
       }
     `,
   ];
@@ -83,11 +101,13 @@ class PilotModuleLogs extends LitElement {
     this.lines = [];
     this.truncated = false;
     this.loading = false;
+    this.clearing = false;
     this.errorMessage = '';
     this.updatedAt = null;
     this._connected = false;
     this._abortController = null;
     this._lastFetchedModule = null;
+    this._ansi = new AnsiUp();
   }
 
   createRenderRoot() {
@@ -136,7 +156,15 @@ class PilotModuleLogs extends LitElement {
             <button
               type="button"
               class="surface-action"
-              ?disabled=${this.loading || !this.module}
+              ?disabled=${this.loading || this.clearing || !this.module}
+              @click=${() => this._clearLogs()}
+            >
+              ${this.clearing ? 'Clearing…' : 'Clear log'}
+            </button>
+            <button
+              type="button"
+              class="surface-action"
+              ?disabled=${this.loading || this.clearing || !this.module}
               @click=${() => this.refresh()}
             >
               ${this.loading ? 'Refreshing…' : 'Refresh log'}
@@ -161,6 +189,8 @@ class PilotModuleLogs extends LitElement {
     if (!this.lines.length) {
       return html`<p class="surface-log__empty">No log entries captured yet.</p>`;
     }
+    const ansiText = this.lines.join('\n');
+    const htmlContent = ansiText ? this._ansi.ansi_to_html(ansiText) : '';
     return html`
       <div class="surface-log__meta">
         <span>Showing ${this.lines.length} line${this.lines.length === 1 ? '' : 's'}.</span>
@@ -171,7 +201,10 @@ class PilotModuleLogs extends LitElement {
           ? html`<span>Updated ${this._formatTimestamp(this.updatedAt)}</span>`
           : html`<span>Awaiting first log write.</span>`}
       </div>
-      <pre class="surface-log__content">${this.lines.join('\n')}</pre>
+      <details class="surface-log__details">
+        <summary class="surface-log__summary">View module log</summary>
+        <pre class="surface-log__content">${unsafeHTML(htmlContent)}</pre>
+      </details>
     `;
   }
 
@@ -211,6 +244,33 @@ class PilotModuleLogs extends LitElement {
         this._abortController = null;
       }
       this.loading = false;
+    }
+  }
+
+  async _clearLogs() {
+    if (!this.module || this.clearing) {
+      return;
+    }
+    this._abortFetch();
+    this.clearing = true;
+    this.errorMessage = '';
+
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(this.module)}/logs`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      this.lines = [];
+      this.truncated = false;
+      this.updatedAt = null;
+      await this.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.errorMessage = `Failed to clear module log: ${message}`;
+    } finally {
+      this.clearing = false;
     }
   }
 

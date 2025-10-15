@@ -157,6 +157,31 @@ export async function setupService(service: string): Promise<void> {
   await runScripts(service, serviceDir, config.setup_scripts, "setup");
 }
 
+export interface ResolvedServiceContext {
+  name: string;
+  dir: string;
+  config: ServiceConfig;
+  composePath: string;
+  project: string;
+  env: Record<string, string>;
+}
+
+export function resolveServiceContext(service: string): ResolvedServiceContext {
+  const serviceDir = locateServiceDir(service);
+  const config = loadServiceConfig(serviceDir, service);
+  const composePath = composeFilePath(serviceDir, config);
+  const project = composeProject(service, config);
+  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
+  return {
+    name: service,
+    dir: serviceDir,
+    config,
+    composePath,
+    project,
+    env,
+  };
+}
+
 export async function setupServices(services: string[]): Promise<void> {
   for (const service of services) {
     await setupService(service);
@@ -171,34 +196,30 @@ export async function teardownService(service: string): Promise<void> {
 }
 
 export async function bringServiceUp(service: string): Promise<void> {
-  const serviceDir = locateServiceDir(service);
-  const config = loadServiceConfig(serviceDir, service);
-  const composePath = composeFilePath(serviceDir, config);
-  const project = composeProject(service, config);
+  const context = resolveServiceContext(service);
   console.log(
-    colors.green(`==> Starting service '${service}' using ${composePath}`),
+    colors.green(
+      `==> Starting service '${service}' using ${context.composePath}`,
+    ),
   );
-  let cmd = $`docker compose -f ${composePath} -p ${project} up -d`.cwd(
-    serviceDir,
-  );
-  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
-  cmd = cmd.env(env);
+  let cmd =
+    $`docker compose -f ${context.composePath} -p ${context.project} up -d`
+      .cwd(context.dir);
+  cmd = cmd.env(context.env);
   await cmd.stdout("inherit").stderr("inherit");
 }
 
 export async function bringServiceDown(service: string): Promise<void> {
-  const serviceDir = locateServiceDir(service);
-  const config = loadServiceConfig(serviceDir, service);
-  const composePath = composeFilePath(serviceDir, config);
-  const project = composeProject(service, config);
+  const context = resolveServiceContext(service);
   console.log(
-    colors.yellow(`==> Stopping service '${service}' using ${composePath}`),
+    colors.yellow(
+      `==> Stopping service '${service}' using ${context.composePath}`,
+    ),
   );
-  let cmd = $`docker compose -f ${composePath} -p ${project} down`.cwd(
-    serviceDir,
-  );
-  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
-  cmd = cmd.env(env);
+  let cmd =
+    $`docker compose -f ${context.composePath} -p ${context.project} down`
+      .cwd(context.dir);
+  cmd = cmd.env(context.env);
   await cmd.stdout("inherit").stderr("inherit");
 }
 
@@ -212,20 +233,22 @@ export async function openServiceShell(
   service: string,
   options: ServiceShellOptions = {},
 ): Promise<void> {
-  const serviceDir = locateServiceDir(service);
-  const config = loadServiceConfig(serviceDir, service);
-  const composePath = composeFilePath(serviceDir, config);
-  const project = composeProject(service, config);
-  const args = buildShellArgs(service, config, composePath, project, options);
+  const context = resolveServiceContext(service);
+  const args = buildShellArgs(
+    service,
+    context.config,
+    context.composePath,
+    context.project,
+    options,
+  );
 
   let builder = new CommandBuilder().command(args)
-    .cwd(serviceDir)
+    .cwd(context.dir)
     .stdin("inherit")
     .stdout("inherit")
     .stderr("inherit")
     .noThrow();
-  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
-  builder = builder.env(env);
+  builder = builder.env(context.env);
 
   const result = await builder.spawn();
   if (result.code !== 0) {
@@ -263,15 +286,10 @@ export async function serviceStatuses(): Promise<ServiceStatus[]> {
 }
 
 export async function serviceStatus(name: string): Promise<ServiceStatus> {
-  const serviceDir = locateServiceDir(name);
-  const config = loadServiceConfig(serviceDir, name);
-  const composePath = composeFilePath(serviceDir, config);
-  const project = composeProject(name, config);
-  let cmd = $`docker compose -f ${composePath} -p ${project} ps`.cwd(
-    serviceDir,
-  );
-  const env = { ...buildRosEnv(), ...(config.env ?? {}) };
-  cmd = cmd.env(env);
+  const context = resolveServiceContext(name);
+  let cmd = $`docker compose -f ${context.composePath} -p ${context.project} ps`
+    .cwd(context.dir);
+  cmd = cmd.env(context.env);
   const output = await cmd.stderr("piped").text();
   const running = output.split("\n").slice(1).some((line) =>
     line.includes("Up")
@@ -279,7 +297,7 @@ export async function serviceStatus(name: string): Promise<ServiceStatus> {
   return {
     name,
     status: running ? "running" : "stopped",
-    description: config.description,
+    description: context.config.description,
   };
 }
 

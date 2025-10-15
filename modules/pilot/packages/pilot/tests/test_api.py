@@ -109,6 +109,10 @@ def test_module_logs_endpoint_rejects_invalid_name(tmp_path: Path) -> None:
     asyncio.run(_exercise_module_logs_invalid_name(tmp_path))
 
 
+def test_module_logs_endpoint_clears_file(tmp_path: Path) -> None:
+    asyncio.run(_exercise_module_logs_clear(tmp_path))
+
+
 def test_git_pull_endpoint_invokes_repo_update(
     monkeypatch: pytest.MonkeyPatch, config_file: Path, tmp_path: Path
 ) -> None:
@@ -356,6 +360,36 @@ async def _exercise_module_logs_invalid_name(tmp_path: Path) -> None:
         assert response.status == 400
 
 
+async def _exercise_module_logs_clear(tmp_path: Path) -> None:
+    module_name = "nav"
+    settings = _build_minimal_settings(
+        tmp_path,
+        module_name=module_name,
+        log_lines=["first line", "second line"],
+    )
+    log_path = tmp_path / "log" / "modules" / f"{module_name}.log"
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.delete(f"/api/modules/{module_name}/logs")
+        assert response.status == 200
+        payload = await response.json()
+        assert payload == {"module": module_name, "cleared": True}
+        assert log_path.read_text(encoding="utf-8") == ""
+
+        follow_up = await client.get(f"/api/modules/{module_name}/logs")
+        assert follow_up.status == 200
+        log_payload = await follow_up.json()
+        assert log_payload["lines"] == []
+        assert log_payload["truncated"] is False
+
+        # Clearing again should succeed even when the file is missing on disk.
+        log_path.unlink()
+        second = await client.delete(f"/api/modules/{module_name}/logs")
+        assert second.status == 200
+        assert log_path.exists()
+
+
 async def _exercise_git_pull_endpoint(
     config_file: Path, tmp_path: Path, calls: list[tuple[tuple[str, ...], Path]]
 ) -> None:
@@ -513,6 +547,9 @@ class _TestClient:
 
     async def post(self, path: str, **kwargs) -> web.ClientResponse:
         return await self.request("POST", path, **kwargs)
+
+    async def delete(self, path: str, **kwargs) -> web.ClientResponse:
+        return await self.request("DELETE", path, **kwargs)
 
 
 def _run_app(app: web.Application) -> _TestClient:
