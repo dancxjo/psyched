@@ -44,6 +44,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="ear_audio_capture",
         name="ear_audio_capture",
         output="screen",
+        emulate_tty=True,
         parameters=[
             {
                 "audio_topic": audio_topic,
@@ -64,6 +65,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="ear_vad",
         name="ear_vad",
         output="screen",
+        emulate_tty=True,
         parameters=[
             {
                 "audio_topic": audio_topic,
@@ -83,6 +85,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="ear_silence",
         name="ear_silence_detector",
         output="screen",
+        emulate_tty=True,
         parameters=[
             {
                 "audio_topic": audio_topic,
@@ -100,6 +103,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="ear_transcriber",
         name="ear_transcriber",
         output="screen",
+        emulate_tty=True,
         parameters=[
             {
                 "backend": backend,
