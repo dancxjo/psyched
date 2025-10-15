@@ -25,8 +25,10 @@ import {
 import {
   defaultModuleTargets,
   defaultServiceTargets,
+  moduleTargetResolution,
   resolveModuleTargets,
   resolveServiceTargets,
+  serviceTargetResolution,
 } from "./lib/host_targets.ts";
 import { resolveTargetBatches } from "./lib/target_resolver.ts";
 import {
@@ -533,17 +535,18 @@ function resolveSystemdTargets(
 
   const modules = listModules();
   const services = listServices();
-  const moduleSet = new Set(modules);
-  const serviceSet = new Set(services);
-  const moduleDefaults = defaultModuleTargets("launch");
-  const serviceDefaults = defaultServiceTargets("up");
-  const wildcardModules = moduleDefaults.length ? moduleDefaults : modules;
-  const wildcardServices = serviceDefaults.length ? serviceDefaults : services;
+  const catalog = { modules, services };
+  const moduleDefaults = moduleTargetResolution("launch").targets;
+  const serviceDefaults = serviceTargetResolution("up").targets;
 
   const resolved: ResolvedSystemdTarget[] = [];
   const seen = new Set<string>();
+  const preferService = Boolean(options.service && !options.module);
 
-  const push = (kind: SystemdTargetKind, name: string) => {
+  let moduleDefaultsApplied = false;
+  let serviceDefaultsApplied = false;
+
+  const pushTarget = (kind: SystemdTargetKind, name: string) => {
     const key = `${kind}:${name}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -552,44 +555,57 @@ function resolveSystemdTargets(
 
   const tokens = targets?.length ? targets : ["*"];
   for (const token of tokens) {
-    if (token === "*" || token.toLowerCase() === "all") {
-      if (!options.service) {
-        for (const name of wildcardModules) push("module", name);
+    if (isWildcardToken(token)) {
+      if (!options.service && !moduleDefaultsApplied) {
+        for (const name of moduleDefaults) pushTarget("module", name);
+        moduleDefaultsApplied = true;
       }
-      if (!options.module) {
-        for (const name of wildcardServices) push("service", name);
+      if (!options.module && !serviceDefaultsApplied) {
+        for (const name of serviceDefaults) pushTarget("service", name);
+        serviceDefaultsApplied = true;
       }
       continue;
     }
 
+    const matches = resolveTargetBatches([token], {
+      catalog,
+      defaults: { modules: [], services: [] },
+      preferService,
+    });
+
+    const matchedModule = matches.modules[0];
+    const matchedService = matches.services[0];
+
     if (options.module) {
-      if (!moduleSet.has(token)) {
-        throw new Error(`Unknown module '${token}'.`);
+      if (matchedModule) {
+        pushTarget("module", matchedModule);
+      } else if (matchedService) {
+        throw new Error(
+          `Target '${token}' is not a module. Use --service to manage services.`,
+        );
       }
-      push("module", token);
       continue;
     }
 
     if (options.service) {
-      if (!serviceSet.has(token)) {
-        throw new Error(`Unknown service '${token}'.`);
+      if (matchedService) {
+        pushTarget("service", matchedService);
+      } else if (matchedModule) {
+        throw new Error(
+          `Target '${token}' is not a service. Use --module to manage modules.`,
+        );
       }
-      push("service", token);
       continue;
     }
 
-    const isModule = moduleSet.has(token);
-    const isService = serviceSet.has(token);
-    if (isModule && !isService) {
-      push("module", token);
-    } else if (!isModule && isService) {
-      push("service", token);
-    } else if (isModule && isService) {
-      throw new Error(
-        `Target '${token}' matches both a module and a service. Use --module or --service to disambiguate.`,
-      );
-    } else {
-      throw new Error(`Unknown module or service '${token}'.`);
+    if (matchedModule) {
+      pushTarget("module", matchedModule);
+      continue;
+    }
+
+    if (matchedService) {
+      pushTarget("service", matchedService);
+      continue;
     }
   }
 
@@ -600,6 +616,10 @@ function resolveSystemdTargets(
   }
 
   return resolved;
+}
+
+function isWildcardToken(token: string): boolean {
+  return token === "*" || token.toLowerCase() === "all";
 }
 
 async function handleTopLevelError(error: unknown): Promise<void> {

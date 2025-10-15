@@ -11,7 +11,7 @@ interface HostProfileTargets {
   services: Map<string, ServiceDirective>;
 }
 
-interface TargetResolution {
+export interface TargetResolution {
   targets: string[];
   fromHost: boolean;
 }
@@ -176,6 +176,16 @@ export function defaultServiceTargets(action: ServiceAction): string[] {
 
 export function resetHostTargetCache(): void {
   cachedProfile = undefined;
+}
+
+export function moduleTargetResolution(action: ModuleAction): TargetResolution {
+  return moduleTargetsFromHost(action);
+}
+
+export function serviceTargetResolution(
+  action: ServiceAction,
+): TargetResolution {
+  return serviceTargetsFromHost(action);
 }
 
 export const __internals__ = {
