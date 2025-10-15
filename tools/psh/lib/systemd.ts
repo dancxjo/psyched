@@ -319,6 +319,43 @@ export async function stopServiceSystemd(service: string): Promise<void> {
   await systemctl("stop", "service", service);
 }
 
+async function debugUnit(kind: UnitKind, name: string): Promise<void> {
+  const unit = unitName(kind, name);
+  console.log();
+  console.log(colors.bold(`=== ${unit} status ===`));
+  const status = await $`sudo systemctl status ${unit} --no-pager`.noThrow()
+    .stdout("inherit").stderr(
+      "inherit",
+    );
+  if (status.code !== 0) {
+    console.warn(
+      colors.yellow(
+        `systemctl status exited with code ${status.code}; see output above for details`,
+      ),
+    );
+  }
+  console.log(colors.bold(`--- ${unit} recent logs ---`));
+  const logs = await $`sudo journalctl -u ${unit} -n 50 --no-pager`.noThrow()
+    .stdout(
+      "inherit",
+    ).stderr("inherit");
+  if (logs.code !== 0) {
+    console.warn(
+      colors.yellow(
+        `journalctl exited with code ${logs.code}; the unit may not have any logs yet`,
+      ),
+    );
+  }
+}
+
+export async function debugSystemd(module: string): Promise<void> {
+  await debugUnit("module", module);
+}
+
+export async function debugServiceSystemd(service: string): Promise<void> {
+  await debugUnit("service", service);
+}
+
 export const __test__ = {
   environmentLines,
   mergeEnv,

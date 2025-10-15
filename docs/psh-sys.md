@@ -13,10 +13,18 @@ The `psh sys` commands manage systemd system services for modules and services i
 
 ## Commands
 
+All `psh sys` subcommands accept an optional target list. If you omit the
+target (or pass `*`), the command applies to every module and service marked as
+enabled for the active host profile. Use `--module` or `--service` to limit the
+wildcard to a single type.
+
 ### Setup and Teardown
 
 ```bash
-# Generate systemd unit file for a module
+# Generate systemd unit files for all enabled modules and services
+psh sys setup
+
+# Target a specific module by name
 psh sys setup <module-name>
 
 # Generate systemd unit file for a service (use --service flag)
@@ -31,10 +39,12 @@ psh sys teardown --service <service-name>
 
 ```bash
 # Enable service to start at boot
+psh sys enable
 psh sys enable <target>
 psh sys enable --service <service-name>
 
 # Disable service from starting at boot
+psh sys disable
 psh sys disable <target>
 psh sys disable --service <service-name>
 ```
@@ -43,12 +53,25 @@ psh sys disable --service <service-name>
 
 ```bash
 # Start service immediately
+psh sys up
 psh sys up <target>
 psh sys up --service <service-name>
 
 # Stop service
+psh sys down
 psh sys down <target>
 psh sys down --service <service-name>
+```
+
+### Debug
+
+```bash
+# Show systemctl status and recent logs for all enabled units
+psh sys debug
+
+# Inspect a single module or service
+psh sys debug <target>
+psh sys debug --service <service-name>
 ```
 
 ## Technical Details
