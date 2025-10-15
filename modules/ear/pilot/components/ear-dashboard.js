@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/pilot.js';
 import { surfaceStyles } from '/components/pilot-style.js';
-import { sampleRateFromMessage } from '/components/utils/audio.js';
+import { sampleRateFromMessage } from '../utils/audio.js';
 import '/components/audio-oscilloscope.js';
 
 const AUDIO_TOPIC = '/audio/raw';
