@@ -83,6 +83,16 @@ _PSH_BULK_OPERATIONS: Dict[str, Sequence[str]] = {
     "module-down": ("mod", "down"),
 }
 
+_PSH_MODULE_SYSTEMD_ACTIONS: Dict[str, Sequence[str]] = {
+    "setup": ("sys", "setup", "--module"),
+    "teardown": ("sys", "teardown", "--module"),
+    "enable": ("sys", "enable", "--module"),
+    "disable": ("sys", "disable", "--module"),
+    "up": ("sys", "up", "--module"),
+    "down": ("sys", "down", "--module"),
+    "debug": ("sys", "debug", "--module"),
+}
+
 
 @dataclass(slots=True)
 class PilotSettings:
@@ -142,6 +152,10 @@ def create_app(*, settings: PilotSettings) -> web.Application:
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/modules/{module_name}/logs", _module_log_handler)
     app.router.add_delete("/api/modules/{module_name}/logs", _module_log_clear_handler)
+    app.router.add_post(
+        "/api/modules/{module_name}/systemd/{action}",
+        _module_systemd_operation_handler,
+    )
     app.router.add_get("/api/module-config", _module_config_handler)
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
     app.router.add_post("/api/ops/git-pull", _git_pull_handler)
@@ -159,7 +173,9 @@ async def _modules_handler(request: web.Request) -> web.Response:
     config = settings.load_config()
     active_descriptors = discover_active_modules(config)
     catalog.refresh()
-    modules = [_module_payload(descriptor, catalog) for descriptor in active_descriptors]
+    modules = await asyncio.gather(
+        *(_module_payload_with_status(descriptor, catalog) for descriptor in active_descriptors)
+    )
     payload = {
         "modules": modules,
         "bridge": {
@@ -235,6 +251,54 @@ async def _module_log_clear_handler(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="Failed to clear module log") from exc
 
     return web.json_response({"module": module_name, "cleared": True})
+
+
+async def _module_systemd_operation_handler(request: web.Request) -> web.Response:
+    settings: PilotSettings = request.app[PILOT_SETTINGS_KEY]
+    repo_root = settings.repo_root
+    if repo_root is None:
+        raise web.HTTPInternalServerError(text="Repository root is not configured")
+
+    module_name = (request.match_info.get("module_name") or "").strip()
+    if not module_name:
+        raise web.HTTPBadRequest(text="Module name must be provided in the request path")
+    if not _MODULE_NAME_PATTERN.fullmatch(module_name):
+        raise web.HTTPBadRequest(text="Module name contains invalid characters")
+
+    action = (request.match_info.get("action") or "").strip().lower()
+    if not action:
+        raise web.HTTPBadRequest(text="Action must be provided in the request path")
+
+    command_prefix = _PSH_MODULE_SYSTEMD_ACTIONS.get(action)
+    if command_prefix is None:
+        raise web.HTTPBadRequest(text=f"Unsupported systemd action: {action}")
+
+    catalog = _get_module_catalog(request.app)
+    catalog.refresh()
+    try:
+        catalog.get_module(module_name)
+    except KeyError as exc:
+        raise web.HTTPNotFound(text=f"Module not found: {module_name}") from exc
+
+    command = ["psh", *command_prefix, module_name]
+
+    try:
+        result = await _run_command(command=command, cwd=repo_root)
+    except FileNotFoundError as exc:
+        _LOGGER.error("psh binary not found while handling systemd action %s", action, exc_info=True)
+        raise web.HTTPInternalServerError(text="psh binary is not available on this host") from exc
+    except OSError as exc:  # pragma: no cover - defensive guard for unexpected OS errors
+        _LOGGER.error("psh systemd action %s failed to spawn", action, exc_info=True)
+        raise web.HTTPInternalServerError(text="Failed to execute systemd action") from exc
+
+    status = await _module_systemd_status(module_name)
+    payload = result.to_payload()
+    payload.update({
+        "module": module_name,
+        "action": action,
+        "status": status,
+    })
+    return web.json_response(payload)
 
 
 async def _module_config_handler(request: web.Request) -> web.Response:
@@ -565,6 +629,87 @@ def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dic
     if dashboard_url:
         data["dashboard_url"] = dashboard_url
     return data
+
+
+async def _module_payload_with_status(
+    descriptor: ModuleDescriptor,
+    catalog: ModuleCatalog,
+) -> Dict[str, Any]:
+    payload = _module_payload(descriptor, catalog)
+    payload["systemd"] = await _module_systemd_status(descriptor.name)
+    return payload
+
+
+def _systemd_unit_name(module_name: str) -> str:
+    normalized = module_name.strip()
+    return f"psh-module-{normalized}.service"
+
+
+async def _module_systemd_status(module_name: str) -> Dict[str, Any]:
+    unit = _systemd_unit_name(module_name)
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "systemctl",
+            "show",
+            "--property=ActiveState,SubState,UnitFileState,LoadState",
+            unit,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return {
+            "supported": False,
+            "unit": unit,
+            "active": False,
+            "enabled": False,
+            "exists": False,
+            "load_state": "missing",
+            "active_state": "unknown",
+            "sub_state": "unknown",
+            "unit_file_state": "absent",
+            "message": "systemctl binary is not available on this host",
+        }
+
+    stdout_bytes, stderr_bytes = await process.communicate()
+    stdout_text = stdout_bytes.decode("utf-8", "replace")
+    metadata: Dict[str, str] = {}
+    for line in stdout_text.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        metadata[key.strip()] = value.strip()
+
+    load_state = metadata.get("LoadState", "")
+    active_state = metadata.get("ActiveState", "")
+    sub_state = metadata.get("SubState", "")
+    unit_file_state = metadata.get("UnitFileState", "")
+
+    exists = load_state not in {"", "not-found", "bad-setting", "error"}
+    enabled = unit_file_state in {"enabled", "linked", "static"}
+    active = active_state in {"active", "activating", "reloading"}
+
+    payload: Dict[str, Any] = {
+        "supported": True,
+        "unit": unit,
+        "load_state": load_state or "unknown",
+        "active_state": active_state or "inactive",
+        "sub_state": sub_state or "dead",
+        "unit_file_state": unit_file_state or "disabled",
+        "exists": exists,
+        "enabled": enabled if exists else False,
+        "active": active if exists else False,
+    }
+
+    if process.returncode != 0 and not exists:
+        payload["message"] = "Systemd unit not found"
+        payload["returncode"] = process.returncode
+    else:
+        stderr_text = stderr_bytes.decode("utf-8", "replace").strip()
+        if stderr_text:
+            payload["message"] = stderr_text
+            payload["returncode"] = process.returncode
+
+    return payload
 
 
 def _host_metadata(config: Mapping[str, Any]) -> Dict[str, str]:

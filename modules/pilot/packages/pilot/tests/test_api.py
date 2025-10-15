@@ -77,7 +77,25 @@ enabled = true
     yield path
 
 
-def test_modules_endpoint_reports_active_dashboards(config_file: Path, tmp_path: Path) -> None:
+def test_modules_endpoint_reports_active_dashboards(
+    monkeypatch: pytest.MonkeyPatch,
+    config_file: Path,
+    tmp_path: Path,
+) -> None:
+    async def fake_status(module_name: str) -> dict[str, object]:
+        return {
+            "supported": True,
+            "unit": f"psh-module-{module_name}.service",
+            "load_state": "loaded",
+            "active_state": "inactive",
+            "sub_state": "dead",
+            "unit_file_state": "disabled",
+            "exists": True,
+            "enabled": False,
+            "active": False,
+        }
+
+    monkeypatch.setattr("pilot.server._module_systemd_status", fake_status)
     asyncio.run(_exercise_modules_endpoint(config_file, tmp_path))
 
 
@@ -145,6 +163,42 @@ def test_psh_endpoint_rejects_unknown_operation(
     asyncio.run(_exercise_psh_rejection(config_file, tmp_path))
 
 
+def test_systemd_endpoint_runs_permitted_action(
+    monkeypatch: pytest.MonkeyPatch,
+    config_file: Path,
+    tmp_path: Path,
+) -> None:
+    calls: list[tuple[tuple[str, ...], Path]] = []
+
+    async def fake_run_command(*, command: list[str], cwd: Path) -> CommandResult:
+        calls.append((tuple(command), cwd))
+        return CommandResult(command=list(command), returncode=0, stdout="started", stderr="")
+
+    async def fake_status(module_name: str) -> dict[str, object]:
+        return {
+            "supported": True,
+            "unit": f"psh-module-{module_name}.service",
+            "load_state": "loaded",
+            "active_state": "active",
+            "sub_state": "running",
+            "unit_file_state": "enabled",
+            "exists": True,
+            "enabled": True,
+            "active": True,
+        }
+
+    monkeypatch.setattr("pilot.server._run_command", fake_run_command)
+    monkeypatch.setattr("pilot.server._module_systemd_status", fake_status)
+    asyncio.run(_exercise_systemd_operation_endpoint(config_file, tmp_path, calls))
+
+
+def test_systemd_endpoint_rejects_unknown_action(
+    config_file: Path,
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_exercise_systemd_rejection(config_file, tmp_path))
+
+
 async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     settings = PilotSettings(
         host_config_path=config_file,
@@ -187,6 +241,9 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
         assert "topics" not in module, "topics metadata should be omitted"
         if module.get("has_pilot"):
             assert module.get("dashboard_url")
+        systemd = module.get("systemd")
+        assert isinstance(systemd, dict)
+        assert set(systemd).issuperset({"unit", "supported", "active", "enabled", "exists"})
 
     bridge = payload.get("bridge")
     assert bridge == {
@@ -456,6 +513,49 @@ async def _exercise_psh_rejection(config_file: Path, tmp_path: Path) -> None:
             "/api/ops/psh",
             json={"operation": "unknown"},
         )
+        assert response.status == 400
+
+
+async def _exercise_systemd_operation_endpoint(
+    config_file: Path,
+    tmp_path: Path,
+    calls: list[tuple[tuple[str, ...], Path]],
+) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.post("/api/modules/imu/systemd/up")
+        assert response.status == 200
+        payload = await response.json()
+
+    assert payload["success"] is True
+    assert payload["module"] == "imu"
+    assert payload["action"] == "up"
+    assert payload["status"]["active"] is True
+    assert calls == [( ("psh", "sys", "up", "--module", "imu"), tmp_path)]
+
+
+async def _exercise_systemd_rejection(config_file: Path, tmp_path: Path) -> None:
+    settings = PilotSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.post("/api/modules/imu/systemd/unknown")
         assert response.status == 400
 
 

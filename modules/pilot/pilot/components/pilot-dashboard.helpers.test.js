@@ -18,7 +18,7 @@ Deno.test('normaliseHostMetadata falls back to derived shortname', () => {
 
 Deno.test('summariseModules deduplicates payloads and counts dashboards', () => {
   const summary = summariseModules([
-    { name: 'imu', slug: 'imu', display_name: 'IMU', has_pilot: true },
+    { name: 'imu', slug: 'imu', display_name: 'IMU', has_pilot: true, systemd: { supported: true, exists: true, active: true, enabled: true } },
     { name: 'imu', slug: 'imu', has_pilot: true },
     { name: 'pilot', display_name: 'Pilot', has_pilot: false },
     { name: '', slug: '', has_pilot: true },
@@ -34,6 +34,9 @@ Deno.test('summariseModules deduplicates payloads and counts dashboards', () => 
   }
   if (!summary.modules[0].dashboardUrl.endsWith('/modules/imu/')) {
     throw new Error('dashboard URL should default to module route');
+  }
+  if (!summary.modules[0].systemd.supported || !summary.modules[0].systemd.exists) {
+    throw new Error('systemd status should be normalised');
   }
 });
 
@@ -52,5 +55,30 @@ Deno.test('resolveRosbridgeUri falls back on invalid payload', () => {
   const resolved = __test__.resolveRosbridgeUri('not a url', { protocol: 'ws:', hostname: 'control.local' });
   if (resolved !== 'ws://control.local:9090') {
     throw new Error(`invalid URI should fallback to ws://control.local:9090 but received ${resolved}`);
+  }
+});
+
+Deno.test('normaliseSystemdStatus applies defaults for missing data', () => {
+  const status = __test__.normaliseSystemdStatus(null);
+  if (status.supported !== false || status.exists !== false) {
+    throw new Error('missing status should report unsupported');
+  }
+  const populated = __test__.normaliseSystemdStatus({
+    supported: true,
+    exists: true,
+    active: true,
+    enabled: false,
+    unit: 'psh-module-imu.service',
+    load_state: 'loaded',
+    active_state: 'active',
+    sub_state: 'running',
+    unit_file_state: 'disabled',
+    message: 'ok',
+  });
+  if (!populated.supported || !populated.exists || !populated.active) {
+    throw new Error('populated status should retain truthy flags');
+  }
+  if (populated.unit !== 'psh-module-imu.service') {
+    throw new Error('unit should be preserved');
   }
 });

@@ -26,6 +26,9 @@ class PilotDashboard extends LitElement {
     bridge: { state: true },
     summary: { state: true },
     lastUpdated: { state: true },
+    modules: { state: true },
+    systemdBusy: { state: true },
+    systemdErrors: { state: true },
   };
 
   static styles = [
@@ -105,6 +108,35 @@ class PilotDashboard extends LitElement {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 0.75rem;
       }
+
+      .module-systemd {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      .module-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .module-actions .surface-action {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.6rem;
+      }
+
+      .module-status-message,
+      .module-error {
+        margin: 0;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .module-error {
+        color: var(--lcars-danger, #ff7f7f);
+      }
     `,
   ];
 
@@ -116,6 +148,9 @@ class PilotDashboard extends LitElement {
     this.bridge = normaliseBridgeSettings(null);
     this.summary = summariseModules([]);
     this.lastUpdated = null;
+    this.modules = [];
+    this.systemdBusy = {};
+    this.systemdErrors = {};
     this._abortController = null;
   }
 
@@ -191,8 +226,8 @@ class PilotDashboard extends LitElement {
         <span class="surface-metric__value">${this.bridge.mode}</span>
         <span class="surface-status">Primary: ${this.bridge.effectiveRosbridgeUri}</span>
         ${this.bridge.videoBase
-          ? html`<span class="surface-status">Video base: ${this.bridge.videoBase}${this.bridge.videoPort ? `:${this.bridge.videoPort}` : ''}</span>`
-          : ''}
+        ? html`<span class="surface-status">Video base: ${this.bridge.videoBase}${this.bridge.videoPort ? `:${this.bridge.videoPort}` : ''}</span>`
+        : ''}
       </section>
     `;
   }
@@ -227,6 +262,26 @@ class PilotDashboard extends LitElement {
   }
 
   _renderModule(module) {
+    const systemd = module.systemd || {
+      supported: false,
+      exists: false,
+      active: false,
+      enabled: false,
+      unit: '',
+      loadState: '',
+      activeState: '',
+      subState: '',
+      unitFileState: '',
+      message: '',
+    };
+    const busyAction = (this.systemdBusy && this.systemdBusy[module.name]) || '';
+    const errorMessage = (this.systemdErrors && this.systemdErrors[module.name]) || '';
+    const canControl = systemd.supported;
+    const activeVariant = systemd.active ? 'success' : systemd.exists ? 'warning' : 'muted';
+    const activeLabel = systemd.active ? 'Active' : systemd.exists ? 'Inactive' : 'Missing';
+    const enabledVariant = systemd.enabled ? 'info' : 'muted';
+    const enabledLabel = systemd.enabled ? 'Enabled' : 'Disabled';
+
     return html`
       <li class="module-list__item">
         <div class="module-list__header">
@@ -236,14 +291,72 @@ class PilotDashboard extends LitElement {
           </span>
         </div>
         ${module.description
-          ? html`<p class="module-list__description">${module.description}</p>`
-          : ''}
+        ? html`<p class="module-list__description">${module.description}</p>`
+        : ''}
         <div class="module-list__meta">
           <span>Slug: ${module.slug}</span>
           ${module.dashboardUrl
-            ? html`<a class="module-list__link" href="${module.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
-            : ''}
+        ? html`<a class="module-list__link" href="${module.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
+        : ''}
         </div>
+        <div class="module-systemd">
+          <span class="surface-chip" data-variant=${activeVariant}>${activeLabel}</span>
+          <span class="surface-chip" data-variant=${enabledVariant}>${enabledLabel}</span>
+          ${systemd.unit
+        ? html`<span class="surface-status">${systemd.unit}</span>`
+        : ''}
+        </div>
+        ${canControl
+        ? html`<div class="module-actions">
+              <button
+                type="button"
+                class="surface-action"
+                @click=${() => this._runSystemdAction(module.name, systemd.active ? 'down' : 'up')}
+                ?disabled=${Boolean(busyAction)}
+              >
+                ${busyAction === 'up' || busyAction === 'down'
+            ? 'Working…'
+            : systemd.active ? 'Stop' : 'Start'}
+              </button>
+              <button
+                type="button"
+                class="surface-action"
+                @click=${() => this._runSystemdAction(module.name, systemd.enabled ? 'disable' : 'enable')}
+                ?disabled=${Boolean(busyAction)}
+              >
+                ${busyAction === 'enable' || busyAction === 'disable'
+            ? 'Working…'
+            : systemd.enabled ? 'Disable' : 'Enable'}
+              </button>
+              ${systemd.exists
+            ? html`<button
+                      type="button"
+                      class="surface-action"
+                      @click=${() => this._runSystemdAction(module.name, 'teardown')}
+                      ?disabled=${Boolean(busyAction)}
+                    >${busyAction === 'teardown' ? 'Working…' : 'Remove unit'}</button>`
+            : html`<button
+                      type="button"
+                      class="surface-action"
+                      @click=${() => this._runSystemdAction(module.name, 'setup')}
+                      ?disabled=${Boolean(busyAction)}
+                    >${busyAction === 'setup' ? 'Working…' : 'Create unit'}</button>`}
+              <button
+                type="button"
+                class="surface-action"
+                @click=${() => this._runSystemdAction(module.name, 'debug')}
+                ?disabled=${Boolean(busyAction)}
+              >
+                ${busyAction === 'debug' ? 'Collecting…' : 'Debug'}
+              </button>
+            </div>`
+        : html`<p class="module-status-message">Systemd integration unavailable on this host.</p>`}
+        ${systemd.message
+        ? html`<p class="module-status-message">${systemd.message}</p>`
+        : ''}
+        ${errorMessage
+        ? html`<p class="module-error">${errorMessage}</p>`
+        : ''}
       </li>
     `;
   }
@@ -261,9 +374,13 @@ class PilotDashboard extends LitElement {
         throw new Error(`Request failed with status ${response.status}`);
       }
       const payload = await response.json();
+      const modules = Array.isArray(payload.modules) ? payload.modules : [];
       this.host = normaliseHostMetadata(payload.host);
       this.bridge = normaliseBridgeSettings(payload.bridge);
-      this.summary = summariseModules(payload.modules);
+      this.modules = modules;
+      this.summary = summariseModules(modules);
+      this.systemdErrors = {};
+      this.systemdBusy = {};
       this.lastUpdated = new Date();
     } catch (error) {
       if (controller.signal.aborted) {
@@ -275,6 +392,68 @@ class PilotDashboard extends LitElement {
         this._abortController = null;
       }
       this.loading = false;
+    }
+  }
+
+  async _runSystemdAction(moduleName, action) {
+    if (!moduleName || !action) {
+      return;
+    }
+
+    this.systemdErrors = { ...this.systemdErrors, [moduleName]: '' };
+    this.systemdBusy = { ...this.systemdBusy, [moduleName]: action };
+
+    try {
+      const response = await fetch(
+        `/api/modules/${encodeURIComponent(moduleName)}/systemd/${encodeURIComponent(action)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (_error) {
+        payload = {};
+      }
+
+      if (!response.ok) {
+        const message = payload && typeof payload.error === 'string'
+          ? payload.error
+          : `Request failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      if (!payload.success) {
+        const details = typeof payload.stderr === 'string' && payload.stderr.trim()
+          ? payload.stderr.trim()
+          : typeof payload.stdout === 'string' && payload.stdout.trim()
+            ? payload.stdout.trim()
+            : 'Command did not complete successfully';
+        throw new Error(details);
+      }
+
+      if (payload.status && typeof payload.status === 'object') {
+        const modules = Array.isArray(this.modules) ? this.modules : [];
+        const updatedModules = modules.map((entry) =>
+          entry && entry.name === moduleName ? { ...entry, systemd: payload.status } : entry,
+        );
+        this.modules = updatedModules;
+        this.summary = summariseModules(updatedModules);
+        this.lastUpdated = new Date();
+      }
+
+      if (typeof payload.stdout === 'string' && payload.stdout.trim()) {
+        console.info(`[pilot] ${moduleName} ${action}: ${payload.stdout.trim()}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.systemdErrors = { ...this.systemdErrors, [moduleName]: message };
+    } finally {
+      const { [moduleName]: _removed, ...rest } = this.systemdBusy;
+      this.systemdBusy = rest;
     }
   }
 
