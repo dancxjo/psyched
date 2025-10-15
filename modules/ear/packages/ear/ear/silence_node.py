@@ -24,10 +24,14 @@ class SilenceDetectorNode(Node):
         window_param = int(self.declare_parameter("average_window", 3).value)
         self._average_window = max(window_param, 1)
         self._publish_on_change = bool(self.declare_parameter("publish_on_change", True).value)
+        reliability_param = str(self.declare_parameter("reliability", "reliable").value).strip().lower()
         self._recent: deque[float] = deque(maxlen=self._average_window)
         self._last_state: bool | None = None
         qos_profile = QoSProfile(depth=20)
-        qos_profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+        if reliability_param == "best_effort":
+            qos_profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+        else:
+            qos_profile.reliability = QoSReliabilityPolicy.RELIABLE
         self._publisher = self.create_publisher(Bool, self._silence_topic, qos_profile)
         self.create_subscription(UInt8MultiArray, self._audio_topic, self._handle_audio, qos_profile)
 
