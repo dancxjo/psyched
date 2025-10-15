@@ -106,7 +106,5 @@ PY
 # Try to prefer a workspace/venv-installed websockets package if present.
 find_and_prepend_websockets || true
 
-ros2 launch voice speech.launch.py \
-  "${LAUNCH_ARGS[@]}" &
-
-wait -n
+exec ros2 launch voice speech.launch.py \
+  "${LAUNCH_ARGS[@]}"

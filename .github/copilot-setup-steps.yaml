@@ -1,0 +1,179 @@
+# GitHub Copilot Setup Steps for psyched
+# This file helps the GitHub Copilot coding agent understand how to set up
+# the development environment for this robotics control stack.
+
+setup_steps:
+  - name: Run bootstrap script
+    description: Install prerequisites and configure the development environment
+    command: ./setup
+    notes: |
+      This script installs:
+      - Core system dependencies (apt packages)
+      - ROS 2 tooling (minimal installation)
+      - Deno runtime for the psh CLI
+      - mDNS configuration
+      - Shell environment helpers
+      After completion, source ~/.bashrc or open a new terminal.
+
+  - name: Provision hosts
+    description: Configure the robot host profiles
+    command: |
+      psh host setup motherbrain
+      psh host setup forebrain
+    notes: |
+      Hosts are defined in the hosts/ directory.
+      Each host declares its installers, modules, and services.
+      The ROS 2 domain ID is set from config/ros_domain_id.
+
+  - name: Set up modules
+    description: Install and configure robotics modules
+    command: |
+      psh mod setup pilot
+    notes: |
+      Modules live in modules/<name>/ with module.toml manifests.
+      Use 'psh mod setup <name>' for individual modules.
+
+build_steps:
+  - name: Build ROS packages
+    description: Compile all ROS 2 packages in the workspace
+    command: psh build
+    notes: |
+      This runs colcon build for all packages in the work/ directory.
+      To build a specific package: psh build <package_name>
+
+  - name: Source ROS environment
+    description: Set up ROS 2 environment variables
+    command: source install/setup.bash
+    notes: |
+      Required before running ROS 2 nodes directly.
+      The psh CLI handles this automatically for 'psh up' commands.
+
+test_steps:
+  - name: Run unit tests
+    description: Execute ROS 2 package tests
+    command: colcon test
+    notes: |
+      Runs all tests defined in ROS 2 packages.
+
+  - name: Format Rust code
+    description: Format Rust code in services
+    command: cargo fmt
+    working_directory: services/asr/app/
+    notes: |
+      Only applies to Rust-based services like the ASR service.
+
+  - name: Check Rust code
+    description: Lint and check Rust code
+    command: cargo check --workspace
+    working_directory: services/asr/app/
+    notes: |
+      Validates Rust code without building.
+
+  - name: Format TypeScript/JavaScript code
+    description: Format Deno/Fresh frontend code
+    command: deno fmt
+    working_directory: modules/pilot/frontend/
+    notes: |
+      Formats TypeScript and JavaScript files using Deno's built-in formatter.
+
+  - name: Check TypeScript types
+    description: Type-check Deno/Fresh frontend code
+    command: deno check
+    working_directory: modules/pilot/frontend/
+    notes: |
+      Validates TypeScript types without running the code.
+
+  - name: Run Deno tests
+    description: Execute Deno test suite
+    command: deno test
+    working_directory: modules/pilot/frontend/
+    notes: |
+      Runs tests defined in the Fresh frontend.
+
+run_steps:
+  - name: Start modules
+    description: Launch robot modules
+    command: psh up <module_name>
+    notes: |
+      Examples:
+      - psh up pilot  # Starts the web cockpit on port 8088
+      - psh up foot   # Starts the iRobot Create controller
+      - psh up imu    # Starts the IMU sensor interface
+
+  - name: Stop modules
+    description: Shut down robot modules
+    command: psh down <module_name>
+    notes: |
+      Or use 'psh down' without arguments to stop all running modules.
+
+  - name: Start services
+    description: Launch containerized services
+    command: psh svc up <service_name>
+    notes: |
+      Services are defined in services/<name>/ with service.toml manifests.
+      Examples: tts, language, graphs, vectors, asr, ros2
+
+  - name: Access Pilot cockpit
+    description: Open the web-based robot control interface
+    url: http://localhost:8088/
+    notes: |
+      Available after running 'psh up pilot'.
+      Provides real-time robot monitoring and control.
+
+tools:
+  - name: psh
+    description: Unified CLI for orchestrating modules and services
+    type: Deno CLI
+    location: tools/psh/
+    notes: |
+      Written in TypeScript using Deno.
+      Handles provisioning, lifecycle management, and systemd integration.
+
+  - name: ROS 2
+    description: Robot Operating System framework
+    version_check: ros2 --version
+    notes: |
+      Default distribution is configured in the environment.
+      Packages built with colcon.
+
+  - name: Deno
+    description: JavaScript/TypeScript runtime
+    version_check: deno --version
+    notes: |
+      Used for the psh CLI and Fresh frontend.
+      Installed by the bootstrap script.
+
+prerequisites:
+  - System packages (installed by ./setup)
+  - ROS 2 tooling
+  - Deno runtime
+  - Docker (for services)
+  - Git
+
+key_files:
+  - path: .github/copilot-instructions.md
+    description: Custom instructions for GitHub Copilot
+
+  - path: README.md
+    description: Main project documentation
+
+  - path: setup
+    description: Bootstrap script (symlink to tools/bootstrap/bootstrap.sh)
+
+  - path: tools/psh/
+    description: Deno-based CLI for orchestration
+
+  - path: modules/
+    description: Hardware and capability modules with module.toml manifests
+
+  - path: services/
+    description: Containerized services with service.toml manifests
+
+  - path: hosts/
+    description: Host configuration profiles
+
+  - path: config/
+    description: Global configuration (ROS domain ID, etc.)
+
+  - path: work/
+    description: Colcon workspace (src/, build/, install/, log/)

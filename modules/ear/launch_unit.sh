@@ -117,6 +117,4 @@ if [[ -n "${SILENCE_PUBLISH_ON_CHANGE}" ]]; then
   LAUNCH_ARGS+=(silence_publish_on_change:="${SILENCE_PUBLISH_ON_CHANGE}")
 fi
 
-ros2 launch ear ear.launch.py "${LAUNCH_ARGS[@]}" &
-
-wait -n
+exec ros2 launch ear ear.launch.py "${LAUNCH_ARGS[@]}"

@@ -24,6 +24,4 @@ if [[ -n "${SIM_SEED}" ]]; then
   ARGS+=(-p simulation_seed:=${SIM_SEED})
 fi
 
-ros2 run hypothalamus hypothalamus_node "${ARGS[@]}" &
-
-wait -n
+exec ros2 run hypothalamus hypothalamus_node "${ARGS[@]}"
