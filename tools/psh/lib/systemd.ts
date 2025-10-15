@@ -161,7 +161,70 @@ function serviceEnv(
   );
 }
 
+async function isLingerEnabled(): Promise<boolean> {
+  try {
+    const result = await $`loginctl show-user ${Deno.env.get("USER") || ""}`
+      .stdout("piped")
+      .stderr("piped")
+      .noThrow();
+    
+    if (result.code !== 0) {
+      return false;
+    }
+    
+    const output = result.stdout;
+    for (const line of output.split("\n")) {
+      if (line.startsWith("Linger=")) {
+        return line.split("=")[1]?.trim() === "yes";
+      }
+    }
+    return false;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function enableLinger(): Promise<void> {
+  const user = Deno.env.get("USER");
+  if (!user) {
+    console.warn(
+      colors.yellow(
+        "⚠️  USER environment variable not set, skipping linger setup",
+      ),
+    );
+    return;
+  }
+
+  const isEnabled = await isLingerEnabled();
+  if (isEnabled) {
+    return;
+  }
+
+  console.log(
+    colors.cyan(
+      `Enabling user lingering for ${user} (required for services to start at boot)...`,
+    ),
+  );
+  
+  try {
+    await $`loginctl enable-linger ${user}`.stdout("inherit").stderr("inherit");
+    console.log(colors.green(`✓ Lingering enabled for ${user}`));
+  } catch (error) {
+    console.warn(
+      colors.yellow(
+        `⚠️  Failed to enable lingering: ${error}. Services may not start at boot.`,
+      ),
+    );
+    console.warn(
+      colors.yellow(
+        `   You may need to run: sudo loginctl enable-linger ${user}`,
+      ),
+    );
+  }
+}
+
 async function reloadSystemd(): Promise<void> {
+  await enableLinger();
   await $`systemctl --user daemon-reload`.stdout("inherit").stderr("inherit");
 }
 
@@ -310,4 +373,6 @@ export const __test__ = {
   sanitizeEnvRecord,
   moduleUnitName,
   serviceUnitName,
+  isLingerEnabled,
+  enableLinger,
 };
