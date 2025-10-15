@@ -1805,3 +1805,18 @@ h5.audio-oscilloscope {
     align-items: flex-start;
   }
 }
+
+pre.surface-log__content {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.5rem;
+}
