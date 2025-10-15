@@ -154,8 +154,7 @@ class FasterWhisperEarBackend(AudioAwareBackend):
             pcm, sample_rate, channels = item
             if channels != 1:
                 _LOGGER.warning(
-                    "faster-whisper backend currently expects mono audio; received %s channels",
-                    channels,
+                    f"faster-whisper backend currently expects mono audio; received {channels} channels",
                 )
             audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
             segments, _ = self._model.transcribe(
@@ -293,8 +292,6 @@ class ServiceASREarBackend(AudioAwareBackend):
         if fallback_error is not None:
             fallback = self._ensure_fallback()
             _LOGGER.warning(
-                "ASR service unavailable at %s; using %s fallback",
-                self._uri,
-                fallback.__class__.__name__,
+                f"ASR service unavailable at {self._uri}; using {fallback.__class__.__name__} fallback",
             )
             fallback.run(publish, stop_event)

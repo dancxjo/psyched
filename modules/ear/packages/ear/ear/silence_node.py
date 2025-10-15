@@ -38,7 +38,7 @@ class SilenceDetectorNode(Node):
         try:
             rms = audioop.rms(data, self._sample_width)
         except audioop.error as exc:  # pragma: no cover - defensive logging
-            self.get_logger().warning("Failed to compute RMS for audio chunk: %s", exc)
+            self.get_logger().warning(f"Failed to compute RMS for audio chunk: {exc}")
             return
         self._recent.append(float(rms))
         average_rms = sum(self._recent) / len(self._recent)

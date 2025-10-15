@@ -73,4 +73,4 @@ class EarWorker:
         if isinstance(self._backend, AudioAwareBackend):
             self._backend.submit_audio(pcm, sample_rate, channels)
         else:
-            self._logger.warning("Backend %s does not accept audio", self._backend)
+            self._logger.warning(f"Backend {self._backend} does not accept audio")

@@ -54,9 +54,7 @@ class TranscriberNode(Node):
             )
 
         self.get_logger().info(
-            "Transcriber ready (backend=%s, transcript_topic=%s)",
-            backend.__class__.__name__,
-            self._transcript_topic,
+            f"Transcriber ready (backend={backend.__class__.__name__}, transcript_topic={self._transcript_topic})",
         )
 
     def _declare_topic(self, name: str, default: str) -> str:
@@ -82,7 +80,9 @@ class TranscriberNode(Node):
             uri = str(self.declare_parameter("service_uri", "ws://127.0.0.1:8089/ws").value).strip() or "ws://127.0.0.1:8089/ws"
             options = self._read_faster_whisper_options()
             return ServiceASREarBackend(uri=uri, fallback_factory=lambda: FasterWhisperEarBackend(**options))
-        self.get_logger().warning("Unknown backend '%s'; defaulting to console backend", backend_name)
+        self.get_logger().warning(
+            f"Unknown backend '{backend_name}'; defaulting to console backend",
+        )
         return ConsoleEarBackend()
 
     def _read_faster_whisper_options(self) -> dict[str, object]:
@@ -120,7 +120,7 @@ class TranscriberNode(Node):
         ros_msg = String()
         ros_msg.data = text
         self._publisher.publish(ros_msg)
-        self.get_logger().info("Heard: %s", text)
+    self.get_logger().info(f"Heard: {text}")
 
     def destroy_node(self) -> bool:
         self._worker.stop()

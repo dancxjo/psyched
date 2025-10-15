@@ -9,7 +9,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import Bool, UInt8MultiArray
-import webrtcvad
+
+try:  # pragma: no cover - dependency guard
+    import webrtcvad  # type: ignore[import-not-found]
+except ImportError as _webrtc_import_error:  # pragma: no cover - env specific
+    webrtcvad = None  # type: ignore[assignment]
+    _WEBRTC_IMPORT_ERROR = _webrtc_import_error
+else:
+    _WEBRTC_IMPORT_ERROR = None
 
 
 class VadNode(Node):
@@ -17,6 +24,12 @@ class VadNode(Node):
 
     def __init__(self) -> None:
         super().__init__("ear_vad")
+        if webrtcvad is None:
+            message = (
+                "webrtcvad dependency missing. Install python3-webrtcvad or run 'pip install webrtcvad'."
+            )
+            self.get_logger().error(message)
+            raise RuntimeError(message) from _WEBRTC_IMPORT_ERROR
         self._audio_topic = str(self.declare_parameter("audio_topic", "/audio/raw").value)
         self._speech_topic = str(self.declare_parameter("speech_topic", "/ear/speech_active").value)
         self._sample_rate = int(self.declare_parameter("sample_rate", 16000).value)
@@ -24,7 +37,9 @@ class VadNode(Node):
             raise ValueError("sample_rate must be one of 8000, 16000, 32000, 48000 for WebRTC VAD")
         self._channels = int(self.declare_parameter("channels", 1).value)
         if self._channels != 1:
-            self.get_logger().warning("VAD currently expects mono audio; received %s channels", self._channels)
+            self.get_logger().warning(
+                f"VAD currently expects mono audio; received {self._channels} channels",
+            )
         self._frame_duration_ms = int(self.declare_parameter("frame_duration_ms", 20).value)
         if self._frame_duration_ms not in (10, 20, 30):
             raise ValueError("frame_duration_ms must be 10, 20, or 30")

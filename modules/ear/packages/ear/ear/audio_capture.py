@@ -85,16 +85,18 @@ class AudioCaptureNode(Node):
                 bufsize=0,
             )
         except FileNotFoundError:
-            self.get_logger().error("Audio source command not found: %s", binary)
+            self.get_logger().error(f"Audio source command not found: {binary}")
             return None
-        except Exception as exc:  # pragma: no cover - defensive logging
-            self.get_logger().exception("Failed to start audio source: %s", exc)
+        except Exception:  # pragma: no cover - defensive logging
+            self.get_logger().exception(
+                f"Failed to start audio source: {' '.join(self._command)}",
+            )
             return None
         if process.stdout is None:
             self.get_logger().error("Audio source did not expose stdout")
             process.terminate()
             return None
-        self.get_logger().info("Started audio source command: %s", " ".join(self._command))
+        self.get_logger().info(f"Started audio source command: {' '.join(self._command)}")
         return process
 
     def _run_loop(self) -> None:
@@ -108,13 +110,13 @@ class AudioCaptureNode(Node):
             while not self._stop_event.is_set():
                 try:
                     chunk = stdout.read(self._chunk_size)
-                except Exception as exc:  # pragma: no cover - defensive logging
-                    self.get_logger().exception("Failed reading audio chunk: %s", exc)
+                except Exception:  # pragma: no cover - defensive logging
+                    self.get_logger().exception("Failed reading audio chunk")
                     break
                 if not chunk:
                     return_code = process.poll()
                     if return_code is not None:
-                        self.get_logger().warning("Audio source exited with code %s", return_code)
+                        self.get_logger().warning(f"Audio source exited with code {return_code}")
                     else:
                         self.get_logger().warning("Audio source produced empty chunk; restarting")
                     break

@@ -11,4 +11,13 @@ install(
 	DESTINATION share/${PROJECT_NAME}
 )
 
+install(
+	PROGRAMS
+		scripts/ear_audio_capture
+		scripts/ear_vad
+		scripts/ear_silence
+		scripts/ear_transcriber
+	DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
