@@ -115,6 +115,42 @@ class EarDashboard extends LitElement {
         flex-wrap: wrap;
         gap: 0.5rem;
       }
+
+      .sensor-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .sensor-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 0.75rem;
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        font-size: 0.85rem;
+      }
+
+      .sensor-item[data-state='active'] {
+        background: rgba(106, 209, 255, 0.2);
+        color: var(--lcars-accent);
+      }
+
+      .sensor-item__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--lcars-accent-secondary);
+      }
+
+      .sensor-item[data-state='active'] .sensor-item__dot {
+        background: var(--lcars-accent);
+        box-shadow: 0 0 12px var(--lcars-accent);
+      }
     `,
     ];
 
@@ -315,10 +351,20 @@ class EarDashboard extends LitElement {
         }
     }
 
+    renderSensorIndicator(label, active) {
+        return html`
+      <li class="sensor-item" data-state="${active ? 'active' : 'idle'}">
+        <span>${label}</span>
+        <span class="sensor-item__dot" aria-hidden="true"></span>
+      </li>
+    `;
+    }
+
     render() {
         const speechVariant = this.speechActive ? 'success' : 'muted';
         const silenceVariant = this.silenceDetected ? 'muted' : 'warning';
         const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
+        const audioActive = this.audioStatus === 'Live';
         return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
@@ -346,6 +392,15 @@ class EarDashboard extends LitElement {
               Clear transcript log
             </button>
           </div>
+        </article>
+
+        <article class="surface-card">
+          <h3 class="surface-card__title">Audio indicators</h3>
+          <ul class="sensor-list">
+            ${this.renderSensorIndicator('Audio stream', audioActive)}
+            ${this.renderSensorIndicator('Speech detected', this.speechActive)}
+            ${this.renderSensorIndicator('Audio energy', !this.silenceDetected)}
+          </ul>
         </article>
 
         <article class="surface-card surface-card--wide">
