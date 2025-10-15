@@ -106,7 +106,7 @@ function chargingStatus(message) {
     return { label: 'Unknown', state: 'idle' };
   }
   if ('state' in message && message.state) {
-    const label = String(message.state);
+    const label = message.state === 2 ? "Charging" : String(message.state);
     const normalized = label.toLowerCase();
     if (normalized.includes('charge') || normalized.includes('dock')) {
       return { label, state: 'charging' };
