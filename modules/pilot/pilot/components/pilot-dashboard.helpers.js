@@ -51,7 +51,9 @@ export function summariseModules(modulesRaw) {
     const dashboardUrlRaw = typeof entry.dashboard_url === 'string' ? entry.dashboard_url.trim() : '';
     const dashboardUrl = dashboardUrlRaw || (hasPilot && name ? `/modules/${name}/` : '');
 
-    normalised.push({ name, slug, displayName, description, hasPilot, dashboardUrl });
+    const systemd = normaliseSystemdStatus(entry.systemd);
+
+    normalised.push({ name, slug, displayName, description, hasPilot, dashboardUrl, systemd });
   }
 
   normalised.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
@@ -99,7 +101,7 @@ function resolveRosbridgeUri(rawUri, location) {
   try {
     const url = new URL(rawUri, baseHref);
     if (url.protocol === 'http:' || url.protocol === 'https:') {
-      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.protocol = fallbackProtocol;
     }
     if (LOOPBACK_HOSTS.has(url.hostname)) {
       url.hostname = fallbackHost;
@@ -126,4 +128,32 @@ function extractPort(rawUri, baseHref) {
   }
 }
 
-export const __test__ = { resolveRosbridgeUri };
+export function normaliseSystemdStatus(rawStatus) {
+  const status = typeof rawStatus === 'object' && rawStatus !== null ? rawStatus : {};
+  const supported = Boolean(status.supported);
+  const exists = Boolean(status.exists && supported);
+  const active = exists && Boolean(status.active);
+  const enabled = exists && Boolean(status.enabled);
+
+  const unit = typeof status.unit === 'string' ? status.unit.trim() : '';
+  const loadState = typeof status.load_state === 'string' ? status.load_state.trim() : '';
+  const activeState = typeof status.active_state === 'string' ? status.active_state.trim() : '';
+  const subState = typeof status.sub_state === 'string' ? status.sub_state.trim() : '';
+  const unitFileState = typeof status.unit_file_state === 'string' ? status.unit_file_state.trim() : '';
+  const message = typeof status.message === 'string' ? status.message.trim() : '';
+
+  return {
+    supported,
+    exists,
+    active,
+    enabled,
+    unit,
+    loadState: loadState || (supported ? 'unknown' : ''),
+    activeState: activeState || (supported ? 'inactive' : ''),
+    subState: subState || (supported ? 'dead' : ''),
+    unitFileState: unitFileState || (supported ? 'disabled' : ''),
+    message,
+  };
+}
+
+export const __test__ = { resolveRosbridgeUri, normaliseSystemdStatus };
