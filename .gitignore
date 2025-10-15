@@ -82,21 +82,11 @@ services/tts/models/*
 # ------------------------------
 hosts/*.local.toml
 modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
-modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
-modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.js
-modules/pilot/packages/pilot/pilot/frontend/components/hypothalamus-dashboard.js
-modules/pilot/packages/pilot/pilot/frontend/components/imu-dashboard.js
-modules/pilot/packages/pilot/pilot/frontend/components/voice-dashboard.js
+# Symlinked components from modules - exclude all .js files but keep AGENTS.md
+modules/pilot/packages/pilot/pilot/frontend/components/*.js
+modules/pilot/packages/pilot/pilot/frontend/components/**/*.js
+# Symlinked js files from modules
 modules/pilot/packages/pilot/pilot/frontend/js/foot.js
 modules/pilot/packages/pilot/pilot/frontend/js/hypothalamus.js
 modules/pilot/packages/pilot/pilot/frontend/js/imu.js
 modules/pilot/packages/pilot/pilot/frontend/js/voice.js
-modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
-modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.helpers.js
-modules/pilot/packages/pilot/pilot/frontend/components/foot-dashboard.helpers.test.js
-modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.js
-modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.helpers.test.js
-modules/pilot/packages/pilot/pilot/frontend/components/pilot-dashboard.js
-modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.helpers.js
-modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.helpers.test.js
-modules/pilot/packages/pilot/pilot/frontend/components/ear-dashboard.js

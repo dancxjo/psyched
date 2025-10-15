@@ -1,7 +1,7 @@
 import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
 import { batteryLabel, formatBatteryValue, batteryMetadata } from '../utils/battery.js';
-import { extractNumeric } from '../utils/metrics.js';
+import { extractNumeric } from '/components/utils/metrics.js';
 
 /**
  * Presents the aggregated battery charge level for the active platform.
