@@ -329,8 +329,9 @@ async def _exercise_module_logs_endpoint(tmp_path: Path) -> None:
     assert payload["display_name"] == "Nav"
     assert payload["truncated"] is True
     assert len(payload["lines"]) == MODULE_LOG_LINE_LIMIT
-    assert payload["lines"][0] == lines[-MODULE_LOG_LINE_LIMIT]
-    assert payload["lines"][-1] == lines[-1]
+    # Lines are now returned newest first
+    assert payload["lines"][0] == lines[-1]
+    assert payload["lines"][-1] == lines[-MODULE_LOG_LINE_LIMIT]
     assert payload["updated_at"] is not None
 
 
