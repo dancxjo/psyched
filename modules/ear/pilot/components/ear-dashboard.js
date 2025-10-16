@@ -11,61 +11,61 @@ const TRANSCRIPT_TOPIC = '/ear/hole';
 const MAX_TRANSCRIPTS = 40;
 
 function uniqueId(prefix = 'ear') {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function safeToString(value) {
-    if (value == null) {
-        return '';
-    }
-    if (typeof value === 'string') {
-        return value;
-    }
-    return String(value);
+  if (value == null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return String(value);
 }
 
 function byteLengthFromMessage(message) {
-    const candidate = message?.data ?? message?.bytes ?? message;
-    if (candidate == null) {
-        return 0;
-    }
-    if (candidate instanceof ArrayBuffer) {
-        return candidate.byteLength;
-    }
-    if (candidate && typeof candidate.byteLength === 'number') {
-        return candidate.byteLength;
-    }
-    if (ArrayBuffer.isView(candidate)) {
-        return candidate.byteLength;
-    }
-    if (Array.isArray(candidate)) {
-        return candidate.length;
-    }
-    if (typeof candidate === 'string') {
-        return candidate.length;
-    }
+  const candidate = message?.data ?? message?.bytes ?? message;
+  if (candidate == null) {
     return 0;
+  }
+  if (candidate instanceof ArrayBuffer) {
+    return candidate.byteLength;
+  }
+  if (candidate && typeof candidate.byteLength === 'number') {
+    return candidate.byteLength;
+  }
+  if (ArrayBuffer.isView(candidate)) {
+    return candidate.byteLength;
+  }
+  if (Array.isArray(candidate)) {
+    return candidate.length;
+  }
+  if (typeof candidate === 'string') {
+    return candidate.length;
+  }
+  return 0;
 }
 
 class EarDashboard extends LitElement {
-    static properties = {
-        audioRecord: { state: true },
-        audioStatus: { state: true },
-        audioMonitoringEnabled: { state: true },
-        lastAudioTimestamp: { state: true },
-        audioSampleRate: { state: true },
-        lastFrameByteLength: { state: true },
-        speechActive: { state: true },
-        silenceDetected: { state: true },
-        transcripts: { state: true },
-    };
+  static properties = {
+    audioRecord: { state: true },
+    audioStatus: { state: true },
+    audioMonitoringEnabled: { state: true },
+    lastAudioTimestamp: { state: true },
+    audioSampleRate: { state: true },
+    lastFrameByteLength: { state: true },
+    speechActive: { state: true },
+    silenceDetected: { state: true },
+    transcripts: { state: true },
+  };
 
-    static styles = [
-        surfaceStyles,
-        css`
+  static styles = [
+    surfaceStyles,
+    css`
       .indicator-row {
         display: flex;
         flex-wrap: wrap;
@@ -152,220 +152,220 @@ class EarDashboard extends LitElement {
         box-shadow: 0 0 12px var(--lcars-accent);
       }
     `,
-    ];
+  ];
 
-    constructor() {
-        super();
-        this.audioRecord = null;
-        this.audioStatus = 'Connecting…';
-        this.audioMonitoringEnabled = true;
-        this.lastAudioTimestamp = 'Never';
-        this.audioSampleRate = 16000;
-        this.lastFrameByteLength = 0;
-        this.speechActive = false;
-        this.silenceDetected = true;
-        this.transcripts = [];
-        this._sockets = new Map();
+  constructor() {
+    super();
+    this.audioRecord = null;
+    this.audioStatus = 'Connecting…';
+    this.audioMonitoringEnabled = true;
+    this.lastAudioTimestamp = 'Never';
+    this.audioSampleRate = 16000;
+    this.lastFrameByteLength = 0;
+    this.speechActive = false;
+    this.silenceDetected = true;
+    this.transcripts = [];
+    this._sockets = new Map();
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._subscribeSpeech();
+    this._subscribeSilence();
+    this._subscribeTranscripts();
+    if (this.audioMonitoringEnabled) {
+      this._subscribeAudio();
+    } else {
+      this.audioStatus = 'Paused';
     }
+  }
 
-    connectedCallback() {
-        super.connectedCallback();
-        this._subscribeSpeech();
-        this._subscribeSilence();
-        this._subscribeTranscripts();
-        if (this.audioMonitoringEnabled) {
-            this._subscribeAudio();
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._teardownAll();
+  }
+
+  toggleAudioMonitoring() {
+    if (this.audioMonitoringEnabled) {
+      this.audioMonitoringEnabled = false;
+      this.audioStatus = 'Paused';
+      this._closeSocket('audio');
+      this.audioRecord = null;
+      this.lastFrameByteLength = 0;
+      return;
+    }
+    this.audioMonitoringEnabled = true;
+    this.audioStatus = 'Connecting…';
+    this._subscribeAudio();
+  }
+
+  clearTranscripts() {
+    this.transcripts = [];
+  }
+
+  _subscribeAudio() {
+    if (!this.audioMonitoringEnabled) {
+      return;
+    }
+    this._openSocket(
+      'audio',
+      {
+        topic: AUDIO_TOPIC,
+        type: 'std_msgs/msg/UInt8MultiArray',
+        role: 'subscribe',
+      },
+      (message) => {
+        this.audioStatus = 'Live';
+        const sampleRate = sampleRateFromMessage(message, this.audioSampleRate || 16000);
+        this.audioSampleRate = sampleRate;
+        this.lastFrameByteLength = byteLengthFromMessage(message);
+        this.lastAudioTimestamp = new Date().toLocaleTimeString();
+        this.audioRecord = {
+          last: message,
+          topic: { name: AUDIO_TOPIC },
+        };
+      },
+    );
+  }
+
+  _subscribeSpeech() {
+    this._openSocket(
+      'speech',
+      {
+        topic: SPEECH_TOPIC,
+        type: 'std_msgs/msg/Bool',
+        role: 'subscribe',
+      },
+      (message) => {
+        this.speechActive = Boolean(message?.data);
+      },
+    );
+  }
+
+  _subscribeSilence() {
+    this._openSocket(
+      'silence',
+      {
+        topic: SILENCE_TOPIC,
+        type: 'std_msgs/msg/Bool',
+        role: 'subscribe',
+      },
+      (message) => {
+        if (typeof message?.data === 'boolean') {
+          this.silenceDetected = message.data;
         } else {
-            this.audioStatus = 'Paused';
+          this.silenceDetected = Boolean(message?.data ?? true);
         }
-    }
+      },
+    );
+  }
 
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        this._teardownAll();
-    }
-
-    toggleAudioMonitoring() {
-        if (this.audioMonitoringEnabled) {
-            this.audioMonitoringEnabled = false;
-            this.audioStatus = 'Paused';
-            this._closeSocket('audio');
-            this.audioRecord = null;
-            this.lastFrameByteLength = 0;
-            return;
+  _subscribeTranscripts() {
+    this._openSocket(
+      'transcripts',
+      {
+        topic: TRANSCRIPT_TOPIC,
+        type: 'std_msgs/msg/String',
+        role: 'subscribe',
+      },
+      (message) => {
+        const text = safeToString(message?.data).trim();
+        if (!text) {
+          return;
         }
-        this.audioMonitoringEnabled = true;
-        this.audioStatus = 'Connecting…';
-        this._subscribeAudio();
-    }
+        const entry = {
+          id: uniqueId('transcript'),
+          text,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+        this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+      },
+    );
+  }
 
-    clearTranscripts() {
-        this.transcripts = [];
-    }
-
-    _subscribeAudio() {
-        if (!this.audioMonitoringEnabled) {
-            return;
+  _openSocket(key, options, handleMessage) {
+    this._closeSocket(key);
+    try {
+      const socket = createTopicSocket(options);
+      socket.addEventListener('open', () => {
+        if (key === 'audio' && this.audioMonitoringEnabled) {
+          this.audioStatus = 'Live';
         }
-        this._openSocket(
-            'audio',
-            {
-                topic: AUDIO_TOPIC,
-                type: 'std_msgs/msg/UInt8MultiArray',
-                role: 'subscribe',
-            },
-            (message) => {
-                this.audioStatus = 'Live';
-                const sampleRate = sampleRateFromMessage(message, this.audioSampleRate || 16000);
-                this.audioSampleRate = sampleRate;
-                this.lastFrameByteLength = byteLengthFromMessage(message);
-                this.lastAudioTimestamp = new Date().toLocaleTimeString();
-                this.audioRecord = {
-                    last: message,
-                    topic: { name: AUDIO_TOPIC },
-                };
-            },
-        );
-    }
-
-    _subscribeSpeech() {
-        this._openSocket(
-            'speech',
-            {
-                topic: SPEECH_TOPIC,
-                type: 'std_msgs/msg/Bool',
-                role: 'subscribe',
-            },
-            (message) => {
-                this.speechActive = Boolean(message?.data);
-            },
-        );
-    }
-
-    _subscribeSilence() {
-        this._openSocket(
-            'silence',
-            {
-                topic: SILENCE_TOPIC,
-                type: 'std_msgs/msg/Bool',
-                role: 'subscribe',
-            },
-            (message) => {
-                if (typeof message?.data === 'boolean') {
-                    this.silenceDetected = message.data;
-                } else {
-                    this.silenceDetected = Boolean(message?.data ?? true);
-                }
-            },
-        );
-    }
-
-    _subscribeTranscripts() {
-        this._openSocket(
-            'transcripts',
-            {
-                topic: TRANSCRIPT_TOPIC,
-                type: 'std_msgs/msg/String',
-                role: 'subscribe',
-            },
-            (message) => {
-                const text = safeToString(message?.data).trim();
-                if (!text) {
-                    return;
-                }
-                const entry = {
-                    id: uniqueId('transcript'),
-                    text,
-                    timestamp: new Date().toLocaleTimeString(),
-                };
-                this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
-            },
-        );
-    }
-
-    _openSocket(key, options, handleMessage) {
-        this._closeSocket(key);
-        try {
-            const socket = createTopicSocket(options);
-            socket.addEventListener('open', () => {
-                if (key === 'audio' && this.audioMonitoringEnabled) {
-                    this.audioStatus = 'Live';
-                }
-            });
-            socket.addEventListener('close', () => {
-                if (key === 'audio') {
-                    this.audioStatus = this.audioMonitoringEnabled ? 'Disconnected' : 'Paused';
-                }
-            });
-            socket.addEventListener('error', (event) => {
-                console.warn(`Ear dashboard socket error for ${options.topic}`, event);
-                if (key === 'audio') {
-                    this.audioStatus = 'Error';
-                }
-            });
-            socket.addEventListener('message', (event) => {
-                const payload = this._decodeTopicPayload(event);
-                if (!payload) {
-                    return;
-                }
-                handleMessage(payload);
-            });
-            this._sockets.set(key, socket);
-        } catch (error) {
-            console.warn(`Ear dashboard failed to open socket for ${options.topic}`, error);
-            if (key === 'audio') {
-                this.audioStatus = 'Error';
-            }
+      });
+      socket.addEventListener('close', () => {
+        if (key === 'audio') {
+          this.audioStatus = this.audioMonitoringEnabled ? 'Disconnected' : 'Paused';
         }
-    }
-
-    _closeSocket(key) {
-        const socket = this._sockets.get(key);
-        if (!socket) {
-            return;
+      });
+      socket.addEventListener('error', (event) => {
+        console.warn(`Ear dashboard socket error for ${options.topic}`, event);
+        if (key === 'audio') {
+          this.audioStatus = 'Error';
         }
-        try {
-            socket.close();
-        } catch (_error) {
-            // ignored
+      });
+      socket.addEventListener('message', (event) => {
+        const payload = this._decodeTopicPayload(event);
+        if (!payload) {
+          return;
         }
-        this._sockets.delete(key);
+        handleMessage(payload);
+      });
+      this._sockets.set(key, socket);
+    } catch (error) {
+      console.warn(`Ear dashboard failed to open socket for ${options.topic}`, error);
+      if (key === 'audio') {
+        this.audioStatus = 'Error';
+      }
     }
+  }
 
-    _teardownAll() {
-        for (const key of this._sockets.keys()) {
-            this._closeSocket(key);
-        }
+  _closeSocket(key) {
+    const socket = this._sockets.get(key);
+    if (!socket) {
+      return;
     }
-
-    _decodeTopicPayload(event) {
-        try {
-            const payload = JSON.parse(event.data);
-            if (!payload || payload.event !== 'message') {
-                return null;
-            }
-            return payload.data;
-        } catch (error) {
-            console.warn('Ear dashboard failed to parse topic payload', error);
-            return null;
-        }
+    try {
+      socket.close();
+    } catch (_error) {
+      // ignored
     }
+    this._sockets.delete(key);
+  }
 
-    renderSensorIndicator(label, active) {
-        return html`
+  _teardownAll() {
+    for (const key of this._sockets.keys()) {
+      this._closeSocket(key);
+    }
+  }
+
+  _decodeTopicPayload(event) {
+    try {
+      const payload = JSON.parse(event.data);
+      if (!payload || payload.event !== 'message') {
+        return null;
+      }
+      return payload.data;
+    } catch (error) {
+      console.warn('Ear dashboard failed to parse topic payload', error);
+      return null;
+    }
+  }
+
+  renderSensorIndicator(label, active) {
+    return html`
       <li class="sensor-item" data-state="${active ? 'active' : 'idle'}">
         <span>${label}</span>
         <span class="sensor-item__dot" aria-hidden="true"></span>
       </li>
     `;
-    }
+  }
 
-    render() {
-        const speechVariant = this.speechActive ? 'success' : 'muted';
-        const silenceVariant = this.silenceDetected ? 'muted' : 'warning';
-        const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
-        const audioActive = this.audioStatus === 'Live';
-        return html`
+  render() {
+    const speechVariant = this.speechActive ? 'success' : 'muted';
+    const silenceVariant = this.silenceDetected ? 'muted' : 'warning';
+    const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
+    const audioActive = this.audioStatus === 'Live';
+    return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
           <h3 class="surface-card__title">Stream status</h3>
@@ -408,7 +408,7 @@ class EarDashboard extends LitElement {
           <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
           <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
             <pilot-audio-oscilloscope
-              width="640"
+              width="320"
               height="200"
               .record=${this.audioRecord ?? {}}
             ></pilot-audio-oscilloscope>
@@ -421,21 +421,21 @@ class EarDashboard extends LitElement {
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Transcript log</h3>
           ${this.transcripts.length === 0
-                ? html`<p class="surface-empty">Awaiting transcripts…</p>`
-                : html`<ol class="transcript-log">
+        ? html`<p class="surface-empty">Awaiting transcripts…</p>`
+        : html`<ol class="transcript-log">
                 ${this.transcripts.map(
-                    (entry) => html`<li class="transcript-entry" key=${entry.id}>
+          (entry) => html`<li class="transcript-entry" key=${entry.id}>
                     <div class="transcript-entry__meta">
                       <span>${entry.timestamp}</span>
                     </div>
                     <p class="transcript-entry__text">${entry.text}</p>
                   </li>`,
-                )}
+        )}
               </ol>`}
         </article>
       </div>
     `;
-    }
+  }
 }
 
 customElements.define('ear-dashboard', EarDashboard);
