@@ -115,7 +115,9 @@ class FeltNode(Node):
     def __init__(self, *, llm_client: Optional[LLMClient] = None, rememberd: Optional[RememberdClient] = None) -> None:
         super().__init__("felt")
 
-        self._llm_client = llm_client or OllamaLLMClient(model=os.environ.get("FELT_MODEL", "gpt-oss"))
+        model_param = self.declare_parameter("model", os.environ.get("FELT_MODEL", "gpt-oss"))
+        model = str(getattr(model_param, "value", "gpt-oss"))
+        self._llm_client = llm_client or OllamaLLMClient(model=model)
         self._rememberd = rememberd or RememberdClient()
 
         self._debounce_seconds = self._declare_float_parameter("debounce_seconds", 3.0)
@@ -130,7 +132,7 @@ class FeltNode(Node):
         qos.history = QoSHistoryPolicy.KEEP_LAST
         qos.reliability = ReliabilityPolicy.RELIABLE
 
-        self.publisher = self.create_publisher(FeelingIntent, "felt/intent", qos)
+        self.publisher = self.create_publisher(FeelingIntent, "/feeling_intent", qos)
 
         self._context_topics = self._load_topic_configs(
             "context_topics", self._DEFAULT_CONTEXT_TOPICS, self._handle_context_message, qos
