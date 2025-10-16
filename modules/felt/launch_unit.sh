@@ -13,5 +13,8 @@ fi
 if [[ -n "${FELT_WINDOW_SECONDS:-}" ]]; then
   ARGS+=("window_seconds:=${FELT_WINDOW_SECONDS}")
 fi
+if [[ -n "${FELT_MODEL:-}" ]]; then
+  ARGS+=("model:=${FELT_MODEL}")
+fi
 
 exec ros2 launch felt felt.launch.py "${ARGS[@]}"
