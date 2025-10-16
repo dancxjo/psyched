@@ -5,6 +5,24 @@ import { bytesFromMessage, sampleRateFromMessage } from '../utils/audio.js';
 /**
  * Real-time audio player that buffers PCM frames and plays them back
  * using the Web Audio API.
+ *
+ * This component subscribes to ROS `/audio/raw` topic messages delivered via
+ * the websocket bridge, converts PCM16 audio data to Float32, and plays it
+ * back through the browser's audio system.
+ *
+ * Usage:
+ * ```html
+ * <pilot-audio-player
+ *   .record=${audioRecord}
+ *   ?autoplay=${false}
+ *   bufferDuration="1.0"
+ * ></pilot-audio-player>
+ * ```
+ *
+ * @property {Object} record - Audio message record from the websocket
+ * @property {Object} topic - Topic metadata (optional)
+ * @property {Boolean} autoplay - Start playing automatically when data arrives
+ * @property {Number} bufferDuration - Target buffer duration in seconds
  */
 class PilotAudioPlayer extends LitElement {
   static properties = {
