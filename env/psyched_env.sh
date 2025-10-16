@@ -236,7 +236,7 @@ USAGE
   case "${mode}" in
     workspace)
       if psyched::source_workspace ${quiet_flag}; then
-        psyched::source_package_local_setup pilot "${quiet}"
+        psyched::source_package_local_setup cockpit "${quiet}"
         return 0
       fi
       return 1
@@ -247,7 +247,7 @@ USAGE
       ;;
     auto)
       if psyched::source_workspace ${quiet_flag}; then
-        psyched::source_package_local_setup pilot "${quiet}"
+        psyched::source_package_local_setup cockpit "${quiet}"
         return 0
       fi
       psyched::source_ros2 ${quiet_flag}

@@ -188,8 +188,8 @@ if "requests" not in sys.modules:
                 {
                     "modules": [
                         {
-                            "name": "pilot",
-                            "display_name": "Pilot",
+                            "name": "cockpit",
+                            "display_name": "Cockpit",
                             "description": "Teleoperation dashboard",
                             "regimes": ["system"],
                             "commands": {"mod": ["setup"], "system": ["start"]},
@@ -334,7 +334,7 @@ def test_normalise_ollama_host_variants() -> None:
     assert _normalise_ollama_host("") == ""
 
 
-def test_chatnode_appends_pilot_summary_to_system_prompt() -> None:
+def test_chatnode_appends_cockpit_summary_to_system_prompt() -> None:
     node = ChatNode()
 
     captured: dict[str, list[dict[str, str]]] = {}
@@ -358,6 +358,6 @@ def test_chatnode_appends_pilot_summary_to_system_prompt() -> None:
     assert system_entry["role"] == "system"
     content = system_entry["content"]
     assert content.startswith("You are a helpful assistant"), content
-    assert "Pilot Control Surface" in content
+    assert "Cockpit Control Surface" in content
     assert "Teleoperation dashboard" in content
 

@@ -3,7 +3,7 @@ apt = ["espeak"]
 pip = ["websockets>=11.0.0"]
 launch = "modules/voice/launch_unit.sh"
 shutdown = "modules/voice/shutdown_unit.sh"
-pilot_control = "modules/voice/pilot/index.html"
+cockpit_control = "modules/voice/cockpit/index.html"
 
 [unit.voice.ros]
 workspace = "."

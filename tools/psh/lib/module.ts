@@ -30,7 +30,7 @@ export interface UnitConfig {
   patches?: string[];
   launch?: string;
   shutdown?: string;
-  pilot_control?: string;
+  cockpit_control?: string;
   git?: GitRepo[];
   ros?: RosBuildConfig;
 }
@@ -554,24 +554,24 @@ export async function resolveModuleScript(
   return resolve(join(moduleDir, script));
 }
 
-function locatePilotFrontend(): string {
-  const primary = join(repoRoot(), "modules", "pilot", "frontend");
+function locateCockpitFrontend(): string {
+  const primary = join(repoRoot(), "modules", "cockpit", "frontend");
   if (pathExists(primary)) {
     return primary;
   }
   const fallback = join(
     repoRoot(),
     "modules",
-    "pilot",
+    "cockpit",
     "packages",
-    "pilot",
-    "pilot",
+    "cockpit",
+    "cockpit",
     "frontend",
   );
   if (pathExists(fallback)) {
     return fallback;
   }
-  throw new Error("pilot frontend not found; run within repository");
+  throw new Error("cockpit frontend not found; run within repository");
 }
 
 function link(target: string, destination: string): void {
@@ -616,23 +616,23 @@ function unlink(path: string): void {
   }
 }
 
-async function linkPilotAssets(
+async function linkCockpitAssets(
   module: string,
   moduleDir: string,
 ): Promise<void> {
-  const pilotDir = join(moduleDir, "pilot");
-  if (!pathExists(pilotDir)) {
+  const cockpitDir = join(moduleDir, "cockpit");
+  if (!pathExists(cockpitDir)) {
     console.log(
-      colors.yellow(`[${module}] no pilot overlay directory; skipping.`),
+      colors.yellow(`[${module}] no cockpit overlay directory; skipping.`),
     );
     return;
   }
-  const overlayRoot = locatePilotFrontend();
-  console.log(colors.cyan(`[${module}] linking pilot assets from ${pilotDir}`));
-  for (const entry of walkSync(pilotDir)) {
-    if (entry.path === pilotDir) continue;
+  const overlayRoot = locateCockpitFrontend();
+  console.log(colors.cyan(`[${module}] linking cockpit assets from ${cockpitDir}`));
+  for (const entry of walkSync(cockpitDir)) {
+    if (entry.path === cockpitDir) continue;
     if (entry.isDirectory) continue;
-    const relativePath = relative(pilotDir, entry.path);
+    const relativePath = relative(cockpitDir, entry.path);
     const destination = join(overlayRoot, relativePath);
     ensureDirectory(dirname(destination));
     link(entry.path, destination);
@@ -669,7 +669,7 @@ export async function setupModule(
     }
   }
   await prepareRosWorkspace(module, config.ros, options.rosPlanner);
-  await linkPilotAssets(module, moduleDir);
+  await linkCockpitAssets(module, moduleDir);
 }
 
 function linkModulePackages(
@@ -872,7 +872,7 @@ export async function teardownModule(module: string): Promise<void> {
   const moduleDir = locateModuleDir(module);
   await bringModuleDown(module);
   unlinkModulePackages(module, moduleDir);
-  await unlinkPilotAssets(module, moduleDir);
+  await unlinkCockpitAssets(module, moduleDir);
   clearPid(module);
 }
 
@@ -901,16 +901,16 @@ function unlinkModulePackages(
   );
 }
 
-async function unlinkPilotAssets(
+async function unlinkCockpitAssets(
   module: string,
   moduleDir: string,
 ): Promise<void> {
-  const pilotDir = join(moduleDir, "pilot");
-  if (!pathExists(pilotDir)) return;
-  const overlayRoot = locatePilotFrontend();
-  console.log(colors.yellow(`[${module}] removing pilot assets`));
-  for (const entry of walkSync(pilotDir, { includeDirs: false })) {
-    const relativePath = relative(pilotDir, entry.path);
+  const cockpitDir = join(moduleDir, "cockpit");
+  if (!pathExists(cockpitDir)) return;
+  const overlayRoot = locateCockpitFrontend();
+  console.log(colors.yellow(`[${module}] removing cockpit assets`));
+  for (const entry of walkSync(cockpitDir, { includeDirs: false })) {
+    const relativePath = relative(cockpitDir, entry.path);
     const destination = join(overlayRoot, relativePath);
     unlink(destination);
   }

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hypothalamus Environment Monitor</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module">
+      import '/js/cockpit.js';
+      import '/modules/hypothalamus/components/hypothalamus-dashboard.js';
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('hypothalamus-dashboard')) {
+          mount.appendChild(document.createElement('hypothalamus-dashboard'));
+        }
+      });
+    </script>
+  </head>
+  <body class="cockpit-solo">
+    <main class="cockpit-solo__main">
+      <header class="cockpit-solo__header">
+        <h1>Hypothalamus Environment Monitor</h1>
+        <p>Track ambient readings and backend health from the habitat sensors.</p>
+      </header>
+      <section id="module-root" class="cockpit-solo__surface"></section>
+    </main>
+  </body>
+</html>

@@ -48,7 +48,7 @@ Usage notes
   `(0, 0, 0.3)`; edit the launch file if your sensor is mounted differently.
 - RTAB-Map support lives in its own module.  Launch an external SLAM node if
   you need online 3D mapping in addition to localization.
-- A pilot-facing dashboard now surfaces localization telemetry and pose
+- A cockpit-facing dashboard now surfaces localization telemetry and pose
   controls at `/modules/nav/`. Dispatch initial pose estimates or navigation
   goals directly from the cockpit when the module is active.
 

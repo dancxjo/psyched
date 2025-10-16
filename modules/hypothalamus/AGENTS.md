@@ -1,6 +1,6 @@
 # Hypothalamus module guidelines
 
-- Keep the simulated fallback online so pilot dashboards remain responsive when
+- Keep the simulated fallback online so cockpit dashboards remain responsive when
   hardware is offline.
 - Mirror Celsius readings with Fahrenheit publications and cockpit readouts for
   operator familiarity.

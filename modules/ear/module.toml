@@ -3,13 +3,13 @@ apt = ["python3-websockets", "python3-numpy", "alsa-utils"]
 pip = ["webrtcvad"]
 launch = "modules/ear/launch_unit.sh"
 shutdown = "modules/ear/shutdown_unit.sh"
-pilot_control = "modules/ear/pilot/index.html"
+cockpit_control = "modules/ear/cockpit/index.html"
 
 [unit.ear.ros]
 workspace = "."
 packages = ["ear"]
 
-[pilot]
+[cockpit]
 display_name = "Ear"
 description = "Audio intake and VAD telemetry"
 regimes = ["audio"]

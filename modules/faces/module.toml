@@ -11,13 +11,13 @@ pip = [
 patches = []
 launch = "modules/faces/launch_unit.sh"
 shutdown = "modules/faces/shutdown_unit.sh"
-pilot_control = "modules/faces/pilot/index.html"
+cockpit_control = "modules/faces/cockpit/index.html"
 
 [unit.faces.ros]
 workspace = "."
 packages = ["faces", "faces_msgs"]
 
-[pilot]
+[cockpit]
 display_name = "Faces"
 description = "Detects faces, publishes crops, and emits embeddings"
 regimes = ["perception"]

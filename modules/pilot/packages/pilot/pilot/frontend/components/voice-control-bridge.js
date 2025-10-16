@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/voice/pilot/components/voice-control-bridge.js

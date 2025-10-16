@@ -14,20 +14,20 @@ Deno.test("colcon build invocation defaults to workspace root", () => {
 });
 
 Deno.test("colcon build invocation selects packages when provided", () => {
-  const invocation = createColconBuildInvocation(["pilot", "imu"]);
+  const invocation = createColconBuildInvocation(["cockpit", "imu"]);
   assertEquals(invocation.cmd, [
     "colcon",
     "build",
     "--symlink-install",
     "--packages-select",
-    "pilot",
+    "cockpit",
     "imu",
   ]);
 });
 
 Deno.test("colcon build invocation forwards arguments after separator", () => {
   const invocation = createColconBuildInvocation([
-    "pilot",
+    "cockpit",
     "--",
     "--cmake-args",
     "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
@@ -37,7 +37,7 @@ Deno.test("colcon build invocation forwards arguments after separator", () => {
     "build",
     "--symlink-install",
     "--packages-select",
-    "pilot",
+    "cockpit",
     "--",
     "--cmake-args",
     "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
@@ -50,7 +50,7 @@ Deno.test("buildWorkspace delegates to provided runner", async () => {
   Deno.env.set("PSYCHED_WORKSPACE_DIR", tempWorkspace);
   try {
     const invocations: ColconBuildInvocation[] = [];
-    await buildWorkspace(["pilot"], (invocation) => {
+    await buildWorkspace(["cockpit"], (invocation) => {
       invocations.push(invocation);
     });
     assertEquals(invocations.length, 1);
@@ -61,7 +61,7 @@ Deno.test("buildWorkspace delegates to provided runner", async () => {
       "build",
       "--symlink-install",
       "--packages-select",
-      "pilot",
+      "cockpit",
     ]);
   } finally {
     if (originalWorkspace === undefined) {

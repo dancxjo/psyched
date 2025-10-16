@@ -18,7 +18,7 @@ patches = [
 ]
 launch = "modules/eye/launch_unit.sh"
 shutdown = "modules/eye/shutdown_unit.sh"
-pilot_control = "modules/eye/pilot/index.html"
+cockpit_control = "modules/eye/cockpit/index.html"
 
 [[unit.eye.git]]
 url = "https://github.com/bribribriambriguy/kinect_ros2.git"
@@ -33,7 +33,7 @@ path = "libfreenect"
 workspace = "."
 packages = ["kinect_ros2"]
 
-[pilot]
+[cockpit]
 display_name = "Eye"
 description = "RGB-D perception from the Kinect"
 regimes = ["perception"]

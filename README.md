@@ -1,6 +1,6 @@
 # psyched
 
-**Psyched** is a modular robotics stack: a ROS 2 workspace, a collection of hardware-specific modules, and a web-based **Pilot** console that lets you drive and monitor a robot from any browser.
+**Psyched** is a modular robotics stack: a ROS 2 workspace, a collection of hardware-specific modules, and a web-based **Cockpit** console that lets you drive and monitor a robot from any browser.
 The repository doubles as a reference implementation for building your own robot—swap out the hardware modules, keep the orchestration.
 
 Pete itself is an embodied experiment in cognition and autonomy: an iRobot Create 1 base (**foot**) topped with sensors, a Raspberry Pi (**motherbrain**) running ROS 2 and coordination logic, and remote **forebrain** servers handling speech, perception, and memory.
@@ -30,7 +30,7 @@ Psyched is organized around three ideas:
 
 1. **Composable modules.**
    Each hardware or capability lives in `modules/<name>` with declarative metadata (`module.toml`) and lifecycle scripts (`launch_*`, `shutdown_*`).
-   Modules can add UI panels to the Pilot console without changing its core frontend.
+   Modules can add UI panels to the Cockpit console without changing its core frontend.
 
 2. **Containerized services.**
    Cross-cutting capabilities (speech stacks, perception pipelines, databases) live in `services/<name>` with a `service.toml` manifest and Docker Compose stack.
@@ -46,7 +46,7 @@ Psyched is organized around three ideas:
 | --------------- | ----------------------------------------------------------------------------- | -------------------- |
 | **motherbrain** | Primary ROS 2 host; manages sensors, actuators, and local modules.            | Raspberry Pi 4 / 5   |
 | **forebrain**   | Remote inference stack; runs ASR / TTS / LLM / memory services in containers. | GPU laptop or server |
-| **pilot**       | Browser-based cockpit for driving, diagnostics, and conversation.             | Any web client       |
+| **cockpit**       | Browser-based cockpit for driving, diagnostics, and conversation.             | Any web client       |
 
 ### Cognitive intent
 
@@ -82,8 +82,8 @@ Provisioning automatically applies those directives and sets the ROS 2 domain ID
 ### 3. Bring modules online
 
 ```bash
-psh mod setup pilot
-psh up pilot
+psh mod setup cockpit
+psh up cockpit
 ```
 
 Then visit **http://<host>:8088/** to access the cockpit (HTTP + WebSocket bridge).
@@ -94,7 +94,7 @@ Launch other modules or services using `psh up <name>`; stop them with `psh down
 ## Repository layout
 
 ```
-├── modules/         # ROS or Python modules (pilot, foot, imu, …)
+├── modules/         # ROS or Python modules (cockpit, foot, imu, …)
 ├── services/        # Containerized microservices (tts, language, graphs, vectors, …)
 ├── tools/           # Provisioning scripts + Deno-based psh CLI
 ├── hosts/           # Host configuration JSON/YAML profiles
@@ -109,9 +109,9 @@ Launch other modules or services using `psh up <name>`; stop them with `psh down
 
 | Module                                   | Purpose                                                                                                                                                                    |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **IMU**                                  | Interfaces with an MPU-6050 sensor via [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver); provides orientation data and optional Pilot UI widget. |
+| **IMU**                                  | Interfaces with an MPU-6050 sensor via [`ros2_mpu6050_driver`](https://github.com/hiwad-aziz/ros2_mpu6050_driver); provides orientation data and optional Cockpit UI widget. |
 | **Foot**                                 | Controls the iRobot Create 1 drive base using upstream ROS 2 packages (`create_robot`, `libcreate`).                                                                       |
-| **Pilot**                                | Unified cockpit webserver and topic bridge.                                                                                                                                |
+| **Cockpit**                                | Unified cockpit webserver and topic bridge.                                                                                                                                |
 | *(planned)* **Ear**, **Chat**, **Voice** | Speech perception and expression modules built atop ASR / LLM / TTS services.                                                                                              |
 
 Launch any module with `psh up <module>` once configured.
@@ -141,9 +141,9 @@ Start or stop them with `psh up <service>` / `psh down <service>`.
 
 ```bash
 psh build            # builds all packages
-psh build pilot      # or target one
+psh build cockpit      # or target one
 source install/setup.bash
-ros2 run pilot cockpit
+ros2 run cockpit cockpit
 ```
 
 ### Using the `psh` CLI
@@ -155,7 +155,7 @@ psh setup            # full host + module + service provisioning
 psh mod list         # view module status
 psh up ear voice     # start modules
 psh down             # stop all
-psh sys enable pilot # register systemd units (auto-starts at boot)
+psh sys enable cockpit # register systemd units (auto-starts at boot)
 ```
 
 For details on systemd integration, see [docs/psh-sys.md](docs/psh-sys.md).
@@ -178,7 +178,7 @@ A lightweight `psyched` function in `.bashrc` ensures correct sourcing on login.
 
 * Build ROS packages via `colcon build`.
 * Run unit tests with `colcon test`.
-* Manual integration tests through Pilot dashboard.
+* Manual integration tests through Cockpit dashboard.
 
 ---
 
@@ -187,14 +187,14 @@ A lightweight `psyched` function in `.bashrc` ensures correct sourcing on login.
 | Symptom                  | Fix                                                                       |
 | ------------------------ | ------------------------------------------------------------------------- |
 | Missing ROS dependencies | Ensure `$ROS_DISTRO` is set (default `kilted`). Run `psyched --ros-only`. |
-| Cockpit unreachable      | Confirm `ros2 run pilot cockpit` prints its URL and port 8088 is open.    |
-| Frontend type errors     | Delete `modules/pilot/frontend/deno.lock` and rerun `deno task cache`.    |
+| Cockpit unreachable      | Confirm `ros2 run cockpit cockpit` prints its URL and port 8088 is open.    |
+| Frontend type errors     | Delete `modules/cockpit/frontend/deno.lock` and rerun `deno task cache`.    |
 
 ---
 
 ## Roadmap
 
-* Expand Pilot topics beyond `/conversation`.
+* Expand Cockpit topics beyond `/conversation`.
 * Add full **ear/chat/voice** stack.
 * Integrate Neo4j + Qdrant memory daemons.
 * CI for Cargo + Deno + Colcon builds.

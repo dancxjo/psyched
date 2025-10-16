@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory Steward Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module">
+      import '/js/cockpit.js';
+      import '/modules/memory/components/memory-dashboard.js';
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('memory-dashboard')) {
+          mount.appendChild(document.createElement('memory-dashboard'));
+        }
+      });
+    </script>
+  </head>
+  <body class="cockpit-solo">
+    <main class="cockpit-solo__main">
+      <header class="cockpit-solo__header">
+        <h1>Memory Steward</h1>
+        <p>Search semantic memories, store new experiences, and monitor the recall queue.</p>
+      </header>
+      <section id="module-root" class="cockpit-solo__surface"></section>
+    </main>
+  </body>
+</html>

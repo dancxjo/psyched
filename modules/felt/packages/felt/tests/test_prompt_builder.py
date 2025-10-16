@@ -17,7 +17,7 @@ def test_build_prompt_includes_topics_status_and_actions():
                 vector_length=4,
             )
         ],
-        pilot_actions=["say(text)", "pause_speech"],
+        cockpit_actions=["say(text)", "pause_speech"],
         window_seconds=3.0,
     )
 

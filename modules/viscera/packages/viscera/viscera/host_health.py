@@ -65,7 +65,7 @@ class HostHealthSample:
 
 
 class HostHealthSampler:
-    """Collect host metrics backing the pilot's HostHealth UI panel.
+    """Collect host metrics backing the cockpit's HostHealth UI panel.
 
     Parameters
     ----------

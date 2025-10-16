@@ -3,4 +3,4 @@ compose = "docker-compose.yml"
 description = "ROS 2 workspace container based on osrf/ros:humble-desktop"
 shell_service = "ros2"
 shell_command = ["/ros_entrypoint.sh", "bash"]
-env = { PILOT_COCKPIT_PORT = "${PILOT_COCKPIT_PORT:-8088}" }
+env = { COCKPIT_COCKPIT_PORT = "${COCKPIT_COCKPIT_PORT:-8088}" }

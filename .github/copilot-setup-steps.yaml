@@ -28,7 +28,7 @@ setup_steps:
   - name: Set up modules
     description: Install and configure robotics modules
     command: |
-      psh mod setup pilot
+      psh mod setup cockpit
     notes: |
       Modules live in modules/<name>/ with module.toml manifests.
       Use 'psh mod setup <name>' for individual modules.
@@ -72,21 +72,21 @@ test_steps:
   - name: Format TypeScript/JavaScript code
     description: Format Deno/Fresh frontend code
     command: deno fmt
-    working_directory: modules/pilot/frontend/
+    working_directory: modules/cockpit/frontend/
     notes: |
       Formats TypeScript and JavaScript files using Deno's built-in formatter.
 
   - name: Check TypeScript types
     description: Type-check Deno/Fresh frontend code
     command: deno check
-    working_directory: modules/pilot/frontend/
+    working_directory: modules/cockpit/frontend/
     notes: |
       Validates TypeScript types without running the code.
 
   - name: Run Deno tests
     description: Execute Deno test suite
     command: deno test
-    working_directory: modules/pilot/frontend/
+    working_directory: modules/cockpit/frontend/
     notes: |
       Runs tests defined in the Fresh frontend.
 
@@ -96,7 +96,7 @@ run_steps:
     command: psh up <module_name>
     notes: |
       Examples:
-      - psh up pilot  # Starts the web cockpit on port 8088
+      - psh up cockpit  # Starts the web cockpit on port 8088
       - psh up foot   # Starts the iRobot Create controller
       - psh up imu    # Starts the IMU sensor interface
 
@@ -113,11 +113,11 @@ run_steps:
       Services are defined in services/<name>/ with service.toml manifests.
       Examples: tts, language, graphs, vectors, asr, ros2
 
-  - name: Access Pilot cockpit
+  - name: Access Cockpit cockpit
     description: Open the web-based robot control interface
     url: http://localhost:8088/
     notes: |
-      Available after running 'psh up pilot'.
+      Available after running 'psh up cockpit'.
       Provides real-time robot monitoring and control.
 
 tools:
@@ -151,7 +151,7 @@ prerequisites:
   - Git
 
 key_files:
-  - path: .github/copilot-instructions.md
+  - path: .github/Copilot-instructions.md
     description: Custom instructions for GitHub Copilot
 
   - path: README.md

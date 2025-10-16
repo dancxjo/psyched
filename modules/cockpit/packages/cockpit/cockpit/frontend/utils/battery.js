@@ -1,0 +1,1 @@
+../../../../../foot/cockpit/utils/battery.js

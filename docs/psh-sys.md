@@ -182,19 +182,19 @@ sudo -v  # Verify sudo access
 
 ```bash
 # Generate unit file (requires sudo)
-psh sys setup pilot
+psh sys setup cockpit
 
 # Enable to start at boot
-psh sys enable pilot
+psh sys enable cockpit
 
 # Start now
-psh sys up pilot
+psh sys up cockpit
 
 # Check status
-sudo systemctl status psh-module-pilot.service
+sudo systemctl status psh-module-cockpit.service
 
 # View logs (no sudo needed)
-journalctl -u psh-module-pilot.service -f
+journalctl -u psh-module-cockpit.service -f
 ```
 
 ### Setting up a service with systemd
@@ -215,11 +215,11 @@ sudo systemctl status psh-service-tts.service
 
 ```bash
 # Stop and disable
-psh sys down pilot
-psh sys disable pilot
+psh sys down cockpit
+psh sys disable cockpit
 
 # Remove unit file
-psh sys teardown pilot
+psh sys teardown cockpit
 ```
 
 ## See Also

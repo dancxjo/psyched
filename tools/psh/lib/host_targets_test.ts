@@ -37,7 +37,7 @@ denoTest("defaultModuleTargets ignore undeclared modules", () => {
     resetHostTargetCache();
     __internals__.reset();
     const setupModules = defaultModuleTargets("setup");
-    assertEquals(setupModules, ["pilot"]);
+    assertEquals(setupModules, ["cockpit"]);
     const launchModules = defaultModuleTargets("launch");
     assertEquals(launchModules, []);
   });

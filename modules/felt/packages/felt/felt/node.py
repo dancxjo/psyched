@@ -248,16 +248,16 @@ class FeltNode(Node):
             if isinstance(actions, list):
                 return [str(action) for action in actions if isinstance(action, str)]
         except Exception as exc:  # pragma: no cover - external command failure
-            self.get_logger().warning("Failed to fetch pilot actions: %s", exc)
+            self.get_logger().warning("Failed to fetch cockpit actions: %s", exc)
         return []
 
     def _fetch_status(self) -> Dict[str, Any]:
         try:
-            result = self._run_psh(["psh", "pilot", "status", "--json"])
+            result = self._run_psh(["psh", "cockpit", "status", "--json"])
             data = json.loads(result) if result else {}
             return data if isinstance(data, dict) else {}
         except Exception as exc:  # pragma: no cover - external command failure
-            self.get_logger().warning("Failed to fetch pilot status: %s", exc)
+            self.get_logger().warning("Failed to fetch cockpit status: %s", exc)
             return {}
 
     def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[FeltPromptContext]:
@@ -271,7 +271,7 @@ class FeltNode(Node):
             topics=topics,
             status=status or topics.get("/status", {}),
             sensations=sensations,
-            pilot_actions=actions,
+            cockpit_actions=actions,
             window_seconds=self._window_seconds,
         )
 

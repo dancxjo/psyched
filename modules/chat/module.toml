@@ -8,13 +8,13 @@ patches = [
 ]
 launch = "modules/chat/launch_unit.sh"
 shutdown = "modules/chat/shutdown_unit.sh"
-pilot_control = "modules/chat/pilot/index.html"
+cockpit_control = "modules/chat/cockpit/index.html"
 
 [unit.chat.ros]
 workspace = "."
 packages = ["chat", "psyched_msgs"]
 
-[pilot]
+[cockpit]
 display_name = "Chat"
 description = "Conversational agent powered by Ollama"
 regimes = ["conversation"]

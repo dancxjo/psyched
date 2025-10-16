@@ -123,9 +123,9 @@ class ChatNode(Node):
     def _compose_system_message(self) -> str:
         base = "You are a helpful assistant."
         try:
-            pilot_base = os.environ.get("PILOT_BASE", "http://localhost:8080")
-            url = pilot_base.rstrip("/") + "/api/modules"
-            # Query Pilot's control surface (optional). Tests inject a fake
+            cockpit_base = os.environ.get("COCKPIT_BASE", "http://localhost:8080")
+            url = cockpit_base.rstrip("/") + "/api/modules"
+            # Query Cockpit's control surface (optional). Tests inject a fake
             # `requests` module into sys.modules; prefer that at runtime so
             # tests remain hermetic even if import-time resolution differs.
             requests_mod = sys.modules.get("requests")
@@ -135,10 +135,10 @@ class ChatNode(Node):
                     data = resp.json()
                     modules = data.get("modules", []) if isinstance(data, dict) else []
                     for mod in modules:
-                        if mod.get("name") == "pilot" or mod.get("display_name", "").lower().startswith("pilot"):
-                            display = mod.get("display_name", "Pilot Control Surface")
+                        if mod.get("name") == "cockpit" or mod.get("display_name", "").lower().startswith("cockpit"):
+                            display = mod.get("display_name", "Cockpit Control Surface")
                             desc = mod.get("description", "")
-                            base += f"\n\nPilot Control Surface:\n{display}\n{desc}\n"
+                            base += f"\n\nCockpit Control Surface:\n{display}\n{desc}\n"
                             break
         except Exception:
             pass

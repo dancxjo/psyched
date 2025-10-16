@@ -12,7 +12,7 @@ Rules:
 - \"attitude_emoji\": 1–3 Unicode emoji, NO WORDS.
 - \"thought_sentence\": exactly 1 sentence.
 - \"spoken_sentence\": 0 or 1 sentence (empty if none).
-- \"commands\": array of valid pilot actions listed below.
+- \"commands\": array of valid cockpit actions listed below.
 - Keep JSON under 512 tokens. No commentary outside JSON."""
 
 _SCHEMA_HINT = {
@@ -32,7 +32,7 @@ class FeltPromptContext:
     topics: Dict[str, Any]
     status: Dict[str, Any] | None
     sensations: List[SensationSummary]
-    pilot_actions: List[str]
+    cockpit_actions: List[str]
     window_seconds: float
 
 
@@ -64,8 +64,8 @@ def build_prompt(context: FeltPromptContext) -> str:
         f"- window_seconds: {context.window_seconds:.2f}"
     )
     lines.append(
-        "pilot_actions (from `psh actions export --json`): "
-        + json.dumps(sorted(set(context.pilot_actions)), ensure_ascii=False)
+        "cockpit_actions (from `psh actions export --json`): "
+        + json.dumps(sorted(set(context.cockpit_actions)), ensure_ascii=False)
     )
     lines.append("")
     lines.append("Schema to emit")

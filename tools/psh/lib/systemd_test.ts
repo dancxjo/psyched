@@ -36,7 +36,7 @@ Deno.test("sanitizeEnvRecord stringifies non-string values", () => {
 });
 
 Deno.test("unit name helpers add prefixes", () => {
-  assertEquals(moduleUnitName("pilot"), "psh-module-pilot.service");
+  assertEquals(moduleUnitName("cockpit"), "psh-module-cockpit.service");
   assertEquals(serviceUnitName("tts"), "psh-service-tts.service");
 });
 

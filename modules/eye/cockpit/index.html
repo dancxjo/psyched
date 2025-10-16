@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eye Sensor Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module">
+      import '/js/cockpit.js';
+      import '/modules/eye/components/eye-dashboard.js';
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('eye-dashboard')) {
+          mount.appendChild(document.createElement('eye-dashboard'));
+        }
+      });
+    </script>
+  </head>
+  <body class="cockpit-solo">
+    <main class="cockpit-solo__main">
+      <header class="cockpit-solo__header">
+        <h1>Eye Sensor Console</h1>
+        <p>Preview Kinect telemetry and queue capture or configuration updates.</p>
+      </header>
+      <section id="module-root" class="cockpit-solo__surface"></section>
+    </main>
+  </body>
+</html>

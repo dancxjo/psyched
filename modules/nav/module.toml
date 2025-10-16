@@ -17,13 +17,13 @@ patches = [
 # build_psyched_nav.sh runs colcon build --packages-select psyched_nav to compile the overlay package.
 launch = "modules/nav/launch_unit.sh"
 shutdown = "modules/nav/shutdown_unit.sh"
-pilot_control = "modules/nav/pilot/index.html"
+cockpit_control = "modules/nav/cockpit/index.html"
 
 [unit.nav.ros]
 workspace = "."
 packages = ["psyched_nav"]
 
-[pilot]
+[cockpit]
 display_name = "Nav"
 description = "Autonomous navigation stack"
 regimes = ["navigation"]

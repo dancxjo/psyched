@@ -142,23 +142,23 @@ Deno.test("falls back to setup task when launch is unavailable", () => {
 Deno.test("registerTask rejects conflicting aliases", () => {
   const registry = createTaskRegistry();
   registerTask(registry, {
-    id: "module:pilot:launch",
-    label: "Pilot launch",
+    id: "module:cockpit:launch",
+    label: "Cockpit launch",
     dependencies: [],
     run: async () => {},
-  } as TestTask, ["pilot"]);
+  } as TestTask, ["cockpit"]);
 
   assertThrows(
     () => {
       registerTask(registry, {
-        id: "service:pilot:start",
-        label: "Pilot service",
+        id: "service:cockpit:start",
+        label: "Cockpit service",
         dependencies: [],
         run: async () => {},
-      } as TestTask, ["pilot"]);
+      } as TestTask, ["cockpit"]);
     },
     Error,
-    "Alias 'pilot' already registered for task 'module:pilot:launch'",
+    "Alias 'cockpit' already registered for task 'module:cockpit:launch'",
   );
 });
 

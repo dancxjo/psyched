@@ -10,7 +10,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SRC_DIR="${PSYCHED_WORKSPACE_SRC:-${REPO_ROOT}/work/src}"
-ENSURE_OVERLAY_SCRIPT="${REPO_ROOT}/modules/pilot/scripts/ensure_cv_bridge_overlay.sh"
+ENSURE_OVERLAY_SCRIPT="${REPO_ROOT}/modules/cockpit/scripts/ensure_cv_bridge_overlay.sh"
 
 ROS_DISTRO=${ROS_DISTRO:-kilted}
 HEADER="/opt/ros/${ROS_DISTRO}/include/cv_bridge/cv_bridge.hpp"

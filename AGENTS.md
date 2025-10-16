@@ -7,7 +7,7 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 - **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a browser-based cockpit for operators.
 - **Languages & frameworks:** Python (`rclpy`, `aiohttp`), the `psh` CLI, ROS 2 (colcon), Bash, optional Rust for certain services (e.g. ASR), and assorted Python/C++ ROS packages pulled in as git dependencies.
 - **Runtime topology:**
-- The `psh` CLI provisions hosts (`hosts/*.json`) and synchronizes module assets into the static pilot frontend served by the cockpit module.
+- The `psh` CLI provisions hosts (`hosts/*.json`) and synchronizes module assets into the static cockpit frontend served by the cockpit module.
 
 ## Key directories and entry points
 
@@ -75,7 +75,7 @@ Always prefer running the smallest relevant command set.
 
 ## Useful references
 
-- Pilot frontend docs live alongside the cockpit module—no external build tooling is required.
+- Cockpit frontend docs live alongside the cockpit module—no external build tooling is required.
 - Create robot stack: <https://github.com/autonomylab/create_robot>
 - MPU6050 ROS driver: <https://github.com/hiwad-aziz/ros2_mpu6050_driver>
 

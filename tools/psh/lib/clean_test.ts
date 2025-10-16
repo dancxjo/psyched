@@ -8,7 +8,7 @@ import { cleanEnvironment, __test__ } from "./clean.ts";
 Deno.test("cleanEnvironment tears down modules, services, and workspace", async () => {
   const calls: string[] = [];
   __test__.replaceModuleOps(
-    () => ["pilot", "wifi", "nav"],
+    () => ["cockpit", "wifi", "nav"],
     async (modules) => {
       calls.push(`modules:${modules.join(",")}`);
     },
@@ -30,7 +30,7 @@ Deno.test("cleanEnvironment tears down modules, services, and workspace", async 
   }
 
   assertEquals(calls, [
-    "modules:pilot,nav",
+    "modules:cockpit,nav",
     "services:tts",
     "workspace",
   ]);
@@ -69,7 +69,7 @@ Deno.test(
 Deno.test("cleanEnvironment respects skip options", async () => {
   const calls: string[] = [];
   __test__.replaceModuleOps(
-    () => ["pilot"],
+    () => ["cockpit"],
     async (modules) => {
       calls.push(`modules:${modules.join(",")}`);
     },
@@ -99,7 +99,7 @@ Deno.test("cleanEnvironment respects skip options", async () => {
 
 Deno.test("cleanEnvironment aggregates teardown failures", async () => {
   __test__.replaceModuleOps(
-    () => ["pilot"],
+    () => ["cockpit"],
     async () => {
       throw new Error("module failure");
     },
@@ -128,7 +128,7 @@ Deno.test("cleanEnvironment aggregates teardown failures", async () => {
 Deno.test("cleanEnvironment propagates AggregateError causes", async () => {
   const moduleError = new Error("module failure");
   __test__.replaceModuleOps(
-    () => ["pilot"],
+    () => ["cockpit"],
     async () => {
       throw moduleError;
     },

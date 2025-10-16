@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Base Control Room</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module">
+      import '/js/cockpit.js';
+      import '/modules/foot/components/foot-dashboard.js';
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const mount = document.querySelector('#module-root');
+        if (mount && !mount.querySelector('foot-dashboard')) {
+          mount.appendChild(document.createElement('foot-dashboard'));
+        }
+      });
+    </script>
+  </head>
+  <body class="cockpit-solo">
+    <main class="cockpit-solo__main">
+      <header class="cockpit-solo__header">
+        <h1>Create Base Control</h1>
+        <p>Monitor telemetry and dispatch drive commands through the shared cockpit controls.</p>
+      </header>
+      <section id="module-root" class="cockpit-solo__surface"></section>
+    </main>
+  </body>
+</html>

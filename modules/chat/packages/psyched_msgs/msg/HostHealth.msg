@@ -1,4 +1,4 @@
-# Host resource metrics captured by the pilot health publisher.
+# Host resource metrics captured by the cockpit health publisher.
 #
 # Values are expressed as floating point percentages where applicable. Missing
 # readings are encoded as NaN in the ROS message.

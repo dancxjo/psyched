@@ -3,13 +3,13 @@ apt = []
 pip = []
 launch = "modules/viscera/launch_unit.sh"
 shutdown = "modules/viscera/shutdown_unit.sh"
-pilot_control = "modules/viscera/pilot/index.html"
+cockpit_control = "modules/viscera/cockpit/index.html"
 
 [unit.viscera.ros]
 workspace = "."
 packages = ["viscera"]
 
-[pilot]
+[cockpit]
 display_name = "Viscera"
 description = "System telemetry and host health monitoring"
 regimes = ["system"]

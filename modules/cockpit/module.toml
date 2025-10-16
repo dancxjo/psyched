@@ -1,0 +1,24 @@
+[unit.cockpit]
+apt = [
+    "python3-aiohttp",
+    "python3-yaml",
+    "python3-tomli-w",
+    "ros-${ROS_DISTRO}-image-transport-plugins",
+    "ros-${ROS_DISTRO}-rosbridge-suite",
+    "ros-${ROS_DISTRO}-tf2-web-republisher",
+    "ros-${ROS_DISTRO}-web-video-server",
+]
+pip = []
+launch = "modules/cockpit/launch_unit.sh"
+shutdown = "modules/cockpit/shutdown_unit.sh"
+cockpit_control = "modules/cockpit/packages/cockpit/cockpit/frontend/index.html"
+
+[unit.cockpit.ros]
+workspace = "."
+packages = ["cockpit"]
+
+[cockpit]
+display_name = "Cockpit"
+description = "Teleoperation dashboard and ROS 2 bridge"
+mod_commands = ["setup", "up", "down", "teardown"]
+regimes = ["system"]

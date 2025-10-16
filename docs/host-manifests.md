@@ -23,7 +23,7 @@ Keep the host object compact and explicit:
     "name": "motherbrain",
     "roles": ["ros2"],
     "installers": ["ros2", "docker"],
-    "modules": ["pilot", "ear"],
+    "modules": ["cockpit", "ear"],
     "services": ["asr"]
   }
 }

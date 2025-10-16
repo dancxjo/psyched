@@ -3,13 +3,13 @@ apt = []
 pip = []
 launch = "modules/felt/launch_unit.sh"
 shutdown = "modules/felt/shutdown_unit.sh"
-pilot_control = "modules/felt/pilot/index.html"
+cockpit_control = "modules/felt/cockpit/index.html"
 
 [unit.felt.ros]
 workspace = "."
 packages = ["felt", "psyched_msgs"]
 
-[pilot]
+[cockpit]
 display_name = "Felt"
 description = "Feeling + will integrator"
 regimes = ["conversation", "navigation"]

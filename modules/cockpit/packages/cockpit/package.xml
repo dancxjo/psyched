@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cockpit</name>
+  <version>0.1.0</version>
+  <description>Cockpit cockpit server with HTTP and WebSocket bridge for ROS 2 topics.</description>
+  <maintainer email="pete@psyched.local">Psyched Maintainers</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <build_depend>rclpy</build_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rosidl_runtime_py</exec_depend>
+  <exec_depend>python3-aiohttp</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-tomli-w</exec_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+</package>

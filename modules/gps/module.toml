@@ -12,13 +12,13 @@ patches = [
 ]
 launch = "modules/gps/launch_unit.sh"
 shutdown = "modules/gps/shutdown_unit.sh"
-pilot_control = "modules/gps/pilot/index.html"
+cockpit_control = "modules/gps/cockpit/index.html"
 
 [unit.gps.ros]
 workspace = "."
 packages = ["ublox_gps", "psyched_msgs"]
 
-[pilot]
+[cockpit]
 display_name = "GPS"
 description = "Satellite navigation telemetry"
 regimes = ["navigation"]

@@ -81,12 +81,12 @@ services/tts/models/*
 # Local machine configs
 # ------------------------------
 hosts/*.local.toml
-modules/pilot/packages/pilot/pilot/frontend/pilot.manifest.json
+modules/cockpit/packages/cockpit/cockpit/frontend/cockpit.manifest.json
 # Symlinked components from modules - exclude all .js files but keep AGENTS.md
-modules/pilot/packages/pilot/pilot/frontend/components/*.js
-modules/pilot/packages/pilot/pilot/frontend/components/**/*.js
+modules/cockpit/packages/cockpit/cockpit/frontend/components/*.js
+modules/cockpit/packages/cockpit/cockpit/frontend/components/**/*.js
 # Symlinked js files from modules
-modules/pilot/packages/pilot/pilot/frontend/js/foot.js
-modules/pilot/packages/pilot/pilot/frontend/js/hypothalamus.js
-modules/pilot/packages/pilot/pilot/frontend/js/imu.js
-modules/pilot/packages/pilot/pilot/frontend/js/voice.js
+modules/cockpit/packages/cockpit/cockpit/frontend/js/foot.js
+modules/cockpit/packages/cockpit/cockpit/frontend/js/hypothalamus.js
+modules/cockpit/packages/cockpit/cockpit/frontend/js/imu.js
+modules/cockpit/packages/cockpit/cockpit/frontend/js/voice.js

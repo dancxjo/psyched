@@ -5,7 +5,7 @@ pip = []
 patches = ["modules/foot/apply_patches.sh"]
 launch = "modules/foot/launch_unit.sh"
 shutdown = "modules/foot/shutdown_unit.sh"
-pilot_control = "modules/foot/pilot/index.html"
+cockpit_control = "modules/foot/cockpit/index.html"
 
 [[unit.foot.git]]
 url = "https://github.com/autonomylab/create_robot.git"
@@ -18,7 +18,7 @@ path = "libcreate"
 [unit.foot.ros]
 workspace = "."
 
-[pilot]
+[cockpit]
 display_name = "Foot"
 description = "Drive base interface for the iRobot Create"
 regimes = ["mobility"]
