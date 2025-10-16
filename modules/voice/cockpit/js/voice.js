@@ -1,5 +1,9 @@
 import { createTopicSocket } from '/js/cockpit.js';
 
+function createVoiceSocket(options) {
+  return createTopicSocket({ module: 'voice', ...options });
+}
+
 function generateId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -27,7 +31,7 @@ export function voiceDashboard() {
       this.connectEventStreams();
     },
     connectVoice() {
-      const socket = createTopicSocket({
+      const socket = createVoiceSocket({
         topic: '/voice',
         type: 'std_msgs/msg/String',
         role: 'subscribe',
@@ -52,7 +56,7 @@ export function voiceDashboard() {
       this.createEventListener('/voice_interrupt', 'Playback interrupted');
     },
     createEventListener(topic, label) {
-      const socket = createTopicSocket({
+      const socket = createVoiceSocket({
         topic,
         type: 'std_msgs/msg/Empty',
         role: 'subscribe',
@@ -71,7 +75,7 @@ export function voiceDashboard() {
       if (this.voicePublisher) {
         return this.voicePublisher;
       }
-      const publisher = createTopicSocket({
+      const publisher = createVoiceSocket({
         topic: '/voice',
         type: 'std_msgs/msg/String',
         role: 'publish',
@@ -89,7 +93,7 @@ export function voiceDashboard() {
       if (this[property]) {
         return this[property];
       }
-      const publisher = createTopicSocket({
+      const publisher = createVoiceSocket({
         topic,
         type,
         role: 'publish',

@@ -1,5 +1,9 @@
 import { createTopicSocket } from '/js/cockpit.js';
 
+function createChatSocket(options) {
+  return createTopicSocket({ module: 'chat', ...options });
+}
+
 function generateId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -30,7 +34,7 @@ export function chatDashboard() {
       this.connectVoice();
     },
     connectConversation() {
-      const socket = createTopicSocket({
+      const socket = createChatSocket({
         topic: '/conversation',
         type: 'psyched_msgs/msg/Message',
         role: 'subscribe',
@@ -48,7 +52,7 @@ export function chatDashboard() {
       socket.addEventListener('error', () => {
         this.status = 'Error';
       });
-      this.conversationPublisher = createTopicSocket({
+      this.conversationPublisher = createChatSocket({
         topic: '/conversation',
         type: 'psyched_msgs/msg/Message',
         role: 'publish',
@@ -61,7 +65,7 @@ export function chatDashboard() {
       });
     },
     connectVoice() {
-      const socket = createTopicSocket({
+      const socket = createChatSocket({
         topic: '/voice',
         type: 'std_msgs/msg/String',
         role: 'subscribe',
@@ -79,7 +83,7 @@ export function chatDashboard() {
       socket.addEventListener('error', () => {
         this.voiceStatus = 'Error';
       });
-      this.voicePublisher = createTopicSocket({
+      this.voicePublisher = createChatSocket({
         topic: '/voice',
         type: 'std_msgs/msg/String',
         role: 'publish',
@@ -125,7 +129,7 @@ export function chatDashboard() {
         words: [],
       };
       try {
-        const publisher = this.conversationPublisher || createTopicSocket({
+        const publisher = this.conversationPublisher || createChatSocket({
           topic: '/conversation',
           type: 'psyched_msgs/msg/Message',
           role: 'publish',
@@ -146,7 +150,7 @@ export function chatDashboard() {
       }
       const payload = { data: text };
       try {
-        const publisher = this.voicePublisher || createTopicSocket({
+        const publisher = this.voicePublisher || createChatSocket({
           topic: '/voice',
           type: 'std_msgs/msg/String',
           role: 'publish',

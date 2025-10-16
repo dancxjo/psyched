@@ -75,23 +75,13 @@ if [[ -z "${COCKPIT_MODULES_ROOT:-}" ]]; then
 fi
 
 ARGS=("--listen-host" "${COCKPIT_LISTEN_HOST:-0.0.0.0}" "--listen-port" "${COCKPIT_LISTEN_PORT:-8088}")
-ROSBRIDGE_HOST="${COCKPIT_ROSBRIDGE_BIND_HOST:-0.0.0.0}"
-ROSBRIDGE_PORT="${COCKPIT_ROSBRIDGE_PORT:-9090}"
-ROSBRIDGE_URI="${COCKPIT_ROSBRIDGE_URI:-ws://127.0.0.1:${ROSBRIDGE_PORT}}"
 TF2_FREQUENCY="${COCKPIT_TF2_FREQUENCY:-30.0}"
 VIDEO_HOST="${COCKPIT_VIDEO_BIND_HOST:-0.0.0.0}"
 VIDEO_PORT="${COCKPIT_VIDEO_PORT:-8089}"
 
-export COCKPIT_BRIDGE_MODE="${COCKPIT_BRIDGE_MODE:-rosbridge}"
-export COCKPIT_ROSBRIDGE_URI="${ROSBRIDGE_URI}"
+export COCKPIT_BRIDGE_MODE="${COCKPIT_BRIDGE_MODE:-actions}"
 export COCKPIT_VIDEO_PORT="${VIDEO_PORT}"
 export COCKPIT_VIDEO_BASE="${COCKPIT_VIDEO_BASE:-http://127.0.0.1:${VIDEO_PORT}}"
-
-start_background "rosbridge" ros2 run rosbridge_server rosbridge_websocket \
-  --ros-args \
-  -p port:="${ROSBRIDGE_PORT}" \
-  -p address:="${ROSBRIDGE_HOST}" \
-  -p use_compression:="false"
 
 start_background "tf2_web_republisher" ros2 run tf2_web_republisher tf2_web_republisher \
   --ros-args \

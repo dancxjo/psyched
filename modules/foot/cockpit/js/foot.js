@@ -1,6 +1,10 @@
 import { createTopicSocket } from '/js/cockpit.js';
 import '/components/joystick-control.js';
 
+function createFootSocket(options) {
+  return createTopicSocket({ module: 'foot', ...options });
+}
+
 const BATTERY_TOPICS = [
   { topic: 'battery/charge', type: 'std_msgs/msg/Float32', key: 'charge' },
   { topic: 'battery/capacity', type: 'std_msgs/msg/Float32', key: 'capacity' },
@@ -116,7 +120,7 @@ export function dashboard() {
     subscribeBattery() {
       const state = {};
       for (const entry of BATTERY_TOPICS) {
-        const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
+        const socket = createFootSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
         socket.addEventListener('message', (event) => {
           try {
             const payload = JSON.parse(event.data);
@@ -153,7 +157,7 @@ export function dashboard() {
 
     subscribeSensors() {
       for (const entry of SENSOR_TOPICS) {
-        const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
+        const socket = createFootSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
         socket.addEventListener('message', (event) => {
           try {
             const payload = JSON.parse(event.data);
@@ -192,7 +196,7 @@ export function dashboard() {
       if (this.publishers.has(key)) {
         return this.publishers.get(key);
       }
-      const socket = createTopicSocket({ topic, type, role: 'publish' });
+      const socket = createFootSocket({ topic, type, role: 'publish' });
       this.publishers.set(key, socket);
       this.sockets.push(socket);
       return socket;

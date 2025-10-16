@@ -50,6 +50,5 @@ stop_pid_file() {
 }
 
 terminate_pattern "ros2 run cockpit cockpit"
-stop_pid_file "rosbridge"
 stop_pid_file "tf2_web_republisher"
 stop_pid_file "web_video_server"

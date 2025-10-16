@@ -2,6 +2,10 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 
+function createImuSocket(options) {
+    return createTopicSocket({ module: 'imu', ...options });
+}
+
 class ImuDashboard extends LitElement {
     static properties = {
         status: { state: true },
@@ -56,7 +60,7 @@ class ImuDashboard extends LitElement {
      * renders the core kinematic telemetry delivered by this topic.
      */
     connectImu() {
-        const socket = createTopicSocket({
+        const socket = createImuSocket({
             topic: '/imu/data',
             type: 'sensor_msgs/msg/Imu',
             role: 'subscribe',

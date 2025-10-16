@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
+import json
 import logging
 import math
 import re
@@ -22,8 +24,10 @@ from typing import (
     Set,
 )
 
-from aiohttp import web
+from aiohttp import WSMsgType, web
 
+from .actions import ActionError, ActionRegistry
+from .actions.builtin import register_builtin_actions
 from .module_catalog import ModuleCatalog, ModuleInfo
 from .config import (
     ModuleDescriptor,
@@ -32,6 +36,7 @@ from .config import (
     save_host_config,
     set_module_config,
 )
+from .ros import RosClient, TopicStream, TopicStreamError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,8 +109,7 @@ class CockpitSettings:
     repo_root: Optional[Path] = None
     listen_host: str = "0.0.0.0"
     listen_port: int = 8088
-    bridge_mode: str = "rosbridge"
-    rosbridge_uri: str = "ws://127.0.0.1:9090"
+    bridge_mode: str = "actions"
     video_base: Optional[str] = None
     video_port: Optional[int] = None
 
@@ -121,9 +125,35 @@ class CockpitSettings:
         """Return descriptors for modules that should surface cockpit panels."""
         return discover_active_modules(self.load_config())
 
+class StreamManager:
+    """Track active action streams and coordinate teardown."""
+
+    def __init__(self, ros: RosClient) -> None:
+        self._ros = ros
+        self._streams: Dict[str, TopicStream] = {}
+
+    def register(self, stream: TopicStream) -> str:
+        stream_id = stream.metadata.id
+        self._streams[stream_id] = stream
+        return stream_id
+
+    def get(self, stream_id: str) -> Optional[TopicStream]:
+        return self._streams.get(stream_id)
+
+    async def release(self, stream_id: str) -> None:
+        self._streams.pop(stream_id, None)
+        await self._ros.close_stream(stream_id)
+
+    async def close_all(self) -> None:
+        for stream_id in list(self._streams.keys()):
+            await self.release(stream_id)
+
 
 COCKPIT_SETTINGS_KEY: web.AppKey[CockpitSettings] = web.AppKey("cockpit_settings")
 MODULE_CATALOG_KEY: web.AppKey[ModuleCatalog] = web.AppKey("module_catalog")
+ACTION_REGISTRY_KEY: web.AppKey[ActionRegistry] = web.AppKey("action_registry")
+ROS_CLIENT_KEY: web.AppKey[RosClient] = web.AppKey("ros_client")
+STREAM_MANAGER_KEY: web.AppKey[StreamManager] = web.AppKey("stream_manager")
 
 
 # Streamlined log handling -------------------------------------------------
@@ -146,8 +176,30 @@ def create_app(*, settings: CockpitSettings) -> web.Application:
     catalog = ModuleCatalog(settings.modules_root)
 
     app[MODULE_CATALOG_KEY] = catalog
-    # Fallback string keys for test harnesses that cannot import the AppKey constants.
-    app["module_catalog"] = catalog
+    app["module_catalog"] = catalog  # Fallback for simple test harnesses.
+
+    ros_client = RosClient()
+    app[ROS_CLIENT_KEY] = ros_client
+
+    registry = ActionRegistry()
+    app[ACTION_REGISTRY_KEY] = registry
+    app["action_registry"] = registry
+
+    stream_manager = StreamManager(ros_client)
+    app[STREAM_MANAGER_KEY] = stream_manager
+
+    try:
+        module_names = [info.name for info in catalog.list_modules()]
+    except Exception:  # pragma: no cover - defensive guard for unexpected filesystem errors
+        module_names = []
+        _LOGGER.exception("Failed to enumerate modules while registering actions")
+    register_builtin_actions(registry, ros=ros_client, modules=module_names)
+
+    async def _shutdown_resources(app: web.Application) -> None:
+        await stream_manager.close_all()
+        await ros_client.shutdown()
+
+    app.on_cleanup.append(_shutdown_resources)
 
     app.router.add_get("/api/modules", _modules_handler)
     app.router.add_get("/api/modules/{module_name}/logs", _module_log_handler)
@@ -160,6 +212,9 @@ def create_app(*, settings: CockpitSettings) -> web.Application:
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
     app.router.add_post("/api/ops/git-pull", _git_pull_handler)
     app.router.add_post("/api/ops/psh", _psh_operation_handler)
+    app.router.add_get("/api/actions", _actions_handler)
+    app.router.add_post("/api/actions/{module_name}/{action_name}", _action_execute_handler)
+    app.router.add_get("/api/streams/{stream_id}", _stream_handler)
 
     app.router.add_get("/", _index_handler)
     app.router.add_get("/{tail:.*}", _static_handler)
@@ -180,7 +235,11 @@ async def _modules_handler(request: web.Request) -> web.Response:
         "modules": modules,
         "bridge": {
             "mode": settings.bridge_mode,
-            "rosbridge_uri": settings.rosbridge_uri,
+            "actions": {
+                "list": "/api/actions",
+                "invoke": "/api/actions/{module}/{action}",
+                "stream": "/api/streams/{stream}",
+            },
             "video_base": settings.video_base,
             "video_port": settings.video_port,
         },
@@ -405,6 +464,162 @@ async def _psh_operation_handler(request: web.Request) -> web.Response:
     return web.json_response(response_payload)
 
 
+async def _actions_handler(request: web.Request) -> web.Response:
+    """Return the catalog of available cockpit actions."""
+
+    registry = _get_action_registry(request.app)
+    payload = registry.to_payload()
+    return web.json_response(payload)
+
+
+async def _action_execute_handler(request: web.Request) -> web.Response:
+    """Execute a module action and optionally provision a streaming bridge."""
+
+    module_name = (request.match_info.get("module_name") or "").strip()
+    action_name = (request.match_info.get("action_name") or "").strip()
+    if not module_name or not action_name:
+        raise web.HTTPBadRequest(text="Module name and action name must be provided in the request path")
+
+    try:
+        payload = await request.json()
+    except Exception as exc:  # pragma: no cover - aiohttp raises for bad JSON
+        raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
+
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, Mapping):
+        raise web.HTTPBadRequest(text="Action payload must be a JSON object")
+
+    arguments = payload.get("arguments", {})
+    if arguments is None:
+        arguments = {}
+    if not isinstance(arguments, Mapping):
+        raise web.HTTPBadRequest(text="arguments must be expressed as a JSON object")
+
+    registry = _get_action_registry(request.app)
+    try:
+        result = await registry.execute(
+            module_name,
+            action_name,
+            app=request.app,
+            arguments=arguments,
+            request=request,
+        )
+    except KeyError as exc:
+        raise web.HTTPNotFound(text=str(exc)) from exc
+    except ActionError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
+
+    response_payload: Dict[str, Any] = {
+        "module": module_name,
+        "action": action_name,
+    }
+    if result.payload is not None:
+        response_payload["result"] = dict(result.payload)
+
+    if result.streaming:
+        stream = result.stream
+        if not isinstance(stream, TopicStream):
+            raise web.HTTPInternalServerError(text="Streaming actions must return a TopicStream")
+        stream_manager = _get_stream_manager(request.app)
+        stream_id = stream_manager.register(stream)
+        response_payload["stream"] = stream.metadata.to_dict()
+        response_payload["stream"]["id"] = stream_id
+
+    return web.json_response(response_payload)
+
+
+async def _stream_handler(request: web.Request) -> web.StreamResponse:
+    """Upgrade the connection to a websocket that forwards stream events."""
+
+    stream_id = (request.match_info.get("stream_id") or "").strip()
+    if not stream_id:
+        raise web.HTTPBadRequest(text="Stream identifier must be provided in the request path")
+
+    stream_manager = _get_stream_manager(request.app)
+    stream = stream_manager.get(stream_id)
+    if stream is None:
+        raise web.HTTPNotFound(text=f"Stream not found: {stream_id}")
+
+    ws = web.WebSocketResponse(heartbeat=30.0)
+    await ws.prepare(request)
+
+    await ws.send_json({"event": "status", "data": {"state": "connected"}})
+
+    forward_task = asyncio.create_task(_forward_stream_events(ws, stream))
+    receive_task = asyncio.create_task(_receive_stream_messages(ws, stream))
+
+    try:
+        await asyncio.wait(
+            [forward_task, receive_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+    finally:
+        for task in (forward_task, receive_task):
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        await stream_manager.release(stream_id)
+        if not ws.closed:
+            await ws.close()
+
+    return ws
+
+
+async def _forward_stream_events(ws: web.WebSocketResponse, stream: TopicStream) -> None:
+    try:
+        while True:
+            event = await stream.next_event()
+            await ws.send_json(event)
+            if event.get("event") == "status" and event.get("data", {}).get("state") == "closed":
+                break
+    except asyncio.CancelledError:  # pragma: no cover - cancellation is expected during shutdown
+        pass
+    except ConnectionResetError:  # pragma: no cover - network interruptions
+        _LOGGER.debug("Websocket connection reset while forwarding stream %s", stream.metadata.id)
+    except Exception:  # pragma: no cover - unexpected websocket/serialization issues
+        _LOGGER.exception("Failed to forward events for stream %s", stream.metadata.id)
+
+
+async def _receive_stream_messages(ws: web.WebSocketResponse, stream: TopicStream) -> None:
+    try:
+        async for message in ws:
+            if message.type == WSMsgType.TEXT:
+                try:
+                    payload = json.loads(message.data)
+                except json.JSONDecodeError:
+                    await ws.send_json({"event": "error", "data": {"message": "Invalid JSON payload"}})
+                    continue
+
+                event_type = payload.get("event")
+                if event_type == "publish":
+                    body = payload.get("data", {})
+                    if not isinstance(body, Mapping):
+                        await ws.send_json({"event": "error", "data": {"message": "Publish payload must be an object"}})
+                        continue
+                    try:
+                        await stream.publish(body)
+                    except TopicStreamError as exc:
+                        await ws.send_json({"event": "error", "data": {"message": str(exc)}})
+                elif event_type == "close":
+                    await ws.close()
+                    break
+                else:
+                    await ws.send_json({"event": "error", "data": {"message": f"Unsupported event: {event_type}"}})
+            elif message.type in {WSMsgType.CLOSED, WSMsgType.CLOSE}:
+                break
+            elif message.type == WSMsgType.ERROR:
+                _LOGGER.debug(
+                    "Websocket for stream %s closed with error: %s",
+                    stream.metadata.id,
+                    ws.exception(),
+                )
+                break
+    except asyncio.CancelledError:  # pragma: no cover - expected during shutdown
+        pass
+    except Exception:  # pragma: no cover - defensive guard
+        _LOGGER.exception("Error while handling inbound websocket messages for stream %s", stream.metadata.id)
+
 def _resolve_psh_command(operation: str) -> Optional[List[str]]:
     """Return the command tuple for a whitelisted ``psh`` operation."""
 
@@ -606,6 +821,29 @@ def _read_module_log(
         updated_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
     return lines, truncated, updated_at
+
+
+def _get_action_registry(app: web.Application) -> ActionRegistry:
+    registry = app.get(ACTION_REGISTRY_KEY)
+    if registry is None:
+        registry = app.get("action_registry")
+    if registry is None:
+        raise RuntimeError("Action registry has not been initialised")
+    return registry
+
+
+def _get_stream_manager(app: web.Application) -> StreamManager:
+    manager = app.get(STREAM_MANAGER_KEY)
+    if manager is None:
+        raise RuntimeError("Stream manager has not been initialised")
+    return manager
+
+
+def _get_ros_client(app: web.Application) -> RosClient:
+    client = app.get(ROS_CLIENT_KEY)
+    if client is None:
+        raise RuntimeError("ROS client has not been initialised")
+    return client
 
 
 def _module_payload(descriptor: ModuleDescriptor, catalog: ModuleCatalog) -> Dict[str, Any]:

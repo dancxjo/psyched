@@ -2,6 +2,10 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 
+function createVisceraSocket(options) {
+  return createTopicSocket({ module: 'viscera', ...options });
+}
+
 const HOST_HEALTH_MSG_TYPE = 'psyched_msgs/msg/HostHealth';
 
 /**
@@ -103,7 +107,7 @@ class VisceraDashboard extends LitElement {
     this.#teardown();
     const topic = this.topic && this.topic.trim() ? this.topic.trim() : resolveHostHealthTopic();
     try {
-      const socket = createTopicSocket({
+      const socket = createVisceraSocket({
         topic,
         type: HOST_HEALTH_MSG_TYPE,
         role: 'subscribe',

@@ -9,6 +9,10 @@ function generateId() {
     return `event-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function createVoiceSocket(options) {
+    return createTopicSocket({ module: 'voice', ...options });
+}
+
 class VoiceDashboard extends LitElement {
     static properties = {
         status: { state: true },
@@ -109,7 +113,7 @@ class VoiceDashboard extends LitElement {
     }
 
     connectVoice() {
-        const socket = createTopicSocket({
+        const socket = createVoiceSocket({
             topic: '/voice',
             type: 'std_msgs/msg/String',
             role: 'subscribe',
@@ -137,7 +141,7 @@ class VoiceDashboard extends LitElement {
     }
 
     createEventListener(topic, label) {
-        const socket = createTopicSocket({
+        const socket = createVoiceSocket({
             topic,
             type: 'std_msgs/msg/Empty',
             role: 'subscribe',
@@ -158,7 +162,7 @@ class VoiceDashboard extends LitElement {
         if (this.voicePublisher) {
             return this.voicePublisher;
         }
-        const publisher = createTopicSocket({
+        const publisher = createVoiceSocket({
             topic: '/voice',
             type: 'std_msgs/msg/String',
             role: 'publish',
@@ -178,7 +182,7 @@ class VoiceDashboard extends LitElement {
         if (this[property]) {
             return this[property];
         }
-        const publisher = createTopicSocket({
+        const publisher = createVoiceSocket({
             topic,
             type,
             role: 'publish',

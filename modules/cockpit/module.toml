@@ -4,7 +4,6 @@ apt = [
     "python3-yaml",
     "python3-tomli-w",
     "ros-${ROS_DISTRO}-image-transport-plugins",
-    "ros-${ROS_DISTRO}-rosbridge-suite",
     "ros-${ROS_DISTRO}-tf2-web-republisher",
     "ros-${ROS_DISTRO}-web-video-server",
 ]

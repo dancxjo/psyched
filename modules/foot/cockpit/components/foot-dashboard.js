@@ -13,6 +13,10 @@ import {
   buildPowerLedPayload,
 } from './foot-dashboard.helpers.js';
 
+function createFootSocket(options) {
+  return createTopicSocket({ module: 'foot', ...options });
+}
+
 const BATTERY_TOPICS = [
   { topic: 'battery/charge', type: 'std_msgs/msg/Float32', key: 'charge' },
   { topic: 'battery/capacity', type: 'std_msgs/msg/Float32', key: 'capacity' },
@@ -36,11 +40,6 @@ const BUTTON_TOPICS = [
   { topic: 'day_button', label: 'Day button' },
   { topic: 'hour_button', label: 'Hour button' },
   { topic: 'minute_button', label: 'Minute button' },
-];
-
-const ROSBRIDGE_TOPICS = [
-  { topic: 'client_count', type: 'std_msgs/msg/UInt32', key: 'clientCount' },
-  { topic: 'connected_clients', type: 'rosbridge_msgs/msg/ConnectedClients', key: 'connectedClients' },
 ];
 
 const TELEMETRY_TOPICS = [
@@ -132,7 +131,6 @@ class FootDashboard extends LitElement {
   static properties = {
     battery: { state: true },
     sensors: { state: true },
-    rosbridge: { state: true },
     telemetry: { state: true },
     parameterForm: { state: true },
     parameterStatus: { state: true },
@@ -303,10 +301,6 @@ class FootDashboard extends LitElement {
       cliffs: false,
       wheels: false,
     };
-    this.rosbridge = {
-      clientCount: 0,
-      connectedClients: 0,
-    };
     this.telemetry = {
       mode: 'Unknown',
       irOmni: '—',
@@ -349,7 +343,6 @@ class FootDashboard extends LitElement {
     this.subscribeBattery();
     this.subscribeSensors();
     this.subscribeButtons();
-    this.subscribeRosbridge();
     this.subscribeTelemetry();
   }
 
@@ -374,7 +367,7 @@ class FootDashboard extends LitElement {
   subscribeBattery() {
     const state = {};
     for (const entry of BATTERY_TOPICS) {
-      const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
+      const socket = createFootSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
       socket.addEventListener('message', (event) => {
         try {
           const payload = JSON.parse(event.data);
@@ -416,7 +409,7 @@ class FootDashboard extends LitElement {
 
   subscribeSensors() {
     for (const entry of SENSOR_TOPICS) {
-      const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
+      const socket = createFootSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
       socket.addEventListener('message', (event) => {
         try {
           const payload = JSON.parse(event.data);
@@ -435,7 +428,7 @@ class FootDashboard extends LitElement {
 
   subscribeButtons() {
     for (const entry of BUTTON_TOPICS) {
-      const socket = createTopicSocket({ topic: entry.topic, type: 'std_msgs/msg/Empty', role: 'subscribe' });
+      const socket = createFootSocket({ topic: entry.topic, type: 'std_msgs/msg/Empty', role: 'subscribe' });
       socket.addEventListener('message', () => {
         this.pushButtonEvent(entry.label, entry.topic);
       });
@@ -443,38 +436,9 @@ class FootDashboard extends LitElement {
     }
   }
 
-  subscribeRosbridge() {
-    for (const entry of ROSBRIDGE_TOPICS) {
-      const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
-      socket.addEventListener('message', (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.event !== 'message') {
-            return;
-          }
-          if (entry.key === 'clientCount') {
-            this.rosbridge = {
-              ...this.rosbridge,
-              clientCount: Number(payload.data?.data ?? payload.data) || 0,
-            };
-          } else if (entry.key === 'connectedClients') {
-            const clients = Array.isArray(payload.data?.clients) ? payload.data.clients.length : 0;
-            this.rosbridge = {
-              ...this.rosbridge,
-              connectedClients: clients,
-            };
-          }
-        } catch (error) {
-          console.warn('Failed to parse rosbridge payload', error);
-        }
-      });
-      this.sockets.push(socket);
-    }
-  }
-
   subscribeTelemetry() {
     for (const entry of TELEMETRY_TOPICS) {
-      const socket = createTopicSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
+      const socket = createFootSocket({ topic: entry.topic, type: entry.type, role: 'subscribe' });
       socket.addEventListener('message', (event) => {
         try {
           const payload = JSON.parse(event.data);
@@ -622,7 +586,7 @@ class FootDashboard extends LitElement {
     if (this.publishers.has(key)) {
       return this.publishers.get(key);
     }
-    const socket = createTopicSocket({ topic, type, role: 'publish' });
+    const socket = createFootSocket({ topic, type, role: 'publish' });
     this.publishers.set(key, socket);
     this.sockets.push(socket);
     return socket;
@@ -725,6 +689,7 @@ class FootDashboard extends LitElement {
     this.parameterStatus = 'Dispatching parameter update…';
     try {
       await callRosService({
+        module: 'foot',
         service: `${node.trim()}/set_parameters`,
         type: 'rcl_interfaces/srv/SetParameters',
         args: { parameters: requestParameters },
@@ -996,10 +961,6 @@ class FootDashboard extends LitElement {
             <div class="surface-metric">
               <span class="surface-metric__label">Vacuum motor</span>
               <span class="surface-metric__value">${this.telemetry.vacuum}</span>
-            </div>
-            <div class="surface-metric">
-              <span class="surface-metric__label">Rosbridge</span>
-              <span class="surface-metric__value">${this.rosbridge.clientCount} clients · ${this.rosbridge.connectedClients} connected</span>
             </div>
           </div>
         </article>

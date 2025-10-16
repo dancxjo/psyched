@@ -1,5 +1,9 @@
 import { createTopicSocket } from '/js/cockpit.js';
 
+function createImuSocket(options) {
+  return createTopicSocket({ module: 'imu', ...options });
+}
+
 export function imuDashboard() {
   return {
     status: 'Connecting…',
@@ -16,7 +20,7 @@ export function imuDashboard() {
      * a thermistor channel.
      */
     connectImu() {
-      const socket = createTopicSocket({
+      const socket = createImuSocket({
         topic: '/imu/data',
         type: 'sensor_msgs/msg/Imu',
         role: 'subscribe',

@@ -203,8 +203,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
     _bootstrap_ros_environment(repo_root)
 
-    bridge_mode = os.environ.get("COCKPIT_BRIDGE_MODE", "rosbridge").lower()
-    rosbridge_uri = os.environ.get("COCKPIT_ROSBRIDGE_URI", "ws://127.0.0.1:9090")
+    bridge_mode = os.environ.get("COCKPIT_BRIDGE_MODE", "actions").lower()
     video_base = os.environ.get("COCKPIT_VIDEO_BASE")
     video_port_env = os.environ.get("COCKPIT_VIDEO_PORT")
     video_port = None
@@ -225,7 +224,6 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         listen_host=args.listen_host,
         listen_port=args.listen_port,
         bridge_mode=bridge_mode,
-        rosbridge_uri=rosbridge_uri,
         video_base=video_base,
         video_port=video_port,
     )

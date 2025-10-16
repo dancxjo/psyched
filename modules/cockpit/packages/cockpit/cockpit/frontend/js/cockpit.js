@@ -1,6 +1,10 @@
-const DEFAULT_BRIDGE = {
-  mode: 'rosbridge',
-  rosbridge_uri: 'ws://127.0.0.1:9090',
+const DEFAULT_INTERFACE = {
+  mode: 'actions',
+  actions: {
+    list: '/api/actions',
+    invoke: '/api/actions/{module}/{action}',
+    stream: '/api/streams/{stream}',
+  },
   video_base: null,
   video_port: 8089,
 };
@@ -8,80 +12,140 @@ const DEFAULT_BRIDGE = {
 const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '', '0.0.0.0']);
 
 function mergeBridgeConfig(values = {}) {
+  const actions = normaliseActions(values && typeof values === 'object' ? values.actions : undefined);
   return {
-    ...DEFAULT_BRIDGE,
+    ...DEFAULT_INTERFACE,
     ...(typeof values === 'object' && values ? values : {}),
+    actions,
   };
 }
 
-function resolveBridge() {
+function normaliseActions(actionsRaw) {
+  const source = typeof actionsRaw === 'object' && actionsRaw !== null ? actionsRaw : {};
+  const list = normaliseActionPath(source.list, DEFAULT_INTERFACE.actions.list);
+  const invoke = normaliseActionPath(source.invoke, DEFAULT_INTERFACE.actions.invoke);
+  const stream = normaliseActionPath(source.stream, DEFAULT_INTERFACE.actions.stream);
+  return { list, invoke, stream };
+}
+
+function normaliseActionPath(raw, fallback) {
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.trim();
+  }
+  return fallback;
+}
+
+function resolveInterface() {
   if (typeof window !== 'undefined' && window.Cockpit && window.Cockpit.bridge) {
     return mergeBridgeConfig(window.Cockpit.bridge);
   }
   return mergeBridgeConfig();
 }
 
-function resolveRosbridgeUrl() {
-  const bridge = resolveBridge();
-  const raw = bridge.rosbridge_uri || DEFAULT_BRIDGE.rosbridge_uri;
-  const page = typeof window !== 'undefined' ? window.location : undefined;
-  const fallbackProtocol = page && page.protocol === 'https:' ? 'wss:' : 'ws:';
-  const fallbackHost = page && page.hostname ? page.hostname : '127.0.0.1';
-  try {
-    const url = new URL(raw, page ? page.href : undefined);
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
-      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    }
-    if (LOOPBACK_HOSTNAMES.has(url.hostname)) {
-      url.hostname = fallbackHost;
-    }
-    if (!url.port) {
-      const parsed = extractPort(raw);
-      url.port = parsed || '9090';
-    }
-    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-      url.protocol = fallbackProtocol;
-    }
-    return url.toString();
-  } catch (error) {
-    console.warn('Invalid rosbridge URI; falling back to current host with port 9090', error);
-    return `${fallbackProtocol}//${fallbackHost}:9090`;
-  }
-}
-
-function extractPort(raw) {
-  try {
-    const url = new URL(raw, typeof window !== 'undefined' ? window.location.href : undefined);
-    return url.port;
-  } catch (_error) {
+function fillTemplate(template, replacements) {
+  if (!template || typeof template !== 'string') {
     return '';
   }
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+    if (Object.prototype.hasOwnProperty.call(replacements, key)) {
+      return replacements[key];
+    }
+    return '';
+  });
+}
+
+function resolveActionUrl(moduleName, actionName) {
+  const interfaceConfig = resolveInterface();
+  const template = interfaceConfig.actions.invoke || DEFAULT_INTERFACE.actions.invoke;
+  const encodedModule = encodeURIComponent(moduleName);
+  const encodedAction = encodeURIComponent(actionName);
+  return fillTemplate(template, { module: encodedModule, action: encodedAction }) || template;
+}
+
+function resolveStreamUrl(streamId) {
+  const interfaceConfig = resolveInterface();
+  const template = interfaceConfig.actions.stream || DEFAULT_INTERFACE.actions.stream;
+  const encodedId = encodeURIComponent(streamId);
+  const path = fillTemplate(template, { stream: encodedId }) || template;
+  if (/^wss?:\/\//i.test(path)) {
+    return path;
+  }
+  const location = typeof window !== 'undefined' ? window.location : undefined;
+  const protocol = location && location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = location && location.host ? location.host : '127.0.0.1';
+  if (!path.startsWith('/')) {
+    return `${protocol}//${host}/${path}`;
+  }
+  return `${protocol}//${host}${path}`;
+}
+
+function resolveActionsListUrl() {
+  const interfaceConfig = resolveInterface();
+  return interfaceConfig.actions.list || DEFAULT_INTERFACE.actions.list;
+}
+
+function retrieveLocation() {
+  return typeof window !== 'undefined' ? window.location : undefined;
+}
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 class TopicSocket {
   constructor(options) {
+    if (!options || typeof options !== 'object') {
+      throw new Error('Options are required for topic sockets');
+    }
+    const moduleName = typeof options.module === 'string' && options.module.trim()
+      ? options.module.trim()
+      : '';
+    if (!moduleName) {
+      throw new Error('module must be provided when creating a topic socket');
+    }
+    if (!options.topic || !options.type) {
+      throw new Error('Both topic and type are required');
+    }
+
+    this.module = moduleName;
     this.topic = options.topic;
-    this.type = options.type;
+    this.messageType = options.type;
     this.role = options.role || 'subscribe';
-    this.queueLength = options.queueLength || 10;
+    this.queueLength = typeof options.queueLength === 'number' && options.queueLength > 0
+      ? Math.floor(options.queueLength)
+      : 10;
+    this.qos = typeof options.qos === 'object' && options.qos !== null ? options.qos : undefined;
+
     this._listeners = new Map();
     this._pendingMessages = [];
-    this._advertised = false;
-    this._subscribed = false;
+    this._ws = null;
+    this._streamId = null;
+    this._publishEnabled = this.role === 'publish' || this.role === 'both';
     this._closed = false;
+    this._initialisationError = null;
+    this._readyDeferred = createDeferred();
+    this.ready = this._readyDeferred.promise;
 
-    this._ws = new WebSocket(resolveRosbridgeUrl());
-    this._ws.addEventListener('open', () => this._onOpen());
-    this._ws.addEventListener('message', (event) => this._onMessage(event));
-    this._ws.addEventListener('close', (event) => this._emit('close', event));
-    this._ws.addEventListener('error', (event) => this._emit('error', event));
+    void this._initialise();
   }
 
   get readyState() {
+    if (!this._ws) {
+      return WebSocket.CLOSED;
+    }
     return this._ws.readyState;
   }
 
   addEventListener(type, handler) {
+    if (typeof handler !== 'function') {
+      throw new Error('Event listener must be a function');
+    }
     if (!this._listeners.has(type)) {
       this._listeners.set(type, new Set());
     }
@@ -95,47 +159,100 @@ class TopicSocket {
     }
   }
 
-  send(rawMessage) {
+  async send(rawMessage) {
+    if (!this._publishEnabled) {
+      throw new Error('Socket is not configured for publishing');
+    }
     if (this._closed) {
       throw new Error('Socket has been closed');
+    }
+    if (this._initialisationError) {
+      throw this._initialisationError;
     }
     let parsed;
     try {
       parsed = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
-    } catch (error) {
-      throw new Error('Messages must be JSON-serializable');
+    } catch (_error) {
+      throw new Error('Messages must be JSON-serialisable');
     }
-    const payload = {
-      op: 'publish',
-      topic: this.topic,
-      msg: parsed,
-    };
-    this._dispatch(JSON.stringify(payload));
-  }
-
-  close() {
-    this._closed = true;
-    if (this._ws.readyState === WebSocket.OPEN) {
-      if (this._subscribed) {
-        this._ws.send(JSON.stringify({ op: 'unsubscribe', topic: this.topic }));
-      }
-      if (this._advertised) {
-        this._ws.send(JSON.stringify({ op: 'unadvertise', topic: this.topic }));
-      }
-    }
-    this._ws.close();
-  }
-
-  // Internal ----------------------------------------------------------
-  _dispatch(payload) {
-    if (this._ws.readyState === WebSocket.CONNECTING) {
-      this._pendingMessages.push(payload);
+    const envelope = JSON.stringify({ event: 'publish', data: parsed });
+    if (!this._ws || this._ws.readyState === WebSocket.CONNECTING) {
+      this._pendingMessages.push(envelope);
       return;
     }
     if (this._ws.readyState !== WebSocket.OPEN) {
       throw new Error('Socket is not ready');
     }
-    this._ws.send(payload);
+    this._ws.send(envelope);
+  }
+
+  close() {
+    if (this._closed) {
+      return;
+    }
+    this._closed = true;
+    if (this._ws) {
+      try {
+        this._ws.close();
+      } catch (_error) {
+        // Ignore socket shutdown errors.
+      }
+    }
+  }
+
+  // Internal helpers ------------------------------------------------
+  async _initialise() {
+    try {
+      const response = await invokeAction(this.module, 'stream_topic', {
+        topic: this.topic,
+        message_type: this.messageType,
+        role: this.role,
+        queue_length: this.queueLength,
+        qos: this.qos,
+      });
+      const stream = response && response.stream ? response.stream : null;
+      if (!stream || !stream.id) {
+        throw new Error('Backend returned an invalid stream descriptor');
+      }
+      this._streamId = stream.id;
+      this._publishEnabled = stream.role === 'publish' || stream.role === 'both';
+      this._ws = new WebSocket(resolveStreamUrl(stream.id));
+      this._ws.addEventListener('open', () => this._onOpen());
+      this._ws.addEventListener('message', (event) => this._onMessage(event));
+      this._ws.addEventListener('close', (event) => this._emit('close', event));
+      this._ws.addEventListener('error', (event) => this._emit('error', event));
+      this._readyDeferred.resolve(stream);
+    } catch (error) {
+      this._initialisationError = error instanceof Error ? error : new Error(String(error));
+      this._readyDeferred.reject(this._initialisationError);
+      this._emit('error', new CustomEvent('error', { detail: { message: this._initialisationError.message } }));
+    }
+  }
+
+  _onOpen() {
+    this._emit('open', new Event('open'));
+    while (this._pendingMessages.length) {
+      const payload = this._pendingMessages.shift();
+      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+        this._ws.send(payload);
+      }
+    }
+  }
+
+  _onMessage(event) {
+    if (typeof event.data !== 'string') {
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch (_error) {
+      return;
+    }
+    const envelope = new MessageEvent('message', {
+      data: JSON.stringify(payload),
+    });
+    this._emit('message', envelope);
   }
 
   _emit(type, event) {
@@ -151,160 +268,77 @@ class TopicSocket {
       }
     }
   }
+}
 
-  _onOpen() {
-    if (this.role === 'publish' || this.role === 'both') {
-      const message = {
-        op: 'advertise',
-        topic: this.topic,
-        type: this.type,
-        queue_size: this.queueLength,
-      };
-      this._ws.send(JSON.stringify(message));
-      this._advertised = true;
-    }
-
-    if (this.role === 'subscribe' || this.role === 'both') {
-      const message = {
-        op: 'subscribe',
-        topic: this.topic,
-        type: this.type,
-        queue_length: this.queueLength,
-      };
-      this._ws.send(JSON.stringify(message));
-      this._subscribed = true;
-    }
-
-    while (this._pendingMessages.length) {
-      const payload = this._pendingMessages.shift();
-      this._ws.send(payload);
-    }
-
-    this._emit('open', new Event('open'));
+async function invokeAction(moduleName, actionName, args = {}) {
+  const url = resolveActionUrl(moduleName, actionName);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ arguments: args }),
+  });
+  if (!response.ok) {
+    const message = await safeReadError(response);
+    throw new Error(`Action ${moduleName}.${actionName} failed: ${message}`);
   }
+  return response.json();
+}
 
-  _onMessage(event) {
-    let payload;
-    try {
-      payload = JSON.parse(event.data);
-    } catch (error) {
-      return;
-    }
-    if (payload.op === 'publish' && payload.topic === this.topic) {
-      const adapted = {
-        data: JSON.stringify({
-          event: 'message',
-          data: payload.msg,
-        }),
-      };
-      this._emit('message', adapted);
-    } else if (payload.op === 'status') {
-      const adapted = {
-        data: JSON.stringify({
-          event: 'status',
-          data: payload,
-        }),
-      };
-      this._emit('message', adapted);
-    }
+async function safeReadError(response) {
+  try {
+    const text = await response.text();
+    return text || `${response.status} ${response.statusText}`;
+  } catch (_error) {
+    return `${response.status} ${response.statusText}`;
   }
 }
 
 export function createTopicSocket(options) {
-  if (!options || !options.topic || !options.type) {
-    throw new Error('Both topic and type are required');
-  }
   return new TopicSocket(options);
 }
 
+export async function callModuleAction(moduleName, actionName, args = {}) {
+  if (!moduleName || typeof moduleName !== 'string') {
+    throw new Error('moduleName must be a non-empty string');
+  }
+  if (!actionName || typeof actionName !== 'string') {
+    throw new Error('actionName must be a non-empty string');
+  }
+  const response = await invokeAction(moduleName, actionName, args);
+  return response.result || {};
+}
+
 /**
- * Call a ROS service through rosbridge and return the response payload.
+ * Call a ROS service through the cockpit backend and return the response payload.
  *
- * @param {{ service: string, type?: string, args?: object, timeoutMs?: number }} options
+ * @param {{ module: string, service: string, type?: string, args?: object, timeoutMs?: number }} options
  * @returns {Promise<object>}
  */
-export function callRosService(options) {
-  if (!options || !options.service) {
-    return Promise.reject(new Error('Service name is required'));
+export async function callRosService(options) {
+  const moduleName = typeof options.module === 'string' && options.module.trim()
+    ? options.module.trim()
+    : '';
+  if (!moduleName) {
+    return Promise.reject(new Error('module must be provided when calling a ROS service'));
   }
-
-  const service = options.service;
-  const type = options.type;
-  const args = options.args || {};
+  const service = typeof options.service === 'string' && options.service.trim()
+    ? options.service.trim()
+    : '';
+  if (!service) {
+    return Promise.reject(new Error('service name is required'));
+  }
+  const serviceType = typeof options.type === 'string' && options.type.trim() ? options.type.trim() : undefined;
+  const args = typeof options.args === 'object' && options.args !== null ? options.args : {};
   const timeoutMs = Number.isFinite(options.timeoutMs) ? Number(options.timeoutMs) : 8000;
-
-  return new Promise((resolve, reject) => {
-    const requestId = `svc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const ws = new WebSocket(resolveRosbridgeUrl());
-    let settled = false;
-
-    const cleanup = () => {
-      ws.removeEventListener('open', handleOpen);
-      ws.removeEventListener('message', handleMessage);
-      ws.removeEventListener('error', handleError);
-      ws.removeEventListener('close', handleClose);
-    };
-
-    const finish = (callback, value) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      cleanup();
-      try {
-        ws.close();
-      } catch (_error) {
-        // ignore socket shutdown errors
-      }
-      callback(value);
-    };
-
-    const handleOpen = () => {
-      const payload = {
-        op: 'call_service',
-        service,
-        args,
-        id: requestId,
-      };
-      if (type) {
-        payload.type = type;
-      }
-      ws.send(JSON.stringify(payload));
-    };
-
-    const handleMessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.op === 'service_response' && payload.id === requestId) {
-          if (payload.result === false) {
-            finish(reject, new Error(payload.values?.message || `Service ${service} returned an error`));
-            return;
-          }
-          finish(resolve, payload.values ?? {});
-        }
-      } catch (error) {
-        finish(reject, error instanceof Error ? error : new Error('Failed to parse service response'));
-      }
-    };
-
-    const handleError = () => {
-      finish(reject, new Error(`Service call to ${service} failed`));
-    };
-
-    const handleClose = () => {
-      finish(reject, new Error(`Service ${service} connection closed before a response was received`));
-    };
-
-    const timer = setTimeout(() => {
-      finish(reject, new Error(`Timed out waiting for ${service}`));
-    }, timeoutMs);
-
-    ws.addEventListener('open', handleOpen);
-    ws.addEventListener('message', handleMessage);
-    ws.addEventListener('error', handleError);
-    ws.addEventListener('close', handleClose);
+  const payload = await callModuleAction(moduleName, 'call_service', {
+    service,
+    service_type: serviceType,
+    arguments: args,
+    timeout_ms: timeoutMs,
   });
+  return payload.result || {};
 }
 
 export function cockpitDashboard() {
@@ -350,9 +384,21 @@ export function cockpitDashboard() {
   };
 }
 
+export async function fetchActionCatalogue() {
+  const response = await fetch(resolveActionsListUrl());
+  if (!response.ok) {
+    const message = await safeReadError(response);
+    throw new Error(`Failed to load action catalogue: ${message}`);
+  }
+  return response.json();
+}
+
 if (typeof window !== 'undefined') {
   const cockpitGlobals = window.Cockpit ? { ...window.Cockpit } : {};
   cockpitGlobals.createTopicSocket = createTopicSocket;
+  cockpitGlobals.callModuleAction = callModuleAction;
+  cockpitGlobals.callRosService = callRosService;
+  cockpitGlobals.fetchActionCatalogue = fetchActionCatalogue;
   cockpitGlobals.dashboard = cockpitDashboard;
   cockpitGlobals.bridge = mergeBridgeConfig(cockpitGlobals.bridge);
   window.Cockpit = cockpitGlobals;

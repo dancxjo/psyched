@@ -9,6 +9,10 @@ function generateId() {
     return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function createChatSocket(options) {
+    return createTopicSocket({ module: 'chat', ...options });
+}
+
 class ChatDashboard extends LitElement {
     static properties = {
         status: { state: true },
@@ -106,7 +110,7 @@ class ChatDashboard extends LitElement {
     }
 
     connectConversation() {
-        const socket = createTopicSocket({
+        const socket = createChatSocket({
             topic: '/conversation',
             type: 'psyched_msgs/msg/Message',
             role: 'subscribe',
@@ -126,7 +130,7 @@ class ChatDashboard extends LitElement {
         });
         this.sockets.push(socket);
 
-        this.conversationPublisher = createTopicSocket({
+        this.conversationPublisher = createChatSocket({
             topic: '/conversation',
             type: 'psyched_msgs/msg/Message',
             role: 'publish',
@@ -141,7 +145,7 @@ class ChatDashboard extends LitElement {
     }
 
     connectVoice() {
-        const socket = createTopicSocket({
+        const socket = createChatSocket({
             topic: '/voice',
             type: 'std_msgs/msg/String',
             role: 'subscribe',
@@ -161,7 +165,7 @@ class ChatDashboard extends LitElement {
         });
         this.sockets.push(socket);
 
-        this.voicePublisher = createTopicSocket({
+        this.voicePublisher = createChatSocket({
             topic: '/voice',
             type: 'std_msgs/msg/String',
             role: 'publish',

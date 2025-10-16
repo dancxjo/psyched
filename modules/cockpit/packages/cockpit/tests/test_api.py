@@ -29,6 +29,69 @@ spec.loader.exec_module(module)
 from cockpit.server import CommandResult, CockpitSettings, create_app, MODULE_LOG_LINE_LIMIT
 
 
+@pytest.fixture(autouse=True)
+def stub_ros_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    class FakeMetadata:
+        def __init__(self, stream_id: str) -> None:
+            self.id = stream_id
+            self.module = "stub"
+            self.topic = "/stub"
+            self.message_type = "std_msgs/msg/String"
+            self.role = "subscribe"
+
+        def to_dict(self) -> dict[str, str]:
+            return {
+                "id": self.id,
+                "module": self.module,
+                "topic": self.topic,
+                "message_type": self.message_type,
+                "role": self.role,
+            }
+
+    class DummyStream:
+        def __init__(self, stream_id: str) -> None:
+            self.metadata = FakeMetadata(stream_id)
+
+        async def next_event(self) -> dict[str, object]:
+            await asyncio.sleep(0)
+            return {"event": "status", "data": {"state": "closed"}}
+
+        async def publish(self, payload: dict[str, object]) -> None:
+            await asyncio.sleep(0)
+
+        async def close(self) -> None:
+            await asyncio.sleep(0)
+
+    class DummyRosClient:
+        def __init__(self, *args, **kwargs) -> None:
+            self._streams: dict[str, DummyStream] = {}
+
+        async def create_topic_stream(self, *, module: str, topic: str, message_type: str, role: str = "subscribe", queue_length: int = 10, qos=None, loop=None):
+            stream_id = f"dummy-{len(self._streams) + 1}"
+            stream = DummyStream(stream_id)
+            self._streams[stream_id] = stream
+            return stream
+
+        async def call_service(self, *, service_name: str, service_type: str, arguments=None, timeout: float = 8.0):
+            return {"status": "ok"}
+
+        async def close_stream(self, stream_id: str) -> None:
+            stream = self._streams.pop(stream_id, None)
+            if stream:
+                await stream.close()
+
+        async def shutdown(self) -> None:
+            for stream_id in list(self._streams.keys()):
+                await self.close_stream(stream_id)
+
+        @property
+        def node(self) -> object:
+            return object()
+
+    monkeypatch.setattr("cockpit.server.RosClient", DummyRosClient)
+    yield
+
+
 @pytest.fixture()
 def config_file(tmp_path: Path) -> Iterator[Path]:
     text = """
@@ -248,7 +311,11 @@ async def _exercise_modules_endpoint(config_file: Path, tmp_path: Path) -> None:
     bridge = payload.get("bridge")
     assert bridge == {
         "mode": settings.bridge_mode,
-        "rosbridge_uri": settings.rosbridge_uri,
+        "actions": {
+            "list": "/api/actions",
+            "invoke": "/api/actions/{module}/{action}",
+            "stream": "/api/streams/{stream}",
+        },
         "video_base": settings.video_base,
         "video_port": settings.video_port,
     }

@@ -286,7 +286,7 @@ class EarDashboard extends LitElement {
   _openSocket(key, options, handleMessage) {
     this._closeSocket(key);
     try {
-      const socket = createTopicSocket(options);
+      const socket = createTopicSocket({ module: 'ear', ...options });
       socket.addEventListener('open', () => {
         if (key === 'audio' && this.audioMonitoringEnabled) {
           this.audioStatus = 'Live';
