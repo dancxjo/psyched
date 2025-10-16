@@ -3,6 +3,7 @@ import { createTopicSocket } from '/js/pilot.js';
 import { surfaceStyles } from '/components/pilot-style.js';
 import { sampleRateFromMessage } from '../utils/audio.js';
 import '/components/audio-oscilloscope.js';
+import '/components/audio-player.js';
 
 const AUDIO_TOPIC = '/audio/raw';
 const SPEECH_TOPIC = '/ear/speech_active';
@@ -416,6 +417,16 @@ class EarDashboard extends LitElement {
               Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
             </p>
           </div>
+        </article>
+
+        <article class="surface-card surface-card--wide">
+          <h3 class="surface-card__title">Audio playback</h3>
+          <p class="surface-note">Live audio stream from <code>${AUDIO_TOPIC}</code>.</p>
+          <pilot-audio-player
+            .record=${this.audioRecord ?? {}}
+            ?autoplay=${false}
+            bufferDuration="1.0"
+          ></pilot-audio-player>
         </article>
 
         <article class="surface-card surface-card--wide">
