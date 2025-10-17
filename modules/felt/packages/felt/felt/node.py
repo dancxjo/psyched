@@ -17,6 +17,7 @@ from rosidl_runtime_py.convert import message_to_ordereddict
 from rosidl_runtime_py.utilities import get_message
 
 from psyched_msgs.msg import FeelingIntent, SensationStamped
+from std_msgs.msg import String as StdString
 
 from .memory_pipeline import prepare_memory_batch
 from .models import SensationRecord
@@ -133,6 +134,17 @@ class FeltNode(Node):
 
         self.publisher = self.create_publisher(FeelingIntent, "felt/intent", qos)
 
+        # Debug publisher: emits JSON snapshots for cockpit debugging
+        try:
+            self._debug_publisher = self.create_publisher(StdString, "felt/debug", qos)
+            # Emit debug snapshot every 5 seconds
+            self._debug_timer = self.create_timer(5.0, self._emit_debug_snapshot)
+        except Exception:
+            # If std_msgs isn't available or publisher cannot be created in tests,
+            # silently continue; debug snapshots are optional.
+            self._debug_publisher = None
+            self._debug_timer = None
+
         self._context_topics = self._load_topic_configs(
             "context_topics", self._DEFAULT_CONTEXT_TOPICS, self._handle_context_message, qos
         )
@@ -240,6 +252,39 @@ class FeltNode(Node):
             self.get_logger().warning("psh command failed (%s): %s", proc.returncode, proc.stderr.strip())
             return ""
         return proc.stdout
+
+    def _emit_debug_snapshot(self) -> None:
+        try:
+            if not getattr(self, "_debug_publisher", None):
+                return
+            snapshot = {
+                "status": "running",
+                "heartbeat": datetime.now(timezone.utc).isoformat(),
+                "config": {
+                    "debounce_seconds": self._debounce_seconds,
+                    "window_seconds": self._window_seconds,
+                    "context_topics": list(self._topic_cache.keys()),
+                    "sensation_topics": [r.topic for _, r in self._sensation_records] if self._sensation_records else [],
+                },
+                "recent_sensations": [
+                    {
+                        "topic": r.topic,
+                        "kind": r.kind,
+                        "collection_hint": r.collection_hint,
+                        "json_payload": r.json_payload,
+                        "vector_len": len(r.vector) if getattr(r, "vector", None) is not None else 0,
+                    }
+                    for r in self._recent_sensations()
+                ],
+                # lightweight logs: sample last few records from internal logger if available
+                "logs": [],
+                "errors": [],
+            }
+            payload = StdString()
+            payload.data = json.dumps(snapshot)
+            self._debug_publisher.publish(payload)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            self.get_logger().warning("Failed to emit debug snapshot: %s", exc)
 
     def _fetch_actions(self) -> List[str]:
         # Prefer fetching actions from cockpit HTTP API if available via env var

@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { surfaceStyles } from '/components/cockpit-style.js';
+import { createTopicSocket } from '/js/cockpit.js';
 import { buildFeltIntentPayload } from './felt-dashboard.helpers.js';
 
 function makeId(prefix) {
@@ -21,6 +22,14 @@ class FeltDashboard extends LitElement {
     statusMessage: { state: true },
     statusTone: { state: true },
     intentLog: { state: true },
+    // Debugging / telemetry
+    connected: { state: true },
+    moduleStatus: { state: true },
+    lastHeartbeat: { state: true },
+    inboundMessages: { state: true },
+    moduleConfig: { state: true },
+    moduleLogs: { state: true },
+    moduleErrors: { state: true },
   };
 
   static styles = [
@@ -99,7 +108,66 @@ class FeltDashboard extends LitElement {
     this.statusMessage = 'Compose a feeling intent to steer downstream planners.';
     this.statusTone = 'info';
     this.intentLog = [];
+    // debug defaults
+    this.connected = false;
+    this.moduleStatus = 'unknown';
+    this.lastHeartbeat = null;
+    this.inboundMessages = [];
+    this.moduleConfig = null;
+    this.moduleLogs = [];
+    this.moduleErrors = [];
   }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Listen for module-sent debug/status events (backend should bubble these)
+    window.addEventListener('felt-module-debug', this._onModuleDebug);
+    window.addEventListener('felt-module-log', this._onModuleLog);
+    window.addEventListener('felt-module-status', this._onModuleStatus);
+    window.addEventListener('felt-module-message', this._onModuleMessage);
+    // Also try subscribing to the /felt/debug topic via cockpit topic socket
+    try {
+      this._debugSocket = createTopicSocket({ module: 'felt', topic: '/felt/debug', type: 'std_msgs/msg/String', role: 'subscribe' });
+      this._debugSocket.addEventListener('message', (ev) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          // payload expected: { event: 'message', data: { data: '<json-string>' } }
+          const envelope = JSON.parse(payload.data?.data || payload.data || '{}');
+          // Merge known keys into state
+          if (envelope.config) this.moduleConfig = envelope.config;
+          if (envelope.status) this.moduleStatus = envelope.status;
+          if (envelope.heartbeat) this.lastHeartbeat = envelope.heartbeat;
+          if (Array.isArray(envelope.logs)) this.moduleLogs = [...envelope.logs, ...this.moduleLogs].slice(0, 500);
+          if (Array.isArray(envelope.errors)) this.moduleErrors = [...envelope.errors, ...this.moduleErrors].slice(0, 200);
+          // Record the raw message as inbound
+          this.inboundMessages = [
+            { timestamp: new Date().toLocaleTimeString(), payload: envelope, source: 'ros:/felt/debug' },
+            ...this.inboundMessages,
+          ].slice(0, 200);
+          this.connected = true;
+        } catch (err) {
+          // ignore JSON parse errors
+        }
+      });
+      this._debugSocket.addEventListener('close', () => (this.connected = false));
+    } catch (_error) {
+      // ignore socket initialisation errors; cockpit may not be available in static preview
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('felt-module-debug', this._onModuleDebug);
+    window.removeEventListener('felt-module-log', this._onModuleLog);
+    window.removeEventListener('felt-module-status', this._onModuleStatus);
+    window.removeEventListener('felt-module-message', this._onModuleMessage);
+  }
+
+  // Event handlers bound as fields so they can be removed correctly
+  _onModuleDebug = (ev) => this.handleModuleDebug(ev);
+  _onModuleLog = (ev) => this.handleModuleLog(ev);
+  _onModuleStatus = (ev) => this.handleModuleStatus(ev);
+  _onModuleMessage = (ev) => this.handleModuleMessage(ev);
 
   render() {
     return html`
@@ -164,9 +232,9 @@ class FeltDashboard extends LitElement {
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Intent log</h3>
           ${this.intentLog.length
-            ? html`<ol class="intent-log">
+        ? html`<ol class="intent-log">
                 ${this.intentLog.map(
-                  (entry) => html`<li class="intent-entry">
+          (entry) => html`<li class="intent-entry">
                     <div class="intent-entry__meta">
                       <span>${entry.timestamp}</span>
                       <span>V:${entry.valence.toFixed(2)}</span>
@@ -175,13 +243,69 @@ class FeltDashboard extends LitElement {
                     </div>
                     <p class="intent-entry__context">${entry.context}</p>
                   </li>`
-                )}
+        )}
               </ol>`
-            : html`<p class="surface-empty">No intents broadcast yet.</p>`}
+        : html`<p class="surface-empty">No intents broadcast yet.</p>`}
           <div class="surface-actions">
             <button type="button" class="surface-button surface-button--ghost" @click=${this.simulatePulse}>
               Simulate inbound intent
             </button>
+          </div>
+        </article>
+
+        <article class="surface-card surface-card--wide">
+          <h3 class="surface-card__title">Felt module debug</h3>
+          <p class="surface-status" data-variant="${this.connected ? 'success' : 'warning'}">
+            Module: ${this.moduleStatus} ${this.lastHeartbeat ? html`— heartbeat ${this.lastHeartbeat}` : ''}
+          </p>
+
+          <div style="display:grid;gap:0.5rem;">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <button class="surface-button" @click=${this.requestDebugDump}>Request debug snapshot</button>
+              <button class="surface-button surface-button--ghost" @click=${this.requestConfig}>Refresh config</button>
+              <button class="surface-button surface-button--ghost" @click=${this.clearModuleLogs}>Clear logs</button>
+              <button class="surface-button surface-button--ghost" @click=${this.copyConfigToClipboard}>Copy config</button>
+            </div>
+
+            <details open>
+              <summary>Recent inbound messages (${this.inboundMessages.length})</summary>
+              ${this.inboundMessages.length
+        ? html`<ol class="intent-log">
+                    ${this.inboundMessages.map(
+          (m) => html`<li class="intent-entry">
+                        <div class="intent-entry__meta">
+                          <span>${m.timestamp}</span>
+                          <span>src:${m.source ?? 'unknown'}</span>
+                        </div>
+                        <pre style="white-space:pre-wrap;margin:0;font:inherit;background:transparent;border:0;padding:0;">${this._pretty(m.payload)}</pre>
+                      </li>`
+        )}
+                  </ol>`
+        : html`<p class="surface-empty">No inbound messages seen yet.</p>`}
+            </details>
+
+            <details>
+              <summary>Module configuration</summary>
+              ${this.moduleConfig ? html`<pre style="white-space:pre-wrap;margin:0;font:inherit;">${this._pretty(this.moduleConfig)}</pre>` : html`<p class="surface-empty">No config received.</p>`}
+            </details>
+
+            <details>
+              <summary>Logs (${this.moduleLogs.length})</summary>
+              ${this.moduleLogs.length
+        ? html`<ol class="intent-log">
+                    ${this.moduleLogs.map((l) => html`<li class="intent-entry"><div class="intent-entry__meta"><span>${l.timestamp}</span><span>${l.level}</span></div><pre style="white-space:pre-wrap;margin:0;font:inherit;">${l.message}</pre></li>`)}
+                  </ol>`
+        : html`<p class="surface-empty">No logs yet.</p>`}
+            </details>
+
+            <details>
+              <summary>Errors (${this.moduleErrors.length})</summary>
+              ${this.moduleErrors.length
+        ? html`<ol class="intent-log">
+                    ${this.moduleErrors.map((e) => html`<li class="intent-entry"><div class="intent-entry__meta"><span>${e.timestamp}</span><span>${e.level ?? 'error'}</span></div><pre style="white-space:pre-wrap;margin:0;font:inherit;">${e.message}${e.stack ? '\n' + e.stack : ''}</pre></li>`)}
+                  </ol>`
+        : html`<p class="surface-empty">No errors reported.</p>`}
+            </details>
           </div>
         </article>
       </div>
@@ -242,6 +366,87 @@ class FeltDashboard extends LitElement {
       context: `[${source}] ${intent.context}`,
     };
     this.intentLog = [logEntry, ...this.intentLog].slice(0, 40);
+  }
+
+  /* ---------- Debug helpers & event wiring ---------- */
+
+  // Pretty-print objects for UI
+  _pretty(obj) {
+    try {
+      return typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    } catch (err) {
+      return String(obj);
+    }
+  }
+
+  // Dispatch an event to request a debug snapshot from the backend
+  requestDebugDump() {
+    this.dispatchEvent(new CustomEvent('felt-debug-request', { bubbles: true, composed: true }));
+    this.statusMessage = 'Requested debug snapshot from felt module…';
+    this.statusTone = 'info';
+  }
+
+  requestConfig() {
+    this.dispatchEvent(new CustomEvent('felt-config-request', { bubbles: true, composed: true }));
+    this.statusMessage = 'Requested config from felt module…';
+    this.statusTone = 'info';
+  }
+
+  clearModuleLogs() {
+    this.moduleLogs = [];
+    this.moduleErrors = [];
+    this.inboundMessages = [];
+    this.dispatchEvent(new CustomEvent('felt-clear-logs', { bubbles: true, composed: true }));
+    this.statusMessage = 'Cleared cockpit-side logs.';
+    this.statusTone = 'info';
+  }
+
+  copyConfigToClipboard = async () => {
+    try {
+      const text = this.moduleConfig ? JSON.stringify(this.moduleConfig, null, 2) : '';
+      await navigator.clipboard.writeText(text);
+      this.statusMessage = 'Module config copied to clipboard.';
+      this.statusTone = 'success';
+    } catch (err) {
+      this.statusMessage = 'Failed to copy config.';
+      this.statusTone = 'error';
+    }
+  };
+
+  // Handlers: these expect the backend to post CustomEvents with `detail` containing payloads
+  handleModuleDebug(ev) {
+    const payload = ev?.detail ?? {};
+    // payload may include { config, logs, errors, status }
+    if (payload.config) this.moduleConfig = payload.config;
+    if (Array.isArray(payload.logs)) this.moduleLogs = [...payload.logs, ...this.moduleLogs].slice(0, 200);
+    if (Array.isArray(payload.errors)) this.moduleErrors = [...payload.errors, ...this.moduleErrors].slice(0, 200);
+    if (payload.status) this.moduleStatus = payload.status;
+    if (payload.heartbeat) this.lastHeartbeat = payload.heartbeat;
+    this.connected = true;
+    this.statusMessage = 'Received debug snapshot from felt module.';
+    this.statusTone = 'success';
+  }
+
+  handleModuleLog(ev) {
+    const payload = ev?.detail ?? {};
+    const entry = { timestamp: new Date().toLocaleTimeString(), level: payload.level ?? 'info', message: payload.message ?? String(payload) };
+    this.moduleLogs = [entry, ...this.moduleLogs].slice(0, 500);
+    if ((payload.level || '').toLowerCase() === 'error') {
+      this.moduleErrors = [{ ...entry, stack: payload.stack }, ...this.moduleErrors].slice(0, 200);
+    }
+  }
+
+  handleModuleStatus(ev) {
+    const payload = ev?.detail ?? {};
+    this.moduleStatus = payload.status ?? this.moduleStatus;
+    if (payload.heartbeat) this.lastHeartbeat = payload.heartbeat;
+    this.connected = !!payload.connected || this.connected;
+  }
+
+  handleModuleMessage(ev) {
+    const payload = ev?.detail ?? {};
+    const msg = { timestamp: new Date().toLocaleTimeString(), payload: payload.payload ?? payload, source: payload.source ?? 'module' };
+    this.inboundMessages = [msg, ...this.inboundMessages].slice(0, 200);
   }
 }
 
