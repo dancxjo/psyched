@@ -196,10 +196,34 @@ async function main() {
 
   // Actions command: expose the cockpit action registry via the psh CLI.
   root
-    .command("actions <subcmd:string>")
-    .description("Interact with the cockpit action registry (export)")
+    .command("actions [subcmd:string]")
+    .description("Interact with the cockpit action registry (export|list|help)")
     .option("--json", "Emit machine-readable JSON output")
-    .action(async ({ json }: { json?: boolean }, subcmd: string) => {
+    .action(async ({ json }: { json?: boolean }, subcmd?: string) => {
+      // When no subcmd or help requested, show usage (plain text or JSON)
+      if (!subcmd || subcmd === "help") {
+        const subcmds = ["export", "list", "help"];
+        if (json) {
+          console.log(JSON.stringify({ subcommands: subcmds }));
+          return;
+        }
+        console.log("Usage:   psh actions <subcmd>");
+        console.log(`Version: ${version}`);
+        console.log("");
+        console.log("Description:\n\n  Interact with the cockpit action registry (export|list|help)");
+        console.log("");
+        console.log("Subcommands:");
+        console.log("  export    - Fetch actions from the cockpit API and print them\n               (human or --json output)");
+        console.log("  list      - Alias for export (keeps existing user mental model)");
+        console.log("  help      - Show this help");
+        console.log("");
+        console.log("Options:\n\n  -h, --help  - Show this help.\n  --json      - Emit machine-readable JSON output");
+        return;
+      }
+
+      // Support 'list' as an alias for 'export'
+      if (subcmd === "list") subcmd = "export";
+
       if (subcmd !== "export") {
         console.error("Unsupported actions subcommand: ", subcmd);
         Deno.exit(2);
