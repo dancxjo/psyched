@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/voice/pilot/components/voice-console.js
+/home/pete/psyched/modules/voice/cockpit/components/voice-console.js

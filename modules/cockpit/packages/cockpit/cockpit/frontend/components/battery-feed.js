@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/foot/pilot/components/battery-feed.js
+/home/pete/psyched/modules/foot/cockpit/components/battery-feed.js

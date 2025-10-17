@@ -1,3 +1,5 @@
+// Compatibility re-export: prefer neutral surface-style but keep cockpit-style name
+export { surfaceStyles } from './surface-style.js';
 import { css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 
 /**

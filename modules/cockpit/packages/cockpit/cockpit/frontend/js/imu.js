@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/imu/pilot/js/imu.js
+/home/pete/psyched/modules/imu/cockpit/js/imu.js

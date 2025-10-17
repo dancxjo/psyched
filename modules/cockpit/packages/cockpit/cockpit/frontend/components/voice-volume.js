@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/voice/pilot/components/voice-volume.js
+/home/pete/psyched/modules/voice/cockpit/components/voice-volume.js

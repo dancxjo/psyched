@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/foot/pilot/components/battery-panel.js
+/home/pete/psyched/modules/foot/cockpit/components/battery-panel.js

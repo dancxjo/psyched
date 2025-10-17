@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/felt/pilot/components/felt-dashboard.js
+/home/pete/psyched/modules/felt/cockpit/components/felt-dashboard.js

@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/ear/pilot/components/audio-oscilloscope.js
+/home/pete/psyched/modules/ear/cockpit/components/audio-oscilloscope.js

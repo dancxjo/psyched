@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/diagnostics-panel.js
+/home/pete/psyched/modules/cockpit/cockpit/components/diagnostics-panel.js

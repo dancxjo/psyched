@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/module-log-viewer.js
+/home/pete/psyched/modules/cockpit/cockpit/components/module-log-viewer.js

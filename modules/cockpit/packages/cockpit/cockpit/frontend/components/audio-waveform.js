@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/ear/pilot/components/audio-waveform.js
+/home/pete/psyched/modules/ear/cockpit/components/audio-waveform.js

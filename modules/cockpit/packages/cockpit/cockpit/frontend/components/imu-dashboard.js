@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/imu/pilot/components/imu-dashboard.js
+/home/pete/psyched/modules/imu/cockpit/components/imu-dashboard.js

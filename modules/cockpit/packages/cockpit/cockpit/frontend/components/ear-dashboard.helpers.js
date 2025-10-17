@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/ear/pilot/components/ear-dashboard.helpers.js
+/home/pete/psyched/modules/ear/cockpit/components/ear-dashboard.helpers.js

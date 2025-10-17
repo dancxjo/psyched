@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/pilot-style.js
+/home/pete/psyched/modules/cockpit/cockpit/components/pilot-style.js

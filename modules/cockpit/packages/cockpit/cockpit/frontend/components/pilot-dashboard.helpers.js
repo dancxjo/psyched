@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/pilot-dashboard.helpers.js
+/home/pete/psyched/modules/cockpit/cockpit/components/pilot-dashboard.helpers.js

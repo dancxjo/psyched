@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/ear/pilot/components/transcription-panel.js
+/home/pete/psyched/modules/ear/cockpit/components/transcription-panel.js

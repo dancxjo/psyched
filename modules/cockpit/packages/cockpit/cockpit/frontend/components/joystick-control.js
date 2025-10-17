@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/joystick-control.js
+/home/pete/psyched/modules/cockpit/cockpit/components/joystick-control.js

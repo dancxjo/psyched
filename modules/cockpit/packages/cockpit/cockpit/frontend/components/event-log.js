@@ -1,1 +1,1 @@
-/home/pete/psyched/modules/pilot/pilot/components/event-log.js
+/home/pete/psyched/modules/cockpit/cockpit/components/event-log.js
