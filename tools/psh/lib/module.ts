@@ -228,13 +228,13 @@ export function composeLaunchCommand(
   const moduleName = shellEscape(options.module);
   const logFile = shellEscape(options.logFile);
   const prefixScript = shellEscape(prefixLogs);
-  const stdoutPipe =
-    `${prefixScript} ${moduleName} stdout | tee -a ${logFile}`;
-  const stderrPipe =
-    `${prefixScript} ${moduleName} stderr | tee -a ${logFile}`;
+  const stdoutPipe = `${prefixScript} ${moduleName} stdout | tee -a ${logFile}`;
+  const stderrPipe = `${prefixScript} ${moduleName} stderr | tee -a ${logFile}`;
   const parts = [
     ...options.envCommands,
-    `exec ${shellEscape(options.launchScript)} > >(${stdoutPipe}) 2> >(${stderrPipe})`,
+    `exec ${
+      shellEscape(options.launchScript)
+    } > >(${stdoutPipe}) 2> >(${stderrPipe})`,
   ];
   return parts.join(" && ");
 }
@@ -628,7 +628,9 @@ async function linkCockpitAssets(
     return;
   }
   const overlayRoot = locateCockpitFrontend();
-  console.log(colors.cyan(`[${module}] linking cockpit assets from ${cockpitDir}`));
+  console.log(
+    colors.cyan(`[${module}] linking cockpit assets from ${cockpitDir}`),
+  );
   for (const entry of walkSync(cockpitDir)) {
     if (entry.path === cockpitDir) continue;
     if (entry.isDirectory) continue;

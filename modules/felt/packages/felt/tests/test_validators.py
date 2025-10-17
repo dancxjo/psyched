@@ -78,3 +78,31 @@ def test_parse_feeling_intent_json_rejects_unknown_command(allowed_actions):
 
     with pytest.raises(FeelingIntentValidationError):
         parse_feeling_intent_json(json.dumps(payload), allowed_actions)
+
+
+def test_parse_feeling_intent_accepts_module_qualified_actions(allowed_actions):
+    # allowed_actions contains e.g. 'move_to(target)'; ensure module-qualified
+    # variants like 'nav.move_to("person")' are accepted as the same base.
+    payload = {
+        "attitude_emoji": "🙂",
+        "thought_sentence": "Approach the person.",
+        "spoken_sentence": "",
+        "commands": ["nav.move_to('person_estimated')"],
+        "goals": [],
+    }
+
+    result = parse_feeling_intent_json(json.dumps(payload), allowed_actions)
+    assert result.commands == ["nav.move_to('person_estimated')"]
+
+
+def test_parse_feeling_int_rejects_unbalanced_parentheses(allowed_actions):
+    payload = {
+        "attitude_emoji": "🙂",
+        "thought_sentence": "Do something.",
+        "spoken_sentence": "",
+        "commands": ["say('Hello"],
+        "goals": [],
+    }
+
+    with pytest.raises(FeelingIntentValidationError):
+        parse_feeling_intent_json(json.dumps(payload), allowed_actions)

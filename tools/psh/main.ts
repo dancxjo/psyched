@@ -194,6 +194,87 @@ async function main() {
       await buildWorkspace(targets);
     });
 
+  // Actions command: expose the cockpit action registry via the psh CLI.
+  root
+    .command("actions <subcmd:string>")
+    .description("Interact with the cockpit action registry (export)")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(async ({ json }: { json?: boolean }, subcmd: string) => {
+      if (subcmd !== "export") {
+        console.error("Unsupported actions subcommand: ", subcmd);
+        Deno.exit(2);
+      }
+
+      const cockpit = (Deno.env.get("COCKPIT_URL") || "http://127.0.0.1:8088")
+        .replace(/\/$/, "");
+      try {
+        const resp = await fetch(`${cockpit}/api/actions`, { method: "GET" });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (json) {
+            console.log(JSON.stringify(data));
+            return;
+          }
+
+          // Human friendly listing from cockpit payload
+          const modules = data && typeof data === "object"
+            ? (data as Record<string, unknown>).modules || {}
+            : {};
+          for (const [moduleName, info] of Object.entries(modules)) {
+            console.log(`Module: ${moduleName}`);
+            const infoRecord = info as Record<string, unknown> | undefined;
+            const actions = infoRecord && Array.isArray(infoRecord.actions)
+              ? infoRecord.actions
+              : [];
+            for (const a of actions) {
+              const aRec = a as Record<string, unknown> | undefined;
+              const name = aRec && typeof aRec.name === "string"
+                ? aRec.name
+                : "<unknown>";
+              const desc = aRec && typeof aRec.description === "string"
+                ? aRec.description
+                : "";
+              console.log(`  - ${name}: ${desc}`);
+            }
+          }
+          return;
+        }
+
+        console.warn(
+          `Cockpit not responding (${resp.status}); falling back to local export`,
+        );
+      } catch (err) {
+        console.warn(
+          "Cockpit API unreachable, falling back to local export:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+
+      // Local fallback: produce a minimal list of builtin actions for each module.
+      const moduleNames = listModules();
+      const actionsList: string[] = [];
+      for (const m of moduleNames) {
+        actionsList.push(`${m}.stream_topic`);
+        actionsList.push(`${m}.call_service`);
+      }
+
+      if (json) {
+        console.log(JSON.stringify({ actions: actionsList }));
+        return;
+      }
+
+      // Human friendly listing from local fallback
+      for (const m of moduleNames) {
+        console.log(`Module: ${m}`);
+        console.log(
+          `  - stream_topic: Stream ROS topic traffic for the ${m} module`,
+        );
+        console.log(
+          `  - call_service: Invoke ROS services on behalf of the ${m} module`,
+        );
+      }
+    });
+
   root
     .command("clean")
     .description("Tear down modules/services and reset the workspace")

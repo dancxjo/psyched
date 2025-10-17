@@ -3,7 +3,7 @@ import {
   assertInstanceOf,
   assertRejects,
 } from "$std/testing/asserts.ts";
-import { cleanEnvironment, __test__ } from "./clean.ts";
+import { __test__, cleanEnvironment } from "./clean.ts";
 
 Deno.test("cleanEnvironment tears down modules, services, and workspace", async () => {
   const calls: string[] = [];

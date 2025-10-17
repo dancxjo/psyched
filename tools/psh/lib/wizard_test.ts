@@ -8,7 +8,13 @@ const {
 
 Deno.test("applyModuleToggles keeps env and depends_on while filtering", () => {
   const modules = [
-    { name: "alpha", setup: true, launch: false, env: { A: "1" }, depends_on: ["ros2"] },
+    {
+      name: "alpha",
+      setup: true,
+      launch: false,
+      env: { A: "1" },
+      depends_on: ["ros2"],
+    },
     { name: "beta", setup: true, launch: true },
     { name: "gamma", setup: false, launch: false },
   ];
@@ -20,7 +26,13 @@ Deno.test("applyModuleToggles keeps env and depends_on while filtering", () => {
 
   const result = applyModuleToggles(modules, toggles);
   assertEquals(result, [
-    { name: "alpha", setup: true, launch: false, env: { A: "1" }, depends_on: ["ros2"] },
+    {
+      name: "alpha",
+      setup: true,
+      launch: false,
+      env: { A: "1" },
+      depends_on: ["ros2"],
+    },
     { name: "beta", setup: false, launch: true },
   ]);
 });

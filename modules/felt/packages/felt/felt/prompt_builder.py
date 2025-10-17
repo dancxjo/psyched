@@ -64,8 +64,8 @@ def build_prompt(context: FeltPromptContext) -> str:
         f"- window_seconds: {context.window_seconds:.2f}"
     )
     lines.append(
-        "cockpit_actions (from `psh actions export --json`): "
-        + json.dumps(sorted(set(context.cockpit_actions)), ensure_ascii=False)
+        "cockpit_actions (from cockpit /api/actions): "
+            + json.dumps(sorted(set(context.cockpit_actions)), ensure_ascii=False)
     )
     lines.append("")
     lines.append("Schema to emit")

@@ -22,6 +22,7 @@ from .memory_pipeline import prepare_memory_batch
 from .models import SensationRecord
 from .prompt_builder import FeltPromptContext, build_prompt
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
+import re
 
 
 _LOGGER = logging.getLogger("psyched.felt.node")
@@ -241,14 +242,45 @@ class FeltNode(Node):
         return proc.stdout
 
     def _fetch_actions(self) -> List[str]:
+        # Prefer fetching actions from cockpit HTTP API if available via env var
+        cockpit_url = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
         try:
-            result = self._run_psh(["psh", "actions", "export", "--json"])
-            data = json.loads(result) if result else {}
-            actions = data.get("actions") if isinstance(data, dict) else data
-            if isinstance(actions, list):
-                return [str(action) for action in actions if isinstance(action, str)]
-        except Exception as exc:  # pragma: no cover - external command failure
-            self.get_logger().warning("Failed to fetch cockpit actions: %s", exc)
+            # Try HTTP first
+            req = request.Request(cockpit_url + "/api/actions")
+            with request.urlopen(req, timeout=2.0) as resp:
+                body = resp.read().decode("utf-8")
+            data = json.loads(body) if body else {}
+            modules = data.get("modules") if isinstance(data, dict) else {}
+            actions: List[str] = []
+            # Also capture schemas mapping for potential validation
+            self._action_schemas: Dict[str, Dict[str, Any]] = {}
+            if isinstance(modules, dict):
+                for module_name, info in modules.items():
+                    for act in info.get("actions", []) or []:
+                        if not isinstance(act, dict):
+                            continue
+                        name = act.get("name")
+                        if isinstance(name, str):
+                            actions.append(f"{module_name}.{name}")
+                            # Store the action's parameters schema if present
+                            params = act.get("parameters")
+                            if isinstance(params, dict):
+                                self._action_schemas[f"{module_name}.{name}"] = params
+            # Fall back to psh export if cockpit didn't return a useful payload
+            if not actions:
+                raise ValueError("no actions from cockpit API")
+            return actions
+        except Exception:
+            # Fall back to legacy `psh` export when cockpit is not reachable
+            try:
+                result = self._run_psh(["psh", "actions", "export", "--json"])
+                data = json.loads(result) if result else {}
+                actions_raw = data.get("actions") if isinstance(data, dict) else data
+                if isinstance(actions_raw, list):
+                    # psh fallback returns simple strings; no schemas available
+                    return [str(action) for action in actions_raw if isinstance(action, str)]
+            except Exception as exc:  # pragma: no cover - external command failure
+                self.get_logger().warning("Failed to fetch cockpit actions: %s", exc)
         return []
 
     def _fetch_status(self) -> Dict[str, Any]:
@@ -259,6 +291,114 @@ class FeltNode(Node):
         except Exception as exc:  # pragma: no cover - external command failure
             self.get_logger().warning("Failed to fetch cockpit status: %s", exc)
             return {}
+
+        def _parse_command(self, command: str) -> tuple[str, str, dict] | None:
+            """Parse a command string into (module, action, arguments).
+
+            Accepts forms like:
+            - "action"
+            - "module.action"
+            - "action(arg)" or "module.action(arg)"
+
+            Returns None when the command cannot be sensibly parsed.
+            """
+            s = command.strip()
+            if not s:
+                return None
+
+            # Extract any parentheses content as a single argument payload if present.
+            m = re.match(r"^([A-Za-z0-9_.-]+)\s*(?:\((.*)\))?$", s)
+            if not m:
+                return None
+            fullname = m.group(1)
+            args_raw = m.group(2)
+
+            if "." in fullname:
+                module, action = fullname.rsplit(".", 1)
+            else:
+                # If no module is specified, default to 'felt' as origin for intent
+                module = "felt"
+                action = fullname
+
+            # Try to parse args_raw as JSON, otherwise send as a single positional arg
+            args: dict = {}
+            if args_raw is not None and args_raw.strip():
+                # Attempt JSON decode first
+                try:
+                    import json as _json
+
+                    parsed = _json.loads(args_raw)
+                    if isinstance(parsed, dict):
+                        args = parsed
+                    else:
+                        # Wrap non-dict into {'_args': parsed}
+                        args = {"_args": parsed}
+                except Exception:
+                    # Fallback: send the raw string as a single field
+                    args = {"_raw": args_raw}
+
+            return (module, action, args)
+
+        def _invoke_commands(self, commands: list[str], available_actions: list[str]) -> None:
+            """Best-effort invocation of each command via the cockpit action API.
+
+            For each command string, parse into module/action/args and POST to
+            /api/actions/{module}/{action} with JSON payload {arguments: args}.
+            """
+            if not commands:
+                return
+
+            cockpit = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
+            for cmd in commands:
+                parsed = self._parse_command(cmd)
+                if not parsed:
+                    self.get_logger().warning("Skipping unrecognised command: %s", cmd)
+                    continue
+                module, action, args = parsed
+
+                # Basic check: ensure module.action exists in available_actions
+                fq = f"{module}.{action}"
+                if fq not in available_actions and action not in [a.split(".", 1)[-1] for a in available_actions]:
+                    self.get_logger().warning("Command not available in action registry: %s", fq)
+                    continue
+
+                payload = {"arguments": args}
+                body = None
+                try:
+                    import json as _json
+
+                    # Validate arguments against action schema if available
+                    schema = getattr(self, "_action_schemas", {}).get(fq)
+                    if schema is not None:
+                        try:
+                            # jsonschema is optional; if installed we validate
+                            from jsonschema import validate
+                            from jsonschema.exceptions import ValidationError as _ValidationError
+
+                            try:
+                                validate(instance=args, schema=schema)
+                            except _ValidationError as verr:
+                                self.get_logger().warning("Action %s.%s failed validation: %s", module, action, verr)
+                                continue
+                        except Exception:
+                            # If jsonschema isn't available or something else goes wrong,
+                            # we log and continue without blocking invocation.
+                            self.get_logger().debug("jsonschema not available or validation failed to run; skipping strict validation for %s.%s", module, action)
+
+                    body = _json.dumps(payload).encode("utf-8")
+                    req = request.Request(
+                        cockpit + f"/api/actions/{module}/{action}",
+                        data=body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with request.urlopen(req, timeout=3.0) as resp:
+                        resp_body = resp.read().decode("utf-8")
+                        self.get_logger().info("Invoked %s.%s => %s", module, action, resp_body)
+                except error.HTTPError as exc:
+                    self.get_logger().warning("Action invocation failed (%s.%s): %s", module, action, exc)
+                except Exception as exc:  # pragma: no cover - network errors
+                    self.get_logger().warning("Failed to invoke action %s.%s: %s", module, action, exc)
 
     def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[FeltPromptContext]:
         if not self._topic_cache and not self._sensation_records:
@@ -312,6 +452,15 @@ class FeltNode(Node):
 
         self.publisher.publish(msg)
         self._dirty = False
+
+        # Attempt to invoke any commands proposed by the LLM. Invocation is
+        # best-effort: we prefer the cockpit HTTP API (COCKPIT_URL) and will
+        # log failures rather than preventing the feeling intent from being
+        # published.
+        try:
+            self._invoke_commands(feeling_data.commands, actions)
+        except Exception as exc:  # pragma: no cover - invocation failures should not crash
+            self.get_logger().warning("Failed to invoke commands: %s", exc)
 
         timestamp = _ros_time_to_datetime(msg.stamp)
         feeling_id = f"felt-{uuid4()}"

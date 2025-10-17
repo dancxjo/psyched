@@ -11,7 +11,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/felt.launch.py']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'jsonschema>=4.0'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',

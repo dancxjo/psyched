@@ -50,12 +50,25 @@ def _normalise_command(command: str) -> str:
 
 
 def _allowed_command_bases(actions: Iterable[str]) -> set[str]:
+    """Return the set of allowed command bases.
+
+    Actions may be provided as simple names ("say") or module-qualified
+    entries ("voice.say"). We normalise by returning the base portion so the
+    validator can accept either form in the LLM output.
+    """
     bases = set()
     for action in actions:
+        if not isinstance(action, str):
+            continue
         action = action.strip()
         if not action:
             continue
-        bases.add(_normalise_command(action))
+        # If module-qualified like 'module.action', take last segment
+        if "." in action:
+            candidate = action.rsplit(".", 1)[-1]
+        else:
+            candidate = action
+        bases.add(_normalise_command(candidate))
     return bases
 
 
@@ -84,13 +97,33 @@ def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> 
     if not isinstance(commands_raw, list) or not all(isinstance(c, str) for c in commands_raw):
         raise FeelingIntentValidationError("commands must be a list of strings")
 
+    # Validate commands against the allowed action bases. Commands may be in
+    # the form 'name', "name(arg)", or qualified 'module.name' / 'module.name(arg)'.
     allowed_bases = _allowed_command_bases(allowed_actions)
     validated_commands: list[str] = []
     for command in commands_raw:
-        base = _normalise_command(command)
+        cmd = command.strip()
+        # If module-qualified, extract the final name portion
+        if "." in cmd and not cmd.startswith("{"):
+            # split module qualification from any params: e.g. 'voice.say("hi")' -> 'voice.say("hi")'
+            # isolate the base name after last dot
+            # but preserve arguments for storage
+            after = cmd.rsplit(".", 1)[-1]
+            base = _normalise_command(after)
+        else:
+            base = _normalise_command(cmd)
+
         if base not in allowed_bases:
             raise FeelingIntentValidationError(f"Unknown command: {command}")
-        validated_commands.append(command.strip())
+
+        # Basic sanitisation: ensure parentheses are balanced if present
+        if "(" in cmd:
+            open_count = cmd.count("(")
+            close_count = cmd.count(")")
+            if open_count != close_count:
+                raise FeelingIntentValidationError(f"Malformed command arguments: {command}")
+
+        validated_commands.append(cmd)
 
     goals_raw = payload.get("goals", [])
     if not isinstance(goals_raw, list) or not all(isinstance(goal, str) for goal in goals_raw):

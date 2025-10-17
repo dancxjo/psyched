@@ -13,10 +13,11 @@ Deno.test("guard blocks when reboot has not happened", () => {
   const sentinel = `${dir}/reboot-required`;
   Deno.writeTextFileSync(sentinel, "123\n");
   assertThrows(
-    () => ensureRebootCompleted({
-      sentinelPath: sentinel,
-      readBootTime: () => 123,
-    }),
+    () =>
+      ensureRebootCompleted({
+        sentinelPath: sentinel,
+        readBootTime: () => 123,
+      }),
     RebootRequiredError,
     "reboot",
   );
