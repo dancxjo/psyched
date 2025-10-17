@@ -82,7 +82,12 @@ class TopicStream:
         self._loop = loop
         self._message_cls = message_cls
         self._qos_profile = qos_profile
-        self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    # Use a bounded queue to provide best-effort delivery to the frontend.
+    # When the queue is full we drop the oldest non-status event so slow
+    # websocket clients don't cause unbounded memory growth or high
+    # latency. The queue size is driven by the queue_length requested by
+    # the caller (see RosClient.create_topic_stream).
+    self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=qos_profile.depth if hasattr(qos_profile, 'depth') else 10)
         self._closed = False
         self._subscription = None
         self._publisher = None
@@ -173,10 +178,42 @@ class TopicStream:
     def _queue_event(self, event: str, data: Mapping[str, Any]) -> None:
         if self._closed:
             return
+        payload = {"event": event, "data": dict(data)}
         try:
-            self._queue.put_nowait({"event": event, "data": dict(data)})
+            self._queue.put_nowait(payload)
+            return
         except asyncio.QueueFull:
-            _LOGGER.warning("Dropping event for stream %s due to full queue", self.id)
+            # Preserve status events (ready/closed) by dropping older
+            # application messages preferentially. We attempt to remove one
+            # existing non-status message from the queue to make room. If the
+            # queue only contains status messages, drop the incoming payload.
+            try:
+                # Drain one item to make room. Use get_nowait which returns
+                # the oldest queued item.
+                oldest = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                _LOGGER.warning("Queue full for stream %s and no removable message found; dropping incoming event", self.id)
+                return
+            else:
+                # If the oldest is a status event, we put it back and decide
+                # to drop the incoming payload (prefer status retention).
+                if oldest.get("event") == "status":
+                    try:
+                        # Put status item back at the front by making a new
+                        # queue with the same items. Simpler approach: put it
+                        # back at the end and drop incoming payload.
+                        self._queue.put_nowait(oldest)
+                    except asyncio.QueueFull:
+                        # If we cannot requeue, log and drop incoming.
+                        _LOGGER.warning("Failed to requeue status event for stream %s; dropping incoming", self.id)
+                    return
+                # We successfully removed a non-status oldest message; try to
+                # enqueue the incoming payload now. If this still fails, log
+                # and drop.
+                try:
+                    self._queue.put_nowait(payload)
+                except asyncio.QueueFull:
+                    _LOGGER.warning("Failed to enqueue event for stream %s after dropping oldest; dropping incoming", self.id)
 
 
 class RosClient:
