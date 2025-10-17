@@ -48,24 +48,83 @@ class OllamaLLMClient(LLMClient):
         self.model = model
         self.host = (host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434").rstrip("/")
         self.timeout = timeout
+        self._last_llm_response: Optional[str] = None
 
     def generate(self, prompt: str) -> str:
-        payload = json.dumps({"model": self.model, "prompt": prompt, "stream": False}).encode("utf-8")
+        """Call Ollama and stream output to stdout while assembling the full response.
+
+        This attempts to request a streaming response from Ollama (stream: true).
+        For each chunk received, we write to stdout and flush so the caller can
+        observe the raw model stream. We also assemble the chunks and return
+        the final response string.
+        """
+        payload = json.dumps({"model": self.model, "prompt": prompt, "stream": True}).encode("utf-8")
         req = request.Request(
             self.host + "/api/generate",
             data=payload,
             headers={"Content-Type": "application/json"},
         )
+        assembled: list[str] = []
         try:
             with request.urlopen(req, timeout=self.timeout) as resp:
-                body = resp.read().decode("utf-8")
+                # Try to stream incrementally. Some servers yield chunked JSON lines.
+                # We'll read in small blocks and attempt to decode partial JSON payloads.
+                try:
+                    # If response supports iteration by lines
+                    for raw in resp:
+                        try:
+                            chunk = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+                        except Exception:
+                            continue
+                        chunk = chunk.strip()
+                        if not chunk:
+                            continue
+                        # Print raw chunk for operator visibility
+                        try:
+                            print(chunk, end="", flush=True)
+                        except Exception:
+                            pass
+                        # Try to parse as JSON and extract 'response' or 'content'
+                        try:
+                            data = json.loads(chunk)
+                            if isinstance(data, dict) and "response" in data:
+                                text = str(data.get("response") or "")
+                                assembled.append(text)
+                                continue
+                            if isinstance(data, dict) and "content" in data:
+                                # Some streaming infra uses 'content' chunks
+                                assembled.append(str(data.get("content") or ""))
+                                continue
+                        except json.JSONDecodeError:
+                            # Not JSON: append raw chunk
+                            assembled.append(chunk)
+                            continue
+                except TypeError:
+                    # resp is not iterable; fall back to reading whole body
+                    body = resp.read().decode("utf-8")
+                    try:
+                        data = json.loads(body)
+                        if isinstance(data, dict) and "response" in data:
+                            assembled.append(str(data.get("response") or ""))
+                        else:
+                            assembled.append(body)
+                    except json.JSONDecodeError:
+                        assembled.append(body)
         except Exception as exc:  # pragma: no cover - network failure path
             raise RuntimeError(f"Failed to reach Ollama at {self.host}: {exc}") from exc
 
-        data = json.loads(body)
-        if isinstance(data, dict) and "response" in data:
-            return str(data["response"])
-        raise RuntimeError(f"Unexpected Ollama response: {data!r}")
+        final = "".join(assembled).strip()
+        # store a small recent copy for debug snapshots
+        try:
+            self._last_llm_response = final[:4096]
+        except Exception:
+            self._last_llm_response = final
+        # ensure newline after streamed raw output so terminal is tidy
+        try:
+            print(flush=True)
+        except Exception:
+            pass
+        return final
 
 
 class RememberdClient:
@@ -279,6 +338,7 @@ class FeltNode(Node):
                 # lightweight logs: sample last few records from internal logger if available
                 "logs": [],
                 "errors": [],
+                "last_llm": self._last_llm_response if getattr(self, "_last_llm_response", None) else None,
             }
             payload = StdString()
             payload.data = json.dumps(snapshot)

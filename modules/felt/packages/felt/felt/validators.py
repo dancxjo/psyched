@@ -39,7 +39,8 @@ def _is_valid_emoji_string(text: str) -> bool:
             return False
         if cat not in {"Mn", "Me", "Cf"}:
             base_count += 1
-    return 1 <= base_count <= 3
+    # Accept 1-2 base emoji glyphs for attitude/mood
+    return 1 <= base_count <= 2
 
 
 def _normalise_command(command: str) -> str:
