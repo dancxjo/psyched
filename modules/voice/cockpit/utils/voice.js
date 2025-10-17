@@ -100,11 +100,11 @@ export default {
 };
 
 // Optionally register this helper in the runtime registry so other components
-// can access it dynamically via `/utils/registry.js`.
+// can access it dynamically via the shared `/utils/registry.js` entry point.
 try {
   // Use a dynamic import to avoid circular static import problems in older
   // bundlers. If the registry is not present, this will fail harmlessly.
-  import('./registry.js').then((r) => {
+  import('/utils/registry.js').then((r) => {
     try {
       r.exportsify('voice', exports.default || module?.exports);
     } catch (_e) {

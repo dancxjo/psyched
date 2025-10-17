@@ -149,15 +149,15 @@ export default {
 };
 
 // Optionally register this helper in the runtime registry so other components
-// can access it dynamically via `/utils/registry.js`.
+// can access it dynamically via the shared `/utils/registry.js` entry point.
 try {
-  import('./registry.js').then((r) => {
+  import('/utils/registry.js').then((r) => {
     try {
       r.exportsify('audio', exports.default || module?.exports);
     } catch (_e) {
       // swallow
     }
-  }).catch(() => {});
+  }).catch(() => { });
 } catch (_) {
   // ignore; registration is optional
 }

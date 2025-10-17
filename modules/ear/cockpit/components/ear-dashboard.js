@@ -166,6 +166,8 @@ class EarDashboard extends LitElement {
     this.silenceDetected = true;
     this.transcripts = [];
     this._sockets = new Map();
+    this._latestAudio = null;
+    this._audioRenderScheduled = false;
   }
 
   connectedCallback() {
@@ -215,15 +217,35 @@ class EarDashboard extends LitElement {
         role: 'subscribe',
       },
       (message) => {
-        this.audioStatus = 'Live';
-        const sampleRate = sampleRateFromMessage(message, this.audioSampleRate || 16000);
-        this.audioSampleRate = sampleRate;
-        this.lastFrameByteLength = byteLengthFromMessage(message);
-        this.lastAudioTimestamp = new Date().toLocaleTimeString();
-        this.audioRecord = {
-          last: message,
-          topic: { name: AUDIO_TOPIC },
-        };
+        // Coalesce high-frequency audio frames and update the UI at the
+        // browser's animation frame rate to avoid excessive re-renders.
+        this._latestAudio = message;
+        if (!this._audioRenderScheduled) {
+          this._audioRenderScheduled = true;
+          // Use requestAnimationFrame to align updates with the display
+          // refresh; this reduces latency compared to arbitrary timers and
+          // allows the oscilloscope element to render smoothly.
+          window.requestAnimationFrame(() => {
+            const msg = this._latestAudio;
+            this._latestAudio = null;
+            this._audioRenderScheduled = false;
+            if (!msg) {
+              return;
+            }
+            this.audioStatus = 'Live';
+            const sampleRate = sampleRateFromMessage(msg, this.audioSampleRate || 16000);
+            this.audioSampleRate = sampleRate;
+            this.lastFrameByteLength = byteLengthFromMessage(msg);
+            this.lastAudioTimestamp = new Date().toLocaleTimeString();
+            // Keep the record small — only include the last frame and topic
+            // metadata. The oscilloscope component should read this property
+            // and render efficiently.
+            this.audioRecord = {
+              last: msg,
+              topic: { name: AUDIO_TOPIC },
+            };
+          });
+        }
       },
     );
   }
