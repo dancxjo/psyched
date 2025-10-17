@@ -32,6 +32,27 @@ mkdir -p "${SRC_DIR}" "${BUILD_DIR}" "${INSTALL_DIR}" "${LOG_DIR}"
 printf '*\n!.gitignore\n' > "${WORKSPACE_DIR}/.gitignore"
 printf '*\n!.gitignore\n' > "${SRC_DIR}/.gitignore"
 
+# If a top-level packages/ directory exists, create symlinks to its entries in the
+# workspace src directory so packages are available to colcon without copying.
+PACKAGES_DIR="${REPO_ROOT}/packages"
+if [[ -d "${PACKAGES_DIR}" ]]; then
+  echo "==> Linking packages from ${PACKAGES_DIR} into ${SRC_DIR}"
+  for pkg in "${PACKAGES_DIR}"/*; do
+    # skip non-directories
+    if [[ ! -d "${pkg}" ]]; then
+      continue
+    fi
+    name=$(basename "${pkg}")
+    dest="${SRC_DIR}/${name}"
+    if [[ -e "${dest}" ]]; then
+      echo "    Skipping ${name}; destination already exists at ${dest}"
+      continue
+    fi
+    echo "    Creating symlink ${dest} -> ${pkg}"
+    ln -s "${pkg}" "${dest}"
+  done
+fi
+
 # Remove deprecated top-level directories if they still exist.
 for legacy in "${REPO_ROOT}/src" "${REPO_ROOT}/build" "${REPO_ROOT}/install"; do
   if [[ -e "${legacy}" ]]; then
