@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/voice/pilot/js/voice.js
