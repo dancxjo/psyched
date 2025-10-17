@@ -402,12 +402,13 @@ class EarDashboard extends LitElement {
             ${this.renderSensorIndicator('Audio energy', !this.silenceDetected)}
           </ul>
         </article>
-
-        <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">PCM oscilloscope</h3>
-          <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
-          <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
-            <cockpit-audio-oscilloscope
+        </div>
+        <div class="surface-grid surface-grid--wide">
+          <article class="surface-card surface-card--wide">
+            <h3 class="surface-card__title">PCM oscilloscope</h3>
+            <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
+            <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
+              <cockpit-audio-oscilloscope
               width="320"
               height="200"
               .record=${this.audioRecord ?? {}}
@@ -417,7 +418,8 @@ class EarDashboard extends LitElement {
             </p>
           </div>
         </article>
-
+      </div>
+        <div class="surface-grid surface-grid--wide">
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Transcript log</h3>
           ${this.transcripts.length === 0
