@@ -1,0 +1,1 @@
+/home/pete/psyched/modules/imu/pilot/components/imu-panel.js
