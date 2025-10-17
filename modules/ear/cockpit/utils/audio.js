@@ -147,3 +147,17 @@ export default {
   pcm16ToFloat32,
   sampleRateFromMessage,
 };
+
+// Optionally register this helper in the runtime registry so other components
+// can access it dynamically via `/utils/registry.js`.
+try {
+  import('./registry.js').then((r) => {
+    try {
+      r.exportsify('audio', exports.default || module?.exports);
+    } catch (_e) {
+      // swallow
+    }
+  }).catch(() => {});
+} catch (_) {
+  // ignore; registration is optional
+}

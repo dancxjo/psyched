@@ -34,12 +34,12 @@ function normaliseAction(action) {
 export function updateVoiceAction(action, descriptor) {
   const key = normaliseAction(action);
   if (!key) {
-    return () => {};
+    return () => { };
   }
   if (descriptor == null) {
     actions.delete(key);
     notify();
-    return () => {};
+    return () => { };
   }
   actions.set(key, descriptor);
   notify();
@@ -64,7 +64,7 @@ export function publishVoiceAction(action, payload = {}) {
 
 export function subscribeVoiceControls(listener) {
   if (typeof listener !== 'function') {
-    return () => {};
+    return () => { };
   }
   subscribers.add(listener);
   try {
@@ -98,3 +98,19 @@ export default {
   updateVoiceVolume,
   setVoiceVolume,
 };
+
+// Optionally register this helper in the runtime registry so other components
+// can access it dynamically via `/utils/registry.js`.
+try {
+  // Use a dynamic import to avoid circular static import problems in older
+  // bundlers. If the registry is not present, this will fail harmlessly.
+  import('./registry.js').then((r) => {
+    try {
+      r.exportsify('voice', exports.default || module?.exports);
+    } catch (_e) {
+      // swallow
+    }
+  }).catch(() => { });
+} catch (_) {
+  // ignore; registration is optional
+}

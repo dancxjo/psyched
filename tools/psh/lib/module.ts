@@ -201,7 +201,7 @@ export function formatExitSummary(
   const summary = status.success
     ? `[${module}] exited cleanly (code ${status.code ?? 0})`
     : `[${module}] exited with code ${status.code ?? "unknown"}` +
-      (status.signal ? ` (signal ${status.signal})` : "");
+    (status.signal ? ` (signal ${status.signal})` : "");
   return status.success ? colors.yellow(summary) : colors.red(summary);
 }
 
@@ -232,8 +232,7 @@ export function composeLaunchCommand(
   const stderrPipe = `${prefixScript} ${moduleName} stderr | tee -a ${logFile}`;
   const parts = [
     ...options.envCommands,
-    `exec ${
-      shellEscape(options.launchScript)
+    `exec ${shellEscape(options.launchScript)
     } > >(${stdoutPipe}) 2> >(${stderrPipe})`,
   ];
   return parts.join(" && ");
@@ -616,10 +615,10 @@ function unlink(path: string): void {
   }
 }
 
-async function linkCockpitAssets(
+function linkCockpitAssets(
   module: string,
   moduleDir: string,
-): Promise<void> {
+): void {
   const cockpitDir = join(moduleDir, "cockpit");
   if (!pathExists(cockpitDir)) {
     console.log(
@@ -903,10 +902,10 @@ function unlinkModulePackages(
   );
 }
 
-async function unlinkCockpitAssets(
+function unlinkCockpitAssets(
   module: string,
   moduleDir: string,
-): Promise<void> {
+): void {
   const cockpitDir = join(moduleDir, "cockpit");
   if (!pathExists(cockpitDir)) return;
   const overlayRoot = locateCockpitFrontend();
@@ -1053,8 +1052,19 @@ export async function bringModuleDown(module: string): Promise<void> {
 export function listModules(): string[] {
   const names: string[] = [];
   for (const entry of Deno.readDirSync(modulesRoot())) {
-    if (entry.isDirectory) {
+    if (!entry.isDirectory) continue;
+    try {
+      const manifestPath = join(modulesRoot(), entry.name, "module.toml");
+      // Only include directories that contain a module.toml manifest.
+      if (!pathExists(manifestPath)) {
+        // Skip incidental directories (e.g., work-in-progress modules).
+        continue;
+      }
       names.push(entry.name);
+    } catch (_err) {
+      // If anything unexpected happens, skip this entry to keep the
+      // module listing robust during clean/teardown operations.
+      continue;
     }
   }
   names.sort();
