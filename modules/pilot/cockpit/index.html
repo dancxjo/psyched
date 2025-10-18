@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Felt Integrator Console</title>
+    <title>Pilot Integrator Console</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module">
       import '/js/cockpit.js';
-      import '/modules/felt/components/felt-dashboard.js';
+      import '/modules/pilot/components/pilot-dashboard.js';
 
       window.addEventListener('DOMContentLoaded', () => {
         const mount = document.querySelector('#module-root');
-        if (mount && !mount.querySelector('felt-dashboard')) {
-          mount.appendChild(document.createElement('felt-dashboard'));
+        if (mount && !mount.querySelector('pilot-dashboard')) {
+          mount.appendChild(document.createElement('pilot-dashboard'));
         }
       });
     </script>
@@ -20,7 +20,7 @@
   <body class="cockpit-solo">
     <main class="cockpit-solo__main">
       <header class="cockpit-solo__header">
-        <h1>Felt Integrator</h1>
+        <h1>Pilot Integrator</h1>
         <p>Shape synthetic feelings and review the blended intent stream driving autonomy.</p>
       </header>
       <section id="module-root" class="cockpit-solo__surface"></section>

@@ -82,12 +82,13 @@ class TopicStream:
         self._loop = loop
         self._message_cls = message_cls
         self._qos_profile = qos_profile
-    # Use a bounded queue to provide best-effort delivery to the frontend.
-    # When the queue is full we drop the oldest non-status event so slow
-    # websocket clients don't cause unbounded memory growth or high
-    # latency. The queue size is driven by the queue_length requested by
-    # the caller (see RosClient.create_topic_stream).
-    self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=qos_profile.depth if hasattr(qos_profile, 'depth') else 10)
+        # Use a bounded queue to provide best-effort delivery to the frontend.
+        # When the queue is full we drop the oldest non-status event so slow
+        # websocket clients don't cause unbounded memory growth or high
+        # latency. The queue size is driven by the queue_length requested by
+        # the caller (see RosClient.create_topic_stream).
+        max_queue = getattr(qos_profile, "depth", 10)
+        self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=max_queue)
         self._closed = False
         self._subscription = None
         self._publisher = None

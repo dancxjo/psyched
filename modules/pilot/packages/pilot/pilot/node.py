@@ -6,7 +6,7 @@ import os
 import subprocess
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 from urllib import request, error
 from uuid import uuid4
 
@@ -21,15 +21,15 @@ from std_msgs.msg import String as StdString
 
 from .memory_pipeline import prepare_memory_batch
 from .models import SensationRecord
-from .prompt_builder import FeltPromptContext, build_prompt
+from .prompt_builder import PilotPromptContext, build_prompt
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
 import re
 
 
-_LOGGER = logging.getLogger("psyched.felt.node")
+_LOGGER = logging.getLogger("psyched.pilot.node")
 if not _LOGGER.handlers:
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [felt.node] %(message)s"))
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [pilot.node] %(message)s"))
     _LOGGER.addHandler(handler)
 _LOGGER.setLevel(logging.INFO)
 
@@ -161,7 +161,7 @@ def _ros_time_to_datetime(time_msg) -> datetime:
     return datetime.fromtimestamp(float(sec) + float(nanosec) / 1e9, tz=timezone.utc)
 
 
-class FeltNode(Node):
+class PilotNode(Node):
     """ROS node orchestrating the feeling + will integration pipeline."""
 
     _DEFAULT_CONTEXT_TOPICS = [
@@ -174,7 +174,7 @@ class FeltNode(Node):
     ]
 
     def __init__(self, *, llm_client: Optional[LLMClient] = None, rememberd: Optional[RememberdClient] = None) -> None:
-        super().__init__("felt")
+        super().__init__("pilot")
 
         self._llm_client = llm_client or OllamaLLMClient(model=os.environ.get("FELT_MODEL", "gpt-oss"))
         self._rememberd = rememberd or RememberdClient()
@@ -191,11 +191,11 @@ class FeltNode(Node):
         qos.history = QoSHistoryPolicy.KEEP_LAST
         qos.reliability = ReliabilityPolicy.RELIABLE
 
-        self.publisher = self.create_publisher(FeelingIntent, "felt/intent", qos)
+        self.publisher = self.create_publisher(FeelingIntent, "pilot/intent", qos)
 
         # Debug publisher: emits JSON snapshots for cockpit debugging
         try:
-            self._debug_publisher = self.create_publisher(StdString, "felt/debug", qos)
+            self._debug_publisher = self.create_publisher(StdString, "pilot/debug", qos)
             # Emit debug snapshot every 5 seconds
             self._debug_timer = self.create_timer(5.0, self._emit_debug_snapshot)
         except Exception:
@@ -380,9 +380,30 @@ class FeltNode(Node):
             try:
                 result = self._run_psh(["psh", "actions", "export", "--json"])
                 data = json.loads(result) if result else {}
+                if isinstance(data, dict):
+                    modules_payload = data.get("modules")
+                    if isinstance(modules_payload, Mapping):
+                        actions: List[str] = []
+                        self._action_schemas = {}
+                        for module_name, info in modules_payload.items():
+                            if not isinstance(info, Mapping):
+                                continue
+                            module_actions = info.get("actions")
+                            if not isinstance(module_actions, list):
+                                continue
+                            for action_entry in module_actions:
+                                if not isinstance(action_entry, Mapping):
+                                    continue
+                                action_name = action_entry.get("name")
+                                if isinstance(action_name, str):
+                                    actions.append(f"{module_name}.{action_name}")
+                                    params = action_entry.get("parameters")
+                                    if isinstance(params, Mapping):
+                                        self._action_schemas[f"{module_name}.{action_name}"] = dict(params)
+                        if actions:
+                            return actions
                 actions_raw = data.get("actions") if isinstance(data, dict) else data
                 if isinstance(actions_raw, list):
-                    # psh fallback returns simple strings; no schemas available
                     return [str(action) for action in actions_raw if isinstance(action, str)]
             except Exception as exc:  # pragma: no cover - external command failure
                 self.get_logger().warning("Failed to fetch cockpit actions: %s", exc)
@@ -421,8 +442,8 @@ class FeltNode(Node):
             if "." in fullname:
                 module, action = fullname.rsplit(".", 1)
             else:
-                # If no module is specified, default to 'felt' as origin for intent
-                module = "felt"
+                # If no module is specified, default to 'pilot' as origin for intent
+                module = "pilot"
                 action = fullname
 
             # Try to parse args_raw as JSON, otherwise send as a single positional arg
@@ -505,14 +526,14 @@ class FeltNode(Node):
                 except Exception as exc:  # pragma: no cover - network errors
                     self.get_logger().warning("Failed to invoke action %s.%s: %s", module, action, exc)
 
-    def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[FeltPromptContext]:
+    def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[PilotPromptContext]:
         if not self._topic_cache and not self._sensation_records:
             return None
         topics = {topic: entry["data"] for topic, entry in self._topic_cache.items()}
         if status and "/status" not in topics:
             topics["/status"] = status
         sensations = [record.to_summary() for record in self._recent_sensations()]
-        return FeltPromptContext(
+        return PilotPromptContext(
             topics=topics,
             status=status or topics.get("/status", {}),
             sensations=sensations,
@@ -568,7 +589,7 @@ class FeltNode(Node):
             self.get_logger().warning("Failed to invoke commands: %s", exc)
 
         timestamp = _ros_time_to_datetime(msg.stamp)
-        feeling_id = f"felt-{uuid4()}"
+        feeling_id = f"pilot-{uuid4()}"
         batch = prepare_memory_batch(
             feeling=feeling_data,
             sensations=recent_records,
@@ -589,7 +610,7 @@ class FeltNode(Node):
 
 def main(args: Optional[Sequence[str]] = None) -> None:
     rclpy.init(args=args)
-    node = FeltNode()
+    node = PilotNode()
     try:
         rclpy.spin(node)
     finally:

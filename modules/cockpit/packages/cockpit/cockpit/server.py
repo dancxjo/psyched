@@ -1,4 +1,4 @@
-"""HTTP server for the streamlined cockpit frontend."""
+"""HTTP server for the streamlined cockpit web interface."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from aiohttp import WSMsgType, web
 
 from .actions import ActionError, ActionRegistry
 from .actions.builtin import register_builtin_actions
+from .module_api import register_module_api_actions
 from .module_catalog import ModuleCatalog, ModuleInfo
 from .config import (
     ModuleDescriptor,
@@ -194,6 +195,7 @@ def create_app(*, settings: CockpitSettings) -> web.Application:
         module_names = []
         _LOGGER.exception("Failed to enumerate modules while registering actions")
     register_builtin_actions(registry, ros=ros_client, modules=module_names)
+    register_module_api_actions(registry, modules_root=settings.modules_root, ros=ros_client)
 
     async def _shutdown_resources(app: web.Application) -> None:
         await stream_manager.close_all()

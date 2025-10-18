@@ -3,7 +3,7 @@
 - Document public Python APIs with type annotations and docstrings that include short usage notes.
 - Run `PYTHONPATH=modules/cockpit/packages/cockpit:$PYTHONPATH pytest modules/cockpit/packages/cockpit/tests` after modifying backend code in this module.
 - Ensure test environments provide the runtime dependencies listed in `setup.py` (notably `aiohttp` and `PyYAML`) so pytest runs without skipping coverage.
-- Keep the cockpit frontend lightweight: static HTML, CSS, and browser JavaScript only (no bundlers or frameworks that require a build step).
+- Keep the cockpit's web interface lightweight: static HTML, CSS, and browser JavaScript only (no bundlers or frameworks that require a build step).
 - Reuse the shared utilities in `/components/cockpit-style.js` for layout, forms, and controls so dashboards stay visually consistent and compact.
 - Ensure HTTP endpoints have corresponding unit tests for their request/response contracts where practical.
 - When introducing new module dashboards, register the component tag in `cockpit/frontend/components/cockpit-app.js` so the cockpit can render it.

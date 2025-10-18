@@ -1,19 +1,19 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import { createTopicSocket } from '/js/cockpit.js';
-import { buildFeltIntentPayload } from './felt-dashboard.helpers.js';
+import { buildPilotIntentPayload } from './pilot-dashboard.helpers.js';
 
 function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 /**
- * Dashboard for orchestrating Felt intent overrides.
+ * Dashboard for orchestrating Pilot intent overrides.
  *
  * Custom events emitted for backend wiring:
- * - ``felt-intent-submit`` → `{ detail: FeltIntentPayload }`
+ * - ``pilot-intent-submit`` → `{ detail: PilotIntentPayload }`
  */
-class FeltDashboard extends LitElement {
+class PilotDashboard extends LitElement {
   static properties = {
     valence: { state: true },
     arousal: { state: true },
@@ -121,13 +121,13 @@ class FeltDashboard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     // Listen for module-sent debug/status events (backend should bubble these)
-    window.addEventListener('felt-module-debug', this._onModuleDebug);
-    window.addEventListener('felt-module-log', this._onModuleLog);
-    window.addEventListener('felt-module-status', this._onModuleStatus);
-    window.addEventListener('felt-module-message', this._onModuleMessage);
-    // Also try subscribing to the /felt/debug topic via cockpit topic socket
+    window.addEventListener('pilot-module-debug', this._onModuleDebug);
+    window.addEventListener('pilot-module-log', this._onModuleLog);
+    window.addEventListener('pilot-module-status', this._onModuleStatus);
+    window.addEventListener('pilot-module-message', this._onModuleMessage);
+    // Also try subscribing to the pilot debug stream via the cockpit API
     try {
-      this._debugSocket = createTopicSocket({ module: 'felt', topic: '/felt/debug', type: 'std_msgs/msg/String', role: 'subscribe' });
+      this._debugSocket = createTopicSocket({ module: 'pilot', action: 'debug_stream' });
       this._debugSocket.addEventListener('message', (ev) => {
         try {
           const payload = JSON.parse(ev.data);
@@ -141,7 +141,7 @@ class FeltDashboard extends LitElement {
           if (Array.isArray(envelope.errors)) this.moduleErrors = [...envelope.errors, ...this.moduleErrors].slice(0, 200);
           // Record the raw message as inbound
           this.inboundMessages = [
-            { timestamp: new Date().toLocaleTimeString(), payload: envelope, source: 'ros:/felt/debug' },
+            { timestamp: new Date().toLocaleTimeString(), payload: envelope, source: 'ros:/pilot/debug' },
             ...this.inboundMessages,
           ].slice(0, 200);
           this.connected = true;
@@ -157,10 +157,10 @@ class FeltDashboard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    window.removeEventListener('felt-module-debug', this._onModuleDebug);
-    window.removeEventListener('felt-module-log', this._onModuleLog);
-    window.removeEventListener('felt-module-status', this._onModuleStatus);
-    window.removeEventListener('felt-module-message', this._onModuleMessage);
+    window.removeEventListener('pilot-module-debug', this._onModuleDebug);
+    window.removeEventListener('pilot-module-log', this._onModuleLog);
+    window.removeEventListener('pilot-module-status', this._onModuleStatus);
+    window.removeEventListener('pilot-module-message', this._onModuleMessage);
   }
 
   // Event handlers bound as fields so they can be removed correctly
@@ -254,7 +254,7 @@ class FeltDashboard extends LitElement {
         </article>
 
         <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Felt module debug</h3>
+          <h3 class="surface-card__title">Pilot module debug</h3>
           <p class="surface-status" data-variant="${this.connected ? 'success' : 'warning'}">
             Module: ${this.moduleStatus} ${this.lastHeartbeat ? html`— heartbeat ${this.lastHeartbeat}` : ''}
           </p>
@@ -314,7 +314,7 @@ class FeltDashboard extends LitElement {
 
   handleIntentSubmit(event) {
     event.preventDefault();
-    const payload = buildFeltIntentPayload({
+    const payload = buildPilotIntentPayload({
       valence: this.valence,
       arousal: this.arousal,
       stance: this.stance,
@@ -326,7 +326,7 @@ class FeltDashboard extends LitElement {
       return;
     }
     this.dispatchEvent(
-      new CustomEvent('felt-intent-submit', {
+      new CustomEvent('pilot-intent-submit', {
         detail: payload.value,
         bubbles: true,
         composed: true,
@@ -358,7 +358,7 @@ class FeltDashboard extends LitElement {
 
   recordIntent(intent, source) {
     const logEntry = {
-      id: makeId('felt'),
+      id: makeId('pilot'),
       timestamp: new Date().toLocaleTimeString(),
       valence: intent.valence,
       arousal: intent.arousal,
@@ -381,14 +381,14 @@ class FeltDashboard extends LitElement {
 
   // Dispatch an event to request a debug snapshot from the backend
   requestDebugDump() {
-    this.dispatchEvent(new CustomEvent('felt-debug-request', { bubbles: true, composed: true }));
-    this.statusMessage = 'Requested debug snapshot from felt module…';
+    this.dispatchEvent(new CustomEvent('pilot-debug-request', { bubbles: true, composed: true }));
+    this.statusMessage = 'Requested debug snapshot from pilot module…';
     this.statusTone = 'info';
   }
 
   requestConfig() {
-    this.dispatchEvent(new CustomEvent('felt-config-request', { bubbles: true, composed: true }));
-    this.statusMessage = 'Requested config from felt module…';
+    this.dispatchEvent(new CustomEvent('pilot-config-request', { bubbles: true, composed: true }));
+    this.statusMessage = 'Requested config from pilot module…';
     this.statusTone = 'info';
   }
 
@@ -396,7 +396,7 @@ class FeltDashboard extends LitElement {
     this.moduleLogs = [];
     this.moduleErrors = [];
     this.inboundMessages = [];
-    this.dispatchEvent(new CustomEvent('felt-clear-logs', { bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent('pilot-clear-logs', { bubbles: true, composed: true }));
     this.statusMessage = 'Cleared cockpit-side logs.';
     this.statusTone = 'info';
   }
@@ -423,7 +423,7 @@ class FeltDashboard extends LitElement {
     if (payload.status) this.moduleStatus = payload.status;
     if (payload.heartbeat) this.lastHeartbeat = payload.heartbeat;
     this.connected = true;
-    this.statusMessage = 'Received debug snapshot from felt module.';
+    this.statusMessage = 'Received debug snapshot from pilot module.';
     this.statusTone = 'success';
   }
 
@@ -450,4 +450,4 @@ class FeltDashboard extends LitElement {
   }
 }
 
-customElements.define('felt-dashboard', FeltDashboard);
+customElements.define('pilot-dashboard', PilotDashboard);

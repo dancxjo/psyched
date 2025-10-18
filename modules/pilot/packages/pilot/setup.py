@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'felt'
+package_name = 'pilot'
 
 setup(
     name=package_name,
@@ -9,7 +9,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/felt.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/pilot.launch.py']),
     ],
     install_requires=['setuptools', 'jsonschema>=4.0'],
     zip_safe=True,
@@ -19,7 +19,7 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
-            'felt_node = felt.node:main',
+            'pilot_node = pilot.node:main',
         ],
     },
 )

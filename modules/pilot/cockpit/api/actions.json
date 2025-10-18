@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "debug_stream",
+      "description": "Stream debug snapshots emitted by the pilot module for cockpit observability.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/pilot/debug",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 50
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the stream queue length."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "stream": {
+            "type": "object",
+            "required": ["id", "module", "topic", "message_type", "role"],
+            "properties": {
+              "id": { "type": "string" },
+              "module": { "type": "string" },
+              "topic": { "type": "string" },
+              "message_type": { "type": "string" },
+              "role": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "required": ["stream"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

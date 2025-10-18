@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from felt.prompt_builder import FeltPromptContext, SensationSummary, build_prompt
+from pilot.prompt_builder import PilotPromptContext, build_prompt
+from pilot.models import SensationSummary
 
 
 def test_build_prompt_includes_topics_status_and_actions():
-    context = FeltPromptContext(
+    context = PilotPromptContext(
         topics={"/instant": "Saw a familiar person waving.", "/status": {"speech": "paused"}},
         status={"speech": "paused", "queue_length": 0},
         sensations=[
@@ -23,7 +24,7 @@ def test_build_prompt_includes_topics_status_and_actions():
 
     prompt = build_prompt(context)
 
-    assert prompt.startswith("You are FELT")
+    assert prompt.startswith("You are PILOT")
     assert "pause_speech" in prompt
     assert "/instant" in prompt
     assert "faces" in prompt

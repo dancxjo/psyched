@@ -1071,6 +1071,69 @@ export function listModules(): string[] {
   return names;
 }
 
+export interface ModuleApiAction {
+  name: string;
+  description: string;
+  kind?: string;
+  parameters?: Record<string, unknown>;
+  returns?: Record<string, unknown>;
+}
+
+export function loadModuleApiActions(): Record<string, ModuleApiAction[]> {
+  const result: Record<string, ModuleApiAction[]> = {};
+  const root = modulesRoot();
+  try {
+    Deno.statSync(root);
+  } catch (_error) {
+    return result;
+  }
+
+  for (const entry of Deno.readDirSync(root)) {
+    if (!entry.isDirectory) continue;
+    const moduleName = entry.name;
+    const apiPath = join(root, moduleName, "cockpit", "api", "actions.json");
+    try {
+      const text = Deno.readTextFileSync(apiPath);
+      const payload = JSON.parse(text);
+      const rawActions = Array.isArray(payload.actions)
+        ? payload.actions
+        : [];
+      const parsed: ModuleApiAction[] = [];
+      for (const raw of rawActions) {
+        if (!raw || typeof raw !== "object") continue;
+        const name = typeof raw.name === "string" ? raw.name.trim() : "";
+        if (!name) continue;
+        const description = typeof raw.description === "string"
+          ? raw.description
+          : "";
+        const action: ModuleApiAction = { name, description };
+        if (typeof raw.kind === "string") {
+          action.kind = raw.kind;
+        }
+        if (raw.parameters && typeof raw.parameters === "object") {
+          action.parameters = raw.parameters as Record<string, unknown>;
+        }
+        if (raw.returns && typeof raw.returns === "object") {
+          action.returns = raw.returns as Record<string, unknown>;
+        }
+        parsed.push(action);
+      }
+      if (parsed.length) {
+        result[moduleName] = parsed;
+      }
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) {
+        console.warn(
+          `Failed to read cockpit API for module ${moduleName}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  return result;
+}
+
 export interface ModuleStatus {
   name: string;
   status: "running" | "stopped";

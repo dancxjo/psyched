@@ -1,5 +1,5 @@
 /**
- * Helper utilities for the Felt dashboard.
+ * Helper utilities for the Pilot dashboard.
  */
 
 /**
@@ -27,9 +27,9 @@ export function clampFloat(value, options) {
  * @param {number|string} draft.arousal Emotional arousal [0, 1].
  * @param {number|string} draft.stance Navigational stance [0, 1].
  * @param {string} draft.context Free-form context string.
- * @returns {{ ok: true, value: FeltIntentPayload } | { ok: false, error: string }}
+ * @returns {{ ok: true, value: PilotIntentPayload } | { ok: false, error: string }}
  */
-export function buildFeltIntentPayload(draft) {
+export function buildPilotIntentPayload(draft) {
   const valence = clampFloat(draft.valence, { min: -1, max: 1, defaultValue: 0 });
   const arousal = clampFloat(draft.arousal, { min: 0, max: 1, defaultValue: 0.2 });
   const stance = clampFloat(draft.stance, { min: 0, max: 1, defaultValue: 0.5 });
@@ -44,7 +44,7 @@ export function buildFeltIntentPayload(draft) {
 }
 
 /**
- * @typedef {object} FeltIntentPayload
+ * @typedef {object} PilotIntentPayload
  * @property {number} valence Normalised valence value.
  * @property {number} arousal Normalised arousal value.
  * @property {number} stance Goal seeking stance weighting.

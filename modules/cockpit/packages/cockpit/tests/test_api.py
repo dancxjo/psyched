@@ -11,6 +11,7 @@ from typing import Iterator
 import pytest
 
 pytest.importorskip("aiohttp")
+pytest.importorskip("rclpy")
 from aiohttp import ClientSession, web
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
