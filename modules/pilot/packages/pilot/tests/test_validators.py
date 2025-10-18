@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from felt.validators import FeelingIntentValidationError, parse_feeling_intent_json
+from pilot.validators import FeelingIntentValidationError, parse_feeling_intent_json
 
 
 @pytest.fixture(name="allowed_actions")

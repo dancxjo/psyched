@@ -1,0 +1,15 @@
+[unit.pilot]
+apt = []
+pip = []
+launch = "modules/pilot/launch_unit.sh"
+shutdown = "modules/pilot/shutdown_unit.sh"
+cockpit_control = "modules/pilot/cockpit/index.html"
+
+[unit.pilot.ros]
+workspace = "."
+packages = ["pilot", "psyched_msgs"]
+
+[cockpit]
+display_name = "Pilot"
+description = "Feeling + will integrator"
+regimes = ["conversation", "navigation"]

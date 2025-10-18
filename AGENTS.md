@@ -4,9 +4,11 @@ Welcome to the Psyched workspace. This guide summarizes everything an automated 
 
 ## System snapshot
 
-- **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a browser-based cockpit for operators.
+- **Mission:** orchestrate a modular ROS 2 stack for the robot "Pete" while exposing a cockpit control layer that also provides a browser-based view for human operators.
 - **Languages & frameworks:** Python (`rclpy`, `aiohttp`), the `psh` CLI, ROS 2 (colcon), Bash, optional Rust for certain services (e.g. ASR), and assorted Python/C++ ROS packages pulled in as git dependencies.
 - **Runtime topology:**
+- The pilot module is Pete's autonomous control layer—the LLM-driven brain that directly consumes each module's API; the cockpit exposes the same APIs for humans through the CLI and browser-based controls when debugging or supervising.
+- Human-facing surfaces (CLI, cockpit UI) exist for setup, debugging, and oversight—the pilot automation remains the primary operator of the system.
 - The `psh` CLI provisions hosts (`hosts/*.json`) and synchronizes module assets into the static cockpit frontend served by the cockpit module.
 
 ## Key directories and entry points

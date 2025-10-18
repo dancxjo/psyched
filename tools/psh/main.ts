@@ -8,6 +8,7 @@ import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
   bringModulesDown,
   bringModulesUp,
+  loadModuleApiActions,
   listModules,
   moduleStatuses,
   setupModules,
@@ -51,6 +52,96 @@ import { runSetupWorkflow, runTeardownWorkflow } from "./lib/workflow.ts";
 import { publishString } from "./lib/ros.ts";
 
 const version = "0.2.0";
+
+const STREAM_TOPIC_SCHEMA = {
+  type: "object",
+  properties: {
+    topic: {
+      type: "string",
+      description: "ROS topic name to bridge",
+    },
+    message_type: {
+      type: "string",
+      description: "Fully-qualified ROS message type for the topic",
+    },
+    role: {
+      type: "string",
+      enum: ["subscribe", "publish", "both"],
+      default: "subscribe",
+    },
+    queue_length: {
+      type: "integer",
+      minimum: 1,
+      default: 10,
+    },
+    qos: {
+      type: "object",
+      description: "Optional QoS overrides (reliability, durability)",
+      additionalProperties: true,
+    },
+  },
+  required: ["topic", "message_type"],
+  additionalProperties: false,
+};
+
+const STREAM_TOPIC_RETURNS = {
+  type: "object",
+  properties: {
+    stream: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        module: { type: "string" },
+        topic: { type: "string" },
+        message_type: { type: "string" },
+        role: { type: "string" },
+      },
+      required: ["id", "module", "topic", "message_type", "role"],
+      additionalProperties: false,
+    },
+  },
+  required: ["stream"],
+  additionalProperties: false,
+};
+
+const CALL_SERVICE_SCHEMA = {
+  type: "object",
+  properties: {
+    service: {
+      type: "string",
+      description: "ROS service name to invoke",
+    },
+    service_type: {
+      type: "string",
+      description: "Optional service type hint",
+    },
+    arguments: {
+      type: "object",
+      description: "Service request arguments",
+      additionalProperties: true,
+    },
+    timeout_ms: {
+      type: "integer",
+      description: "Optional timeout for the service call in milliseconds",
+      minimum: 1,
+      default: 8000,
+    },
+  },
+  required: ["service"],
+  additionalProperties: false,
+};
+
+const CALL_SERVICE_RETURNS = {
+  type: "object",
+  properties: {
+    result: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+  required: ["result"],
+  additionalProperties: false,
+};
 
 async function main() {
   const root = new Command()
@@ -274,28 +365,66 @@ async function main() {
         );
       }
 
-      // Local fallback: produce a minimal list of builtin actions for each module.
       const moduleNames = listModules();
-      const actionsList: string[] = [];
-      for (const m of moduleNames) {
-        actionsList.push(`${m}.stream_topic`);
-        actionsList.push(`${m}.call_service`);
+      const apiActions = loadModuleApiActions();
+      const modulesPayload: Record<string, { actions: Record<string, unknown>[] }> = {};
+
+      for (const moduleName of moduleNames) {
+        const actions: Record<string, unknown>[] = [];
+        const defined = apiActions[moduleName] ?? [];
+        const definedNames = new Set<string>();
+
+        for (const action of defined) {
+          definedNames.add(action.name);
+          const streaming = typeof action.kind === "string"
+            ? action.kind.toLowerCase() === "stream-topic"
+            : false;
+          actions.push({
+            name: action.name,
+            description: action.description ?? "",
+            parameters: action.parameters ?? {},
+            returns: action.returns ?? undefined,
+            streaming,
+          });
+        }
+
+        if (!definedNames.has("stream_topic")) {
+          actions.push({
+            name: "stream_topic",
+            description: `Stream ROS topic traffic for the ${moduleName} module`,
+            parameters: STREAM_TOPIC_SCHEMA,
+            returns: STREAM_TOPIC_RETURNS,
+            streaming: true,
+          });
+        }
+
+        if (!definedNames.has("call_service")) {
+          actions.push({
+            name: "call_service",
+            description: `Invoke ROS services on behalf of the ${moduleName} module`,
+            parameters: CALL_SERVICE_SCHEMA,
+            returns: CALL_SERVICE_RETURNS,
+            streaming: false,
+          });
+        }
+
+        modulesPayload[moduleName] = { actions };
       }
 
       if (json) {
-        console.log(JSON.stringify({ actions: actionsList }));
+        console.log(JSON.stringify({ modules: modulesPayload }));
         return;
       }
 
-      // Human friendly listing from local fallback
-      for (const m of moduleNames) {
-        console.log(`Module: ${m}`);
-        console.log(
-          `  - stream_topic: Stream ROS topic traffic for the ${m} module`,
-        );
-        console.log(
-          `  - call_service: Invoke ROS services on behalf of the ${m} module`,
-        );
+      for (const [moduleName, info] of Object.entries(modulesPayload)) {
+        console.log(`Module: ${moduleName}`);
+        for (const action of info.actions) {
+          const name = typeof action.name === "string" ? action.name : "<unknown>";
+          const description = typeof action.description === "string"
+            ? action.description
+            : "";
+          console.log(`  - ${name}: ${description}`);
+        }
       }
     });
 

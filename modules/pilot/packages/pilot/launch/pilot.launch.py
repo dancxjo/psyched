@@ -10,10 +10,10 @@ def generate_launch_description() -> LaunchDescription:
     debounce_arg = DeclareLaunchArgument('debounce_seconds', default_value='3.0')
     window_arg = DeclareLaunchArgument('window_seconds', default_value='3.0')
 
-    felt_node = Node(
-        package='felt',
-        executable='felt_node',
-        name='felt',
+    pilot_node = Node(
+        package='pilot',
+        executable='pilot_node',
+        name='pilot',
         output='screen',
         parameters=[
             {
@@ -23,4 +23,4 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    return LaunchDescription([debounce_arg, window_arg, felt_node])
+    return LaunchDescription([debounce_arg, window_arg, pilot_node])

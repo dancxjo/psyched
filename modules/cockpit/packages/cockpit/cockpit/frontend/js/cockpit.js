@@ -109,24 +109,40 @@ class TopicSocket {
     if (!moduleName) {
       throw new Error('module must be provided when creating a topic socket');
     }
-    if (!options.topic || !options.type) {
-      throw new Error('Both topic and type are required');
-    }
-
     this.module = moduleName;
-    this.topic = options.topic;
-    this.messageType = options.type;
-    this.role = options.role || 'subscribe';
-    this.queueLength = typeof options.queueLength === 'number' && options.queueLength > 0
-      ? Math.floor(options.queueLength)
-      : 10;
-    this.qos = typeof options.qos === 'object' && options.qos !== null ? options.qos : undefined;
+    this.actionName = typeof options.action === 'string' && options.action.trim()
+      ? options.action.trim()
+      : '';
+    this.actionArgs = typeof options.arguments === 'object' && options.arguments !== null
+      ? options.arguments
+      : {};
+
+    if (!this.actionName) {
+      if (!options.topic || !options.type) {
+        throw new Error('Both topic and type are required when no action override is provided');
+      }
+      this.topic = options.topic;
+      this.messageType = options.type;
+      this.role = options.role || 'subscribe';
+      this.queueLength = typeof options.queueLength === 'number' && options.queueLength > 0
+        ? Math.floor(options.queueLength)
+        : 10;
+      this.qos = typeof options.qos === 'object' && options.qos !== null ? options.qos : undefined;
+    } else {
+      this.topic = options.topic || '';
+      this.messageType = options.type || '';
+      this.role = options.role || 'subscribe';
+      this.queueLength = typeof options.queueLength === 'number' && options.queueLength > 0
+        ? Math.floor(options.queueLength)
+        : 10;
+      this.qos = typeof options.qos === 'object' && options.qos !== null ? options.qos : undefined;
+    }
 
     this._listeners = new Map();
     this._pendingMessages = [];
     this._ws = null;
     this._streamId = null;
-    this._publishEnabled = this.role === 'publish' || this.role === 'both';
+    this._publishEnabled = false;
     this._closed = false;
     this._initialisationError = null;
     this._readyDeferred = createDeferred();
@@ -203,13 +219,15 @@ class TopicSocket {
   // Internal helpers ------------------------------------------------
   async _initialise() {
     try {
-      const response = await invokeAction(this.module, 'stream_topic', {
-        topic: this.topic,
-        message_type: this.messageType,
-        role: this.role,
-        queue_length: this.queueLength,
-        qos: this.qos,
-      });
+      const response = this.actionName
+        ? await invokeAction(this.module, this.actionName, this.actionArgs)
+        : await invokeAction(this.module, 'stream_topic', {
+          topic: this.topic,
+          message_type: this.messageType,
+          role: this.role,
+          queue_length: this.queueLength,
+          qos: this.qos,
+        });
       const stream = response && response.stream ? response.stream : null;
       if (!stream || !stream.id) {
         throw new Error('Backend returned an invalid stream descriptor');

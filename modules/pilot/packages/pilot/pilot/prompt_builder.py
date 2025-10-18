@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List
 
 from .models import SensationSummary
 
-_SYSTEM_PROMPT = """You are FELT, Pete’s feeling+will integrator. Produce one compact JSON ONLY.
+_SYSTEM_PROMPT = """You are PILOT, Pete’s feeling+will integrator. Produce one compact JSON ONLY.
 Rules:
 - "attitude_emoji": 1–2 Unicode emoji, NO WORDS. (Represent attitude/mood only)
 - "thought_sentence": exactly 1 sentence.
@@ -28,7 +28,7 @@ _SCHEMA_HINT = {
 
 
 @dataclass(slots=True)
-class FeltPromptContext:
+class PilotPromptContext:
     """Context bundle passed to the LLM prompt renderer."""
 
     topics: Dict[str, Any]
@@ -49,7 +49,7 @@ def _format_sensations(sensations: Iterable[SensationSummary]) -> str:
     return json.dumps(payloads, ensure_ascii=False, sort_keys=True)
 
 
-def build_prompt(context: FeltPromptContext) -> str:
+def build_prompt(context: PilotPromptContext) -> str:
     """Construct the single-shot LLM prompt for the feeling integrator."""
 
     lines: List[str] = [_SYSTEM_PROMPT, "", "Context (examples merged each cycle)", "", "topics:"]

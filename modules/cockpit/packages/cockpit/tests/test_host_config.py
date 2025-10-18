@@ -8,6 +8,8 @@ from typing import List
 
 import pytest
 
+pytest.importorskip("rclpy")
+
 from cockpit.config import HostConfigError, ModuleDescriptor, discover_active_modules, load_host_config
 
 

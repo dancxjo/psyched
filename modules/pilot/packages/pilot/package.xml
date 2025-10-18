@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-    <name>felt</name>
+    <name>pilot</name>
     <version>0.1.0</version>
     <description>Feeling + will integrator node.</description>
     <maintainer email="tdreed@gmail.com">Psyched</maintainer>

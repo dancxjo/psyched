@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from felt.memory_pipeline import MemoryBatch, prepare_memory_batch
-from felt.models import FeelingIntentData, SensationRecord
+from pilot.memory_pipeline import MemoryBatch, prepare_memory_batch
+from pilot.models import FeelingIntentData, SensationRecord
 
 
 def test_prepare_memory_batch_includes_vectors_and_graph_links():
@@ -37,11 +37,11 @@ def test_prepare_memory_batch_includes_vectors_and_graph_links():
         sensations=sensations,
         source_topics=["/instant", "/sensation/face"],
         timestamp=timestamp,
-        feeling_id="feel-123",
+        feeling_id="pilot-123",
     )
 
     assert isinstance(batch, MemoryBatch)
-    assert batch.feeling_id == "feel-123"
+    assert batch.feeling_id == "pilot-123"
     collections = {entry.get("collection") for entry in batch.vectors}
     assert {"faces", "thoughts", "emotions"}.issubset(collections)
     assert batch.graph_mutations
