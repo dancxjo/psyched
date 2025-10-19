@@ -120,6 +120,7 @@ export function normaliseFeelingIntent(message) {
  *     }>,
  *   }>,
  *   lastLLM: string,
+ *   prompt: string,
  *   logs: string[],
  *   errors: string[],
  * }}
@@ -216,6 +217,7 @@ export function normaliseDebugSnapshot(snapshot) {
   const logs = cleanStringArray(data.logs);
   const errors = cleanStringArray(data.errors);
   const lastLLM = cleanString(data.last_llm);
+  const prompt = cleanString(data.last_prompt);
 
   return {
     status,
@@ -233,6 +235,7 @@ export function normaliseDebugSnapshot(snapshot) {
     recentSensations,
     scripts,
     lastLLM,
+    prompt,
     logs,
     errors,
   };

@@ -344,6 +344,7 @@ class PilotNode(Node):
         self._script_runs: List[Dict[str, Any]] = []
         self._script_lock = threading.Lock()
         self._action_schemas: Dict[str, Dict[str, Any]] = {}
+        self._last_prompt: Optional[str] = None
 
         host_full, host_short = _resolve_host_names()
         suggestions = _discover_topic_suggestions(
@@ -703,6 +704,7 @@ class PilotNode(Node):
                 "logs": [],
                 "errors": [],
                 "last_llm": self._last_llm_response if getattr(self, "_last_llm_response", None) else None,
+                "last_prompt": self._last_prompt if getattr(self, "_last_prompt", None) else None,
                 "scripts": self._script_status_snapshot(),
             }
             payload = StdString()
@@ -822,6 +824,10 @@ class PilotNode(Node):
             return
 
         prompt = build_prompt(context)
+        try:
+            self._last_prompt = prompt[:4096]
+        except Exception:
+            self._last_prompt = prompt
         try:
             raw_response = self._llm_client.generate(prompt)
             feeling_data = parse_feeling_intent_json(raw_response, actions)

@@ -33,6 +33,7 @@ class PilotDashboard extends LitElement {
     config: { state: true },
     recentSensations: { state: true },
     scriptRuns: { state: true },
+    lastPrompt: { state: true },
     lastLLM: { state: true },
     logsCount: { state: true },
     errorsCount: { state: true },
@@ -198,6 +199,7 @@ class PilotDashboard extends LitElement {
     };
     this.recentSensations = [];
     this.scriptRuns = [];
+    this.lastPrompt = "";
     this.lastLLM = "";
     this.logsCount = 0;
     this.errorsCount = 0;
@@ -503,6 +505,18 @@ class PilotDashboard extends LitElement {
             `}
         </article>
 
+        ${this.lastPrompt
+          ? html`
+            <article class="surface-card surface-card--wide">
+              <h3 class="surface-card__title">Latest prompt</h3>
+              <p class="section-note">
+                Snapshot of the text sent to the language model for the most recent planning cycle.
+              </p>
+              <pre class="llm-output">${this.lastPrompt}</pre>
+            </article>
+          `
+          : null}
+
         ${this.lastLLM
           ? html`
             <article class="surface-card surface-card--wide">
@@ -606,6 +620,7 @@ class PilotDashboard extends LitElement {
       this.config = normalised.config;
       this.recentSensations = normalised.recentSensations;
       this.scriptRuns = normalised.scripts;
+      this.lastPrompt = normalised.prompt;
       this.lastLLM = normalised.lastLLM;
       this.logsCount = normalised.logs.length;
       this.errorsCount = normalised.errors.length;
