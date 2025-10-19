@@ -16,10 +16,15 @@
       <div class="nav-title">PSYCHED COCKPIT</div>
       <template x-for="section in sections" :key="section.id">
         <div class="nav-item">
-          <button type="button" class="nav-button" :class="{ active: section.id === activeId }" @click="scrollTo(section.id)">
+          <a
+            class="nav-button"
+            :class="{ active: section.id === activeId }"
+            :href="`#${section.id}`"
+            @click.prevent="scrollTo(section.id, true)"
+          >
             <span class="nav-index" x-text="padIndex(section.index)"></span>
             <span class="nav-label" x-text="section.label"></span>
-          </button>
+          </a>
           <template x-if="section.id === activeId && topSectionId && section.id !== topSectionId">
             <button
               type="button"
@@ -78,18 +83,33 @@
               if (this.sections.length && !this.activeId) {
                 this.activeId = this.sections[0].id;
               }
+              const hashId = window.location && typeof window.location.hash === 'string'
+                ? window.location.hash.replace(/^#/, '')
+                : '';
+              if (hashId) {
+                const match = this.sections.find((section) => section.id === hashId);
+                if (match) {
+                  requestAnimationFrame(() => {
+                    this.scrollTo(hashId, false);
+                    this.activeId = hashId;
+                  });
+                }
+              }
               updateActive();
             };
-            this.scrollTo = (id) => {
+            this.scrollTo = (id, updateHash = false) => {
               const node = document.getElementById(id);
               if (node) {
                 node.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 this.activeId = id;
+                if (updateHash && typeof history !== 'undefined' && history.replaceState) {
+                  history.replaceState(null, '', `#${id}`);
+                }
               }
             };
             this.scrollToTop = () => {
               if (!this.topSectionId) return;
-              this.scrollTo(this.topSectionId);
+              this.scrollTo(this.topSectionId, true);
             };
             this.padIndex = (value) => String(value + 1).padStart(2, '0');
             window.addEventListener('cockpit-sections', (event) => {
@@ -101,6 +121,17 @@
               : null;
             if (cachedSections && cachedSections.length) {
               applySections(cachedSections);
+            }
+            const initialSections = [
+              {
+                id: 'cockpit-config',
+                label: 'Module Configuration',
+                index: 0,
+                url: '/config/',
+              },
+            ];
+            if (!this.sections.length) {
+              applySections(initialSections);
             }
           },
         };
