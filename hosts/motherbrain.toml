@@ -45,13 +45,5 @@ display_name = "Hypothalamus"
 HYPOTHALAMUS_SENSOR_TYPE = "DHT11"
 HYPOTHALAMUS_GPIO_PIN = "D23"
 
-[config.mod.wifi.env]
-WIFI_INTERFACE = "wlan1"
-WIFI_CHANNEL = "11"
-WIFI_COUNTRY_CODE = "US"
-WIFI_SSID = "Pete-Net"
-WIFI_ENABLE_NAT = "true"
-WIFI_UPLINK_INTERFACE = "wlan0"
-
-[config.mod.will.env]
-WILL_DEFAULT_REGIME = "idle"
+[config.mod.pilot.env]
+OLLAMA_HOST = "http://forebrain.local:11434"
