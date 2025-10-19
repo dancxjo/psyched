@@ -1,28 +1,101 @@
-import { strict as assert } from 'node:assert';
-import test from 'node:test';
+import { strict as assert } from "node:assert";
+import test from "node:test";
 
 import {
-  buildPilotIntentPayload,
-  clampFloat,
-} from './pilot-dashboard.helpers.js';
+  normaliseDebugSnapshot,
+  normaliseFeelingIntent,
+  parseRosStamp,
+} from "./pilot-dashboard.helpers.js";
 
-test('clampFloat normalises decimal ranges', () => {
-  assert.equal(clampFloat(0.25, { min: 0, max: 1, defaultValue: 0.5 }), 0.25);
-  assert.equal(clampFloat(-5, { min: -1, max: 1, defaultValue: 0 }), -1);
-  assert.equal(clampFloat(5, { min: -1, max: 1, defaultValue: 0 }), 1);
-  assert.equal(clampFloat('oops', { min: 0, max: 1, defaultValue: 0.4 }), 0.4);
+test("parseRosStamp returns Date for valid stamp", () => {
+  const result = parseRosStamp({ sec: 1700000000, nanosec: 500000000 });
+  assert.ok(result instanceof Date);
+  assert.equal(result.getTime(), 1700000000_500);
 });
 
-test('buildPilotIntentPayload validates context requirement', () => {
-  const ok = buildPilotIntentPayload({
-    valence: 0.2,
-    arousal: 0.5,
-    stance: 0.7,
-    context: 'Greeting visitors at the lab entrance',
-  });
-  assert.equal(ok.ok, true);
-  assert.equal(ok.value.context.length > 0, true);
+test("parseRosStamp returns null for invalid input", () => {
+  assert.equal(parseRosStamp({}), null);
+  assert.equal(parseRosStamp(null), null);
+});
 
-  const bad = buildPilotIntentPayload({ valence: 0, arousal: 0.3, stance: 0.4, context: '   ' });
-  assert.equal(bad.ok, false);
+test("normaliseFeelingIntent trims and preserves key fields", () => {
+  const message = {
+    stamp: { sec: 1700000100, nanosec: 0 },
+    attitude_emoji: " 😀 ",
+    spoken_sentence: " Hello there ",
+    thought_sentence: " Considering actions ",
+    command_script: ' nav.move_to(target="visitor") ',
+    goals: ["  greet  ", 42, "", null],
+    mood_delta: " +calm ",
+    source_topics: [" /status ", ""],
+    memory_collection_emoji: " 📚 ",
+    memory_collection_text: " Archive updated ",
+    memory_collection_raw: "",
+    episode_id: " episode-1 ",
+    situation_id: "",
+  };
+  const result = normaliseFeelingIntent(message);
+  assert.ok(result);
+  assert.equal(result.id, "episode-1");
+  assert.equal(result.attitudeEmoji, "😀");
+  assert.equal(result.spokenSentence, "Hello there");
+  assert.equal(result.commandScript, 'nav.move_to(target="visitor")');
+  assert.deepEqual(result.goals, ["greet"]);
+  assert.deepEqual(result.sourceTopics, ["/status"]);
+  assert.ok(result.stamp instanceof Date);
+});
+
+test("normaliseDebugSnapshot surfaces config and telemetry", () => {
+  const snapshot = {
+    status: " running ",
+    heartbeat: "2024-07-18T12:00:00Z",
+    config: {
+      debounce_seconds: 2.5,
+      window_seconds: "4",
+      context_topics: ["/status", "/instant", "/status"],
+      sensation_topics: ["/sensations"],
+    },
+    recent_sensations: [
+      {
+        topic: " /sensations ",
+        kind: "touch",
+        collection_hint: "hand",
+        json_payload: '{"force": 1}',
+        vector_len: 4,
+      },
+      { topic: "", kind: "ignored" },
+    ],
+    scripts: [
+      {
+        id: " run-1 ",
+        status: " completed ",
+        started_at: "2024-07-18T11:59:55Z",
+        finished_at: "2024-07-18T12:00:01Z",
+        used_actions: [" nav.move_to ", ""],
+        actions: [{
+          action: " nav.move_to ",
+          status: " ok ",
+          response: { ok: true },
+          timestamp: "2024-07-18T12:00:00Z",
+        }],
+      },
+    ],
+    last_llm: " Hello world ",
+    logs: [" entry ", "entry "],
+    errors: [""],
+  };
+
+  const result = normaliseDebugSnapshot(snapshot);
+  assert.equal(result.status, "running");
+  assert.ok(result.heartbeat instanceof Date);
+  assert.equal(result.config.debounceSeconds, 2.5);
+  assert.equal(result.config.windowSeconds, 4);
+  assert.deepEqual(result.config.contextTopics, ["/status", "/instant"]);
+  assert.equal(result.recentSensations.length, 1);
+  assert.equal(result.recentSensations[0].topic, "/sensations");
+  assert.equal(result.scripts[0].status, "completed");
+  assert.deepEqual(result.scripts[0].usedActions, ["nav.move_to"]);
+  assert.equal(result.lastLLM, "Hello world");
+  assert.equal(result.logs.length, 1);
+  assert.equal(result.errors.length, 0);
 });

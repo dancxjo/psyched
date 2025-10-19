@@ -2,8 +2,50 @@
   "version": 1,
   "actions": [
     {
+      "name": "intent_stream",
+      "description": "Stream FeelingIntent messages emitted by the pilot planner loop.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "pilot/intent",
+        "message_type": "psyched_msgs/msg/FeelingIntent",
+        "role": "subscribe",
+        "queue_length": 20
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the stream queue length."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "stream": {
+            "type": "object",
+            "required": ["id", "module", "topic", "message_type", "role"],
+            "properties": {
+              "id": { "type": "string" },
+              "module": { "type": "string" },
+              "topic": { "type": "string" },
+              "message_type": { "type": "string" },
+              "role": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "required": ["stream"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "debug_stream",
-      "description": "Stream debug snapshots emitted by the pilot module for cockpit observability.",
+      "description": "Stream pilot debug snapshots including topic caches, sensations, scripts, and LLM output.",
       "kind": "stream-topic",
       "defaults": {
         "topic": "/pilot/debug",

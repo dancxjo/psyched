@@ -3,50 +3,237 @@
  */
 
 /**
- * Clamp a floating point value.
+ * Convert a ROS time stamp object into a JavaScript Date.
  *
- * @param {number|string|null|undefined} value Raw input value.
- * @param {{ min: number, max: number, defaultValue: number }} options Range metadata.
- * @returns {number}
+ * @param {{ sec?: number, nanosec?: number } | null | undefined} stamp
+ * @returns {Date | null}
  */
-export function clampFloat(value, options) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return options.defaultValue;
+export function parseRosStamp(stamp) {
+  if (!stamp || typeof stamp !== "object") {
+    return null;
   }
-  if (parsed < options.min) return options.min;
-  if (parsed > options.max) return options.max;
-  return Number(parsed.toFixed(3));
+  const sec = Number(stamp.sec);
+  const nanosec = Number(stamp.nanosec);
+  if (!Number.isFinite(sec)) {
+    return null;
+  }
+  const nanoseconds = Number.isFinite(nanosec) ? nanosec : 0;
+  const millis = sec * 1000 + Math.floor(nanoseconds / 1e6);
+  const result = new Date(millis);
+  return Number.isNaN(result.getTime()) ? null : result;
 }
 
 /**
- * Build a payload describing a requested FeelingIntent override.
+ * Normalise a FeelingIntent ROS message into a cockpit-friendly shape.
  *
- * @param {object} draft Form values captured from the dashboard.
- * @param {number|string} draft.valence Emotional valence [-1, 1].
- * @param {number|string} draft.arousal Emotional arousal [0, 1].
- * @param {number|string} draft.stance Navigational stance [0, 1].
- * @param {string} draft.context Free-form context string.
- * @returns {{ ok: true, value: PilotIntentPayload } | { ok: false, error: string }}
+ * @param {object | null | undefined} message
+ * @returns {{
+ *   id: string | null,
+ *   stamp: Date | null,
+ *   attitudeEmoji: string,
+ *   spokenSentence: string,
+ *   thoughtSentence: string,
+ *   commandScript: string,
+ *   goals: string[],
+ *   moodDelta: string,
+ *   sourceTopics: string[],
+ *   memory: { emoji: string, text: string, raw: string },
+ *   episodeId: string,
+ *   situationId: string,
+ * } | null}
  */
-export function buildPilotIntentPayload(draft) {
-  const valence = clampFloat(draft.valence, { min: -1, max: 1, defaultValue: 0 });
-  const arousal = clampFloat(draft.arousal, { min: 0, max: 1, defaultValue: 0.2 });
-  const stance = clampFloat(draft.stance, { min: 0, max: 1, defaultValue: 0.5 });
-  const context = String(draft.context ?? '').trim();
-  if (!context) {
-    return { ok: false, error: 'Context is required to broadcast a feeling intent.' };
+export function normaliseFeelingIntent(message) {
+  if (!message || typeof message !== "object") {
+    return null;
   }
+  const cleanString = (
+    value,
+  ) => (typeof value === "string" ? value.trim() : "");
+  const stamp = parseRosStamp(message.stamp);
+  const goals = Array.isArray(message.goals)
+    ? message.goals.filter((goal) => typeof goal === "string" && goal.trim())
+      .map((goal) => goal.trim())
+    : [];
+  const sourceTopics = Array.isArray(message.source_topics)
+    ? message.source_topics
+      .filter((topic) => typeof topic === "string" && topic.trim())
+      .map((topic) => topic.trim())
+    : [];
+  const episodeId = cleanString(message.episode_id);
+  const situationId = cleanString(message.situation_id);
+  const id = episodeId || situationId ||
+    (stamp ? `intent-${stamp.getTime()}` : null);
+
   return {
-    ok: true,
-    value: { valence, arousal, stance, context },
+    id,
+    stamp,
+    attitudeEmoji: cleanString(message.attitude_emoji),
+    spokenSentence: cleanString(message.spoken_sentence),
+    thoughtSentence: cleanString(message.thought_sentence),
+    commandScript: cleanString(message.command_script),
+    goals,
+    moodDelta: cleanString(message.mood_delta),
+    sourceTopics,
+    memory: {
+      emoji: cleanString(message.memory_collection_emoji),
+      text: cleanString(message.memory_collection_text),
+      raw: cleanString(message.memory_collection_raw),
+    },
+    episodeId,
+    situationId,
   };
 }
 
 /**
- * @typedef {object} PilotIntentPayload
- * @property {number} valence Normalised valence value.
- * @property {number} arousal Normalised arousal value.
- * @property {number} stance Goal seeking stance weighting.
- * @property {string} context Narrative context associated with the intent.
+ * Normalise the debug snapshot payload emitted by the pilot module.
+ *
+ * @param {object | null | undefined} snapshot
+ * @returns {{
+ *   status: string,
+ *   heartbeat: Date | null,
+ *   config: {
+ *     debounceSeconds: number | null,
+ *     windowSeconds: number | null,
+ *     contextTopics: string[],
+ *     sensationTopics: string[],
+ *   },
+ *   recentSensations: Array<{
+ *     topic: string,
+ *     kind: string,
+ *     hint: string,
+ *     jsonPayload: string,
+ *     vectorLength: number,
+ *   }>,
+ *   scripts: Array<{
+ *     id: string,
+ *     status: string,
+ *     startedAt: string,
+ *     finishedAt: string,
+ *     error: string,
+ *     source: string,
+ *     usedActions: string[],
+ *     actions: Array<{
+ *       action: string,
+ *       status: string,
+ *       response: unknown,
+ *       timestamp: string,
+ *     }>,
+ *   }>,
+ *   lastLLM: string,
+ *   logs: string[],
+ *   errors: string[],
+ * }}
  */
+export function normaliseDebugSnapshot(snapshot) {
+  const cleanString = (
+    value,
+  ) => (typeof value === "string" ? value.trim() : "");
+  const cleanStringArray = (value) =>
+    Array.isArray(value)
+      ? Array.from(
+        new Set(
+          value.filter((entry) => typeof entry === "string" && entry.trim())
+            .map((entry) => entry.trim()),
+        ),
+      )
+      : [];
+  const data = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const status = cleanString(data.status) || "unknown";
+
+  const heartbeatRaw = cleanString(data.heartbeat);
+  let heartbeat = null;
+  if (heartbeatRaw) {
+    const parsed = new Date(heartbeatRaw);
+    heartbeat = Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const configRaw = data.config && typeof data.config === "object"
+    ? data.config
+    : {};
+  const debounceSecondsRaw = Number(configRaw.debounce_seconds);
+  const windowSecondsRaw = Number(configRaw.window_seconds);
+
+  const recentSensationsRaw = Array.isArray(data.recent_sensations)
+    ? data.recent_sensations
+    : [];
+  const recentSensations = recentSensationsRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const topic = cleanString(entry.topic);
+      if (!topic) {
+        return null;
+      }
+      const vectorLength = Number.isFinite(Number(entry.vector_len))
+        ? Number(entry.vector_len)
+        : Array.isArray(entry.vector)
+        ? entry.vector.length
+        : 0;
+      return {
+        topic,
+        kind: cleanString(entry.kind),
+        hint: cleanString(entry.collection_hint),
+        jsonPayload: cleanString(entry.json_payload),
+        vectorLength,
+      };
+    })
+    .filter(Boolean);
+
+  const scriptsRaw = Array.isArray(data.scripts) ? data.scripts : [];
+  const scripts = scriptsRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const actionsRaw = Array.isArray(entry.actions) ? entry.actions : [];
+      const actions = actionsRaw
+        .map((action) => {
+          if (!action || typeof action !== "object") {
+            return null;
+          }
+          return {
+            action: cleanString(action.action),
+            status: cleanString(action.status) || "unknown",
+            response: action.response,
+            timestamp: cleanString(action.timestamp),
+          };
+        })
+        .filter(Boolean);
+      return {
+        id: cleanString(entry.id) || "",
+        status: cleanString(entry.status) || "unknown",
+        startedAt: cleanString(entry.started_at),
+        finishedAt: cleanString(entry.finished_at),
+        error: cleanString(entry.error),
+        source: cleanString(entry.source),
+        usedActions: cleanStringArray(entry.used_actions),
+        actions,
+      };
+    })
+    .filter(Boolean);
+
+  const logs = cleanStringArray(data.logs);
+  const errors = cleanStringArray(data.errors);
+  const lastLLM = cleanString(data.last_llm);
+
+  return {
+    status,
+    heartbeat,
+    config: {
+      debounceSeconds: Number.isFinite(debounceSecondsRaw)
+        ? debounceSecondsRaw
+        : null,
+      windowSeconds: Number.isFinite(windowSecondsRaw)
+        ? windowSecondsRaw
+        : null,
+      contextTopics: cleanStringArray(configRaw.context_topics),
+      sensationTopics: cleanStringArray(configRaw.sensation_topics),
+    },
+    recentSensations,
+    scripts,
+    lastLLM,
+    logs,
+    errors,
+  };
+}
