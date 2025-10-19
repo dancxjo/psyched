@@ -257,7 +257,7 @@ class VoiceDashboard extends LitElement {
           <form @submit=${this.handleSendVoice}>
             <label>
               Text to speak
-              <textarea rows="3" .value=${this.voiceMessage} @input=${(e) => (this.voiceMessage = e.target.value)} placeholder="Type message"></textarea>
+              <input type="text" .value=${this.voiceMessage} @input=${(e) => (this.voiceMessage = e.target.value)} placeholder="Type message">
             </label>
             <button class="surface-action" type="submit">Send to /voice</button>
             ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
