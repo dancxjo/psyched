@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import traceback
 from collections.abc import Callable
 
 from .backends import AudioAwareBackend, EarBackend
@@ -50,7 +51,7 @@ class EarWorker:
                 try:
                     self._backend.close()
                 except Exception:  # pragma: no cover - defensive logging
-                    self._logger.exception("Failed to close audio backend cleanly")
+                    self._log_exception("Failed to close audio backend cleanly")
             thread = self._thread
             if thread is not None:
                 thread.join(timeout=5)
@@ -62,7 +63,7 @@ class EarWorker:
         try:
             self._backend.run(self._publisher, self._stop_event)
         except Exception:  # pragma: no cover - defensive logging
-            self._logger.exception("Ear backend terminated with an error")
+            self._log_exception("Ear backend terminated with an error")
         finally:
             with self._lock:
                 self._started = False
@@ -74,3 +75,13 @@ class EarWorker:
             self._backend.submit_audio(pcm, sample_rate, channels)
         else:
             self._logger.warning(f"Backend {self._backend} does not accept audio")
+
+    def _log_exception(self, message: str) -> None:
+        """Report exceptions through both ROS and stdlib loggers."""
+
+        if hasattr(self._logger, "exception"):
+            self._logger.exception(message)
+            return
+
+        formatted_traceback = traceback.format_exc()
+        self._logger.error(f"{message}\n{formatted_traceback}")
