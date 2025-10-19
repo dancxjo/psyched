@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
+import tomllib
+
 from .actions import ActionError, ActionResult, ModuleAction
 
 try:  # pragma: no cover - exercised implicitly when ROS dependencies exist
@@ -109,7 +111,7 @@ def register_module_api_actions(
         api = load_module_api_definition(module_dir)
         if api is None:
             continue
-        module_name = module_dir.name
+        module_name = _canonical_module_name(module_dir)
         for definition in api.actions:
             try:
                 action = _build_action(module_name, definition, ros)
@@ -122,6 +124,29 @@ def register_module_api_actions(
                 )
                 continue
             registry.register(module_name, action)
+
+
+def _canonical_module_name(module_dir: Path) -> str:
+    """Return the canonical module name for ``module_dir``.
+
+    The cockpit surfaces actions using the module identifier that other
+    subsystems reference (e.g. the cockpit UI, :mod:`psh`, ROS bridge). On
+    packaged hosts the on-disk directory can diverge from this identifier when
+    version suffixes are appended (``pilot-unit``), so we prefer the manifest's
+    ``name`` field when available and fall back to the directory name.
+    """
+
+    manifest = module_dir / "module.toml"
+    if manifest.exists():
+        try:
+            payload = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:  # pragma: no cover - invalid manifest
+            _LOGGER.warning("Failed to parse module manifest %s: %s", manifest, exc)
+        else:
+            name = payload.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+    return module_dir.name
 
 
 def _build_action(
