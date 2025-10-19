@@ -267,11 +267,11 @@ class CockpitModuleLogs extends LitElement {
       <div class="surface-log__meta">
         <span>Showing ${this.lines.length} line${this.lines.length === 1 ? '' : 's'}.</span>
         ${this.truncated
-          ? html`<span>Older entries truncated.</span>`
-          : ''}
+        ? html`<span>Older entries truncated.</span>`
+        : ''}
         ${this.updatedAt
-          ? html`<span>Updated ${this._formatTimestamp(this.updatedAt)}</span>`
-          : html`<span>Awaiting first log write.</span>`}
+        ? html`<span>Updated ${this._formatTimestamp(this.updatedAt)}</span>`
+        : html`<span>Awaiting first log write.</span>`}
       </div>
       <details class="surface-log__details">
         <summary class="surface-log__summary">View module log</summary>
@@ -314,8 +314,8 @@ class CockpitModuleLogs extends LitElement {
         <span>Module: ${details.displayName}</span>
         <span>Slug: ${details.slug || 'n/a'}</span>
         ${details.dashboardUrl
-          ? html`<a class="module-commands__link" href="${details.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
-          : ''}
+        ? html`<a class="module-commands__link" href="${details.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
+        : ''}
         ${details.systemd.unit ? html`<span>Unit: ${details.systemd.unit}</span>` : ''}
       </div>
       <div class="module-commands__meta">
@@ -331,8 +331,8 @@ class CockpitModuleLogs extends LitElement {
               ?disabled=${Boolean(busyAction)}
             >
               ${busyAction === 'up' || busyAction === 'down'
-                ? 'Working…'
-                : systemd.active ? 'Stop' : 'Start'}
+            ? 'Working…'
+            : systemd.active ? 'Stop' : 'Start'}
             </button>
             <button
               type="button"
@@ -341,17 +341,17 @@ class CockpitModuleLogs extends LitElement {
               ?disabled=${Boolean(busyAction)}
             >
               ${busyAction === 'enable' || busyAction === 'disable'
-                ? 'Working…'
-                : systemd.enabled ? 'Disable' : 'Enable'}
+            ? 'Working…'
+            : systemd.enabled ? 'Disable' : 'Enable'}
             </button>
             ${systemd.exists
-              ? html`<button
+            ? html`<button
                     type="button"
                     class="surface-action"
                     @click=${() => this._runSystemdAction('teardown')}
                     ?disabled=${Boolean(busyAction)}
                   >${busyAction === 'teardown' ? 'Working…' : 'Remove unit'}</button>`
-              : html`<button
+            : html`<button
                     type="button"
                     class="surface-action"
                     @click=${() => this._runSystemdAction('setup')}

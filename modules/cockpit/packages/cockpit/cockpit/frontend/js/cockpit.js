@@ -70,6 +70,15 @@ function resolveStreamUrl(streamId) {
   if (/^wss?:\/\//i.test(path)) {
     return path;
   }
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      const url = new URL(path);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      return url.toString();
+    } catch (_error) {
+      // Fall through to relative handling below if URL construction fails.
+    }
+  }
   const location = typeof window !== 'undefined' ? window.location : undefined;
   const protocol = location && location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = location && location.host ? location.host : '127.0.0.1';
