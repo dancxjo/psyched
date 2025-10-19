@@ -100,30 +100,70 @@ def register_module_api_actions(
     *,
     modules_root: Path,
     ros: RosClient,
+    extra_roots: Iterable[Path] = (),
 ) -> None:
-    """Register module-defined cockpit actions from JSON definitions."""
+    """Register module-defined cockpit actions from JSON definitions.
 
-    root = Path(modules_root)
-    if not root.exists():
-        return
+    Parameters
+    ----------
+    registry:
+        Target :class:`~cockpit.actions.ActionRegistry` that stores the
+        resulting actions.
+    modules_root:
+        Primary directory containing module manifests and cockpit API
+        definitions. This is typically the active workspace managed by
+        ``psh``.
+    ros:
+        ROS client used when constructing action handlers.
+    extra_roots:
+        Optional additional directories that should be scanned when the
+        primary workspace does not expose cockpit API files. This allows the
+        cockpit to fall back to repository checkouts where the action
+        definitions live even when the active workspace omits them (e.g. a
+        stripped deployment tree). Later directories only contribute actions
+        that were not already registered by earlier roots, ensuring
+        workspace-specific overrides remain authoritative.
+    """
 
-    for module_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        api = load_module_api_definition(module_dir)
-        if api is None:
+    roots: List[Path] = [Path(modules_root)]
+    roots.extend(Path(root) for root in extra_roots)
+
+    visited: set[Path] = set()
+    registered: set[tuple[str, str]] = set()
+
+    for candidate in roots:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if resolved in visited:
             continue
-        module_name = _canonical_module_name(module_dir)
-        for definition in api.actions:
-            try:
-                action = _build_action(module_name, definition, ros)
-            except ValueError as exc:
-                _LOGGER.warning(
-                    "Skipping action %s.%s due to configuration error: %s",
-                    module_name,
-                    definition.name,
-                    exc,
-                )
+        visited.add(resolved)
+
+        if not candidate.exists():
+            continue
+
+        for module_dir in sorted(p for p in candidate.iterdir() if p.is_dir()):
+            api = load_module_api_definition(module_dir)
+            if api is None:
                 continue
-            registry.register(module_name, action)
+            module_name = _canonical_module_name(module_dir)
+            for definition in api.actions:
+                key = (module_name, definition.name)
+                if key in registered:
+                    continue
+                try:
+                    action = _build_action(module_name, definition, ros)
+                except ValueError as exc:
+                    _LOGGER.warning(
+                        "Skipping action %s.%s due to configuration error: %s",
+                        module_name,
+                        definition.name,
+                        exc,
+                    )
+                    continue
+                registry.register(module_name, action)
+                registered.add(key)
 
 
 def _canonical_module_name(module_dir: Path) -> str:

@@ -195,7 +195,19 @@ def create_app(*, settings: CockpitSettings) -> web.Application:
         module_names = []
         _LOGGER.exception("Failed to enumerate modules while registering actions")
     register_builtin_actions(registry, ros=ros_client, modules=module_names)
-    register_module_api_actions(registry, modules_root=settings.modules_root, ros=ros_client)
+
+    extra_action_roots: list[Path] = []
+    if repo_root is not None:
+        repo_modules = repo_root / "modules"
+        if repo_modules.resolve() != settings.modules_root.resolve():
+            extra_action_roots.append(repo_modules)
+
+    register_module_api_actions(
+        registry,
+        modules_root=settings.modules_root,
+        ros=ros_client,
+        extra_roots=extra_action_roots,
+    )
 
     async def _shutdown_resources(app: web.Application) -> None:
         await stream_manager.close_all()
