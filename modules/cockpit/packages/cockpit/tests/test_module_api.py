@@ -169,6 +169,42 @@ def test_register_module_api_actions_registers_service(tmp_path: Path) -> None:
     assert call["timeout"] == pytest.approx(1.2)
 
 
+def test_register_module_api_actions_uses_extra_roots(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "debug_stream",
+          "description": "Stream pilot debug",
+          "kind": "stream-topic",
+          "defaults": {
+            "topic": "/pilot/debug",
+            "message_type": "std_msgs/msg/String"
+          }
+        }
+      ]
+    }
+    """
+
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    fallback_root = tmp_path / "repo"
+    write_actions_file(fallback_root, "pilot", payload)
+
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(
+        registry,
+        modules_root=work_root,
+        ros=ros,
+        extra_roots=[fallback_root],
+    )  # type: ignore[arg-type]
+
+    action = registry.get("pilot", "debug_stream")
+    assert action.description == "Stream pilot debug"
+
+
 def test_register_module_api_actions_uses_manifest_name(tmp_path: Path) -> None:
     payload = """
     {
