@@ -90,3 +90,8 @@ modules/cockpit/packages/cockpit/cockpit/frontend/js/foot.js
 modules/cockpit/packages/cockpit/cockpit/frontend/js/hypothalamus.js
 modules/cockpit/packages/cockpit/cockpit/frontend/js/imu.js
 modules/cockpit/packages/cockpit/cockpit/frontend/js/voice.js
+modules/cockpit/packages/cockpit/cockpit/frontend/README.md
+modules/cockpit/packages/cockpit/cockpit/frontend/api/actions.json
+modules/cockpit/packages/cockpit/cockpit/frontend/components/README.md
+modules/cockpit/packages/cockpit/cockpit/frontend/utils/battery.js
+modules/cockpit/packages/cockpit/cockpit/frontend/utils/voice.js
