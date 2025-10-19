@@ -66,6 +66,21 @@ class EarDashboard extends LitElement {
   static styles = [
     surfaceStyles,
     css`
+      .dashboard-layout {
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .dashboard-row {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .dashboard-row--wide {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+
       .indicator-row {
         display: flex;
         flex-wrap: wrap;
@@ -77,6 +92,16 @@ class EarDashboard extends LitElement {
       .oscilloscope-wrapper {
         display: grid;
         gap: 0.5rem;
+      }
+
+      cockpit-audio-oscilloscope {
+        display: block;
+        width: 100%;
+      }
+
+      cockpit-audio-oscilloscope canvas {
+        width: 100%;
+        height: auto;
       }
 
       .oscilloscope-wrapper[data-state='idle'] {
@@ -388,63 +413,65 @@ class EarDashboard extends LitElement {
     const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
     const audioActive = this.audioStatus === 'Live';
     return html`
-      <div class="surface-grid surface-grid--wide">
-        <article class="surface-card">
-          <h3 class="surface-card__title">Stream status</h3>
-          <p class="surface-note">Audio stream: <strong>${this.audioStatus}</strong></p>
-          <p class="surface-note">Last frame: ${this.lastAudioTimestamp}</p>
-          <div class="indicator-row">
-            <span class="surface-pill" data-variant=${speechVariant}>
-              ${this.speechActive ? 'Speech detected' : 'No speech'}
-            </span>
-            <span class="surface-pill" data-variant=${silenceVariant}>
-              ${this.silenceDetected ? 'Silence' : 'Audio energy'}
-            </span>
-          </div>
-          <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${() => this.toggleAudioMonitoring()}>
-              ${this.audioMonitoringEnabled ? 'Pause audio monitor' : 'Resume audio monitor'}
-            </button>
-            <button
-              type="button"
-              class="surface-button surface-button--ghost"
-              @click=${() => this.clearTranscripts()}
-              ?disabled=${this.transcripts.length === 0}
-            >
-              Clear transcript log
-            </button>
-          </div>
-        </article>
+      <div class="dashboard-layout">
+        <div class="dashboard-row dashboard-row--wide">
+          <article class="surface-card">
+            <h3 class="surface-card__title">Stream status</h3>
+            <p class="surface-note">Audio stream: <strong>${this.audioStatus}</strong></p>
+            <p class="surface-note">Last frame: ${this.lastAudioTimestamp}</p>
+            <div class="indicator-row">
+              <span class="surface-pill" data-variant=${speechVariant}>
+                ${this.speechActive ? 'Speech detected' : 'No speech'}
+              </span>
+              <span class="surface-pill" data-variant=${silenceVariant}>
+                ${this.silenceDetected ? 'Silence' : 'Audio energy'}
+              </span>
+            </div>
+            <div class="surface-actions">
+              <button type="button" class="surface-button" @click=${() => this.toggleAudioMonitoring()}>
+                ${this.audioMonitoringEnabled ? 'Pause audio monitor' : 'Resume audio monitor'}
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${() => this.clearTranscripts()}
+                ?disabled=${this.transcripts.length === 0}
+              >
+                Clear transcript log
+              </button>
+            </div>
+          </article>
 
-        <article class="surface-card">
-          <h3 class="surface-card__title">Audio indicators</h3>
-          <ul class="sensor-list">
-            ${this.renderSensorIndicator('Audio stream', audioActive)}
-            ${this.renderSensorIndicator('Speech detected', this.speechActive)}
-            ${this.renderSensorIndicator('Audio energy', !this.silenceDetected)}
-          </ul>
-        </article>
+          <article class="surface-card">
+            <h3 class="surface-card__title">Audio indicators</h3>
+            <ul class="sensor-list">
+              ${this.renderSensorIndicator('Audio stream', audioActive)}
+              ${this.renderSensorIndicator('Speech detected', this.speechActive)}
+              ${this.renderSensorIndicator('Audio energy', !this.silenceDetected)}
+            </ul>
+          </article>
         </div>
-        <div class="surface-grid surface-grid--wide">
+
+        <div class="dashboard-row">
           <article class="surface-card surface-card--wide">
             <h3 class="surface-card__title">PCM oscilloscope</h3>
             <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
             <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
               <cockpit-audio-oscilloscope
-              width="320"
-              height="200"
-              .record=${this.audioRecord ?? {}}
-            ></cockpit-audio-oscilloscope>
-            <p class="surface-note surface-mono">
-              Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
-            </p>
-          </div>
-        </article>
-      </div>
-        <div class="surface-grid surface-grid--wide">
-        <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Transcript log</h3>
-          ${this.transcripts.length === 0
+                height="200"
+                .record=${this.audioRecord ?? {}}
+              ></cockpit-audio-oscilloscope>
+              <p class="surface-note surface-mono">
+                Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <div class="dashboard-row">
+          <article class="surface-card surface-card--wide">
+            <h3 class="surface-card__title">Transcript log</h3>
+            ${this.transcripts.length === 0
         ? html`<p class="surface-empty">Awaiting transcripts…</p>`
         : html`<ol class="transcript-log">
                 ${this.transcripts.map(
@@ -456,7 +483,8 @@ class EarDashboard extends LitElement {
                   </li>`,
         )}
               </ol>`}
-        </article>
+          </article>
+        </div>
       </div>
     `;
   }

@@ -26,6 +26,7 @@ class CockpitAudioOscilloscope extends LitElement {
     this._samples = new Float32Array();
     this._lastByteLength = 0;
     this._decodeWarningIssued = false;
+    this._resizeObserver = null;
   }
 
   createRenderRoot() {
@@ -35,13 +36,70 @@ class CockpitAudioOscilloscope extends LitElement {
   firstUpdated() {
     this._canvas = this.querySelector('canvas');
     this._context = this._canvas?.getContext('2d') ?? null;
+    this._observeResize();
+    this._syncCanvasDimensions();
     this._renderWaveform();
   }
 
+  disconnectedCallback() {
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    super.disconnectedCallback();
+  }
+
   updated(changed) {
+    let shouldRender = false;
+    if (changed.has('width') || changed.has('height')) {
+      this._syncCanvasDimensions();
+      shouldRender = true;
+    }
     if (changed.has('record')) {
       this._samples = this._extractSamples();
+      shouldRender = true;
+    }
+    if (shouldRender) {
       this._renderWaveform();
+    }
+  }
+
+  _observeResize() {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    if (this._resizeObserver) {
+      return;
+    }
+    this._resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target !== this) {
+          continue;
+        }
+        const nextWidth = Math.floor(entry.contentRect.width || 0);
+        if (!nextWidth) {
+          continue;
+        }
+        if (nextWidth !== this.width) {
+          this.width = nextWidth;
+        }
+      }
+    });
+    this._resizeObserver.observe(this);
+  }
+
+  _syncCanvasDimensions() {
+    if (!this._canvas) {
+      this._canvas = this.querySelector('canvas');
+    }
+    if (!this._canvas) {
+      return;
+    }
+    if (this.width && this._canvas.width !== this.width) {
+      this._canvas.width = this.width;
+    }
+    if (this.height && this._canvas.height !== this.height) {
+      this._canvas.height = this.height;
     }
   }
 
