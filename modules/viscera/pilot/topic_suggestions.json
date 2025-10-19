@@ -1,0 +1,9 @@
+{
+  "context_topics": [
+    {
+      "topic": "/hosts/health/{HOST_SHORT}",
+      "type": "psyched_msgs/msg/HostHealth"
+    }
+  ],
+  "sensation_topics": []
+}

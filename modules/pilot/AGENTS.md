@@ -9,3 +9,9 @@
 
 - The canonical action export is available via the `psh` CLI: `psh actions export --json`.
 - The pilot node will prefer querying the cockpit HTTP API (`/api/actions`) when available and falls back to `psh actions export --json` when not. Keep the `psh` command in sync with cockpit actions if you add or modify actions.
+
+## Topic configuration
+
+- The pilot automatically subscribes to a minimal set of inputs (host health, `/instant`, `/situation`, `/status`, `/sensations`) so the prompt loop can run even before other modules publish data.
+- Modules can suggest extra inputs by dropping `modules/<name>/pilot/topic_suggestions.json`. Entries should include `topic` and `type` fields; placeholders `{HOST}` and `{HOST_SHORT}` resolve at runtime.
+- Override the subscriptions at launch time via the `context_topics` and `sensation_topics` parameters (JSON). Example: `ros2 run pilot pilot_node --ros-args -p context_topics='[{"topic":"/hosts/health/motherbrain","type":"psyched_msgs/msg/HostHealth"}]'`.

@@ -1,0 +1,13 @@
+{
+  "context_topics": [
+    {
+      "topic": "conversation",
+      "type": "psyched_msgs/msg/Message"
+    },
+    {
+      "topic": "chat/stream",
+      "type": "std_msgs/msg/String"
+    }
+  ],
+  "sensation_topics": []
+}

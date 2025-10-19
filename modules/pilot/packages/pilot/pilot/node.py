@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 from urllib import error, request
 from uuid import uuid4
@@ -38,6 +40,159 @@ if not _LOGGER.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [pilot.node] %(message)s"))
     _LOGGER.addHandler(handler)
 _LOGGER.setLevel(logging.INFO)
+
+
+def _resolve_host_names(env: Optional[Mapping[str, str]] = None) -> tuple[str, str]:
+    """Return ``(hostname, shortname)`` derived from *env* or the local host."""
+
+    source: Mapping[str, str] = env if env is not None else os.environ
+    raw = (
+        str(
+            source.get("PILOT_HOST")
+            or source.get("HOST")
+            or source.get("HOSTNAME")
+            or socket.gethostname()
+            or ""
+        ).strip()
+    )
+    if not raw:
+        raw = "host"
+    short = raw.split(".")[0] or raw
+    return raw, short
+
+
+def _default_context_topics(host_short: str) -> List[Dict[str, str]]:
+    """Return the minimal default context topic subscriptions."""
+
+    return [
+        {"topic": f"/hosts/health/{host_short}", "type": "psyched_msgs/msg/HostHealth"},
+        {"topic": "/instant", "type": "std_msgs/msg/String"},
+        {"topic": "/situation", "type": "std_msgs/msg/String"},
+        {"topic": "/status", "type": "std_msgs/msg/String"},
+    ]
+
+
+def _default_sensation_topics() -> List[Dict[str, str]]:
+    """Return the minimal default sensation topic subscriptions."""
+
+    return [{"topic": "/sensations", "type": "psyched_msgs/msg/SensationStamped"}]
+
+
+def _normalise_topic_entries(
+    entries: Sequence[Mapping[str, Any]],
+    *,
+    keep_first: bool,
+) -> List[Dict[str, str]]:
+    """Return topic/type entries with duplicates removed while preserving order."""
+
+    dedup: Dict[str, Dict[str, str]] = {}
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        topic = str(entry.get("topic") or "").strip()
+        type_name = str(entry.get("type") or "").strip()
+        if not topic or not type_name:
+            continue
+        if keep_first and topic in dedup:
+            continue
+        dedup[topic] = {"topic": topic, "type": type_name}
+    return list(dedup.values())
+
+
+def _expand_topic_template(value: str, *, host_full: str, host_short: str) -> str:
+    """Return *value* with host placeholders substituted."""
+
+    result = value.replace("{HOST_SHORT}", host_short).replace("${HOST_SHORT}", host_short)
+    result = result.replace("{HOST}", host_full).replace("${HOST}", host_full)
+    return result
+
+
+def _discover_topic_suggestions(
+    root: Optional[Path],
+    *,
+    host_full: str,
+    host_short: str,
+    logger: Optional[Any] = None,
+) -> Dict[str, List[Dict[str, str]]]:
+    """Return topic suggestions discovered under *root*."""
+
+    suggestions: Dict[str, List[Dict[str, str]]] = {
+        "context_topics": [],
+        "sensation_topics": [],
+    }
+    if root is None:
+        return suggestions
+    try:
+        base = Path(root)
+    except TypeError:
+        return suggestions
+    if not base.exists():
+        return suggestions
+
+    for module_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+        candidate = module_dir / "pilot" / "topic_suggestions.json"
+        if not candidate.exists():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            if logger:
+                logger.warning("Failed to parse %s: %s", candidate, exc)
+            continue
+        for key in ("context_topics", "sensation_topics"):
+            items = payload.get(key)
+            if not isinstance(items, list):
+                continue
+            for entry in items:
+                if not isinstance(entry, Mapping):
+                    continue
+                topic = str(entry.get("topic") or "").strip()
+                type_name = str(entry.get("type") or "").strip()
+                if not topic or not type_name:
+                    continue
+                expanded_topic = _expand_topic_template(topic, host_full=host_full, host_short=host_short)
+                suggestions[key].append({"topic": expanded_topic, "type": type_name})
+    return suggestions
+
+
+def _suggestions_root(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
+    """Return the directory containing module topic suggestion manifests."""
+
+    source: Mapping[str, str] = env if env is not None else os.environ
+    explicit = source.get("PILOT_TOPIC_SUGGESTIONS_ROOT")
+    if explicit:
+        return Path(explicit)
+    repo_dir = source.get("REPO_DIR")
+    if repo_dir:
+        return Path(repo_dir) / "modules"
+    return None
+
+
+def _parse_topic_parameter(
+    raw_value: Any,
+    *,
+    param_name: str,
+    fallback: List[Dict[str, str]],
+    logger: Any,
+) -> List[Dict[str, str]]:
+    """Return the configured topic entries parsed from ROS parameter storage."""
+
+    if isinstance(raw_value, str):
+        try:
+            loaded = json.loads(raw_value)
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON for %s, using fallback", param_name)
+            return list(fallback)
+    elif isinstance(raw_value, list):
+        loaded = raw_value
+    else:
+        return list(fallback)
+
+    entries = _normalise_topic_entries(
+        [entry for entry in loaded if isinstance(entry, Mapping)],
+        keep_first=False,
+    )
+    return entries
 
 
 class LLMClient:
@@ -170,15 +325,6 @@ def _ros_time_to_datetime(time_msg) -> datetime:
 class PilotNode(Node):
     """ROS node orchestrating the feeling + will integration pipeline."""
 
-    _DEFAULT_CONTEXT_TOPICS = [
-        {"topic": "/instant", "type": "std_msgs/msg/String"},
-        {"topic": "/situation", "type": "std_msgs/msg/String"},
-        {"topic": "/status", "type": "std_msgs/msg/String"},
-    ]
-    _DEFAULT_SENSATION_TOPICS = [
-        {"topic": "/sensations", "type": "psyched_msgs/msg/SensationStamped"}
-    ]
-
     def __init__(self, *, llm_client: Optional[LLMClient] = None, rememberd: Optional[RememberdClient] = None) -> None:
         super().__init__("pilot")
 
@@ -199,6 +345,22 @@ class PilotNode(Node):
         self._script_lock = threading.Lock()
         self._action_schemas: Dict[str, Dict[str, Any]] = {}
 
+        host_full, host_short = _resolve_host_names()
+        suggestions = _discover_topic_suggestions(
+            _suggestions_root(),
+            host_full=host_full,
+            host_short=host_short,
+            logger=self.get_logger(),
+        )
+        context_defaults = _normalise_topic_entries(
+            _default_context_topics(host_short) + suggestions["context_topics"],
+            keep_first=True,
+        )
+        sensation_defaults = _normalise_topic_entries(
+            _default_sensation_topics() + suggestions["sensation_topics"],
+            keep_first=True,
+        )
+
         qos = QoSProfile(depth=10)
         qos.history = QoSHistoryPolicy.KEEP_LAST
         qos.reliability = ReliabilityPolicy.RELIABLE
@@ -217,11 +379,12 @@ class PilotNode(Node):
             self._debug_timer = None
 
         self._context_topics = self._load_topic_configs(
-            "context_topics", self._DEFAULT_CONTEXT_TOPICS, self._handle_context_message, qos
+            "context_topics", context_defaults, self._handle_context_message, qos
         )
         self._sensation_topics = self._load_topic_configs(
-            "sensation_topics", self._DEFAULT_SENSATION_TOPICS, self._handle_sensation_message, qos
+            "sensation_topics", sensation_defaults, self._handle_sensation_message, qos
         )
+        self._seed_minimal_context(host_short)
 
         self._timer = self.create_timer(self._debounce_seconds, self._on_timer)
 
@@ -236,26 +399,22 @@ class PilotNode(Node):
     def _load_topic_configs(
         self,
         param_name: str,
-        default: List[Dict[str, Any]],
+        default: List[Dict[str, str]],
         callback,
         qos: QoSProfile,
     ) -> Dict[str, Any]:
-        raw_param = self.declare_parameter(param_name, json.dumps(default)).value
-        if isinstance(raw_param, str):
-            try:
-                configs = json.loads(raw_param)
-            except json.JSONDecodeError:
-                self.get_logger().warning("Invalid JSON for %s, using defaults", param_name)
-                configs = default
-        elif isinstance(raw_param, list):
-            configs = raw_param
-        else:
-            configs = default
+        default_payload = json.dumps(default)
+        raw_param = self.declare_parameter(param_name, default_payload).value
+        entries = _parse_topic_parameter(
+            raw_param,
+            param_name=param_name,
+            fallback=default,
+            logger=self.get_logger(),
+        )
 
         mapping: Dict[str, Any] = {}
-        for entry in configs:
-            if not isinstance(entry, dict):
-                continue
+        subscriptions: List[str] = []
+        for entry in entries:
             topic = entry.get("topic")
             type_name = entry.get("type")
             if not topic or not type_name:
@@ -269,7 +428,28 @@ class PilotNode(Node):
             subscription = self.create_subscription(msg_type, topic, lambda msg, t=topic: callback(t, msg), qos)
             self._subscriptions.append(subscription)
             mapping[topic] = msg_type
+            subscriptions.append(f"{topic} ({type_name})")
+
+        if subscriptions:
+            self.get_logger().info("Subscribing to %s: %s", param_name, ", ".join(subscriptions))
+        else:
+            self.get_logger().warning("No subscriptions configured for %s", param_name)
         return mapping
+
+    def _seed_minimal_context(self, host_short: str) -> None:
+        """Ensure the prompt loop has baseline context even before ROS traffic arrives."""
+
+        if "/pilot/system" in self._topic_cache:
+            return
+        self._topic_cache["/pilot/system"] = {
+            "data": {
+                "status": "pilot_ready",
+                "host_short": host_short,
+                "note": "Awaiting upstream modules to publish topics.",
+            },
+            "timestamp": time.time(),
+        }
+        self._dirty = True
 
     def _handle_context_message(self, topic: str, msg: Any) -> None:
         try:
