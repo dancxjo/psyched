@@ -422,7 +422,9 @@ class PilotNode(Node):
             try:
                 msg_type = get_message(type_name)
             except (AttributeError, ModuleNotFoundError, ValueError) as exc:
-                self.get_logger().error("Failed to import message type %s: %s", type_name, exc)
+                self.get_logger().error(
+                    f"Failed to import message type {type_name}: {exc}"
+                )
                 continue
 
             subscription = self.create_subscription(msg_type, topic, lambda msg, t=topic: callback(t, msg), qos)
@@ -431,9 +433,13 @@ class PilotNode(Node):
             subscriptions.append(f"{topic} ({type_name})")
 
         if subscriptions:
-            self.get_logger().info("Subscribing to %s: %s", param_name, ", ".join(subscriptions))
+            self.get_logger().info(
+                f"Subscribing to {param_name}: {', '.join(subscriptions)}"
+            )
         else:
-            self.get_logger().warning("No subscriptions configured for %s", param_name)
+            self.get_logger().warning(
+                f"No subscriptions configured for {param_name}"
+            )
         return mapping
 
     def _seed_minimal_context(self, host_short: str) -> None:
@@ -525,7 +531,7 @@ class PilotNode(Node):
         fq = f"{module}.{action}"
         if fq not in available_actions:
             self.get_logger().warning(
-                "Command not available in action registry: %s", fq
+                f"Command not available in action registry: {fq}"
             )
             return False, "not_available"
 
@@ -542,12 +548,12 @@ class PilotNode(Node):
                         validate(instance=invocation.arguments, schema=schema)
                     except _ValidationError as verr:
                         self.get_logger().warning(
-                            "Action %s.%s failed validation: %s", module, action, verr
+                            f"Action {module}.{action} failed validation: {verr}"
                         )
                         return False, str(verr)
                 except Exception:
                     self.get_logger().debug(
-                        "jsonschema not available or validation skipped for %s", fq
+                        f"jsonschema not available or validation skipped for {fq}"
                     )
 
             body = json.dumps(payload).encode("utf-8")
@@ -559,16 +565,18 @@ class PilotNode(Node):
             )
             with request.urlopen(req, timeout=3.0) as resp:
                 resp_body = resp.read().decode("utf-8")
-                self.get_logger().info("Invoked %s.%s => %s", module, action, resp_body)
+                self.get_logger().info(
+                    f"Invoked {module}.{action} => {resp_body}"
+                )
                 return True, resp_body
         except error.HTTPError as exc:
             self.get_logger().warning(
-                "Action invocation failed (%s.%s): %s", module, action, exc
+                f"Action invocation failed ({module}.{action}): {exc}"
             )
             return False, str(exc)
         except Exception as exc:  # pragma: no cover - network errors
             self.get_logger().warning(
-                "Failed to invoke action %s.%s: %s", module, action, exc
+                f"Failed to invoke action {module}.{action}: {exc}"
             )
             return False, str(exc)
 
@@ -606,7 +614,7 @@ class PilotNode(Node):
                     script, available_actions, context=context
                 )
             except CommandScriptError as exc:
-                self.get_logger().warning("command_script invalid: %s", exc)
+                self.get_logger().warning(f"command_script invalid: {exc}")
                 self._record_script_state(
                     script_id,
                     status="invalid",
@@ -615,7 +623,9 @@ class PilotNode(Node):
                 )
                 return
             except Exception as exc:  # pragma: no cover - defensive guard
-                self.get_logger().error("command_script execution failed: %s", exc)
+                self.get_logger().error(
+                    f"command_script execution failed: {exc}"
+                )
                 self._record_script_state(
                     script_id,
                     status="failed",
@@ -655,10 +665,14 @@ class PilotNode(Node):
         try:
             proc = subprocess.run(args, check=False, capture_output=True, text=True)
         except FileNotFoundError:
-            self.get_logger().warning("psh command not available: %s", args[0])
+            self.get_logger().warning(
+                f"psh command not available: {args[0]}"
+            )
             return ""
         if proc.returncode != 0:
-            self.get_logger().warning("psh command failed (%s): %s", proc.returncode, proc.stderr.strip())
+            self.get_logger().warning(
+                f"psh command failed ({proc.returncode}): {proc.stderr.strip()}"
+            )
             return ""
         return proc.stdout
 
@@ -695,7 +709,7 @@ class PilotNode(Node):
             payload.data = json.dumps(snapshot)
             self._debug_publisher.publish(payload)
         except Exception as exc:  # pragma: no cover - defensive guard
-            self.get_logger().warning("Failed to emit debug snapshot: %s", exc)
+            self.get_logger().warning(f"Failed to emit debug snapshot: {exc}")
 
     def _fetch_actions(self) -> List[str]:
         # Prefer fetching actions from cockpit HTTP API if available via env var
@@ -757,7 +771,9 @@ class PilotNode(Node):
                 if isinstance(actions_raw, list):
                     return [str(action) for action in actions_raw if isinstance(action, str)]
             except Exception as exc:  # pragma: no cover - external command failure
-                self.get_logger().warning("Failed to fetch cockpit actions: %s", exc)
+                self.get_logger().warning(
+                    f"Failed to fetch cockpit actions: {exc}"
+                )
         return []
 
     def _fetch_status(self) -> Dict[str, Any]:
@@ -766,7 +782,9 @@ class PilotNode(Node):
             data = json.loads(result) if result else {}
             return data if isinstance(data, dict) else {}
         except Exception as exc:  # pragma: no cover - external command failure
-            self.get_logger().warning("Failed to fetch cockpit status: %s", exc)
+            self.get_logger().warning(
+                f"Failed to fetch cockpit status: {exc}"
+            )
             return {}
 
     def _parse_command(self, command: str) -> tuple[str, str, dict] | None:
@@ -808,7 +826,7 @@ class PilotNode(Node):
             raw_response = self._llm_client.generate(prompt)
             feeling_data = parse_feeling_intent_json(raw_response, actions)
         except (RuntimeError, FeelingIntentValidationError) as exc:
-            self.get_logger().error("Failed to generate FeelingIntent: %s", exc)
+            self.get_logger().error(f"Failed to generate FeelingIntent: {exc}")
             return
 
         recent_records = self._recent_sensations()
@@ -847,7 +865,9 @@ class PilotNode(Node):
                 context=script_context,
             )
         except Exception as exc:  # pragma: no cover - execution failures should not crash
-            self.get_logger().warning("Failed to schedule command script: %s", exc)
+            self.get_logger().warning(
+                f"Failed to schedule command script: {exc}"
+            )
 
         timestamp = _ros_time_to_datetime(msg.stamp)
         feeling_id = f"pilot-{uuid4()}"
@@ -866,7 +886,7 @@ class PilotNode(Node):
                 }
             )
         except Exception as exc:  # pragma: no cover - external service failure
-            self.get_logger().warning("Failed to write to rememberd: %s", exc)
+            self.get_logger().warning(f"Failed to write to rememberd: {exc}")
 
 
 def main(args: Optional[Sequence[str]] = None) -> None:
