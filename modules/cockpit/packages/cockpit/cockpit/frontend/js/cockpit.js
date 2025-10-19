@@ -151,7 +151,10 @@ class TopicSocket {
     this._pendingMessages = [];
     this._ws = null;
     this._streamId = null;
-    this._publishEnabled = false;
+    // Optimistically honour the caller's requested role so publish calls can
+    // be queued before the backend confirms the stream configuration. The
+    // server's response (handled in _initialise) still has the final say.
+    this._publishEnabled = this.role === 'publish' || this.role === 'both';
     this._closed = false;
     this._initialisationError = null;
     this._readyDeferred = createDeferred();
