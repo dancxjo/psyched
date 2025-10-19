@@ -41,6 +41,13 @@ class HypothalamusDashboard extends LitElement {
         this.sockets = [];
     }
 
+    createSocket(options) {
+        // Cockpit routes sockets by module; omitting the module key causes runtime failures.
+        const socket = createTopicSocket({ module: 'hypothalamus', ...options });
+        this.sockets.push(socket);
+        return socket;
+    }
+
     connectedCallback() {
         super.connectedCallback();
         this.connectTemperature();
@@ -62,7 +69,7 @@ class HypothalamusDashboard extends LitElement {
     }
 
     connectTemperature() {
-        const socket = createTopicSocket({
+        const socket = this.createSocket({
             topic: '/environment/temperature',
             type: 'sensor_msgs/msg/Temperature',
             role: 'subscribe',
@@ -84,11 +91,10 @@ class HypothalamusDashboard extends LitElement {
         socket.addEventListener('error', () => {
             this.status = 'Error';
         });
-        this.sockets.push(socket);
     }
 
     connectFahrenheit() {
-        const socket = createTopicSocket({
+        const socket = this.createSocket({
             topic: '/environment/temperature_fahrenheit',
             type: 'std_msgs/msg/Float32',
             role: 'subscribe',
@@ -103,11 +109,10 @@ class HypothalamusDashboard extends LitElement {
                 }
             }
         });
-        this.sockets.push(socket);
     }
 
     connectHumidity() {
-        const socket = createTopicSocket({
+        const socket = this.createSocket({
             topic: '/environment/humidity_percent',
             type: 'std_msgs/msg/Float32',
             role: 'subscribe',
@@ -122,11 +127,10 @@ class HypothalamusDashboard extends LitElement {
                 }
             }
         });
-        this.sockets.push(socket);
     }
 
     connectStatus() {
-        const socket = createTopicSocket({
+        const socket = this.createSocket({
             topic: '/environment/thermostat_status',
             type: 'std_msgs/msg/String',
             role: 'subscribe',
@@ -137,7 +141,6 @@ class HypothalamusDashboard extends LitElement {
                 this.backend = String(payload.data.data || 'unknown');
             }
         });
-        this.sockets.push(socket);
     }
 
     touch() {

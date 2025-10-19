@@ -13,6 +13,10 @@ export function dashboard() {
     temperatureF: null,
     humidityPercent: null,
     lastUpdate: 'Never',
+    createSocket(options) {
+      // Cockpit routes sockets by module; omitting the module key causes runtime failures.
+      return createTopicSocket({ module: 'hypothalamus', ...options });
+    },
     init() {
       this.connectTemperature();
       this.connectFahrenheit();
@@ -20,7 +24,7 @@ export function dashboard() {
       this.connectStatus();
     },
     connectTemperature() {
-      const socket = createTopicSocket({
+      const socket = this.createSocket({
         topic: '/environment/temperature',
         type: 'sensor_msgs/msg/Temperature',
         role: 'subscribe',
@@ -44,7 +48,7 @@ export function dashboard() {
       });
     },
     connectFahrenheit() {
-      const socket = createTopicSocket({
+      const socket = this.createSocket({
         topic: '/environment/temperature_fahrenheit',
         type: 'std_msgs/msg/Float32',
         role: 'subscribe',
@@ -61,7 +65,7 @@ export function dashboard() {
       });
     },
     connectHumidity() {
-      const socket = createTopicSocket({
+      const socket = this.createSocket({
         topic: '/environment/humidity_percent',
         type: 'std_msgs/msg/Float32',
         role: 'subscribe',
@@ -78,7 +82,7 @@ export function dashboard() {
       });
     },
     connectStatus() {
-      const socket = createTopicSocket({
+      const socket = this.createSocket({
         topic: '/environment/thermostat_status',
         type: 'std_msgs/msg/String',
         role: 'subscribe',
