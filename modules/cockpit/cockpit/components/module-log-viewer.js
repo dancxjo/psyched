@@ -106,10 +106,6 @@ class CockpitModuleLogs extends LitElement {
     this._ansi = new AnsiUp();
   }
 
-  createRenderRoot() {
-    return this;
-  }
-
   connectedCallback() {
     super.connectedCallback();
     this._connected = true;
