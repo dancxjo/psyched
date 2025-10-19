@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Sequence
 
 import rclpy
@@ -25,6 +26,7 @@ class TranscriberNode(Node):
 
     def __init__(self) -> None:
         super().__init__("ear_transcriber")
+        self._warned_missing_faster_whisper = False
         transcript_topic_param = str(self.declare_parameter("transcript_topic", "").value).strip()
         if transcript_topic_param:
             self._transcript_topic = transcript_topic_param
@@ -69,14 +71,25 @@ class TranscriberNode(Node):
         value = str(parameter.value).strip()
         return value or default
 
+    def _faster_whisper_available(self) -> bool:
+        try:
+            importlib.import_module("faster_whisper")  # type: ignore[import-not-found]
+        except ImportError:
+            if not self._warned_missing_faster_whisper:
+                self._warned_missing_faster_whisper = True
+                self.get_logger().error(
+                    "faster-whisper dependency is missing; install it with `psh mod pip ear` "
+                    "or `python3 -m pip install --break-system-packages faster-whisper` to enable the offline fallback.",
+                )
+            return False
+        return True
+
     def _create_backend(self) -> EarBackend:
         backend_name = str(self.declare_parameter("backend", "console").value).strip().lower()
         if backend_name in {"console", "stdin", "text"}:
             return ConsoleEarBackend()
         if backend_name in {"faster_whisper", "whisper"}:
-            try:
-                import faster_whisper  # type: ignore[import-not-found]
-            except ImportError:
+            if not self._faster_whisper_available():
                 self.get_logger().warning(
                     "faster-whisper backend requested but dependency is missing; falling back to console",
                 )
@@ -86,7 +99,16 @@ class TranscriberNode(Node):
         if backend_name in {"service", "asr", "websocket"}:
             uri = str(self.declare_parameter("service_uri", "ws://127.0.0.1:8089/ws").value).strip() or "ws://127.0.0.1:8089/ws"
             options = self._read_faster_whisper_options()
-            return ServiceASREarBackend(uri=uri, fallback_factory=lambda: FasterWhisperEarBackend(**options))
+            fallback_factory = (
+                (lambda: FasterWhisperEarBackend(**options))
+                if self._faster_whisper_available()
+                else None
+            )
+            if fallback_factory is None:
+                self.get_logger().warning(
+                    "ASR service fallback to faster-whisper is disabled until the dependency is installed.",
+                )
+            return ServiceASREarBackend(uri=uri, fallback_factory=fallback_factory)
         self.get_logger().warning(
             f"Unknown backend '{backend_name}'; defaulting to console backend",
         )

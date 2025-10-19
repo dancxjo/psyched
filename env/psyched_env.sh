@@ -45,11 +45,49 @@ export PSYCHED_WORKSPACE_INSTALL
 export PSYCHED_WORKSPACE_LOG
 
 if [[ -n "${ROS_DISTRO:-}" ]]; then
-  : "${PSYCHED_ROS_DISTRO:=${ROS_DISTRO}}"
+: "${PSYCHED_ROS_DISTRO:=${ROS_DISTRO}}"
 else
   : "${PSYCHED_ROS_DISTRO:=kilted}"
 fi
 : "${PSYCHED_ROS_SETUP:=/opt/ros/${PSYCHED_ROS_DISTRO}/setup.bash}"
+
+psyched::colcon_site_packages() {
+  local python_version
+  python_version="$(python3 - <<'PY' 2>/dev/null || true)
+import sys
+print(f\"{sys.version_info.major}.{sys.version_info.minor}\")
+PY
+"
+  if [[ -z "${python_version}" ]]; then
+    return 1
+  fi
+  local venv_root="/opt/ros/${PSYCHED_ROS_DISTRO}/colcon-venv"
+  local site_dir="${venv_root}/lib/python${python_version}/site-packages"
+  if [[ -d "${site_dir}" ]]; then
+    printf '%s\n' "${site_dir}"
+    return 0
+  fi
+  return 1
+}
+
+psyched::ensure_colcon_pythonpath() {
+  local site_dir
+  if ! site_dir="$(psyched::colcon_site_packages)"; then
+    return 1
+  fi
+  case ":${PYTHONPATH:-}:" in
+    *":${site_dir}:"*) ;;
+    *)
+      if [[ -n "${PYTHONPATH:-}" ]]; then
+        export PYTHONPATH="${site_dir}:${PYTHONPATH}"
+      else
+        export PYTHONPATH="${site_dir}"
+      fi
+      ;;
+  esac
+}
+
+psyched::ensure_colcon_pythonpath || true
 
 export PSYCHED_ROS_DISTRO
 export PSYCHED_ROS_SETUP

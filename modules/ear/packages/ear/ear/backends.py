@@ -133,8 +133,14 @@ class FasterWhisperEarBackend(AudioAwareBackend):
             from faster_whisper import WhisperModel  # type: ignore[import-not-found]
             import numpy as np  # type: ignore[import-not-found]
         except ImportError as error:  # pragma: no cover - optional dependency
+            _LOGGER.error(
+                "faster-whisper backend requested but dependencies are missing. "
+                "Install them with `psh mod pip ear` (preferred) or "
+                "`python3 -m pip install --break-system-packages faster-whisper` before retrying.",
+            )
             raise RuntimeError(
-                "faster-whisper backend requested but dependencies are missing"
+                "faster-whisper backend requested but dependencies are missing; install via "
+                "`psh mod pip ear` or `python3 -m pip install --break-system-packages faster-whisper`"
             ) from error
 
         if self._model is None:
