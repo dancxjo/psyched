@@ -108,6 +108,7 @@ class CockpitModuleLogs extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
+        flex-wrap: wrap;
       }
 
       .module-commands__title {
@@ -140,6 +141,11 @@ class CockpitModuleLogs extends LitElement {
       .module-commands__actions .surface-action {
         font-size: 0.75rem;
         padding: 0.35rem 0.6rem;
+      }
+
+      .module-commands__log {
+        display: grid;
+        gap: 0.6rem;
       }
 
       .module-commands__note,
@@ -220,29 +226,7 @@ class CockpitModuleLogs extends LitElement {
   render() {
     return html`
       <article class="surface-card surface-card--compact">
-        <div class="surface-log__header">
-          <h3 class="surface-card__title">Module log</h3>
-          <div class="surface-log__actions">
-            <button
-              type="button"
-              class="surface-action"
-              ?disabled=${this.loading || this.clearing || !this.module}
-              @click=${() => this._clearLogs()}
-            >
-              ${this.clearing ? 'Clearing…' : 'Clear log'}
-            </button>
-            <button
-              type="button"
-              class="surface-action"
-              ?disabled=${this.loading || this.clearing || !this.module}
-              @click=${() => this.refresh()}
-            >
-              ${this.loading ? 'Refreshing…' : 'Refresh log'}
-            </button>
-          </div>
-        </div>
         ${this._renderModuleCommands()}
-        ${this._renderStatus()}
       </article>
     `;
   }
@@ -298,6 +282,10 @@ class CockpitModuleLogs extends LitElement {
       return html`<section class="module-commands">
         <div class="module-commands__header">
           ${moduleCommandsTitle}
+          <div class="module-commands__actions">
+            <button type="button" class="surface-action" disabled>Clear log</button>
+            <button type="button" class="surface-action" disabled>Refresh log</button>
+          </div>
         </div>
         <p class="module-commands__note">Set a module to manage lifecycle commands.</p>
       </section>`;
@@ -309,6 +297,24 @@ class CockpitModuleLogs extends LitElement {
         <span class="surface-chip" data-variant=${details.hasCockpit ? 'success' : 'warning'}>
           ${details.hasCockpit ? 'Dashboard ready' : 'No dashboard'}
         </span>
+        <div class="module-commands__actions">
+          <button
+            type="button"
+            class="surface-action"
+            ?disabled=${this.loading || this.clearing || !this.module}
+            @click=${() => this._clearLogs()}
+          >
+            ${this.clearing ? 'Clearing…' : 'Clear log'}
+          </button>
+          <button
+            type="button"
+            class="surface-action"
+            ?disabled=${this.loading || this.clearing || !this.module}
+            @click=${() => this.refresh()}
+          >
+            ${this.loading ? 'Refreshing…' : 'Refresh log'}
+          </button>
+        </div>
       </div>
       <div class="module-commands__meta">
         <span>Module: ${details.displayName}</span>
@@ -365,10 +371,14 @@ class CockpitModuleLogs extends LitElement {
             >
               ${busyAction === 'debug' ? 'Collecting…' : 'Debug'}
             </button>
-          </div>`
+        </div>`
         : html`<p class="module-commands__note">Systemd integration unavailable on this host.</p>`}
       ${systemd.message ? html`<p class="module-commands__note">${systemd.message}</p>` : ''}
       ${errorMessage ? html`<p class="module-commands__error">${errorMessage}</p>` : ''}
+      <div class="module-commands__log">
+        <h4 class="surface-card__subtitle">Module log</h4>
+        ${this._renderStatus()}
+      </div>
     </section>`;
   }
 
