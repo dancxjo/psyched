@@ -299,7 +299,9 @@ body {
 }
 
 .module-surface {
-  display: block;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .module-placeholder {

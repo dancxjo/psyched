@@ -1,6 +1,7 @@
-import { LitElement, html } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { buildNavigationSections } from '/utils/navigation.js';
 import './module-log-viewer.js';
+import { surfaceStyles } from './cockpit-style.js';
 
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
@@ -24,6 +25,17 @@ const MODULE_COMPONENTS = {
  * Lightweight shell that lists module dashboards surfaced by the cockpit.
  */
 class CockpitApp extends LitElement {
+  static styles = [
+    surfaceStyles,
+    css`
+      .module-surface {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: minmax(0, 1fr);
+      }
+    `,
+  ];
+
   static properties = {
     modules: { state: true },
     loading: { state: true },
@@ -159,7 +171,7 @@ class CockpitApp extends LitElement {
           ${module.description ? html`<p class="module-description">${module.description}</p>` : ''}
         </header>
         ${componentTag
-        ? html`<div class="module-surface">
+        ? html`<div class="module-surface surface-grid surface-grid--stack">
               ${this.renderComponent(componentTag)}
               <cockpit-module-logs module=${module.name}></cockpit-module-logs>
             </div>`

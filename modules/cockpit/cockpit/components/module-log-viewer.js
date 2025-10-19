@@ -33,10 +33,6 @@ class CockpitModuleLogs extends LitElement {
         display: block;
       }
 
-      .surface-card {
-        margin-top: 1rem;
-      }
-
       .surface-log__header {
         display: flex;
         align-items: center;
