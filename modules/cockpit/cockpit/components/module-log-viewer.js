@@ -38,13 +38,6 @@ class CockpitModuleLogs extends LitElement {
         display: block;
       }
 
-      .surface-log__header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-      }
-
       .surface-log__meta {
         font-size: 0.75rem;
         color: var(--lcars-muted);
@@ -73,13 +66,6 @@ class CockpitModuleLogs extends LitElement {
         font-style: italic;
       }
 
-      .surface-log__actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-
       .surface-log__details {
         margin-top: 0.5rem;
       }
@@ -94,16 +80,12 @@ class CockpitModuleLogs extends LitElement {
         gap: 0.35rem;
       }
 
-      .module-commands {
+      .module-log-panel {
         display: grid;
-        gap: 0.6rem;
-        padding: 0.75rem 0.9rem;
-        border: 1px solid var(--control-surface-border);
-        border-radius: 0.6rem;
-        background: rgba(0, 0, 0, 0.28);
+        gap: 0.75rem;
       }
 
-      .module-commands__header {
+      .module-log-panel__header {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -111,7 +93,13 @@ class CockpitModuleLogs extends LitElement {
         flex-wrap: wrap;
       }
 
-      .module-commands__title {
+      .module-log-panel__title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .module-log-panel__heading {
         margin: 0;
         font-size: 0.85rem;
         letter-spacing: 0.08em;
@@ -119,46 +107,71 @@ class CockpitModuleLogs extends LitElement {
         color: var(--metric-title-color);
       }
 
-      .module-commands__meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        font-size: 0.75rem;
-        color: var(--lcars-muted);
-      }
-
-      .module-commands__link {
-        color: var(--lcars-accent);
-        text-decoration: none;
-      }
-
-      .module-commands__actions {
+      .module-log-panel__actions {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
       }
 
-      .module-commands__actions .surface-action {
+      .module-log-panel__actions .surface-action {
         font-size: 0.75rem;
         padding: 0.35rem 0.6rem;
       }
 
-      .module-commands__log {
-        display: grid;
-        gap: 0.6rem;
+      .module-log-panel__controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
       }
 
-      .module-commands__note,
-      .module-commands__error {
+      .module-log-panel__controls .surface-action {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.6rem;
+      }
+
+      .module-log-panel__meta {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .module-log-panel__metaRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      .module-log-panel__metaLink {
+        color: var(--lcars-accent);
+        text-decoration: none;
+      }
+
+      .module-log-panel__log {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .module-log-panel__subheading {
+        margin: 0;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--metric-label-color);
+      }
+
+      .module-log-panel__note,
+      .module-log-panel__error {
         margin: 0;
         font-size: 0.75rem;
       }
 
-      .module-commands__note {
+      .module-log-panel__note {
         color: var(--lcars-muted);
       }
 
-      .module-commands__error {
+      .module-log-panel__error {
         color: var(--lcars-danger, #ff7f7f);
       }
     `,
@@ -224,11 +237,7 @@ class CockpitModuleLogs extends LitElement {
   }
 
   render() {
-    return html`
-      <article class="surface-card surface-card--compact">
-        ${this._renderModuleCommands()}
-      </article>
-    `;
+    return this._renderModuleCommands();
   }
 
   _renderStatus() {
@@ -276,28 +285,34 @@ class CockpitModuleLogs extends LitElement {
     const enabledVariant = systemd.enabled ? 'info' : 'muted';
     const enabledLabel = systemd.enabled ? 'Enabled' : 'Disabled';
 
-    const moduleCommandsTitle = html`<h3 class="module-commands__title">Module commands</h3>`;
-
     if (!this.module) {
-      return html`<section class="module-commands">
-        <div class="module-commands__header">
-          ${moduleCommandsTitle}
-          <div class="module-commands__actions">
+      return html`<section class="surface-panel module-log-panel">
+        <header class="module-log-panel__header">
+          <div class="module-log-panel__title">
+            <h3 class="module-log-panel__heading">Module commands</h3>
+          </div>
+          <div class="module-log-panel__actions">
             <button type="button" class="surface-action" disabled>Clear log</button>
             <button type="button" class="surface-action" disabled>Refresh log</button>
           </div>
+        </header>
+        <p class="module-log-panel__note">Set a module to manage lifecycle commands.</p>
+        <div class="module-log-panel__log">
+          <h4 class="module-log-panel__subheading">Module log</h4>
+          ${this._renderStatus()}
         </div>
-        <p class="module-commands__note">Set a module to manage lifecycle commands.</p>
       </section>`;
     }
 
-    return html`<section class="module-commands">
-      <div class="module-commands__header">
-        ${moduleCommandsTitle}
-        <span class="surface-chip" data-variant=${details.hasCockpit ? 'success' : 'warning'}>
-          ${details.hasCockpit ? 'Dashboard ready' : 'No dashboard'}
-        </span>
-        <div class="module-commands__actions">
+    return html`<section class="surface-panel module-log-panel">
+      <header class="module-log-panel__header">
+        <div class="module-log-panel__title">
+          <h3 class="module-log-panel__heading">Module commands</h3>
+          <span class="surface-chip" data-variant=${details.hasCockpit ? 'success' : 'warning'}>
+            ${details.hasCockpit ? 'Dashboard ready' : 'No dashboard'}
+          </span>
+        </div>
+        <div class="module-log-panel__actions">
           <button
             type="button"
             class="surface-action"
@@ -315,21 +330,25 @@ class CockpitModuleLogs extends LitElement {
             ${this.loading ? 'Refreshing…' : 'Refresh log'}
           </button>
         </div>
-      </div>
-      <div class="module-commands__meta">
-        <span>Module: ${details.displayName}</span>
-        <span>Slug: ${details.slug || 'n/a'}</span>
-        ${details.dashboardUrl
-        ? html`<a class="module-commands__link" href="${details.dashboardUrl}" target="_blank" rel="noreferrer">Open dashboard</a>`
-        : ''}
-        ${details.systemd.unit ? html`<span>Unit: ${details.systemd.unit}</span>` : ''}
-      </div>
-      <div class="module-commands__meta">
-        <span class="surface-chip" data-variant=${activeVariant}>${activeLabel}</span>
-        <span class="surface-chip" data-variant=${enabledVariant}>${enabledLabel}</span>
+      </header>
+      <div class="module-log-panel__meta">
+        <div class="module-log-panel__metaRow">
+          <span>Module: ${details.displayName}</span>
+          <span>Slug: ${details.slug || 'n/a'}</span>
+          ${details.dashboardUrl
+            ? html`<a class="module-log-panel__metaLink" href="${details.dashboardUrl}" target="_blank" rel="noreferrer">
+                Open dashboard
+              </a>`
+            : ''}
+          ${details.systemd.unit ? html`<span>Unit: ${details.systemd.unit}</span>` : ''}
+        </div>
+        <div class="module-log-panel__metaRow">
+          <span class="surface-chip" data-variant=${activeVariant}>${activeLabel}</span>
+          <span class="surface-chip" data-variant=${enabledVariant}>${enabledLabel}</span>
+        </div>
       </div>
       ${canControl
-        ? html`<div class="module-commands__actions">
+        ? html`<div class="module-log-panel__controls">
             <button
               type="button"
               class="surface-action"
@@ -372,11 +391,11 @@ class CockpitModuleLogs extends LitElement {
               ${busyAction === 'debug' ? 'Collecting…' : 'Debug'}
             </button>
         </div>`
-        : html`<p class="module-commands__note">Systemd integration unavailable on this host.</p>`}
-      ${systemd.message ? html`<p class="module-commands__note">${systemd.message}</p>` : ''}
-      ${errorMessage ? html`<p class="module-commands__error">${errorMessage}</p>` : ''}
-      <div class="module-commands__log">
-        <h4 class="surface-card__subtitle">Module log</h4>
+        : html`<p class="module-log-panel__note">Systemd integration unavailable on this host.</p>`}
+      ${systemd.message ? html`<p class="module-log-panel__note">${systemd.message}</p>` : ''}
+      ${errorMessage ? html`<p class="module-log-panel__error">${errorMessage}</p>` : ''}
+      <div class="module-log-panel__log">
+        <h4 class="module-log-panel__subheading">Module log</h4>
         ${this._renderStatus()}
       </div>
     </section>`;
