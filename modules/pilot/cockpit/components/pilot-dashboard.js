@@ -3,11 +3,14 @@ import {
   html,
   LitElement,
 } from "https://unpkg.com/lit@3.1.4/index.js?module";
+import { classMap } from "https://unpkg.com/lit@3.1.4/directives/class-map.js?module";
 import { surfaceStyles } from "/components/cockpit-style.js";
 import { createTopicSocket } from "/js/cockpit.js";
 import {
+  loadCollapsedCards,
   normaliseDebugSnapshot,
   normaliseFeelingIntent,
+  persistCollapsedCards,
 } from "./pilot-dashboard.helpers.js";
 
 function makeId(prefix) {
@@ -38,6 +41,7 @@ class PilotDashboard extends LitElement {
     logsCount: { state: true },
     errorsCount: { state: true },
     intentFeed: { state: true },
+    collapsedCards: { state: true },
   };
 
   static styles = [
@@ -204,6 +208,7 @@ class PilotDashboard extends LitElement {
     this.logsCount = 0;
     this.errorsCount = 0;
     this.intentFeed = [];
+    this.collapsedCards = loadCollapsedCards();
 
     this._debugSocket = null;
     this._intentSocket = null;
@@ -221,6 +226,32 @@ class PilotDashboard extends LitElement {
     this._shutdownSocket(this._intentSocket);
     this._debugSocket = null;
     this._intentSocket = null;
+  }
+
+  isCardCollapsed(id) {
+    if (!id || !(this.collapsedCards instanceof Set)) {
+      return false;
+    }
+    return this.collapsedCards.has(id);
+  }
+
+  setCardCollapsed(id, collapsed) {
+    if (!id) {
+      return;
+    }
+    const next = new Set(this.collapsedCards instanceof Set ? this.collapsedCards : []);
+    if (collapsed) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    this.collapsedCards = next;
+    persistCollapsedCards(next);
+  }
+
+  toggleCardCollapsed(id) {
+    const collapsed = this.isCardCollapsed(id);
+    this.setCardCollapsed(id, !collapsed);
   }
 
   render() {
@@ -242,10 +273,12 @@ class PilotDashboard extends LitElement {
       ? "FeelingIntent stream active."
       : "No FeelingIntent messages yet.";
 
-    return html`
-      <div class="surface-grid surface-grid--wide">
-        <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Pilot status</h3>
+    const cards = [
+      this.renderSurfaceCard({
+        id: "pilot-status",
+        title: "Pilot status",
+        wide: true,
+        content: html`
           <p class="surface-status" data-variant="${statusTone}">${statusMessage}</p>
           <dl class="status-grid">
             <div>
@@ -311,10 +344,13 @@ class PilotDashboard extends LitElement {
                 <p class="empty-placeholder">No sensation streams recorded yet.</p>
               `}
           </section>
-        </article>
-
-        <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">FeelingIntent feed</h3>
+        `,
+      }),
+      this.renderSurfaceCard({
+        id: "pilot-intent",
+        title: "FeelingIntent feed",
+        wide: true,
+        content: html`
           <p class="surface-status" data-variant="${intentTone}">${intentMessage}</p>
           ${this.intentFeed.length
             ? html`
@@ -388,10 +424,12 @@ class PilotDashboard extends LitElement {
                 No FeelingIntent messages received from the pilot yet.
               </p>
             `}
-        </article>
-
-        <article class="surface-card">
-          <h3 class="surface-card__title">Recent sensations</h3>
+        `,
+      }),
+      this.renderSurfaceCard({
+        id: "pilot-sensations",
+        title: "Recent sensations",
+        content: html`
           <p class="section-note">
             Sliding window of sensation summaries captured over the last ${this
                 .config.windowSeconds != null
@@ -433,10 +471,12 @@ class PilotDashboard extends LitElement {
             : html`
               <p class="empty-placeholder">No sensations recorded in the current window.</p>
             `}
-        </article>
-
-        <article class="surface-card">
-          <h3 class="surface-card__title">Command scripts</h3>
+        `,
+      }),
+      this.renderSurfaceCard({
+        id: "pilot-scripts",
+        title: "Command scripts",
+        content: html`
           <p class="section-note">
             Scripts dispatched by the pilot after validating the LLM output and action
             catalogue.
@@ -503,33 +543,78 @@ class PilotDashboard extends LitElement {
             : html`
               <p class="empty-placeholder">No command scripts executed yet.</p>
             `}
-        </article>
-
-        ${this.lastPrompt
-          ? html`
-            <article class="surface-card surface-card--wide">
-              <h3 class="surface-card__title">Latest prompt</h3>
+        `,
+      }),
+      this.lastPrompt
+        ? this.renderSurfaceCard({
+            id: "pilot-latest-prompt",
+            title: "Latest prompt",
+            wide: true,
+            content: html`
               <p class="section-note">
                 Snapshot of the text sent to the language model for the most recent planning cycle.
               </p>
               <pre class="llm-output">${this.lastPrompt}</pre>
-            </article>
-          `
-          : null}
-
-        ${this.lastLLM
-          ? html`
-            <article class="surface-card surface-card--wide">
-              <h3 class="surface-card__title">Latest LLM response</h3>
+            `,
+          })
+        : null,
+      this.lastLLM
+        ? this.renderSurfaceCard({
+            id: "pilot-latest-llm",
+            title: "Latest LLM response",
+            wide: true,
+            content: html`
               <p class="section-note">
                 Trimmed copy of the model output that informed the most recent FeelingIntent
                 message.
               </p>
               <pre class="llm-output">${this.lastLLM}</pre>
-            </article>
-          `
-          : null}
+            `,
+          })
+        : null,
+    ].filter(Boolean);
+
+    return html`
+      <div class="surface-grid surface-grid--wide">
+        ${cards}
       </div>
+    `;
+  }
+
+  renderSurfaceCard({ id, title, content, wide = false }) {
+    const cardId = typeof id === "string" ? id.trim() : "";
+    const collapsed = cardId ? this.isCardCollapsed(cardId) : false;
+    const contentId = cardId ? `${cardId}-content` : undefined;
+    const classes = classMap({
+      "surface-card": true,
+      "surface-card--wide": Boolean(wide),
+      "surface-card--collapsible": true,
+      "surface-card--collapsed": collapsed,
+    });
+
+    return html`
+      <article class=${classes} data-card-id=${cardId || undefined}>
+        <header class="surface-card__header">
+          <h3 class="surface-card__title">${title}</h3>
+          <button
+            type="button"
+            class="surface-card__toggle"
+            aria-expanded=${collapsed ? "false" : "true"}
+            aria-controls=${contentId || undefined}
+            aria-label=${collapsed ? `Expand ${title}` : `Collapse ${title}`}
+            @click=${() => cardId && this.toggleCardCollapsed(cardId)}
+          >
+            ${collapsed ? "Expand" : "Collapse"}
+          </button>
+        </header>
+        <div
+          id=${contentId || undefined}
+          class="surface-card__content"
+          ?hidden=${collapsed}
+        >
+          ${content}
+        </div>
+      </article>
     `;
   }
 

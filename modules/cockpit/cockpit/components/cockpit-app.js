@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { buildNavigationSections } from '/utils/navigation.js';
+import { buildNavigationSections, normaliseModuleSlug } from '/utils/navigation.js';
 import './module-log-viewer.js';
 import { surfaceStyles } from './cockpit-style.js';
 
@@ -160,7 +160,7 @@ class CockpitApp extends LitElement {
   }
 
   renderModuleSurface(module) {
-    const slug = module.slug || module.name;
+    const slug = normaliseModuleSlug(module) || module.slug || module.name;
     const displayName = module.display_name || module.name;
     const componentTag = MODULE_COMPONENTS[module.name];
     const moduleContent = componentTag
