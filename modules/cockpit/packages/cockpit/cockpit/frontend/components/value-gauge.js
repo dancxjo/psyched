@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/cockpit/cockpit/components/value-gauge.js

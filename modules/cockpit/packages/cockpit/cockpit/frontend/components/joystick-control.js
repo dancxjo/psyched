@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/cockpit/cockpit/components/joystick-control.js

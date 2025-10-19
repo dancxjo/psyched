@@ -1,1 +1,0 @@
-/home/pete/psyched/modules/foot/cockpit/js/foot.js
