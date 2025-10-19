@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildNavigationSections } from './navigation.js';
+import { buildNavigationSections, normaliseModuleSlug } from './navigation.js';
 
 test('includes the configuration section first', () => {
   const sections = buildNavigationSections([]);
@@ -47,5 +47,27 @@ test('skips entries without slugs or names and preserves numbering', () => {
     label: 'GPS Dashboard',
     index: 1,
     url: '/modules/gps/',
+  });
+});
+
+test('normaliseModuleSlug collapses unsafe characters', () => {
+  const slug = normaliseModuleSlug({
+    name: 'pilot',
+    slug: ' Pilot Control! ',
+  });
+  assert.equal(slug, 'pilot-control');
+});
+
+test('buildNavigationSections slugifies ids for anchors', () => {
+  const sections = buildNavigationSections([
+    { name: 'pilot', display_name: 'Pilot', slug: 'Pilot Control!', has_cockpit: true },
+  ]);
+
+  assert.equal(sections.length, 2);
+  assert.deepEqual(sections[1], {
+    id: 'module-pilot-control',
+    label: 'Pilot',
+    index: 1,
+    url: '/modules/pilot/',
   });
 });

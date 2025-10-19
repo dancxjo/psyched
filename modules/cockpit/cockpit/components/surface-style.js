@@ -55,6 +55,18 @@ export const surfaceStyles = css`
     gap: 0.65rem;
   }
 
+  .surface-card--collapsible {
+    position: relative;
+  }
+
+  .surface-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
   .surface-card__title {
     margin: 0;
     font-size: 0.9rem;
@@ -62,6 +74,39 @@ export const surfaceStyles = css`
     text-transform: uppercase;
     color: var(--metric-title-color);
   }
+
+  .surface-card__toggle {
+    appearance: none;
+    border: 1px solid var(--control-surface-border);
+    background: transparent;
+    color: var(--lcars-text);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.65rem;
+    border-radius: calc(var(--control-surface-radius) / 1.6);
+    cursor: pointer;
+  }
+
+  .surface-card__toggle:hover,
+  .surface-card__toggle:focus {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--lcars-accent, #f0f4ff);
+    outline: none;
+  }
+
+  .surface-card__toggle:focus-visible {
+    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.45);
+  }
+
+  .surface-card--collapsed .surface-card__content {
+    display: none;
+  }
+
+  .surface-card--collapsed .surface-card__toggle {
+    opacity: 0.85;
+  }
+
 
   .surface-card__subtitle {
     margin: 0;

@@ -2,9 +2,11 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 
 import {
+  loadCollapsedCards,
   normaliseDebugSnapshot,
   normaliseFeelingIntent,
   parseRosStamp,
+  persistCollapsedCards,
 } from "./pilot-dashboard.helpers.js";
 
 test("parseRosStamp returns Date for valid stamp", () => {
@@ -98,4 +100,60 @@ test("normaliseDebugSnapshot surfaces config and telemetry", () => {
   assert.equal(result.lastLLM, "Hello world");
   assert.equal(result.logs.length, 1);
   assert.equal(result.errors.length, 0);
+});
+
+test("loadCollapsedCards returns stored identifiers", () => {
+  const storage = {
+    getItem(key) {
+      if (key === "psyched::pilot-dashboard::collapsed") {
+        return JSON.stringify([" pilot-status ", "pilot-scripts", ""]);
+      }
+      return null;
+    },
+  };
+
+  const collapsed = loadCollapsedCards(storage);
+  assert.ok(collapsed instanceof Set);
+  assert.deepEqual(Array.from(collapsed), ["pilot-status", "pilot-scripts"]);
+});
+
+test("loadCollapsedCards copes with corrupt storage entries", () => {
+  const storage = {
+    getItem() {
+      return "not-json";
+    },
+  };
+
+  const collapsed = loadCollapsedCards(storage);
+  assert.ok(collapsed instanceof Set);
+  assert.equal(collapsed.size, 0);
+});
+
+test("persistCollapsedCards stores unique trimmed identifiers", () => {
+  const writes = [];
+  const storage = {
+    setItem(key, value) {
+      writes.push([key, value]);
+    },
+  };
+
+  const source = new Set([" pilot-status ", "pilot-status", "pilot-logs"]);
+  const stored = persistCollapsedCards(source, storage);
+
+  assert.equal(stored, true);
+  assert.deepEqual(writes, [[
+    "psyched::pilot-dashboard::collapsed",
+    JSON.stringify(["pilot-status", "pilot-logs"]),
+  ]]);
+});
+
+test("persistCollapsedCards tolerates storage failures", () => {
+  const storage = {
+    setItem() {
+      throw new Error("write failed");
+    },
+  };
+
+  const stored = persistCollapsedCards(new Set(["pilot-status"]), storage);
+  assert.equal(stored, false);
 });

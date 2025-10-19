@@ -35,9 +35,8 @@ export function buildNavigationSections(modules) {
       continue;
     }
 
-    const name = typeof module.name === 'string' ? module.name : '';
-    const slugCandidate = typeof module.slug === 'string' ? module.slug.trim() : '';
-    const slug = slugCandidate || name;
+    const name = typeof module.name === 'string' ? module.name.trim() : '';
+    const slug = normaliseModuleSlug(module);
     if (!slug) {
       continue;
     }
@@ -67,4 +66,29 @@ export function buildNavigationSections(modules) {
   }
 
   return sections;
+}
+
+/**
+ * Derive a slug suitable for DOM identifiers and anchor fragments.
+ *
+ * @param {object | null | undefined} module Module metadata from /api/modules.
+ * @returns {string} Sanitised slug or an empty string when one cannot be derived.
+ */
+export function normaliseModuleSlug(module) {
+  if (!module || typeof module !== 'object') {
+    return '';
+  }
+  const rawSlug = typeof module.slug === 'string' ? module.slug : '';
+  const rawName = typeof module.name === 'string' ? module.name : '';
+  const source = rawSlug.trim() || rawName.trim();
+  if (!source) {
+    return '';
+  }
+  const normalised = source
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^\p{Letter}\p{Number}-]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return normalised;
 }
