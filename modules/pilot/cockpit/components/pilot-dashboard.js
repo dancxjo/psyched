@@ -30,6 +30,7 @@ class PilotDashboard extends LitElement {
     moduleConfig: { state: true },
     moduleLogs: { state: true },
     moduleErrors: { state: true },
+    scriptRuns: { state: true },
   };
 
   static styles = [
@@ -116,6 +117,7 @@ class PilotDashboard extends LitElement {
     this.moduleConfig = null;
     this.moduleLogs = [];
     this.moduleErrors = [];
+    this.scriptRuns = [];
   }
 
   connectedCallback() {
@@ -139,6 +141,7 @@ class PilotDashboard extends LitElement {
           if (envelope.heartbeat) this.lastHeartbeat = envelope.heartbeat;
           if (Array.isArray(envelope.logs)) this.moduleLogs = [...envelope.logs, ...this.moduleLogs].slice(0, 500);
           if (Array.isArray(envelope.errors)) this.moduleErrors = [...envelope.errors, ...this.moduleErrors].slice(0, 200);
+          if (Array.isArray(envelope.scripts)) this.scriptRuns = envelope.scripts;
           // Record the raw message as inbound
           this.inboundMessages = [
             { timestamp: new Date().toLocaleTimeString(), payload: envelope, source: 'ros:/pilot/debug' },
@@ -242,6 +245,9 @@ class PilotDashboard extends LitElement {
                       <span>S:${entry.stance.toFixed(2)}</span>
                     </div>
                     <p class="intent-entry__context">${entry.context}</p>
+                    ${entry.command_script
+                      ? html`<pre style="white-space:pre-wrap;margin:0;font:inherit;background:transparent;border:0;padding:0;">${entry.command_script}</pre>`
+                      : ''}
                   </li>`
         )}
               </ol>`
@@ -282,6 +288,43 @@ class PilotDashboard extends LitElement {
         )}
                   </ol>`
         : html`<p class="surface-empty">No inbound messages seen yet.</p>`}
+            </details>
+
+            <details open>
+              <summary>Recent command scripts (${this.scriptRuns.length})</summary>
+              ${this.scriptRuns.length
+        ? html`<ol class="intent-log">
+                    ${this.scriptRuns.map(
+          (run) => html`<li class="intent-entry">
+                        <div class="intent-entry__meta">
+                          <span>${run.requested_at ?? 'unknown'}</span>
+                          <span>${run.source ?? 'unknown'}</span>
+                          <span>${run.status ?? 'unknown'}</span>
+                        </div>
+                        <pre style="white-space:pre-wrap;margin:0;font:inherit;background:transparent;border:0;padding:0;">${run.script ?? ''}</pre>
+                        ${Array.isArray(run.actions) && run.actions.length
+                          ? html`<details open>
+                              <summary>Actions (${run.actions.length})</summary>
+                              <ol class="intent-log">
+                                ${run.actions.map(
+                                  (a) => html`<li class="intent-entry">
+                                      <div class="intent-entry__meta">
+                                        <span>${a.timestamp ?? ''}</span>
+                                        <span>${a.status ?? ''}</span>
+                                      </div>
+                                      <div>${a.action ?? ''}</div>
+                                      ${a.response
+                                        ? html`<pre style="white-space:pre-wrap;margin:0;font:inherit;background:transparent;border:0;padding:0;">${a.response}</pre>`
+                                        : ''}
+                                    </li>`
+                                )}
+                              </ol>
+                            </details>`
+                          : ''}
+                      </li>`
+        )}
+                  </ol>`
+        : html`<p class="surface-empty">No scripts have been queued.</p>`}
             </details>
 
             <details>
@@ -364,6 +407,7 @@ class PilotDashboard extends LitElement {
       arousal: intent.arousal,
       stance: intent.stance,
       context: `[${source}] ${intent.context}`,
+      command_script: intent.command_script || '',
     };
     this.intentLog = [logEntry, ...this.intentLog].slice(0, 40);
   }
@@ -420,6 +464,7 @@ class PilotDashboard extends LitElement {
     if (payload.config) this.moduleConfig = payload.config;
     if (Array.isArray(payload.logs)) this.moduleLogs = [...payload.logs, ...this.moduleLogs].slice(0, 200);
     if (Array.isArray(payload.errors)) this.moduleErrors = [...payload.errors, ...this.moduleErrors].slice(0, 200);
+    if (Array.isArray(payload.scripts)) this.scriptRuns = payload.scripts;
     if (payload.status) this.moduleStatus = payload.status;
     if (payload.heartbeat) this.lastHeartbeat = payload.heartbeat;
     this.connected = true;

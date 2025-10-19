@@ -11,7 +11,7 @@ def test_prepare_memory_batch_includes_vectors_and_graph_links():
         attitude_emoji="🙂",
         thought_sentence="I should remember this moment.",
         spoken_sentence="",
-        commands=["pause_speech"],
+        command_script="voice.pause_speech()",
         goals=["reflect"],
         mood_delta="calming",
         memory_collection_raw="faces",

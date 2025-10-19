@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 import unicodedata
-from typing import Iterable, Sequence
+from typing import Sequence
 
+from .command_script import CommandScriptError, CommandScriptInterpreter
 from .models import FeelingIntentData
 
 
@@ -14,6 +16,10 @@ class FeelingIntentValidationError(ValueError):
 
 _SENTENCE_TERMINATOR_PATTERN = re.compile(r"[.?!]")
 _MULTIPLE_SENTENCE_PATTERN = re.compile(r"[.?!].+?[.?!]")
+_MAX_SCRIPT_CHARACTERS = 4096
+_MAX_SCRIPT_LINES = 200
+_COMMAND_INTERPRETER = CommandScriptInterpreter()
+
 def _is_single_sentence(text: str) -> bool:
     cleaned = " ".join(text.strip().split())
     if not cleaned:
@@ -41,38 +47,6 @@ def _is_valid_emoji_string(text: str) -> bool:
             base_count += 1
     # Accept 1-2 base emoji glyphs for attitude/mood
     return 1 <= base_count <= 2
-
-
-def _normalise_command(command: str) -> str:
-    name = command.strip()
-    if "(" in name:
-        return name.split("(", 1)[0]
-    return name
-
-
-def _allowed_command_bases(actions: Iterable[str]) -> set[str]:
-    """Return the set of allowed command bases.
-
-    Actions may be provided as simple names ("say") or module-qualified
-    entries ("voice.say"). We normalise by returning the base portion so the
-    validator can accept either form in the LLM output.
-    """
-    bases = set()
-    for action in actions:
-        if not isinstance(action, str):
-            continue
-        action = action.strip()
-        if not action:
-            continue
-        # If module-qualified like 'module.action', take last segment
-        if "." in action:
-            candidate = action.rsplit(".", 1)[-1]
-        else:
-            candidate = action
-        bases.add(_normalise_command(candidate))
-    return bases
-
-
 def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> FeelingIntentData:
     try:
         payload = json.loads(raw_json)
@@ -94,37 +68,24 @@ def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> 
     if spoken and not _is_single_sentence(spoken):
         raise FeelingIntentValidationError("spoken_sentence must be empty or a single sentence")
 
-    commands_raw = payload.get("commands", [])
-    if not isinstance(commands_raw, list) or not all(isinstance(c, str) for c in commands_raw):
-        raise FeelingIntentValidationError("commands must be a list of strings")
-
-    # Validate commands against the allowed action bases. Commands may be in
-    # the form 'name', "name(arg)", or qualified 'module.name' / 'module.name(arg)'.
-    allowed_bases = _allowed_command_bases(allowed_actions)
-    validated_commands: list[str] = []
-    for command in commands_raw:
-        cmd = command.strip()
-        # If module-qualified, extract the final name portion
-        if "." in cmd and not cmd.startswith("{"):
-            # split module qualification from any params: e.g. 'voice.say("hi")' -> 'voice.say("hi")'
-            # isolate the base name after last dot
-            # but preserve arguments for storage
-            after = cmd.rsplit(".", 1)[-1]
-            base = _normalise_command(after)
-        else:
-            base = _normalise_command(cmd)
-
-        if base not in allowed_bases:
-            raise FeelingIntentValidationError(f"Unknown command: {command}")
-
-        # Basic sanitisation: ensure parentheses are balanced if present
-        if "(" in cmd:
-            open_count = cmd.count("(")
-            close_count = cmd.count(")")
-            if open_count != close_count:
-                raise FeelingIntentValidationError(f"Malformed command arguments: {command}")
-
-        validated_commands.append(cmd)
+    command_script_raw = payload.get("command_script", "")
+    if not isinstance(command_script_raw, str):
+        raise FeelingIntentValidationError("command_script must be a string")
+    command_script = textwrap.dedent(command_script_raw).strip()
+    if not command_script:
+        raise FeelingIntentValidationError("command_script must not be empty")
+    if len(command_script) > _MAX_SCRIPT_CHARACTERS:
+        raise FeelingIntentValidationError(
+            f"command_script exceeds {_MAX_SCRIPT_CHARACTERS} characters"
+        )
+    if command_script.count("\n") + 1 > _MAX_SCRIPT_LINES:
+        raise FeelingIntentValidationError(
+            f"command_script exceeds {_MAX_SCRIPT_LINES} lines"
+        )
+    try:
+        _COMMAND_INTERPRETER.analyse(command_script, allowed_actions)
+    except CommandScriptError as exc:
+        raise FeelingIntentValidationError(f"command_script invalid: {exc}") from exc
 
     goals_raw = payload.get("goals", [])
     if not isinstance(goals_raw, list) or not all(isinstance(goal, str) for goal in goals_raw):
@@ -141,7 +102,7 @@ def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> 
         attitude_emoji=attitude,
         thought_sentence=thought,
         spoken_sentence=spoken,
-        commands=validated_commands,
+        command_script=command_script,
         goals=[goal.strip() for goal in goals_raw if goal.strip()],
         mood_delta=mood_delta,
         memory_collection_raw=memory_collection_raw,
