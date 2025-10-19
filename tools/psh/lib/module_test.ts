@@ -20,6 +20,7 @@ import {
   PipPackagePlanner,
   RosBuildPlanner,
   RosBuildPlannerRunner,
+  __internals__,
 } from "./module.ts";
 import { repoRoot } from "./paths.ts";
 
@@ -92,6 +93,7 @@ Deno.test("formatLaunchDiagnostics summarises the launch plan", () => {
     "launch script: /tmp/launch.sh",
     "log file: /logs/imu.log",
     "environment bootstrap: source /env && psyched::activate --quiet",
+    "module env overrides: (none)",
     "spawn command: exec launch --test",
   ]);
 });
@@ -133,6 +135,56 @@ Deno.test(
     const result = await awaitModuleStability(pending, 5);
     assertEquals(result, null);
     await delay(10);
+  },
+);
+
+Deno.test(
+  "moduleEnvOverrides reads host-specific environment overrides",
+  async () => {
+    const tempRoot = Deno.makeTempDirSync();
+    try {
+      Deno.mkdirSync(join(tempRoot, "modules"), { recursive: true });
+      Deno.mkdirSync(join(tempRoot, "tools", "psh"), { recursive: true });
+      Deno.mkdirSync(join(tempRoot, "hosts"), { recursive: true });
+      Deno.writeTextFileSync(join(tempRoot, "tools", "psh", "deno.json"), "{}\n");
+      Deno.writeTextFileSync(
+        join(tempRoot, "hosts", "testbed.toml"),
+        `
+[host]
+name = "testbed"
+modules = ["pilot"]
+
+[config.mod.pilot.env]
+OLLAMA_HOST = "http://forebrain.local:11434"
+        `.trimStart(),
+      );
+
+      const originalRepoRoot = Deno.env.get("PSYCHED_REPO_ROOT");
+      const originalHost = Deno.env.get("PSH_HOST");
+      try {
+        Deno.env.set("PSYCHED_REPO_ROOT", tempRoot);
+        Deno.env.set("PSH_HOST", "testbed");
+        __internals__.resetModuleEnvCache();
+        const env = await __internals__.moduleEnvOverrides("pilot");
+        assertEquals(env, { OLLAMA_HOST: "http://forebrain.local:11434" });
+        const cached = await __internals__.moduleEnvOverrides("pilot");
+        assertEquals(cached, env);
+      } finally {
+        if (originalRepoRoot === null || originalRepoRoot === undefined) {
+          Deno.env.delete("PSYCHED_REPO_ROOT");
+        } else {
+          Deno.env.set("PSYCHED_REPO_ROOT", originalRepoRoot);
+        }
+        if (originalHost === null || originalHost === undefined) {
+          Deno.env.delete("PSH_HOST");
+        } else {
+          Deno.env.set("PSH_HOST", originalHost);
+        }
+        __internals__.resetModuleEnvCache();
+      }
+    } finally {
+      await Deno.remove(tempRoot, { recursive: true });
+    }
   },
 );
 

@@ -285,148 +285,146 @@ async function main() {
       await buildWorkspace(targets);
     });
 
-  // Actions command: expose the cockpit action registry via the psh CLI.
-  root
-    .command("actions [subcmd:string]")
-    .description("Interact with the cockpit action registry (export|list|help)")
-    .option("--json", "Emit machine-readable JSON output")
-    .action(async ({ json }: { json?: boolean }, subcmd?: string) => {
-      // When no subcmd or help requested, show usage (plain text or JSON)
-      if (!subcmd || subcmd === "help") {
-        const subcmds = ["export", "list", "help"];
+  async function runActionsExport(json?: boolean): Promise<void> {
+    const cockpit = (Deno.env.get("COCKPIT_URL") || "http://127.0.0.1:8088")
+      .replace(/\/$/, "");
+    try {
+      const resp = await fetch(`${cockpit}/api/actions`, { method: "GET" });
+      if (resp.ok) {
+        const data = await resp.json();
         if (json) {
-          console.log(JSON.stringify({ subcommands: subcmds }));
-          return;
-        }
-        console.log("Usage:   psh actions <subcmd>");
-        console.log(`Version: ${version}`);
-        console.log("");
-        console.log("Description:\n\n  Interact with the cockpit action registry (export|list|help)");
-        console.log("");
-        console.log("Subcommands:");
-        console.log("  export    - Fetch actions from the cockpit API and print them\n               (human or --json output)");
-        console.log("  list      - Alias for export (keeps existing user mental model)");
-        console.log("  help      - Show this help");
-        console.log("");
-        console.log("Options:\n\n  -h, --help  - Show this help.\n  --json      - Emit machine-readable JSON output");
-        return;
-      }
-
-      // Support 'list' as an alias for 'export'
-      if (subcmd === "list") subcmd = "export";
-
-      if (subcmd !== "export") {
-        console.error("Unsupported actions subcommand: ", subcmd);
-        Deno.exit(2);
-      }
-
-      const cockpit = (Deno.env.get("COCKPIT_URL") || "http://127.0.0.1:8088")
-        .replace(/\/$/, "");
-      try {
-        const resp = await fetch(`${cockpit}/api/actions`, { method: "GET" });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (json) {
-            console.log(JSON.stringify(data));
-            return;
-          }
-
-          // Human friendly listing from cockpit payload
-          const modules = data && typeof data === "object"
-            ? (data as Record<string, unknown>).modules || {}
-            : {};
-          for (const [moduleName, info] of Object.entries(modules)) {
-            console.log(`Module: ${moduleName}`);
-            const infoRecord = info as Record<string, unknown> | undefined;
-            const actions = infoRecord && Array.isArray(infoRecord.actions)
-              ? infoRecord.actions
-              : [];
-            for (const a of actions) {
-              const aRec = a as Record<string, unknown> | undefined;
-              const name = aRec && typeof aRec.name === "string"
-                ? aRec.name
-                : "<unknown>";
-              const desc = aRec && typeof aRec.description === "string"
-                ? aRec.description
-                : "";
-              console.log(`  - ${name}: ${desc}`);
-            }
-          }
+          console.log(JSON.stringify(data));
           return;
         }
 
-        console.warn(
-          `Cockpit not responding (${resp.status}); falling back to local export`,
-        );
-      } catch (err) {
-        console.warn(
-          "Cockpit API unreachable, falling back to local export:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-
-      const moduleNames = listModules();
-      const apiActions = loadModuleApiActions();
-      const modulesPayload: Record<string, { actions: Record<string, unknown>[] }> = {};
-
-      for (const moduleName of moduleNames) {
-        const actions: Record<string, unknown>[] = [];
-        const defined = apiActions[moduleName] ?? [];
-        const definedNames = new Set<string>();
-
-        for (const action of defined) {
-          definedNames.add(action.name);
-          const streaming = typeof action.kind === "string"
-            ? action.kind.toLowerCase() === "stream-topic"
-            : false;
-          actions.push({
-            name: action.name,
-            description: action.description ?? "",
-            parameters: action.parameters ?? {},
-            returns: action.returns ?? undefined,
-            streaming,
-          });
+        const modules = data && typeof data === "object"
+          ? (data as Record<string, unknown>).modules || {}
+          : {};
+        for (const [moduleName, info] of Object.entries(modules)) {
+          console.log(`Module: ${moduleName}`);
+          const infoRecord = info as Record<string, unknown> | undefined;
+          const actions = infoRecord && Array.isArray(infoRecord.actions)
+            ? infoRecord.actions
+            : [];
+          for (const a of actions) {
+            const aRec = a as Record<string, unknown> | undefined;
+            const name = aRec && typeof aRec.name === "string"
+              ? aRec.name
+              : "<unknown>";
+            const desc = aRec && typeof aRec.description === "string"
+              ? aRec.description
+              : "";
+            console.log(`  - ${name}: ${desc}`);
+          }
         }
-
-        if (!definedNames.has("stream_topic")) {
-          actions.push({
-            name: "stream_topic",
-            description: `Stream ROS topic traffic for the ${moduleName} module`,
-            parameters: STREAM_TOPIC_SCHEMA,
-            returns: STREAM_TOPIC_RETURNS,
-            streaming: true,
-          });
-        }
-
-        if (!definedNames.has("call_service")) {
-          actions.push({
-            name: "call_service",
-            description: `Invoke ROS services on behalf of the ${moduleName} module`,
-            parameters: CALL_SERVICE_SCHEMA,
-            returns: CALL_SERVICE_RETURNS,
-            streaming: false,
-          });
-        }
-
-        modulesPayload[moduleName] = { actions };
-      }
-
-      if (json) {
-        console.log(JSON.stringify({ modules: modulesPayload }));
         return;
       }
 
-      for (const [moduleName, info] of Object.entries(modulesPayload)) {
-        console.log(`Module: ${moduleName}`);
-        for (const action of info.actions) {
-          const name = typeof action.name === "string" ? action.name : "<unknown>";
-          const description = typeof action.description === "string"
-            ? action.description
-            : "";
-          console.log(`  - ${name}: ${description}`);
-        }
+      console.warn(
+        `Cockpit not responding (${resp.status}); falling back to local export`,
+      );
+    } catch (err) {
+      console.warn(
+        "Cockpit API unreachable, falling back to local export:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+
+    const moduleNames = listModules();
+    const apiActions = loadModuleApiActions();
+    const modulesPayload: Record<string, { actions: Record<string, unknown>[] }> = {};
+
+    for (const moduleName of moduleNames) {
+      const actions: Record<string, unknown>[] = [];
+      const defined = apiActions[moduleName] ?? [];
+      const definedNames = new Set<string>();
+
+      for (const action of defined) {
+        definedNames.add(action.name);
+        const streaming = typeof action.kind === "string"
+          ? action.kind.toLowerCase() === "stream-topic"
+          : false;
+        actions.push({
+          name: action.name,
+          description: action.description ?? "",
+          parameters: action.parameters ?? {},
+          returns: action.returns ?? undefined,
+          streaming,
+        });
       }
+
+      if (!definedNames.has("stream_topic")) {
+        actions.push({
+          name: "stream_topic",
+          description: `Stream ROS topic traffic for the ${moduleName} module`,
+          parameters: STREAM_TOPIC_SCHEMA,
+          returns: STREAM_TOPIC_RETURNS,
+          streaming: true,
+        });
+      }
+
+      if (!definedNames.has("call_service")) {
+        actions.push({
+          name: "call_service",
+          description: `Invoke ROS services on behalf of the ${moduleName} module`,
+          parameters: CALL_SERVICE_SCHEMA,
+          returns: CALL_SERVICE_RETURNS,
+          streaming: false,
+        });
+      }
+
+      modulesPayload[moduleName] = { actions };
+    }
+
+    if (json) {
+      console.log(JSON.stringify({ modules: modulesPayload }));
+      return;
+    }
+
+    for (const [moduleName, info] of Object.entries(modulesPayload)) {
+      console.log(`Module: ${moduleName}`);
+      for (const action of info.actions) {
+        const name = typeof action.name === "string" ? action.name : "<unknown>";
+        const description = typeof action.description === "string"
+          ? action.description
+          : "";
+        console.log(`  - ${name}: ${description}`);
+      }
+    }
+  }
+
+  const actionsCommand = new Command()
+    .description("Interact with the cockpit action registry (export|list)")
+    .action(function () {
+      this.showHelp();
     });
+
+  actionsCommand
+    .command("export")
+    .description(
+      "Fetch actions from the cockpit API (fallback to local definitions)",
+    )
+    .option("--json", "Emit machine-readable JSON output")
+    .action(async ({ json }: { json?: boolean }) => {
+      await runActionsExport(Boolean(json));
+    });
+
+  actionsCommand
+    .command("list")
+    .description("Alias for 'export'")
+    .option("--json", "Emit machine-readable JSON output")
+    .action(async ({ json }: { json?: boolean }) => {
+      await runActionsExport(Boolean(json));
+    });
+
+  actionsCommand
+    .command("help")
+    .description("Show help for actions subcommands")
+    .action(function () {
+      this.parent?.showHelp();
+    });
+
+  root.command("actions", actionsCommand);
 
   root
     .command("clean")

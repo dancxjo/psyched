@@ -9,6 +9,101 @@ import { ensureRebootCompleted } from "./reboot_guard.ts";
 
 const PID_DIR = join(workspaceRoot(), ".psh");
 
+type ModuleDirective = {
+  name?: string;
+  env?: Record<string, unknown>;
+};
+
+type HostModuleEnv = Record<string, string>;
+
+const MODULE_ENV_CACHE = new Map<string, HostModuleEnv>();
+
+function sanitizeEnvRecord(
+  input?: Record<string, unknown>,
+): Record<string, string> {
+  if (!input) return {};
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!key) continue;
+    if (value === undefined || value === null) continue;
+    result[key] = typeof value === "string" ? value : String(value);
+  }
+  return result;
+}
+
+function hostCandidates(): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const override = Deno.env.get("PSH_HOST")?.trim();
+  if (override && !seen.has(override)) {
+    seen.add(override);
+    ordered.push(override);
+  }
+  try {
+    const hostname = Deno.hostname()?.trim();
+    if (hostname && !seen.has(hostname)) {
+      seen.add(hostname);
+      ordered.push(hostname);
+    }
+  } catch (_error) {
+    // Hostname detection can fail in restricted environments; ignore.
+  }
+  return ordered;
+}
+
+function envVerbose(): boolean {
+  return Deno.env.get("PSH_VERBOSE") === "1";
+}
+
+async function loadHostModuleDirective(
+  module: string,
+): Promise<ModuleDirective | undefined> {
+  const { HostConfigNotFoundError, loadHostConfig } = await import("./host.ts");
+  for (const candidate of hostCandidates()) {
+    try {
+      const { config } = loadHostConfig(candidate);
+      const directive = config.modules?.find((entry) => entry.name === module);
+      if (directive) {
+        return directive as ModuleDirective;
+      }
+    } catch (error) {
+      if (error instanceof HostConfigNotFoundError) {
+        continue;
+      }
+      if (envVerbose()) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[${module}] host config lookup failed for '${candidate}': ${message}`,
+        );
+      }
+    }
+  }
+  return undefined;
+}
+
+async function moduleEnvOverrides(module: string): Promise<HostModuleEnv> {
+  if (MODULE_ENV_CACHE.has(module)) {
+    return MODULE_ENV_CACHE.get(module)!;
+  }
+  try {
+    const directive = await loadHostModuleDirective(module);
+    const env = sanitizeEnvRecord(directive?.env);
+    MODULE_ENV_CACHE.set(module, env);
+    return env;
+  } catch (error) {
+    if (envVerbose()) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[${module}] failed to resolve host environment: ${message}`);
+    }
+    MODULE_ENV_CACHE.set(module, {});
+    return {};
+  }
+}
+
+function resetModuleEnvCache(): void {
+  MODULE_ENV_CACHE.clear();
+}
+
 export interface GitRepo {
   url: string;
   branch?: string;
@@ -175,6 +270,7 @@ export interface LaunchDiagnosticsContext {
   envCommands: string[];
   logFile: string;
   command: string;
+  envOverrides?: Record<string, string>;
 }
 
 export function formatLaunchDiagnostics(
@@ -189,6 +285,16 @@ export function formatLaunchDiagnostics(
     lines.push(`environment bootstrap: ${context.envCommands.join(" && ")}`);
   } else {
     lines.push("environment bootstrap: (none)");
+  }
+  const overrides = context.envOverrides ?? {};
+  const entries = Object.entries(overrides);
+  if (entries.length) {
+    entries.sort(([a], [b]) => a.localeCompare(b));
+    lines.push(
+      `module env overrides: ${entries.map(([k, v]) => `${k}=${v}`).join(", ")}`,
+    );
+  } else {
+    lines.push("module env overrides: (none)");
   }
   lines.push(`spawn command: ${context.command}`);
   return lines;
@@ -926,6 +1032,7 @@ export async function bringModuleUp(
   if (!config.launch) {
     throw new Error(`module '${module}' has no launch script configured`);
   }
+  const moduleEnv = await moduleEnvOverrides(module);
   const launchScript = await resolveModuleScript(config.launch, moduleDir);
   console.log(colors.green(`==> Launching module '${module}' in background`));
 
@@ -973,6 +1080,7 @@ export async function bringModuleUp(
         envCommands,
         logFile,
         command: launchCommand,
+        envOverrides: moduleEnv,
       })
     ) {
       console.log(colors.dim(`[${module}] ${line}`));
@@ -988,6 +1096,7 @@ export async function bringModuleUp(
     stdin: "null",
     stdout: "inherit",
     stderr: "inherit",
+    env: moduleEnv,
   }).spawn();
 
   writePid(module, child.pid);
@@ -1133,6 +1242,11 @@ export function loadModuleApiActions(): Record<string, ModuleApiAction[]> {
 
   return result;
 }
+
+export const __internals__ = {
+  moduleEnvOverrides,
+  resetModuleEnvCache,
+};
 
 export interface ModuleStatus {
   name: string;
