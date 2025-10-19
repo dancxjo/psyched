@@ -167,3 +167,32 @@ def test_register_module_api_actions_registers_service(tmp_path: Path) -> None:
     assert call["service_type"] == "std_srvs/srv/Trigger"
     assert call["arguments"] == {"force": False}
     assert call["timeout"] == pytest.approx(1.2)
+
+
+def test_register_module_api_actions_uses_manifest_name(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "debug_stream",
+          "description": "Stream pilot debug",
+          "kind": "stream-topic",
+          "defaults": {
+            "topic": "/pilot/debug",
+            "message_type": "std_msgs/msg/String"
+          }
+        }
+      ]
+    }
+    """
+    module_dir = write_actions_file(tmp_path, "pilot-unit", payload)
+    module_dir.joinpath("module.toml").write_text(
+        "name = \"pilot\"\n", encoding="utf-8"
+    )
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    action = registry.get("pilot", "debug_stream")
+    assert action.description == "Stream pilot debug"
