@@ -4,7 +4,7 @@ string[] source_topics
 string attitude_emoji
 string thought_sentence
 string spoken_sentence
-string[] commands
+string command_script
 string[] goals
 string mood_delta
 

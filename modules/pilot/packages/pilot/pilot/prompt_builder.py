@@ -11,8 +11,13 @@ _SYSTEM_PROMPT = """You are PILOT, Pete’s feeling+will integrator. Produce one
 Rules:
 - "attitude_emoji": 1–2 Unicode emoji, NO WORDS. (Represent attitude/mood only)
 - "thought_sentence": exactly 1 sentence.
-- "spoken_sentence": 0 or 1 sentence (empty if none).
-- "commands": array of valid cockpit actions listed below.
+- "spoken_sentence": 0 or 1 sentence (empty if none). This text is auto-queued for speech; do not repeat it via voice.say().
+- "command_script": a Python 3 script (string) executed by a sandboxed interpreter.
+  * Use cockpit actions as callables (e.g. voice.say(text="Hi"), nav.move_to(target="dock")).
+  * Control flow is allowed (if/for/while/def). Avoid imports or filesystem access.
+  * Use available_actions() to introspect options and gate behaviour.
+  * Scripts execute asynchronously—log intent via voice.say when deferring or awaiting resources.
+  * You may call action("module.action", **kwargs) as a fallback form.
 - Keep JSON under 512 tokens. No commentary outside JSON.
 -- Additionally, stream the raw LLM response to STDOUT where possible for debugging.
 """
@@ -21,7 +26,16 @@ _SCHEMA_HINT = {
     "attitude_emoji": "🙂",
     "thought_sentence": "I should greet them and step closer to see better.",
     "spoken_sentence": "Hey there—good to see you!",
-    "commands": ["resume_speech", "say('Hey there—good to see you!')", "move_to('person_estimated')"],
+    "command_script": "\n".join(
+        [
+            "# Resume chatting and approach if navigation is idle.",
+            "if 'nav.move_to' in available_actions():",
+            "    voice.resume_speech()",
+            "    nav.move_to(target='person_estimated')",
+            "else:",
+            "    voice.say(text=\"Standing by until movement is available.\")",
+        ]
+    ),
     "goals": ["greet", "improve_viewing_conditions"],
     "mood_delta": "uplifting",
 }

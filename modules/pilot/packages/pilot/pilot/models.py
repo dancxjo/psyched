@@ -19,15 +19,21 @@ class FeelingIntentData:
     ...     attitude_emoji="🙂",
     ...     thought_sentence="I should wave back.",
     ...     spoken_sentence="Hello there!",
-    ...     commands=["say('Hello there!')"],
+    ...     command_script="nav.move_to(target='person_estimated')",
     ... )
-    FeelingIntentData(attitude_emoji='🙂', thought_sentence='I should wave back.', spoken_sentence='Hello there!', commands=["say('Hello there!')"], goals=[], mood_delta='', memory_collection_raw='', memory_collection_text='', memory_collection_emoji='', episode_id='', situation_id='')
+    FeelingIntentData(attitude_emoji='🙂', thought_sentence='I should wave back.', spoken_sentence='Hello there!', command_script="nav.move_to(target='person_estimated')", goals=[], mood_delta='', memory_collection_raw='', memory_collection_text='', memory_collection_emoji='', episode_id='', situation_id='')
+
+    Notes
+    -----
+    ``spoken_sentence`` is automatically enqueued for speech, so scripts should
+    avoid calling :func:`voice.say` with the same text unless repetition is
+    deliberate.
     """
 
     attitude_emoji: str
     thought_sentence: str
     spoken_sentence: str
-    commands: List[str] = field(default_factory=list)
+    command_script: str = ""
     goals: List[str] = field(default_factory=list)
     mood_delta: str = ""
     memory_collection_raw: str = ""

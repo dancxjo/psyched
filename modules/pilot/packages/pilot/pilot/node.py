@@ -4,10 +4,12 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
-from urllib import request, error
+from urllib import error, request
 from uuid import uuid4
 
 import rclpy
@@ -19,11 +21,15 @@ from rosidl_runtime_py.utilities import get_message
 from psyched_msgs.msg import FeelingIntent, SensationStamped
 from std_msgs.msg import String as StdString
 
+from .command_script import (
+    CommandInvocation,
+    CommandScriptError,
+    CommandScriptInterpreter,
+)
 from .memory_pipeline import prepare_memory_batch
 from .models import SensationRecord
 from .prompt_builder import PilotPromptContext, build_prompt
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
-import re
 
 
 _LOGGER = logging.getLogger("psyched.pilot.node")
@@ -187,6 +193,12 @@ class PilotNode(Node):
         self._subscriptions: List[Any] = []
         self._dirty = False
 
+        self._command_interpreter = CommandScriptInterpreter()
+        self._script_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pilot-script")
+        self._script_runs: List[Dict[str, Any]] = []
+        self._script_lock = threading.Lock()
+        self._action_schemas: Dict[str, Dict[str, Any]] = {}
+
         qos = QoSProfile(depth=10)
         qos.history = QoSHistoryPolicy.KEEP_LAST
         qos.reliability = ReliabilityPolicy.RELIABLE
@@ -301,6 +313,164 @@ class PilotNode(Node):
         self._sensation_records = recent
         return [record for _, record in recent]
 
+    def destroy_node(self) -> bool:
+        try:
+            self._script_executor.shutdown(wait=False)
+        except Exception:
+            pass
+        return super().destroy_node()
+
+    def _script_status_snapshot(self) -> List[Dict[str, Any]]:
+        with self._script_lock:
+            return [dict(entry) for entry in self._script_runs]
+
+    def _record_script_state(self, script_id: str, **updates: Any) -> None:
+        with self._script_lock:
+            for entry in self._script_runs:
+                if entry.get("id") == script_id:
+                    entry.update(updates)
+                    break
+            else:
+                entry = {"id": script_id}
+                entry.update(updates)
+                self._script_runs.append(entry)
+            if len(self._script_runs) > 12:
+                del self._script_runs[:-12]
+
+    def _dispatch_action(
+        self, invocation: CommandInvocation, available_actions: List[str]
+    ) -> tuple[bool, str]:
+        module = invocation.module or "pilot"
+        action = invocation.action
+        fq = f"{module}.{action}"
+        if fq not in available_actions:
+            self.get_logger().warning(
+                "Command not available in action registry: %s", fq
+            )
+            return False, "not_available"
+
+        cockpit = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
+        payload = {"arguments": invocation.arguments}
+        try:
+            schema = self._action_schemas.get(fq)
+            if schema is not None:
+                try:
+                    from jsonschema import validate
+                    from jsonschema.exceptions import ValidationError as _ValidationError
+
+                    try:
+                        validate(instance=invocation.arguments, schema=schema)
+                    except _ValidationError as verr:
+                        self.get_logger().warning(
+                            "Action %s.%s failed validation: %s", module, action, verr
+                        )
+                        return False, str(verr)
+                except Exception:
+                    self.get_logger().debug(
+                        "jsonschema not available or validation skipped for %s", fq
+                    )
+
+            body = json.dumps(payload).encode("utf-8")
+            req = request.Request(
+                cockpit + f"/api/actions/{module}/{action}",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with request.urlopen(req, timeout=3.0) as resp:
+                resp_body = resp.read().decode("utf-8")
+                self.get_logger().info("Invoked %s.%s => %s", module, action, resp_body)
+                return True, resp_body
+        except error.HTTPError as exc:
+            self.get_logger().warning(
+                "Action invocation failed (%s.%s): %s", module, action, exc
+            )
+            return False, str(exc)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.get_logger().warning(
+                "Failed to invoke action %s.%s: %s", module, action, exc
+            )
+            return False, str(exc)
+
+    def _schedule_script_execution(
+        self,
+        *,
+        script: str,
+        available_actions: List[str],
+        source: str,
+        context: Mapping[str, Any],
+    ) -> None:
+        if not script.strip():
+            return
+        script_id = f"script-{uuid4()}"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        preview = script if len(script) <= 2048 else script[:2048] + "…"
+        self._record_script_state(
+            script_id,
+            source=source,
+            script=preview,
+            status="queued",
+            requested_at=now_iso,
+            actions=[],
+        )
+
+        def _runner() -> None:
+            self._record_script_state(
+                script_id,
+                status="running",
+                started_at=datetime.now(timezone.utc).isoformat(),
+            )
+            actions_log: List[Dict[str, Any]] = []
+            try:
+                result = self._command_interpreter.execute(
+                    script, available_actions, context=context
+                )
+            except CommandScriptError as exc:
+                self.get_logger().warning("command_script invalid: %s", exc)
+                self._record_script_state(
+                    script_id,
+                    status="invalid",
+                    error=str(exc),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+                return
+            except Exception as exc:  # pragma: no cover - defensive guard
+                self.get_logger().error("command_script execution failed: %s", exc)
+                self._record_script_state(
+                    script_id,
+                    status="failed",
+                    error=str(exc),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+                return
+
+            for invocation in result.invocations:
+                success, response = self._dispatch_action(invocation, available_actions)
+                actions_log.append(
+                    {
+                        "action": f"{invocation.module}.{invocation.action}",
+                        "status": "ok" if success else "error",
+                        "response": response,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                self._record_script_state(script_id, actions=list(actions_log))
+
+            final_status = (
+                "completed"
+                if all(entry["status"] == "ok" for entry in actions_log)
+                else "completed_with_errors"
+            )
+            self._record_script_state(
+                script_id,
+                status=final_status,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                used_actions=result.used_actions,
+                actions=list(actions_log),
+            )
+
+        self._script_executor.submit(_runner)
+
     def _run_psh(self, args: Sequence[str]) -> str:
         try:
             proc = subprocess.run(args, check=False, capture_output=True, text=True)
@@ -339,6 +509,7 @@ class PilotNode(Node):
                 "logs": [],
                 "errors": [],
                 "last_llm": self._last_llm_response if getattr(self, "_last_llm_response", None) else None,
+                "scripts": self._script_status_snapshot(),
             }
             payload = StdString()
             payload.data = json.dumps(snapshot)
@@ -418,113 +589,9 @@ class PilotNode(Node):
             self.get_logger().warning("Failed to fetch cockpit status: %s", exc)
             return {}
 
-        def _parse_command(self, command: str) -> tuple[str, str, dict] | None:
-            """Parse a command string into (module, action, arguments).
-
-            Accepts forms like:
-            - "action"
-            - "module.action"
-            - "action(arg)" or "module.action(arg)"
-
-            Returns None when the command cannot be sensibly parsed.
-            """
-            s = command.strip()
-            if not s:
-                return None
-
-            # Extract any parentheses content as a single argument payload if present.
-            m = re.match(r"^([A-Za-z0-9_.-]+)\s*(?:\((.*)\))?$", s)
-            if not m:
-                return None
-            fullname = m.group(1)
-            args_raw = m.group(2)
-
-            if "." in fullname:
-                module, action = fullname.rsplit(".", 1)
-            else:
-                # If no module is specified, default to 'pilot' as origin for intent
-                module = "pilot"
-                action = fullname
-
-            # Try to parse args_raw as JSON, otherwise send as a single positional arg
-            args: dict = {}
-            if args_raw is not None and args_raw.strip():
-                # Attempt JSON decode first
-                try:
-                    import json as _json
-
-                    parsed = _json.loads(args_raw)
-                    if isinstance(parsed, dict):
-                        args = parsed
-                    else:
-                        # Wrap non-dict into {'_args': parsed}
-                        args = {"_args": parsed}
-                except Exception:
-                    # Fallback: send the raw string as a single field
-                    args = {"_raw": args_raw}
-
-            return (module, action, args)
-
-        def _invoke_commands(self, commands: list[str], available_actions: list[str]) -> None:
-            """Best-effort invocation of each command via the cockpit action API.
-
-            For each command string, parse into module/action/args and POST to
-            /api/actions/{module}/{action} with JSON payload {arguments: args}.
-            """
-            if not commands:
-                return
-
-            cockpit = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
-            for cmd in commands:
-                parsed = self._parse_command(cmd)
-                if not parsed:
-                    self.get_logger().warning("Skipping unrecognised command: %s", cmd)
-                    continue
-                module, action, args = parsed
-
-                # Basic check: ensure module.action exists in available_actions
-                fq = f"{module}.{action}"
-                if fq not in available_actions and action not in [a.split(".", 1)[-1] for a in available_actions]:
-                    self.get_logger().warning("Command not available in action registry: %s", fq)
-                    continue
-
-                payload = {"arguments": args}
-                body = None
-                try:
-                    import json as _json
-
-                    # Validate arguments against action schema if available
-                    schema = getattr(self, "_action_schemas", {}).get(fq)
-                    if schema is not None:
-                        try:
-                            # jsonschema is optional; if installed we validate
-                            from jsonschema import validate
-                            from jsonschema.exceptions import ValidationError as _ValidationError
-
-                            try:
-                                validate(instance=args, schema=schema)
-                            except _ValidationError as verr:
-                                self.get_logger().warning("Action %s.%s failed validation: %s", module, action, verr)
-                                continue
-                        except Exception:
-                            # If jsonschema isn't available or something else goes wrong,
-                            # we log and continue without blocking invocation.
-                            self.get_logger().debug("jsonschema not available or validation failed to run; skipping strict validation for %s.%s", module, action)
-
-                    body = _json.dumps(payload).encode("utf-8")
-                    req = request.Request(
-                        cockpit + f"/api/actions/{module}/{action}",
-                        data=body,
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    with request.urlopen(req, timeout=3.0) as resp:
-                        resp_body = resp.read().decode("utf-8")
-                        self.get_logger().info("Invoked %s.%s => %s", module, action, resp_body)
-                except error.HTTPError as exc:
-                    self.get_logger().warning("Action invocation failed (%s.%s): %s", module, action, exc)
-                except Exception as exc:  # pragma: no cover - network errors
-                    self.get_logger().warning("Failed to invoke action %s.%s: %s", module, action, exc)
+    def _parse_command(self, command: str) -> tuple[str, str, dict] | None:
+        """Deprecated helper retained for compatibility; not used with scripts."""
+        raise RuntimeError("_parse_command is no longer supported")
 
     def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[PilotPromptContext]:
         if not self._topic_cache and not self._sensation_records:
@@ -533,6 +600,12 @@ class PilotNode(Node):
         if status and "/status" not in topics:
             topics["/status"] = status
         sensations = [record.to_summary() for record in self._recent_sensations()]
+        script_snapshot = self._script_status_snapshot()
+        if script_snapshot:
+            topics["/pilot/scripts"] = {
+                "recent": script_snapshot,
+                "running": [entry for entry in script_snapshot if entry.get("status") == "running"],
+            }
         return PilotPromptContext(
             topics=topics,
             status=status or topics.get("/status", {}),
@@ -559,6 +632,12 @@ class PilotNode(Node):
             return
 
         recent_records = self._recent_sensations()
+        script_context = {
+            "topics": context.topics,
+            "status": context.status or {},
+            "sensations": [s.prompt_payload() for s in context.sensations],
+            "window_seconds": context.window_seconds,
+        }
 
         msg = FeelingIntent()
         msg.stamp = self.get_clock().now().to_msg()
@@ -567,7 +646,7 @@ class PilotNode(Node):
         msg.attitude_emoji = feeling_data.attitude_emoji
         msg.thought_sentence = feeling_data.thought_sentence
         msg.spoken_sentence = feeling_data.spoken_sentence
-        msg.commands = feeling_data.commands
+        msg.command_script = feeling_data.command_script
         msg.goals = feeling_data.goals
         msg.mood_delta = feeling_data.mood_delta
         msg.memory_collection_raw = feeling_data.memory_collection_raw
@@ -579,14 +658,16 @@ class PilotNode(Node):
         self.publisher.publish(msg)
         self._dirty = False
 
-        # Attempt to invoke any commands proposed by the LLM. Invocation is
-        # best-effort: we prefer the cockpit HTTP API (COCKPIT_URL) and will
-        # log failures rather than preventing the feeling intent from being
-        # published.
+        # Execute the generated script asynchronously so the LLM loop can continue.
         try:
-            self._invoke_commands(feeling_data.commands, actions)
-        except Exception as exc:  # pragma: no cover - invocation failures should not crash
-            self.get_logger().warning("Failed to invoke commands: %s", exc)
+            self._schedule_script_execution(
+                script=feeling_data.command_script,
+                available_actions=actions,
+                source="pilot.llm",
+                context=script_context,
+            )
+        except Exception as exc:  # pragma: no cover - execution failures should not crash
+            self.get_logger().warning("Failed to schedule command script: %s", exc)
 
         timestamp = _ros_time_to_datetime(msg.stamp)
         feeling_id = f"pilot-{uuid4()}"
