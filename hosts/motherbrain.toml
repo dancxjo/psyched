@@ -1,7 +1,7 @@
 [host]
 name = "motherbrain"
 installers = ["ros2", "docker"]
-modules = ["cockpit", "hypothalamus", "imu", "foot", "voice", "ear", "pilot"]
+modules = ["cockpit", "foot", "voice", "pilot"]
 
 [config.mod.ear.env]
 EAR_BACKEND = "service"
