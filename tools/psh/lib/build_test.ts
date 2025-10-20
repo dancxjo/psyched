@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "$std/testing/asserts.ts";
+import { assert, assertEquals, assertRejects } from "$std/testing/asserts.ts";
 import { join } from "$std/path/mod.ts";
 import { workspaceRoot } from "./paths.ts";
 import {
@@ -11,6 +11,7 @@ Deno.test("colcon build invocation defaults to workspace root", () => {
   const invocation = createColconBuildInvocation([]);
   assertEquals(invocation.cwd, workspaceRoot());
   assertEquals(invocation.cmd, ["colcon", "build", "--symlink-install"]);
+  assertEquals(invocation.env, {});
 });
 
 Deno.test("colcon build invocation selects packages when provided", () => {
@@ -23,6 +24,7 @@ Deno.test("colcon build invocation selects packages when provided", () => {
     "cockpit",
     "imu",
   ]);
+  assertEquals(invocation.env, {});
 });
 
 Deno.test("colcon build invocation forwards arguments after separator", () => {
@@ -42,6 +44,7 @@ Deno.test("colcon build invocation forwards arguments after separator", () => {
     "--cmake-args",
     "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
   ]);
+  assertEquals(invocation.env, {});
 });
 
 Deno.test("buildWorkspace delegates to provided runner", async () => {
@@ -63,6 +66,11 @@ Deno.test("buildWorkspace delegates to provided runner", async () => {
       "--packages-select",
       "cockpit",
     ]);
+    const rosDistro = invocation.env.ROS_DISTRO;
+    assert(
+      typeof rosDistro === "string" && rosDistro.length > 0,
+      "expected ROS_DISTRO to be populated in invocation environment",
+    );
   } finally {
     if (originalWorkspace === undefined) {
       Deno.env.delete("PSYCHED_WORKSPACE_DIR");
