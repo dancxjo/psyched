@@ -29,15 +29,6 @@ Keep the host object compact and explicit:
 }
 ```
 
-The `ros2` installer provisions a Docker-based ROS 2 helper by default, so pair
-it with the `docker` installer (or override `[config.installer.ros2] mode = "native"`
-for the legacy apt flow). The helper launches `osrf/ros` images with
-`--network=host`, binds the repository's `work/` directory into the container at
-`/work`, and mirrors the entire checkout into the container so symlinked package
-sources resolve correctly. The `psh` CLI automatically shells into that helper
-for `rosdep`, `colcon`, and `ros2` commands, so keep module overlays and build
-artefacts inside `work/` and run ROS-facing commands through `psh`.
-
 ## Services
 
 Describe each service under a single object. Capture a quick port summary and

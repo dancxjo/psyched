@@ -1,5 +1,5 @@
+import { $ } from "$dax";
 import { sourcePsychedEnv } from "./ros_env.ts";
-import { runRosCommand } from "./ros_container.ts";
 
 /**
  * Publishes a string message to a ROS 2 topic.
@@ -8,13 +8,8 @@ import { runRosCommand } from "./ros_container.ts";
  */
 export async function publishString(topic: string, message: string) {
   const env = await sourcePsychedEnv();
-  await runRosCommand([
-    "ros2",
-    "topic",
-    "pub",
-    "--once",
-    topic,
-    "std_msgs/msg/String",
-    `data: ${message}`,
-  ], { env });
+  // `dax` doesn't handle nested quotes well, so we escape them for the shell.
+  const escapedMessage = message.replace(/'/g, `'"'"'`);
+  await $`ros2 topic pub --once ${topic} std_msgs/msg/String 'data: ${escapedMessage}'`
+    .env(env);
 }

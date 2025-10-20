@@ -20,7 +20,6 @@ export interface ProvisionContextOptions {
     isRoot?: boolean;
     sudoPath?: string;
   };
-  config?: Record<string, unknown>;
 }
 
 export class ProvisionContext {
@@ -28,7 +27,6 @@ export class ProvisionContext {
   readonly verbose: boolean;
   readonly isRoot: boolean;
   readonly sudoPath?: string;
-  readonly config: Record<string, unknown>;
 
   constructor(options: ProvisionContextOptions = {}) {
     this.verbose = options.verbose ?? false;
@@ -39,7 +37,6 @@ export class ProvisionContext {
     this.isRoot = options.system?.isRoot ?? this.#detectRoot();
     this.sudoPath = options.system?.sudoPath ??
       (this.isRoot ? undefined : this.#detectSudo());
-    this.config = options.config ? { ...options.config } : {};
   }
 
   async step<T>(
