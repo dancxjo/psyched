@@ -60,6 +60,7 @@ Always prefer running the smallest relevant command set.
 
 - **Lockfile drift:** `deno.lock` enforces lockfile version ≥5. Older Deno releases will fail with “unsupported lockfile version”. Upgrade Deno or regenerate the lock.
 - **ROS distro mismatch:** Scripts default to the custom `kilted` distro name. Override with `ROS_DISTRO=<distro>` before running `psh env` if you target `humble`/`jazzy`.
+- **ROS container default:** Hosts run ROS 2 from a Docker image by default and alias `/usr/local/bin/ros2-container`. Add `[config.installer.ros2] mode = "native"` if you need the legacy apt-based install, and remember to include the `docker` installer when relying on the container helper.
 - **Workspace resets:** `tools/clean_workspace` wipes `work/` and leaves `src/` empty so disabled modules stay out of the build graph. Run it (or `psh clean`) when paths drift, then rerun `psh mod setup <module>` for any packages you need.
 - **Network safety:** `psh clean` intentionally preserves connectivity-critical modules/services (Wi-Fi, SSH, mDNS). Keep those protections in place so remote sessions stay alive during cleanup.
 - **Deno TLS certificates:** When fetching dependencies during `deno task test`, set `DENO_TLS_CA_STORE=system` if you encounter TLS certificate errors in restricted environments.

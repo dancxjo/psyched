@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install_ros2.sh - Provision ROS 2 on Ubuntu using the upstream apt packages.
+# install_ros2.sh - Provision ROS 2 on Debian/Ubuntu using the upstream apt packages.
 #
 # This script mirrors the `psh dep ros2` command. The ROS distribution can be
 # overridden via the ROS_DISTRO environment variable.
@@ -37,6 +37,29 @@ elif ! command -v sudo >/dev/null 2>&1; then
   exit 1
 fi
 
+OS_ID="ubuntu"
+OS_ID_LIKE=" "
+OS_CODENAME=""
+if [[ -r /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  OS_ID="${ID:-${OS_ID}}"
+  OS_ID="${OS_ID,,}"
+  if [[ -n "${ID_LIKE:-}" ]]; then
+    OS_ID_LIKE=" ${ID_LIKE,,} "
+  fi
+  if [[ -n "${VERSION_CODENAME:-}" ]]; then
+    OS_CODENAME="${VERSION_CODENAME,,}"
+  fi
+fi
+if [[ -z "${OS_CODENAME}" ]] && command -v lsb_release >/dev/null 2>&1; then
+  OS_CODENAME="$(lsb_release -cs 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+fi
+if [[ -z "${OS_CODENAME}" ]]; then
+  OS_CODENAME="focal"
+fi
+
+echo "Detected distribution: ${OS_ID} (${OS_CODENAME})"
 echo "Provisioning ROS 2 ${ROS_DISTRO} using Debian packages..."
 
 export LANG=en_US.UTF-8
@@ -54,14 +77,23 @@ export LANG=en_US.UTF-8
 
 locale
 
-"${SUDO[@]}" add-apt-repository -y universe
+ENABLE_UNIVERSE=0
+if [[ "${OS_ID}" == "ubuntu" ]] || [[ "${OS_ID_LIKE}" == *" ubuntu "* ]]; then
+  ENABLE_UNIVERSE=1
+fi
+
+if [[ "${ENABLE_UNIVERSE}" -eq 1 ]]; then
+  "${SUDO[@]}" add-apt-repository -y universe
+else
+  echo "Skipping Ubuntu 'universe' repository enablement for ${OS_ID}."
+fi
 "${SUDO[@]}" apt-get update
 
 echo "Setting up ROS 2 apt repository..."
 
 ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F'"' '{print $4}')
 
-curl -fsSL -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo $VERSION_CODENAME)_all.deb"
+curl -fsSL -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.${OS_CODENAME}_all.deb"
 
 echo "Installing ROS 2 ${ROS_DISTRO} packages..."
 

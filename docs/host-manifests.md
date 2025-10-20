@@ -29,6 +29,10 @@ Keep the host object compact and explicit:
 }
 ```
 
+The `ros2` installer provisions a Docker-based ROS 2 helper by default, so pair
+it with the `docker` installer (or override `[config.installer.ros2] mode = "native"`
+for the legacy apt flow).
+
 ## Services
 
 Describe each service under a single object. Capture a quick port summary and
