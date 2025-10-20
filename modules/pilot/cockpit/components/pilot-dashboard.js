@@ -5,12 +5,11 @@ import {
 } from "https://unpkg.com/lit@3.1.4/index.js?module";
 import { classMap } from "https://unpkg.com/lit@3.1.4/directives/class-map.js?module";
 import { surfaceStyles } from "/components/cockpit-style.js";
+import { createCollapsedCardManager } from "/components/dashboard-collapse.js";
 import { createTopicSocket } from "/js/cockpit.js";
 import {
-  loadCollapsedCards,
   normaliseDebugSnapshot,
   normaliseFeelingIntent,
-  persistCollapsedCards,
 } from "./pilot-dashboard.helpers.js";
 
 function makeId(prefix) {
@@ -208,7 +207,8 @@ class PilotDashboard extends LitElement {
     this.logsCount = 0;
     this.errorsCount = 0;
     this.intentFeed = [];
-    this.collapsedCards = loadCollapsedCards();
+    this._cardManager = createCollapsedCardManager("module-pilot");
+    this.collapsedCards = this._cardManager.getCollapsedIds();
 
     this._debugSocket = null;
     this._intentSocket = null;
@@ -229,14 +229,21 @@ class PilotDashboard extends LitElement {
   }
 
   isCardCollapsed(id) {
-    if (!id || !(this.collapsedCards instanceof Set)) {
+    if (!id) {
       return false;
     }
-    return this.collapsedCards.has(id);
+    if (this._cardManager) {
+      return this._cardManager.isCollapsed(id);
+    }
+    return this.collapsedCards instanceof Set ? this.collapsedCards.has(id) : false;
   }
 
   setCardCollapsed(id, collapsed) {
     if (!id) {
+      return;
+    }
+    if (this._cardManager) {
+      this.collapsedCards = this._cardManager.setCollapsed(id, collapsed);
       return;
     }
     const next = new Set(this.collapsedCards instanceof Set ? this.collapsedCards : []);
@@ -246,10 +253,16 @@ class PilotDashboard extends LitElement {
       next.delete(id);
     }
     this.collapsedCards = next;
-    persistCollapsedCards(next);
   }
 
   toggleCardCollapsed(id) {
+    if (!id) {
+      return;
+    }
+    if (this._cardManager) {
+      this.collapsedCards = this._cardManager.toggle(id);
+      return;
+    }
     const collapsed = this.isCardCollapsed(id);
     this.setCardCollapsed(id, !collapsed);
   }
