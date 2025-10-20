@@ -4,6 +4,7 @@
 - Favor dependency injection for external services (LLM, rememberd) so tests can remain hermetic.
 - Keep launch and shutdown scripts POSIX-friendly and idempotent; preserve `set -euo pipefail` guards.
 - Keep the cockpit action definitions in `modules/pilot/cockpit/api/` aligned with the node's behaviour so the cockpit web interface, the pilot ROS node, and `psh actions` stay in sync.
+- Tests include lightweight stubs for ROS interfaces under `modules/pilot/packages/pilot/tests` so they can run without ROS installed; extend those stubs when adding new dependencies.
 
 ## Action discovery
 

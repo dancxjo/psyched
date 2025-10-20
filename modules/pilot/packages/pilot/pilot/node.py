@@ -33,8 +33,9 @@ from .command_script import (
 )
 from .memory_pipeline import prepare_memory_batch
 from .models import SensationRecord
-from .prompt_builder import PilotPromptContext, build_prompt
+from .prompt_builder import PilotPromptContext, PromptImage, build_prompt
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
+from .vision import summarise_image_message
 
 
 _LOGGER = logging.getLogger("psyched.pilot.node")
@@ -201,7 +202,9 @@ def _parse_topic_parameter(
 class LLMClient:
     """Abstract interface so tests can stub LLM calls."""
 
-    def generate(self, prompt: str) -> str:  # pragma: no cover - interface
+    def generate(
+        self, prompt: str, *, images: Optional[Sequence[str]] = None
+    ) -> str:  # pragma: no cover - interface
         raise NotImplementedError
 
 
@@ -214,7 +217,7 @@ class OllamaLLMClient(LLMClient):
         self.timeout = timeout
         self._last_llm_response: Optional[str] = None
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, *, images: Optional[Sequence[str]] = None) -> str:
         """Call Ollama and stream output to stdout while assembling the full response.
 
         This attempts to request a streaming response from Ollama (stream: true).
@@ -222,7 +225,10 @@ class OllamaLLMClient(LLMClient):
         observe the raw model stream. We also assemble the chunks and return
         the final response string.
         """
-        payload = json.dumps({"model": self.model, "prompt": prompt, "stream": True}).encode("utf-8")
+        body: Dict[str, Any] = {"model": self.model, "prompt": prompt, "stream": True}
+        if images:
+            body["images"] = list(images)
+        payload = json.dumps(body).encode("utf-8")
         req = request.Request(
             self.host + "/api/generate",
             data=payload,
@@ -467,8 +473,16 @@ class PilotNode(Node):
         try:
             data = message_to_ordereddict(msg)
         except Exception:
-            data = str(msg)
-        self._topic_cache[topic] = {"data": data, "timestamp": time.time()}
+            entry = {"data": str(msg), "timestamp": time.time()}
+            self._topic_cache[topic] = entry
+            self._dirty = True
+            return
+
+        sanitised, prompt_image = summarise_image_message(topic, msg, data)
+        entry = {"data": sanitised, "timestamp": time.time()}
+        if prompt_image is not None:
+            entry["image"] = prompt_image
+        self._topic_cache[topic] = entry
         self._dirty = True
 
     def _handle_sensation_message(self, topic: str, msg: SensationStamped) -> None:
@@ -794,12 +808,21 @@ class PilotNode(Node):
                 "recent": script_snapshot,
                 "running": [entry for entry in script_snapshot if entry.get("status") == "running"],
             }
+        now = time.time()
+        vision_images: List[PromptImage] = []
+        for topic, entry in self._topic_cache.items():
+            image = entry.get("image")
+            if isinstance(image, PromptImage):
+                timestamp = float(entry.get("timestamp", now))
+                if now - timestamp <= self._window_seconds:
+                    vision_images.append(image)
         return PilotPromptContext(
             topics=topics,
             status=status or topics.get("/status", {}),
             sensations=sensations,
             cockpit_actions=actions,
             window_seconds=self._window_seconds,
+            vision_images=vision_images,
         )
 
     def _on_timer(self) -> None:
@@ -817,7 +840,8 @@ class PilotNode(Node):
         except Exception:
             self._last_prompt = prompt
         try:
-            raw_response = self._llm_client.generate(prompt)
+            images_payload = [img.base64_data for img in context.vision_images] or None
+            raw_response = self._llm_client.generate(prompt, images=images_payload)
             feeling_data = parse_feeling_intent_json(raw_response, actions)
         except (RuntimeError, FeelingIntentValidationError) as exc:
             self.get_logger().error(f"Failed to generate FeelingIntent: {exc}")
