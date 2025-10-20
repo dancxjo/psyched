@@ -186,6 +186,20 @@ class PilotDashboard extends LitElement {
       .llm-output {
         margin-top: 1rem;
       }
+
+      .pilot-dashboard__intent-prompt {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 0.85rem;
+        grid-column: 1 / -1;
+        align-items: start;
+      }
+
+      @media (max-width: 720px) {
+        .pilot-dashboard__intent-prompt {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
     `,
   ];
 
@@ -273,163 +287,178 @@ class PilotDashboard extends LitElement {
       ? "FeelingIntent stream active."
       : "No FeelingIntent messages yet.";
 
-    const cards = [
-      this.renderSurfaceCard({
-        id: "pilot-status",
-        title: "Pilot status",
-        wide: true,
-        content: html`
-          <p class="surface-status" data-variant="${statusTone}">${statusMessage}</p>
-          <dl class="status-grid">
-            <div>
-              <dt>Planner state</dt>
-              <dd>${this.moduleStatus}</dd>
-            </div>
-            <div>
-              <dt>Heartbeat</dt>
-              <dd>${heartbeatDisplay}</dd>
-            </div>
-            <div>
-              <dt>Debounce window</dt>
-              <dd>${debounceDisplay}</dd>
-            </div>
-            <div>
-              <dt>Context horizon</dt>
-              <dd>${windowDisplay}</dd>
-            </div>
-            <div>
-              <dt>Debug logs cached</dt>
-              <dd>${this.logsCount}</dd>
-            </div>
-            <div>
-              <dt>Error entries</dt>
-              <dd>${this.errorsCount}</dd>
-            </div>
-          </dl>
-          <section>
-            <h4>Context topics</h4>
-            <p class="section-note">
-              Topics the pilot is currently including in the prompt context.
-            </p>
-            ${this.config.contextTopics.length
-              ? html`
-                <ul class="chip-list">
-                  ${this.config.contextTopics.map((topic) =>
-                    html`
-                      <li class="chip">${topic}</li>
-                    `
-                  )}
-                </ul>
-              `
-              : html`
-                <p class="empty-placeholder">No context topics observed yet.</p>
-              `}
-          </section>
-          <section>
-            <h4>Sensation inputs</h4>
-            <p class="section-note">
-              Recent sensation topics contributing to short-term memory.
-            </p>
-            ${this.config.sensationTopics.length
-              ? html`
-                <ul class="chip-list">
-                  ${this.config.sensationTopics.map((topic) =>
-                    html`
-                      <li class="chip">${topic}</li>
-                    `
-                  )}
-                </ul>
-              `
-              : html`
-                <p class="empty-placeholder">No sensation streams recorded yet.</p>
-              `}
-          </section>
-        `,
-      }),
-      this.renderSurfaceCard({
-        id: "pilot-intent",
-        title: "FeelingIntent feed",
-        wide: true,
-        content: html`
-          <p class="surface-status" data-variant="${intentTone}">${intentMessage}</p>
-          ${this.intentFeed.length
+    const statusCard = this.renderSurfaceCard({
+      id: "pilot-status",
+      title: "Pilot status",
+      wide: true,
+      content: html`
+        <p class="surface-status" data-variant="${statusTone}">${statusMessage}</p>
+        <dl class="status-grid">
+          <div>
+            <dt>Planner state</dt>
+            <dd>${this.moduleStatus}</dd>
+          </div>
+          <div>
+            <dt>Heartbeat</dt>
+            <dd>${heartbeatDisplay}</dd>
+          </div>
+          <div>
+            <dt>Debounce window</dt>
+            <dd>${debounceDisplay}</dd>
+          </div>
+          <div>
+            <dt>Context horizon</dt>
+            <dd>${windowDisplay}</dd>
+          </div>
+          <div>
+            <dt>Debug logs cached</dt>
+            <dd>${this.logsCount}</dd>
+          </div>
+          <div>
+            <dt>Error entries</dt>
+            <dd>${this.errorsCount}</dd>
+          </div>
+        </dl>
+        <section>
+          <h4>Context topics</h4>
+          <p class="section-note">
+            Topics the pilot is currently including in the prompt context.
+          </p>
+          ${this.config.contextTopics.length
             ? html`
-              <ul class="intent-feed">
-                ${this.intentFeed.map(
-                  (entry) =>
-                    html`
-                      <li class="intent-entry">
-                        <div class="intent-entry__meta">
-                          <span class="intent-entry__emoji">${entry
-                            .attitudeEmoji || "🤖"}</span>
-                          <span>${entry.displayTime}</span>
-                          ${entry.episodeId
-                            ? html`
-                              <span>Episode ${entry.episodeId}</span>
-                            `
-                            : null} ${entry.situationId
-                            ? html`
-                              <span>Situation ${entry.situationId}</span>
-                            `
-                            : null}
-                        </div>
-                        ${entry.spokenSentence
-                          ? html`
-                            <p class="surface-note">"${entry
-                              .spokenSentence}"</p>
-                          `
-                          : null} ${entry.thoughtSentence
-                          ? html`
-                            <p class="section-note">${entry.thoughtSentence}</p>
-                          `
-                          : null} ${entry.goals.length
-                          ? html`
-                            <p class="intent-entry__goals">
-                              Goals: ${entry.goals.join(", ")}
-                            </p>
-                          `
-                          : null} ${entry.commandScript
-                          ? html`
-                            <pre class="intent-entry__script">${entry
-                              .commandScript}</pre>
-                          `
-                          : null} ${entry.sourceTopics.length
-                          ? html`
-                            <p class="intent-entry__topics">
-                              Sources: ${entry.sourceTopics.join(", ")}
-                            </p>
-                          `
-                          : null} ${entry.moodDelta
-                          ? html`
-                            <p class="section-note">Mood delta: ${entry
-                              .moodDelta}</p>
-                          `
-                          : null}
-                        ${entry.memory && entry.memory.text
-                          ? html`
-                            <p class="section-note">
-                              Memory: ${entry.memory.emoji
-                                ? `${entry.memory.emoji} `
-                                : ""}${entry.memory.text}
-                            </p>
-                          `
-                          : null}
-                      </li>
-                    `,
+              <ul class="chip-list">
+                ${this.config.contextTopics.map((topic) =>
+                  html`
+                    <li class="chip">${topic}</li>
+                  `
                 )}
               </ul>
             `
             : html`
-              <p class="empty-placeholder">
-                No FeelingIntent messages received from the pilot yet.
-              </p>
+              <p class="empty-placeholder">No context topics observed yet.</p>
             `}
-        `,
-      }),
-      this.renderSurfaceCard({
-        id: "pilot-sensations",
-        title: "Recent sensations",
-        content: html`
+        </section>
+        <section>
+          <h4>Sensation inputs</h4>
+          <p class="section-note">
+            Recent sensation topics contributing to short-term memory.
+          </p>
+          ${this.config.sensationTopics.length
+            ? html`
+              <ul class="chip-list">
+                ${this.config.sensationTopics.map((topic) =>
+                  html`
+                    <li class="chip">${topic}</li>
+                  `
+                )}
+              </ul>
+            `
+            : html`
+              <p class="empty-placeholder">No sensation streams recorded yet.</p>
+            `}
+        </section>
+      `,
+    });
+
+    const intentCard = this.renderSurfaceCard({
+      id: "pilot-intent",
+      title: "FeelingIntent feed",
+      wide: true,
+      content: html`
+        <p class="surface-status" data-variant="${intentTone}">${intentMessage}</p>
+        ${this.intentFeed.length
+          ? html`
+            <ul class="intent-feed">
+              ${this.intentFeed.map(
+                (entry) =>
+                  html`
+                    <li class="intent-entry">
+                      <div class="intent-entry__meta">
+                        <span class="intent-entry__emoji">${entry
+                          .attitudeEmoji || "🤖"}</span>
+                        <span>${entry.displayTime}</span>
+                        ${entry.episodeId
+                          ? html`
+                            <span>Episode ${entry.episodeId}</span>
+                          `
+                          : null} ${entry.situationId
+                          ? html`
+                            <span>Situation ${entry.situationId}</span>
+                          `
+                          : null}
+                      </div>
+                      ${entry.spokenSentence
+                        ? html`
+                          <p class="surface-note">"${entry
+                            .spokenSentence}"</p>
+                        `
+                        : null} ${entry.thoughtSentence
+                        ? html`
+                          <p class="section-note">${entry.thoughtSentence}</p>
+                        `
+                        : null} ${entry.goals.length
+                        ? html`
+                          <p class="intent-entry__goals">
+                            Goals: ${entry.goals.join(", ")}
+                          </p>
+                        `
+                        : null} ${entry.commandScript
+                        ? html`
+                          <pre class="intent-entry__script">${entry
+                            .commandScript}</pre>
+                        `
+                        : null} ${entry.sourceTopics.length
+                        ? html`
+                          <p class="intent-entry__topics">
+                            Sources: ${entry.sourceTopics.join(", ")}
+                          </p>
+                        `
+                        : null} ${entry.moodDelta
+                        ? html`
+                          <p class="section-note">Mood delta: ${entry
+                            .moodDelta}</p>
+                        `
+                        : null}
+                      ${entry.memory && entry.memory.text
+                        ? html`
+                          <p class="section-note">
+                            Memory: ${entry.memory.emoji
+                              ? `${entry.memory.emoji} `
+                              : ""}${entry.memory.text}
+                          </p>
+                        `
+                        : null}
+                    </li>
+                  `,
+              )}
+            </ul>
+          `
+          : html`
+            <p class="empty-placeholder">
+              No FeelingIntent messages received from the pilot yet.
+            </p>
+          `}
+      `,
+    });
+
+    const promptCard = this.lastPrompt
+      ? this.renderSurfaceCard({
+          id: "pilot-latest-prompt",
+          title: "Latest prompt",
+          wide: true,
+          content: html`
+            <p class="section-note">
+              Snapshot of the text sent to the language model for the most recent planning cycle.
+            </p>
+            <pre class="llm-output">${this.lastPrompt}</pre>
+          `,
+        })
+      : null;
+
+    const sensationsCard = this.renderSurfaceCard({
+      id: "pilot-sensations",
+      title: "Recent sensations",
+      content: html`
           <p class="section-note">
             Sliding window of sensation summaries captured over the last ${this
                 .config.windowSeconds != null
@@ -472,106 +501,109 @@ class PilotDashboard extends LitElement {
               <p class="empty-placeholder">No sensations recorded in the current window.</p>
             `}
         `,
-      }),
-      this.renderSurfaceCard({
-        id: "pilot-scripts",
-        title: "Command scripts",
-        content: html`
-          <p class="section-note">
-            Scripts dispatched by the pilot after validating the LLM output and action
-            catalogue.
-          </p>
-          ${this.scriptRuns.length
-            ? html`
-              <ul class="scripts-list">
-                ${this.scriptRuns.slice(0, 6).map(
-                  (script) =>
-                    html`
-                      <li class="script-entry">
-                        <p class="script-entry__meta">
-                          <span class="script-entry__status">${script
-                            .status}</span>
-                          ${script.source
-                            ? html`
-                              <span>• ${script.source}</span>
-                            `
-                            : null} ${script.startedAt
-                            ? html`
-                              <span>• ${script.startedAt}</span>
-                            `
-                            : null} ${script.finishedAt
-                            ? html`
-                              <span>→ ${script.finishedAt}</span>
-                            `
-                            : null}
-                        </p>
-                        ${script.error
+      });
+
+    const scriptsCard = this.renderSurfaceCard({
+      id: "pilot-scripts",
+      title: "Command scripts",
+      content: html`
+        <p class="section-note">
+          Scripts dispatched by the pilot after validating the LLM output and action
+          catalogue.
+        </p>
+        ${this.scriptRuns.length
+          ? html`
+            <ul class="scripts-list">
+              ${this.scriptRuns.slice(0, 6).map(
+                (script) =>
+                  html`
+                    <li class="script-entry">
+                      <p class="script-entry__meta">
+                        <span class="script-entry__status">${script
+                          .status}</span>
+                        ${script.source
                           ? html`
-                            <p class="surface-status" data-variant="error">${script
-                              .error}</p>
+                            <span>• ${script.source}</span>
                           `
-                          : null} ${script.usedActions.length
+                          : null} ${script.startedAt
                           ? html`
-                            <p class="section-note">
-                              Actions: ${script.usedActions.join(", ")}
-                            </p>
+                            <span>• ${script.startedAt}</span>
                           `
-                          : null} ${script.actions.length
+                          : null} ${script.finishedAt
                           ? html`
-                            <ul class="script-entry__actions">
-                              ${script.actions.map(
-                                (action) =>
-                                  html`
-                                    <li>
-                                      ${action.action || "unknown"} – ${action
-                                        .status} ${action.timestamp
-                                        ? html`
-                                          <span>(${action.timestamp})</span>
-                                        `
-                                        : null}
-                                    </li>
-                                  `,
-                              )}
-                            </ul>
+                            <span>→ ${script.finishedAt}</span>
                           `
                           : null}
-                      </li>
-                    `,
-                )}
-              </ul>
-            `
-            : html`
-              <p class="empty-placeholder">No command scripts executed yet.</p>
-            `}
-        `,
-      }),
+                      </p>
+                      ${script.error
+                        ? html`
+                          <p class="surface-status" data-variant="error">${script
+                            .error}</p>
+                        `
+                        : null} ${script.usedActions.length
+                        ? html`
+                          <p class="section-note">
+                            Actions: ${script.usedActions.join(", ")}
+                          </p>
+                        `
+                        : null} ${script.actions.length
+                        ? html`
+                          <ul class="script-entry__actions">
+                            ${script.actions.map(
+                              (action) =>
+                                html`
+                                  <li>
+                                    ${action.action || "unknown"} – ${action
+                                      .status} ${action.timestamp
+                                      ? html`
+                                        <span>(${action.timestamp})</span>
+                                      `
+                                      : null}
+                                  </li>
+                                `,
+                            )}
+                          </ul>
+                        `
+                        : null}
+                    </li>
+                  `,
+              )}
+            </ul>
+          `
+          : html`
+            <p class="empty-placeholder">No command scripts executed yet.</p>
+          `}
+      `,
+    });
+
+    const lastLLMCard = this.lastLLM
+      ? this.renderSurfaceCard({
+          id: "pilot-latest-llm",
+          title: "Latest LLM response",
+          wide: true,
+          content: html`
+            <p class="section-note">
+              Trimmed copy of the model output that informed the most recent FeelingIntent
+              message.
+            </p>
+            <pre class="llm-output">${this.lastLLM}</pre>
+          `,
+        })
+      : null;
+
+    const cards = [
+      statusCard,
       this.lastPrompt
-        ? this.renderSurfaceCard({
-            id: "pilot-latest-prompt",
-            title: "Latest prompt",
-            wide: true,
-            content: html`
-              <p class="section-note">
-                Snapshot of the text sent to the language model for the most recent planning cycle.
-              </p>
-              <pre class="llm-output">${this.lastPrompt}</pre>
-            `,
-          })
-        : null,
-      this.lastLLM
-        ? this.renderSurfaceCard({
-            id: "pilot-latest-llm",
-            title: "Latest LLM response",
-            wide: true,
-            content: html`
-              <p class="section-note">
-                Trimmed copy of the model output that informed the most recent FeelingIntent
-                message.
-              </p>
-              <pre class="llm-output">${this.lastLLM}</pre>
-            `,
-          })
-        : null,
+        ? html`
+            <div class="pilot-dashboard__intent-prompt">
+              ${intentCard}
+              ${promptCard}
+            </div>
+          `
+        : intentCard,
+      sensationsCard,
+      scriptsCard,
+      lastLLMCard,
     ].filter(Boolean);
 
     return html`
