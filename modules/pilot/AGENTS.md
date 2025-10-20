@@ -8,7 +8,7 @@
 ## Action discovery
 
 - The canonical action export is available via the `psh` CLI: `psh actions export --json`.
-- The pilot node will prefer querying the cockpit HTTP API (`/api/actions`) when available and falls back to `psh actions export --json` when not. Keep the `psh` command in sync with cockpit actions if you add or modify actions.
+- The pilot node will prefer querying the cockpit HTTP API (`/api/actions`) when available and falls back to reading `modules/<name>/cockpit/api/actions.json` directly when not. Keep the cockpit manifests in sync with runtime behaviour when you add or modify actions.
 
 ## Topic configuration
 
