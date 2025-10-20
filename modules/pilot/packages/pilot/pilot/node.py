@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import socket
-import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +22,10 @@ from rosidl_runtime_py.utilities import get_message
 from psyched_msgs.msg import FeelingIntent, SensationStamped
 from std_msgs.msg import String as StdString
 
+from .cockpit_helpers import (
+    load_local_cockpit_actions,
+    normalise_cockpit_modules_payload,
+)
 from .command_script import (
     CommandInvocation,
     CommandScriptError,
@@ -344,6 +347,8 @@ class PilotNode(Node):
         self._script_runs: List[Dict[str, Any]] = []
         self._script_lock = threading.Lock()
         self._action_schemas: Dict[str, Dict[str, Any]] = {}
+        self._modules_root = self._discover_modules_root()
+        self._actions_fallback_logged = False
         self._last_prompt: Optional[str] = None
 
         host_full, host_short = _resolve_host_names()
@@ -662,20 +667,16 @@ class PilotNode(Node):
 
         self._script_executor.submit(_runner)
 
-    def _run_psh(self, args: Sequence[str]) -> str:
-        try:
-            proc = subprocess.run(args, check=False, capture_output=True, text=True)
-        except FileNotFoundError:
-            self.get_logger().warning(
-                f"psh command not available: {args[0]}"
-            )
-            return ""
-        if proc.returncode != 0:
-            self.get_logger().warning(
-                f"psh command failed ({proc.returncode}): {proc.stderr.strip()}"
-            )
-            return ""
-        return proc.stdout
+    def _discover_modules_root(self) -> Path:
+        """Return the repository modules directory for cockpit fallbacks."""
+
+        repo_dir = os.environ.get("REPO_DIR")
+        if repo_dir:
+            try:
+                return Path(repo_dir) / "modules"
+            except TypeError:
+                pass
+        return Path(__file__).resolve().parents[5] / "modules"
 
     def _emit_debug_snapshot(self) -> None:
         try:
@@ -724,70 +725,57 @@ class PilotNode(Node):
             data = json.loads(body) if body else {}
             modules = data.get("modules") if isinstance(data, dict) else {}
             actions: List[str] = []
-            # Also capture schemas mapping for potential validation
-            self._action_schemas: Dict[str, Dict[str, Any]] = {}
+            self._action_schemas = {}
             if isinstance(modules, dict):
                 for module_name, info in modules.items():
-                    for act in info.get("actions", []) or []:
-                        if not isinstance(act, dict):
+                    raw_actions = info.get("actions") if isinstance(info, Mapping) else []
+                    if not isinstance(raw_actions, list):
+                        continue
+                    for act in raw_actions:
+                        if not isinstance(act, Mapping):
                             continue
                         name = act.get("name")
                         if isinstance(name, str):
-                            actions.append(f"{module_name}.{name}")
-                            # Store the action's parameters schema if present
+                            fq_name = f"{module_name}.{name}"
+                            actions.append(fq_name)
                             params = act.get("parameters")
-                            if isinstance(params, dict):
-                                self._action_schemas[f"{module_name}.{name}"] = params
-            # Fall back to psh export if cockpit didn't return a useful payload
-            if not actions:
-                raise ValueError("no actions from cockpit API")
-            return actions
-        except Exception:
-            # Fall back to legacy `psh` export when cockpit is not reachable
-            try:
-                result = self._run_psh(["psh", "actions", "export", "--json"])
-                data = json.loads(result) if result else {}
-                if isinstance(data, dict):
-                    modules_payload = data.get("modules")
-                    if isinstance(modules_payload, Mapping):
-                        actions: List[str] = []
-                        self._action_schemas = {}
-                        for module_name, info in modules_payload.items():
-                            if not isinstance(info, Mapping):
-                                continue
-                            module_actions = info.get("actions")
-                            if not isinstance(module_actions, list):
-                                continue
-                            for action_entry in module_actions:
-                                if not isinstance(action_entry, Mapping):
-                                    continue
-                                action_name = action_entry.get("name")
-                                if isinstance(action_name, str):
-                                    actions.append(f"{module_name}.{action_name}")
-                                    params = action_entry.get("parameters")
-                                    if isinstance(params, Mapping):
-                                        self._action_schemas[f"{module_name}.{action_name}"] = dict(params)
-                        if actions:
-                            return actions
-                actions_raw = data.get("actions") if isinstance(data, dict) else data
-                if isinstance(actions_raw, list):
-                    return [str(action) for action in actions_raw if isinstance(action, str)]
-            except Exception as exc:  # pragma: no cover - external command failure
+                            if isinstance(params, Mapping):
+                                self._action_schemas[fq_name] = dict(params)
+            if actions:
+                return actions
+            raise ValueError("no actions from cockpit API")
+        except Exception as exc:
+            if not self._actions_fallback_logged:
                 self.get_logger().warning(
-                    f"Failed to fetch cockpit actions: {exc}"
+                    f"Falling back to local cockpit actions: {exc}"
                 )
-        return []
+                self._actions_fallback_logged = True
+            else:
+                self.get_logger().debug(
+                    f"Falling back to local cockpit actions: {exc}"
+                )
+
+        actions, schemas = load_local_cockpit_actions(
+            self._modules_root,
+            logger=self.get_logger(),
+        )
+        self._action_schemas = schemas
+        return actions
 
     def _fetch_status(self) -> Dict[str, Any]:
+        cockpit_url = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
         try:
-            result = self._run_psh(["psh", "cockpit", "status", "--json"])
-            data = json.loads(result) if result else {}
-            return data if isinstance(data, dict) else {}
-        except Exception as exc:  # pragma: no cover - external command failure
+            req = request.Request(cockpit_url + "/api/modules")
+            with request.urlopen(req, timeout=2.0) as resp:
+                body = resp.read().decode("utf-8")
+            data = json.loads(body) if body else {}
+            if isinstance(data, Mapping):
+                return normalise_cockpit_modules_payload(data)
+        except Exception as exc:
             self.get_logger().warning(
                 f"Failed to fetch cockpit status: {exc}"
             )
-            return {}
+        return {}
 
     def _parse_command(self, command: str) -> tuple[str, str, dict] | None:
         """Deprecated helper retained for compatibility; not used with scripts."""
