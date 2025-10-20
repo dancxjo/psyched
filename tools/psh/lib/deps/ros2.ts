@@ -8,7 +8,7 @@ import {
   shouldEnableUniverse,
 } from "./os.ts";
 import { getRosDomainId } from "../ros_env.ts";
-import { repoRoot } from "../paths.ts";
+import { workspaceRoot } from "../paths.ts";
 
 export interface DetermineRosDistroOptions {
   env: Record<string, string | undefined>;
@@ -201,11 +201,11 @@ export function resolveRos2InstallPlan(
   const workspaceSource = readString(
     containerRaw?.workspace_source ?? raw?.workspace_source,
     "ros2.container.workspace_source",
-  );
+  ) ?? workspaceRoot();
   const workspaceTarget = readString(
     containerRaw?.workspace_target ?? raw?.workspace_target,
     "ros2.container.workspace_target",
-  );
+  ) ?? "/work";
   const user = readString(
     containerRaw?.user ?? raw?.user,
     "ros2.container.user",
@@ -328,6 +328,7 @@ function buildContainerHelperScript(
     `readonly network_mode=${shellQuote(networkMode)}`,
     `readonly workspace_source=${shellQuote(workspaceSource)}`,
     `readonly workspace_target=${shellQuote(workspaceTarget)}`,
+    `readonly workspace_mount=${shellQuote(`${workspaceSource}:${workspaceTarget}:rw`)}`,
     `readonly custom_user=${shellQuote(user ?? "")}`,
     "",
     "if ! command -v docker >/dev/null 2>&1; then",
@@ -346,7 +347,7 @@ function buildContainerHelperScript(
     "  \"--name\" \"$container_name\"",
     "  \"--user\" \"$user_value\"",
     "  \"--workdir\" \"$workspace_target\"",
-    "  \"-v\" \"$workspace_source:$workspace_target\"",
+    "  \"-v\" \"$workspace_mount\"",
     ")",
   ];
 
@@ -634,13 +635,19 @@ async function installRos2Container(
   const containerName = plan.containerName ?? "psyched-ros2";
   const networkMode = plan.networkMode ?? "host";
   const helperPath = plan.helperPath ?? defaultHelperPath();
-  const workspaceSource = plan.workspaceSource ?? repoRoot();
-  const workspaceTarget = plan.workspaceTarget ?? workspaceSource;
+  const workspaceSource = plan.workspaceSource ?? workspaceRoot();
+  const workspaceTarget = plan.workspaceTarget ?? "/work";
+  const workspaceMountKey = `${workspaceSource}:${workspaceTarget}`;
   const additionalVolumes = plan.volumes.filter((volume) =>
-    volume !== `${workspaceSource}:${workspaceTarget}`
+    volume !== workspaceMountKey && volume !== `${workspaceMountKey}:rw`
   );
   const passEnv = plan.passEnv.length ? plan.passEnv : ["DISPLAY"];
   const env = plan.env;
+
+  await context.step("Ensure ROS workspace directory exists", async (step) => {
+    await Deno.mkdir(workspaceSource, { recursive: true });
+    step.log(`Workspace directory available at ${workspaceSource}`);
+  });
 
   await context.step("Validate Docker availability", async (step) => {
     await step.exec(["docker", "--version"], {

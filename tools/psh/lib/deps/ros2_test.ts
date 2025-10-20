@@ -8,6 +8,7 @@ import {
   resolveRos2InstallPlan,
 } from "./ros2.ts";
 import { getRosDomainId } from "../ros_env.ts";
+import { workspaceRoot } from "../paths.ts";
 
 Deno.test("determineRosDistro respects env override", () => {
   const value = determineRosDistro({ env: { ROS_DISTRO: "jazzy" } });
@@ -53,6 +54,8 @@ Deno.test("resolveRos2InstallPlan defaults to container mode", () => {
   assertEquals(plan.containerImage, "osrf/ros:humble-desktop");
   assertEquals(plan.containerName, "psyched-ros2");
   assertEquals(plan.networkMode, "host");
+  assertEquals(plan.workspaceSource, workspaceRoot());
+  assertEquals(plan.workspaceTarget, "/work");
   assertEquals(plan.passEnv, ["DISPLAY"]);
   assertEquals(plan.volumes, ["/tmp/.X11-unix:/tmp/.X11-unix:rw"]);
 });

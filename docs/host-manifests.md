@@ -31,7 +31,9 @@ Keep the host object compact and explicit:
 
 The `ros2` installer provisions a Docker-based ROS 2 helper by default, so pair
 it with the `docker` installer (or override `[config.installer.ros2] mode = "native"`
-for the legacy apt flow).
+for the legacy apt flow). The helper launches `osrf/ros` images with
+`--network=host` and binds the repository's `work/` directory into the container
+at `/work`, so keep module overlays and build artefacts inside that folder.
 
 ## Services
 
