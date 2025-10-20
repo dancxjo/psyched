@@ -53,11 +53,12 @@ fi
 
 psyched::colcon_site_packages() {
   local python_version
-  python_version="$(python3 - <<'PY' 2>/dev/null || true)
-import sys
-print(f\"{sys.version_info.major}.{sys.version_info.minor}\")
-PY
-"
+  if ! python_version="$(
+    python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null
+  )"; then
+    return 1
+  fi
+  python_version="${python_version%%$'\n'*}"
   if [[ -z "${python_version}" ]]; then
     return 1
   fi
