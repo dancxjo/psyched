@@ -9,6 +9,7 @@ These are reusable UI components that are not specific to any single module:
 - **cockpit-app.js** - Main application shell that hosts all module dashboards
 - **cockpit-style.js** - Shared CSS styles used across all dashboards
 - **cockpit-dashboard.js** - The cockpit module's own dashboard
+- **dashboard-collapse.js** - Helper for persistent surface card collapse state
 - **module-log-viewer.js** - Generic log viewer for any module
 - **event-log.js** - Generic event display component
 - **diagnostics-panel.js** - Generic diagnostics display
