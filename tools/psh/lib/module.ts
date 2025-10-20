@@ -5,7 +5,6 @@ import { walkSync } from "$std/fs/walk.ts";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
 import { modulesRoot, repoRoot, workspaceRoot, workspaceSrc } from "./paths.ts";
-import { runRosCommand } from "./ros_container.ts";
 import { ensureRebootCompleted } from "./reboot_guard.ts";
 
 const PID_DIR = join(workspaceRoot(), ".psh");
@@ -856,7 +855,7 @@ const defaultRosBuildRunner: RosBuildPlannerRunner = {
     if (skipKeys.length) {
       args.push("--skip-keys", skipKeys.join(" "));
     }
-    await runRosCommand(["rosdep", ...args], { cwd: workspace });
+    await $`rosdep ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
   },
   async colcon({ workspace, packages, buildArgs }: ColconInvocation) {
     const args = ["build", "--symlink-install"];
@@ -866,7 +865,7 @@ const defaultRosBuildRunner: RosBuildPlannerRunner = {
     if (buildArgs.length) {
       args.push(...buildArgs);
     }
-    await runRosCommand(["colcon", ...args], { cwd: workspace });
+    await $`colcon ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
   },
 };
 
