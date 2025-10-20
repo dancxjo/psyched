@@ -1,6 +1,6 @@
 [unit.pilot]
 apt = ["python3-typing-extensions"]
-pip = []
+pip = ["typing_extensions>=4.7,<5"]
 launch = "modules/pilot/launch_unit.sh"
 shutdown = "modules/pilot/shutdown_unit.sh"
 cockpit_control = "modules/pilot/cockpit/index.html"

@@ -11,7 +11,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/pilot.launch.py']),
     ],
-    install_requires=['setuptools', 'jsonschema>=4.0'],
+    install_requires=['setuptools', 'jsonschema>=4.0', 'typing_extensions>=4.7,<5'],
     zip_safe=True,
     maintainer='Psyched',
     maintainer_email='tdreed@gmail.com',
