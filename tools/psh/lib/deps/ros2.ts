@@ -44,7 +44,7 @@ export function renderRosProfile(distro: string): string {
 export function buildRosBasePackages(distro: string): string[] {
   return [
     `ros-${distro}-ros-base`,
-    `ros-${distro}-ros-dev-tools`,
+    "ros-dev-tools",
     `ros-${distro}-rmw-cyclonedds-cpp`,
     "python3-rosdep",
   ];

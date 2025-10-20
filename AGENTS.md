@@ -69,7 +69,7 @@ Always prefer running the smallest relevant command set.
 - **Front-end helper tests:** Several cockpit helper suites rely on `deno test`. Check that the `deno` binary is available before invoking them and call out the limitation when it is missing.
 - **APT CLI stability:** Provisioning scripts must use `apt-get` (not `apt`) to avoid behaviour changes and interactive warnings during automation.
 - **ROS tooling packages:** Avoid installing `python3-colcon-*` or other catkin/colcon Debian packages; rely on ros-base and rosdep instead to prevent dpkg conflicts on Pete's hosts.
-- **ROS dev payload:** When tweaking installers ensure the `ros-<distro>-ros-dev-tools` meta-package stays in the dependency list so developer tooling (colcon, vcstool) lands without dragging in the desktop stack.
+- **ROS dev payload:** When tweaking installers ensure the `ros-dev-tools` meta-package stays in the dependency list so developer tooling (colcon, vcstool) lands without dragging in the desktop stack.
 - **Colcon virtualenv:** The ROS installers create `/opt/ros/<distro>/colcon-venv` and symlink `/usr/local/bin/colcon` into it. Reuse that environment instead of layering additional pip/apt colcon installs.
 - **Resource index drift:** When adding ROS 2 packages, ensure each `resource/<package>` file contains only the package name with a trailing newline and that Python packages ship a matching `setup.cfg` so ament indexing remains intact.
 - **Post-bootstrap shell refresh:** `./setup` now runs `psh host setup` automatically while skipping module/service provisioning. Open a fresh shell (or `source ~/.bashrc`) before running `psh mod setup` / `psh svc setup` so the ROS environment is available.
