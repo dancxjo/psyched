@@ -75,6 +75,7 @@ Always prefer running the smallest relevant command set.
 - **Post-bootstrap shell refresh:** `./setup` now runs `psh host setup` automatically while skipping module/service provisioning. Open a fresh shell (or `source ~/.bashrc`) before running `psh mod setup` / `psh svc setup` so the ROS environment is available.
 - **Host setup scope:** `psh host setup` only runs installers/scripts by default. Pass `--include-modules` / `--include-services` (or run `psh mod setup` / `psh svc setup` afterward) when you need lifecycle steps.
 - **Profile newline gotchas:** Deno's installer may append `source ~/.deno/env` without a trailing newline. Use `tools/bootstrap/profile_helpers.sh` to add exports to shell profiles so new lines aren't merged into the previous command.
+- **Hardware groups:** When new peripherals require extra device groups (e.g. `spi`), update `tools/psh/lib/user_groups.ts` so bootstrap keeps operator accounts in sync.
 
 ## Useful references
 
