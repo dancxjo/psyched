@@ -198,6 +198,93 @@ export function parseSongSheet(sheet) {
   return entries;
 }
 
+export const SONG_LIMITS = Object.freeze({
+  minId: 0,
+  maxId: 4,
+  minLength: 1,
+  maxLength: 16,
+  restNote: 30,
+  minPlayable: 31,
+  maxPlayable: 127,
+  maxDurationTicks: 255,
+});
+
+/**
+ * Build the payload expected by :msg:`create_msgs/msg/DefineSong`.
+ *
+ * @param {unknown} songId raw song identifier
+ * @param {Array<{note: number, duration: number}>} entries parsed note sheet
+ * @returns {{ song: number, length: number, notes: number[], durations: number[] }}
+ */
+export function buildDefineSongPayload(songId, entries) {
+  const id = Number(songId);
+  if (!Number.isInteger(id)) {
+    throw new Error(
+      `Song ID must be an integer between ${SONG_LIMITS.minId} and ${SONG_LIMITS.maxId}.`,
+    );
+  }
+  if (id < SONG_LIMITS.minId || id > SONG_LIMITS.maxId) {
+    throw new Error(
+      `Song ID must be between ${SONG_LIMITS.minId} and ${SONG_LIMITS.maxId}.`,
+    );
+  }
+  if (!Array.isArray(entries)) {
+    throw new Error("Song notes must be provided as an array.");
+  }
+  if (entries.length < SONG_LIMITS.minLength) {
+    throw new Error("At least one note is required to define a song.");
+  }
+  if (entries.length > SONG_LIMITS.maxLength) {
+    throw new Error("Songs may only contain up to 16 notes.");
+  }
+
+  const notes = [];
+  const durations = [];
+
+  entries.forEach((entry, index) => {
+    const noteValue = Number(entry?.note);
+    if (!Number.isFinite(noteValue)) {
+      throw new Error(`Note ${index + 1} is not a valid number.`);
+    }
+    const roundedNote = Math.round(noteValue);
+    const isRest = roundedNote === SONG_LIMITS.restNote;
+    if (
+      !isRest &&
+      (roundedNote < SONG_LIMITS.minPlayable ||
+        roundedNote > SONG_LIMITS.maxPlayable)
+    ) {
+      throw new Error(
+        `Note ${index + 1} must be ${SONG_LIMITS.restNote} for a rest or between ${SONG_LIMITS.minPlayable} and ${SONG_LIMITS.maxPlayable}.`,
+      );
+    }
+
+    const durationSeconds = Number(entry?.duration);
+    if (!Number.isFinite(durationSeconds)) {
+      throw new Error(`Duration ${index + 1} is not a valid number.`);
+    }
+    if (durationSeconds < 0) {
+      throw new Error(`Duration ${index + 1} must be zero or positive.`);
+    }
+    const durationTicks = Math.round(durationSeconds * 64);
+    if (durationTicks > SONG_LIMITS.maxDurationTicks) {
+      const maxSeconds = SONG_LIMITS.maxDurationTicks / 64;
+      throw new Error(
+        `Duration ${index + 1} exceeds the maximum of ${maxSeconds.toFixed(2)} seconds.`,
+      );
+    }
+
+    notes.push(roundedNote);
+    durations.push(durationTicks / 64);
+  });
+
+  return {
+    song: id,
+    length: notes.length,
+    notes,
+    durations,
+  };
+}
+
 /**
  * Convert ASCII text into the ``std_msgs/msg/UInt8MultiArray`` payload accepted
  * by ``/set_ascii``.

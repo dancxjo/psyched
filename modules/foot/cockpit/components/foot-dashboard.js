@@ -10,9 +10,11 @@ import "/components/joystick-control.js";
 import {
   buildParameterRequest,
   buildPowerLedPayload,
+  buildDefineSongPayload,
   formatJointState,
   formatOdometry,
   formatParameterEvent,
+  SONG_LIMITS,
   parseSongSheet,
   toAsciiPayload,
 } from "./foot-dashboard.helpers.js";
@@ -850,32 +852,20 @@ class FootDashboard extends LitElement {
 
   async submitSongDefinition(event) {
     event.preventDefault();
-    const notes = parseSongSheet(this.songForm.notes);
-    if (!notes.length) {
+    const parsed = parseSongSheet(this.songForm.notes);
+    if (!parsed.length) {
       this.songStatus =
         'Provide at least one "note,duration" pair to define a song.';
       return;
     }
-    const id = Number(this.songForm.id);
-    if (!Number.isInteger(id) || id < 0 || id > 15) {
-      this.songStatus = "Song ID must be between 0 and 15.";
-      return;
-    }
     try {
+      const payload = buildDefineSongPayload(this.songForm.id, parsed);
       const socket = this.ensurePublisher(
         "define_song",
         "create_msgs/msg/DefineSong",
       );
-      socket.send(
-        JSON.stringify({
-          id,
-          notes: notes.map((entry) => ({
-            note: entry.note,
-            duration: entry.duration,
-          })),
-        }),
-      );
-      this.songStatus = `Song ${id} programmed with ${notes.length} notes.`;
+      socket.send(JSON.stringify(payload));
+      this.songStatus = `Song ${payload.song} programmed with ${payload.length} notes.`;
     } catch (error) {
       this.songStatus = error instanceof Error ? error.message : String(error);
     }
@@ -884,8 +874,13 @@ class FootDashboard extends LitElement {
   playSong(event) {
     event.preventDefault();
     const id = Number(this.songForm.id);
-    if (!Number.isInteger(id) || id < 0 || id > 15) {
-      this.songStatus = "Song ID must be between 0 and 15.";
+    if (
+      !Number.isInteger(id) ||
+      id < SONG_LIMITS.minId ||
+      id > SONG_LIMITS.maxId
+    ) {
+      this.songStatus =
+        `Song ID must be between ${SONG_LIMITS.minId} and ${SONG_LIMITS.maxId}.`;
       return;
     }
     try {
