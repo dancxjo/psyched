@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
+import { copyTextToClipboard, formatCommandLogForCopy } from '/components/log-copy.js';
 
 const POSE_TOPIC = {
   topic: 'amcl_pose',
@@ -106,15 +107,22 @@ class NavDashboard extends LitElement {
     initialPoseForm: { state: true },
     goalForm: { state: true },
     logEntries: { state: true },
+    logCopyState: { state: true },
+    logCopyMessage: { state: true },
   };
 
   static styles = [
     surfaceStyles,
     css`
-      .surface-card__title {
+      .surface-card__header {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 0.5rem;
+      }
+
+      .surface-card__title {
+        margin: 0;
       }
 
       form {
@@ -196,8 +204,11 @@ class NavDashboard extends LitElement {
       yaw: '0.0',
     };
     this.logEntries = [];
+    this.logCopyState = 'idle';
+    this.logCopyMessage = '';
     this._sockets = [];
     this._publishers = new Map();
+    this._logCopyResetHandle = 0;
   }
 
   connectedCallback() {
@@ -208,6 +219,7 @@ class NavDashboard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._shutdown();
+    this._clearLogCopyReset();
   }
 
   render() {
@@ -235,7 +247,21 @@ class NavDashboard extends LitElement {
         </article>
 
         <article class="surface-card">
-          <h2 class="surface-card__title">Command log</h2>
+          <header class="surface-card__header">
+            <h2 class="surface-card__title">Command log</h2>
+            <button
+              type="button"
+              class="surface-action"
+              ?disabled=${this.logCopyState === 'copying' || !this.logEntries.length}
+              @click=${() => this._copyCommandLog()}
+            >
+              ${this.logCopyState === 'copying'
+                ? 'Copying…'
+                : this.logCopyState === 'copied'
+                  ? 'Copied!'
+                  : 'Copy log'}
+            </button>
+          </header>
           <p class="surface-status">Recent cockpit interactions</p>
           <ul class="surface-log">
             ${this.logEntries.length
@@ -253,6 +279,9 @@ class NavDashboard extends LitElement {
                 )
               : html`<li class="surface-muted">No commands dispatched yet.</li>`}
           </ul>
+          ${this.logCopyState === 'failed' && this.logCopyMessage
+            ? html`<p class="surface-status" data-variant="error">${this.logCopyMessage}</p>`
+            : ''}
         </article>
       </div>
 
@@ -494,6 +523,44 @@ class NavDashboard extends LitElement {
   _setStatus(message, tone = 'success') {
     this.statusMessage = message;
     this.statusTone = tone;
+  }
+
+  async _copyCommandLog() {
+    if (this.logCopyState === 'copying') {
+      return;
+    }
+    this._setLogCopyState('copying');
+    try {
+      const text = formatCommandLogForCopy(this.logEntries);
+      const success = await copyTextToClipboard(text);
+      if (success) {
+        this._setLogCopyState('copied');
+      } else {
+        this._setLogCopyState('failed', 'Clipboard unavailable. Please copy the entries manually.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this._setLogCopyState('failed', `Failed to copy command log: ${message}`);
+    }
+  }
+
+  _setLogCopyState(state, message = '') {
+    this.logCopyState = state;
+    this.logCopyMessage = message;
+    this._clearLogCopyReset();
+    if (state === 'copied' || state === 'failed') {
+      this._logCopyResetHandle = globalThis.setTimeout(() => {
+        this.logCopyState = 'idle';
+        this.logCopyMessage = '';
+      }, 3000);
+    }
+  }
+
+  _clearLogCopyReset() {
+    if (this._logCopyResetHandle) {
+      globalThis.clearTimeout(this._logCopyResetHandle);
+      this._logCopyResetHandle = 0;
+    }
   }
 
   _pushLog(message, type, detail) {

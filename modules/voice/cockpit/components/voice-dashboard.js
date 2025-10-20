@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
+import { copyTextToClipboard, formatVoiceEventLogForCopy } from '/components/log-copy.js';
 
 function generateId() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -23,11 +24,24 @@ class VoiceDashboard extends LitElement {
         volume: { state: true },
         lastVoice: { state: true },
         eventLog: { state: true },
+        eventLogCopyState: { state: true },
+        eventLogCopyMessage: { state: true },
     };
 
     static styles = [
         surfaceStyles,
         css`
+      .surface-card__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .surface-card__title {
+        margin: 0;
+      }
+
       form {
         display: flex;
         flex-direction: column;
@@ -86,12 +100,15 @@ class VoiceDashboard extends LitElement {
         this.volume = 255;
         this.lastVoice = '';
         this.eventLog = [];
+        this.eventLogCopyState = 'idle';
+        this.eventLogCopyMessage = '';
         this.voicePublisher = null;
         this.interruptPublisher = null;
         this.resumePublisher = null;
         this.clearPublisher = null;
         this.volumePublisher = null;
         this.sockets = [];
+        this._eventLogCopyResetHandle = 0;
     }
 
     connectedCallback() {
@@ -110,6 +127,7 @@ class VoiceDashboard extends LitElement {
             }
         }
         this.sockets.length = 0;
+        this._clearEventLogCopyReset();
     }
 
     connectVoice() {
@@ -156,6 +174,44 @@ class VoiceDashboard extends LitElement {
             this.eventLog = [event, ...this.eventLog].slice(0, 30);
         });
         this.sockets.push(socket);
+    }
+
+    async copyEventLog() {
+        if (this.eventLogCopyState === 'copying') {
+            return;
+        }
+        this.setEventLogCopyState('copying');
+        try {
+            const text = formatVoiceEventLogForCopy(this.eventLog);
+            const success = await copyTextToClipboard(text);
+            if (success) {
+                this.setEventLogCopyState('copied');
+            } else {
+                this.setEventLogCopyState('failed', 'Clipboard unavailable. Copy the events manually.');
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.setEventLogCopyState('failed', `Failed to copy event log: ${message}`);
+        }
+    }
+
+    setEventLogCopyState(state, message = '') {
+        this.eventLogCopyState = state;
+        this.eventLogCopyMessage = message;
+        this._clearEventLogCopyReset();
+        if (state === 'copied' || state === 'failed') {
+            this._eventLogCopyResetHandle = globalThis.setTimeout(() => {
+                this.eventLogCopyState = 'idle';
+                this.eventLogCopyMessage = '';
+            }, 3000);
+        }
+    }
+
+    _clearEventLogCopyReset() {
+        if (this._eventLogCopyResetHandle) {
+            globalThis.clearTimeout(this._eventLogCopyResetHandle);
+            this._eventLogCopyResetHandle = 0;
+        }
     }
 
     ensureVoicePublisher() {
@@ -284,7 +340,21 @@ class VoiceDashboard extends LitElement {
         </article>
 
         <article class="surface-card">
-          <h3 class="surface-card__title">Event Log</h3>
+          <header class="surface-card__header">
+            <h3 class="surface-card__title">Event Log</h3>
+            <button
+              class="surface-action"
+              type="button"
+              ?disabled=${this.eventLogCopyState === 'copying' || this.eventLog.length === 0}
+              @click=${() => this.copyEventLog()}
+            >
+              ${this.eventLogCopyState === 'copying'
+                ? 'Copying…'
+                : this.eventLogCopyState === 'copied'
+                  ? 'Copied!'
+                  : 'Copy log'}
+            </button>
+          </header>
           <ul class="surface-log">
             ${this.eventLog.length === 0
                 ? html`<li class="surface-log__entry">No events yet</li>`
@@ -296,6 +366,9 @@ class VoiceDashboard extends LitElement {
               </li>`,
                 )}
           </ul>
+          ${this.eventLogCopyState === 'failed' && this.eventLogCopyMessage
+                ? html`<p class="surface-status" data-variant="error">${this.eventLogCopyMessage}</p>`
+                : ''}
         </article>
       </div>
     `;

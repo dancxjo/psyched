@@ -3,6 +3,7 @@ import { unsafeHTML } from 'https://unpkg.com/lit@3.1.4/directives/unsafe-html.j
 import { AnsiUp } from 'https://esm.sh/ansi_up@6.0.2';
 import { surfaceStyles } from './cockpit-style.js';
 import { normaliseSystemdStatus } from './cockpit-dashboard.helpers.js';
+import { copyTextToClipboard, formatModuleLogForCopy } from './log-copy.js';
 
 /**
  * Compact module log viewer that surfaces the tail of a module's log file.
@@ -29,6 +30,8 @@ class CockpitModuleLogs extends LitElement {
     moduleDetails: { state: true },
     systemdBusy: { state: true },
     systemdError: { state: true },
+    copyState: { state: true },
+    copyMessage: { state: true },
   };
 
   static styles = [
@@ -190,10 +193,13 @@ class CockpitModuleLogs extends LitElement {
     this.moduleDetails = this._normaliseModule(null);
     this.systemdBusy = '';
     this.systemdError = '';
+    this.copyState = 'idle';
+    this.copyMessage = '';
     this._connected = false;
     this._abortController = null;
     this._lastFetchedModule = null;
     this._ansi = new AnsiUp();
+    this._copyResetHandle = 0;
   }
 
   connectedCallback() {
@@ -208,6 +214,7 @@ class CockpitModuleLogs extends LitElement {
     super.disconnectedCallback();
     this._connected = false;
     this._abortFetch();
+    this._clearCopyResetTimer();
   }
 
   updated(changedProperties) {
@@ -225,11 +232,12 @@ class CockpitModuleLogs extends LitElement {
         this.updatedAt = null;
         this.errorMessage = '';
         this._lastFetchedModule = null;
-        this.moduleDetails = this._normaliseModule(null);
-        this.systemdBusy = '';
-        this.systemdError = '';
-        return;
-      }
+      this.moduleDetails = this._normaliseModule(null);
+      this.systemdBusy = '';
+      this.systemdError = '';
+      this._setCopyState('idle');
+      return;
+    }
       if (this.module && this.module !== this._lastFetchedModule) {
         this.refresh();
       }
@@ -324,6 +332,18 @@ class CockpitModuleLogs extends LitElement {
           <button
             type="button"
             class="surface-action"
+            ?disabled=${this.loading || this.clearing || this.copyState === 'copying' || !this.module}
+            @click=${() => this._copyLogs()}
+          >
+            ${this.copyState === 'copying'
+              ? 'Copying…'
+              : this.copyState === 'copied'
+                ? 'Copied!'
+                : 'Copy log'}
+          </button>
+          <button
+            type="button"
+            class="surface-action"
             ?disabled=${this.loading || this.clearing || !this.module}
             @click=${() => this.refresh()}
           >
@@ -394,6 +414,9 @@ class CockpitModuleLogs extends LitElement {
         : html`<p class="module-log-panel__note">Systemd integration unavailable on this host.</p>`}
       ${systemd.message ? html`<p class="module-log-panel__note">${systemd.message}</p>` : ''}
       ${errorMessage ? html`<p class="module-log-panel__error">${errorMessage}</p>` : ''}
+      ${this.copyState === 'failed' && this.copyMessage
+        ? html`<p class="module-log-panel__error">${this.copyMessage}</p>`
+        : ''}
       <div class="module-log-panel__log">
         <h4 class="module-log-panel__subheading">Module log</h4>
         ${this._renderStatus()}
@@ -425,6 +448,47 @@ class CockpitModuleLogs extends LitElement {
       dashboardUrl,
       systemd,
     };
+  }
+
+  async _copyLogs() {
+    if (!this.module || this.copyState === 'copying') {
+      return;
+    }
+    this._setCopyState('copying');
+    try {
+      const payload = formatModuleLogForCopy(this.lines, {
+        truncated: this.truncated,
+        updatedAt: this.updatedAt,
+      });
+      const success = await copyTextToClipboard(payload);
+      if (success) {
+        this._setCopyState('copied');
+      } else {
+        this._setCopyState('failed', 'Unable to access the clipboard. Copy the log manually.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this._setCopyState('failed', `Failed to copy module log: ${message}`);
+    }
+  }
+
+  _setCopyState(state, message = '') {
+    this.copyState = state;
+    this.copyMessage = message;
+    this._clearCopyResetTimer();
+    if (state === 'copied' || state === 'failed') {
+      this._copyResetHandle = globalThis.setTimeout(() => {
+        this.copyState = 'idle';
+        this.copyMessage = '';
+      }, 3000);
+    }
+  }
+
+  _clearCopyResetTimer() {
+    if (this._copyResetHandle) {
+      globalThis.clearTimeout(this._copyResetHandle);
+      this._copyResetHandle = 0;
+    }
   }
 
   async _runSystemdAction(action) {

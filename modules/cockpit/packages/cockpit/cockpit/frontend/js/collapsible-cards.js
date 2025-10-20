@@ -6,6 +6,7 @@ import {
 
 const processedCards = new WeakSet();
 const managerCache = new Map();
+const observedShadowRoots = new WeakSet();
 
 function getManager(scopeId) {
   const key = normaliseDashboardScope(scopeId);
@@ -129,6 +130,65 @@ function applyCollapsedState(card, toggle, content, collapsed, titleText) {
   toggle.setAttribute('aria-label', collapsed ? `Expand ${label}` : `Collapse ${label}`);
 }
 
+function monitorShadowRoot(shadowRoot) {
+  if (!shadowRoot || observedShadowRoots.has(shadowRoot)) {
+    return;
+  }
+  observedShadowRoots.add(shadowRoot);
+  scanForCards(shadowRoot);
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        handlePotentialRoot(node);
+      }
+    }
+  });
+  observer.observe(shadowRoot, { childList: true, subtree: true });
+}
+
+function handlePotentialRoot(node) {
+  if (!node) {
+    return;
+  }
+  if (node instanceof HTMLElement) {
+    scanForCards(node);
+    if (node.shadowRoot) {
+      monitorShadowRoot(node.shadowRoot);
+    }
+  } else if (node instanceof ShadowRoot) {
+    monitorShadowRoot(node);
+  } else if (node instanceof DocumentFragment) {
+    scanForCards(node);
+    for (const element of node.querySelectorAll ? node.querySelectorAll('*') : []) {
+      if (element instanceof HTMLElement && element.shadowRoot) {
+        monitorShadowRoot(element.shadowRoot);
+      }
+    }
+  }
+}
+
+function trackShadowHosts(root) {
+  if (!root) {
+    return;
+  }
+
+  if (root instanceof HTMLElement && root.shadowRoot) {
+    monitorShadowRoot(root.shadowRoot);
+  }
+
+  const scope = root.querySelectorAll ? root : null;
+  if (!scope) {
+    return;
+  }
+
+  for (const element of scope.querySelectorAll('*')) {
+    if (element instanceof HTMLElement && element.shadowRoot) {
+      monitorShadowRoot(element.shadowRoot);
+    }
+  }
+}
+
 function initialiseCard(card) {
   if (!(card instanceof HTMLElement)) {
     return;
@@ -168,6 +228,7 @@ function scanForCards(root = document) {
   if (!root) {
     return;
   }
+
   const cards = root.querySelectorAll ? root.querySelectorAll('.surface-card') : [];
   for (const card of cards) {
     initialiseCard(card);
@@ -175,26 +236,30 @@ function scanForCards(root = document) {
   if (root instanceof HTMLElement && root.classList && root.classList.contains('surface-card')) {
     initialiseCard(root);
   }
+
+  trackShadowHosts(root);
 }
 
 if (typeof window !== 'undefined') {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => scanForCards(document));
-  } else {
+  const initialise = () => {
     scanForCards(document);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialise);
+  } else {
+    initialise();
   }
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
-        if (node instanceof HTMLElement) {
-          scanForCards(node);
-        }
+        handlePotentialRoot(node);
       }
     }
   });
 
   if (document.body) {
     observer.observe(document.body, { childList: true, subtree: true });
+    trackShadowHosts(document.body);
   }
 }

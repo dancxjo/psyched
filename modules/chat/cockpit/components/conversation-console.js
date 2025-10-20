@@ -1,4 +1,5 @@
 import { LitElement, html, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { copyTextToClipboard, formatConversationHistoryForCopy } from '/components/log-copy.js';
 
 /**
  * Conversation console that shows recent dialogue and lets operators seed user turns.
@@ -14,6 +15,8 @@ class CockpitConversationConsole extends LitElement {
     _input: { state: true },
     _speaker: { state: true },
     _isSending: { state: true },
+    _copyState: { state: true },
+    _copyMessage: { state: true },
   };
 
   constructor() {
@@ -22,10 +25,18 @@ class CockpitConversationConsole extends LitElement {
     this._input = '';
     this._speaker = '';
     this._isSending = false;
+    this._copyState = 'idle';
+    this._copyMessage = '';
+    this._copyResetHandle = 0;
   }
 
   createRenderRoot() {
     return this;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._clearCopyReset();
   }
 
   _formatSeconds(value) {
@@ -182,8 +193,7 @@ class CockpitConversationConsole extends LitElement {
     }
   }
 
-  renderHistory() {
-    const entries = this.history;
+  renderHistory(entries = this.history) {
     if (!entries.length) {
       return html`<li class="conversation-empty">No conversation yet.</li>`;
     }
@@ -212,14 +222,75 @@ class CockpitConversationConsole extends LitElement {
     });
   }
 
+  async copyHistory() {
+    if (this._copyState === 'copying') {
+      return;
+    }
+    this._setCopyState('copying');
+    try {
+      const text = formatConversationHistoryForCopy(this.history);
+      const success = await copyTextToClipboard(text);
+      if (success) {
+        this._setCopyState('copied');
+      } else {
+        this._setCopyState('failed', 'Clipboard unavailable. Copy the conversation manually.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this._setCopyState('failed', `Failed to copy conversation: ${message}`);
+    }
+  }
+
+  _setCopyState(state, message = '') {
+    this._copyState = state;
+    this._copyMessage = message;
+    this._clearCopyReset();
+    if (state === 'copied' || state === 'failed') {
+      this._copyResetHandle = globalThis.setTimeout(() => {
+        this._copyState = 'idle';
+        this._copyMessage = '';
+      }, 3000);
+    }
+  }
+
+  _clearCopyReset() {
+    if (this._copyResetHandle) {
+      globalThis.clearTimeout(this._copyResetHandle);
+      this._copyResetHandle = 0;
+    }
+  }
+
   render() {
     const disabled = this._isSending || this.record?.state !== 'connected';
+    const history = this.history;
+    const hasHistory = history.length > 0;
     return html`
       <div class="conversation-console">
         <div class="conversation-log">
-          <h5 class="audio-oscilloscope">Conversation Log</h5>
+          <div
+            class="conversation-log__header"
+            style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;"
+          >
+            <h5 class="audio-oscilloscope" style="margin: 0;">Conversation Log</h5>
+            <button
+              type="button"
+              class="control-button"
+              data-variant="muted"
+              ?disabled=${this._copyState === 'copying' || !hasHistory}
+              @click=${() => this.copyHistory()}
+            >
+              ${this._copyState === 'copying'
+                ? 'Copying…'
+                : this._copyState === 'copied'
+                  ? 'Copied!'
+                  : 'Copy log'}
+            </button>
+          </div>
+          ${this._copyState === 'failed' && this._copyMessage
+            ? html`<p style="margin: 0 0 0.5rem 0; color: var(--lcars-danger, #ff7f7f); font-size: 0.75rem;">${this._copyMessage}</p>`
+            : nothing}
           <ul>
-            ${this.renderHistory()}
+            ${this.renderHistory(history)}
           </ul>
         </div>
         <form class="conversation-form" @submit=${(event) => this.handleSubmit(event)}>

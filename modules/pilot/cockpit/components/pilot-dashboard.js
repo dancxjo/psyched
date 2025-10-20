@@ -454,19 +454,24 @@ class PilotDashboard extends LitElement {
       `,
     });
 
-    const promptCard = this.lastPrompt
-      ? this.renderSurfaceCard({
-          id: "pilot-latest-prompt",
-          title: "Latest prompt",
-          wide: true,
-          content: html`
-            <p class="section-note">
-              Snapshot of the text sent to the language model for the most recent planning cycle.
-            </p>
-            <pre class="llm-output">${this.lastPrompt}</pre>
-          `,
-        })
-      : null;
+    const promptCard = this.renderSurfaceCard({
+      id: "pilot-latest-prompt",
+      title: "Latest prompt",
+      wide: true,
+      content: this.lastPrompt
+        ? html`
+          <p class="section-note">
+            Snapshot of the text sent to the language model for the most recent planning cycle.
+          </p>
+          <pre class="llm-output">${this.lastPrompt}</pre>
+        `
+        : html`
+          <p class="section-note">
+            Prompt history will appear here once the planner publishes telemetry.
+          </p>
+          <p class="empty-placeholder">No prompt captured yet.</p>
+        `,
+    });
 
     const sensationsCard = this.renderSurfaceCard({
       id: "pilot-sensations",
@@ -606,14 +611,12 @@ class PilotDashboard extends LitElement {
 
     const cards = [
       statusCard,
-      this.lastPrompt
-        ? html`
-            <div class="pilot-dashboard__intent-prompt">
-              ${intentCard}
-              ${promptCard}
-            </div>
-          `
-        : intentCard,
+      html`
+        <div class="pilot-dashboard__intent-prompt">
+          ${intentCard}
+          ${promptCard}
+        </div>
+      `,
       sensationsCard,
       scriptsCard,
       lastLLMCard,

@@ -9,5 +9,6 @@
 - When introducing new module dashboards, register the component tag in `cockpit/frontend/components/cockpit-app.js` so the cockpit can render it.
 - Frontend navigation helpers now have Node-based tests—run `node --test modules/cockpit/packages/cockpit/cockpit/frontend/utils/navigation.test.js` after editing them to keep the cockpit sidebar aligned with the rendered modules.
 - After editing `cockpit/frontend/index.html`, run `node --test modules/cockpit/packages/cockpit/cockpit/frontend/index.test.js` to verify the Alpine-bound navigation stays connected to its data scope.
+- Shared log utilities live in `modules/cockpit/cockpit/components/log-copy.js`; run `deno test modules/cockpit/cockpit/components/log-copy.test.js` after updating them to confirm clipboard helpers and formatters stay stable.
 - Component sources live under `modules/cockpit/cockpit/components/`; symlinks inside `packages/.../frontend/components/` may not exist until `psh mod setup` runs, so point new tests and tooling at the source directory.
 - Keep `launch_unit.sh` as the supervising process: track helper PIDs, use `trap` + `wait` for cleanup, and avoid `exec` when background jobs are active so `psh mod up` doesn't tear down the cockpit as it exits.

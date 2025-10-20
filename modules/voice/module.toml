@@ -1,5 +1,5 @@
 [unit.voice]
-apt = ["espeak"]
+apt = ["espeak", "alsa-utils"]
 pip = ["websockets>=11.0.0"]
 launch = "modules/voice/launch_unit.sh"
 shutdown = "modules/voice/shutdown_unit.sh"

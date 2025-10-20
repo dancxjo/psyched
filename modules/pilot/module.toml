@@ -1,5 +1,5 @@
 [unit.pilot]
-apt = []
+apt = ["python3-typing-extensions"]
 pip = []
 launch = "modules/pilot/launch_unit.sh"
 shutdown = "modules/pilot/shutdown_unit.sh"
