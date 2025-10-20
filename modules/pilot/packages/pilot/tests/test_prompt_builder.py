@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from pilot.prompt_builder import PilotPromptContext, build_prompt
+from pilot.prompt_builder import PilotPromptContext, PromptImage, build_prompt
 from pilot.models import SensationSummary
 
 
@@ -30,3 +30,29 @@ def test_build_prompt_includes_topics_status_and_actions():
     assert "faces" in prompt
     assert "recent_sensations" in prompt
     assert "vector_length" in prompt
+
+
+def test_build_prompt_mentions_vision_images_when_available():
+    """Ensure vision images add explicit prompt guidance without leaking binary data."""
+
+    context = PilotPromptContext(
+        topics={"/instant": "Investigating the lab."},
+        status={"speech": "active"},
+        sensations=[],
+        cockpit_actions=["nav.move_to"],
+        window_seconds=2.0,
+        vision_images=[
+            PromptImage(
+                topic="/camera/color/image_raw/compressed",
+                description="current frame jpeg (9216 bytes)",
+                base64_data="AAECAw==",
+            )
+        ],
+    )
+
+    prompt = build_prompt(context)
+
+    assert "vision_images" in prompt
+    assert "robot is seeing currently" in prompt
+    assert "/camera/color/image_raw/compressed" in prompt
+    assert "AAECAw==" not in prompt

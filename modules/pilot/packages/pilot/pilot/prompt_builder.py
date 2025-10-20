@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List
 
 from .models import SensationSummary
@@ -42,6 +42,30 @@ _SCHEMA_HINT = {
 
 
 @dataclass(slots=True)
+class PromptImage:
+    """Metadata describing an image passed alongside the pilot prompt.
+
+    Example
+    -------
+    >>> PromptImage(
+    ...     topic="/camera/color/image_raw/compressed",
+    ...     description="current frame jpeg (9216 bytes)",
+    ...     base64_data="AAECAw==",
+    ... )
+    PromptImage(topic='/camera/color/image_raw/compressed', description='current frame jpeg (9216 bytes)', base64_data='AAECAw==')
+    """
+
+    topic: str
+    description: str
+    base64_data: str
+
+    def prompt_hint(self) -> str:
+        """Return a concise hint suitable for inline prompt instructions."""
+
+        return f"{self.topic} ({self.description})" if self.description else self.topic
+
+
+@dataclass(slots=True)
 class PilotPromptContext:
     """Context bundle passed to the LLM prompt renderer."""
 
@@ -50,6 +74,7 @@ class PilotPromptContext:
     sensations: List[SensationSummary]
     cockpit_actions: List[str]
     window_seconds: float
+    vision_images: List[PromptImage] = field(default_factory=list)
 
 
 def _format_topics(topics: Dict[str, Any]) -> Iterable[str]:
@@ -61,6 +86,11 @@ def _format_topics(topics: Dict[str, Any]) -> Iterable[str]:
 def _format_sensations(sensations: Iterable[SensationSummary]) -> str:
     payloads = [s.prompt_payload() for s in sensations]
     return json.dumps(payloads, ensure_ascii=False, sort_keys=True)
+
+
+def _format_vision_images(images: Iterable[PromptImage]) -> Iterable[str]:
+    for image in images:
+        yield f"- {image.prompt_hint()}"
 
 
 def build_prompt(context: PilotPromptContext) -> str:
@@ -83,6 +113,15 @@ def build_prompt(context: PilotPromptContext) -> str:
         "cockpit_actions (from cockpit /api/actions): "
             + json.dumps(sorted(set(context.cockpit_actions)), ensure_ascii=False)
     )
+    if context.vision_images:
+        lines.append("")
+        lines.append(
+            "vision_images (robot's current view provided via the Ollama images API):"
+        )
+        lines.extend(_format_vision_images(context.vision_images))
+        lines.append(
+            "These frames show what the robot is seeing currently; reference them when reasoning."
+        )
     lines.append("")
     lines.append("Schema to emit")
     lines.append("")
