@@ -8,6 +8,7 @@ import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
 import { buildRosEnv } from "./ros_env.ts";
+import { ensureEssentialUserGroups } from "./user_groups.ts";
 
 /** Supported host manifest file extension. */
 const HOST_CONFIG_EXTENSIONS = [
@@ -911,6 +912,18 @@ export async function provisionHostProfile(
   const includeServices = options.includeServices ?? false;
   const provisionOptions: ProvisionRunOptions = { verbose, showLogsOnSuccess };
   const registry = createTaskRegistry();
+
+  registerTask(registry, {
+    id: "system:groups",
+    label: "Ensure essential user group memberships",
+    dependencies: [],
+    run: async () => {
+      await ensureEssentialUserGroups({
+        verbose: provisionOptions.verbose,
+        showLogsOnSuccess: provisionOptions.showLogsOnSuccess,
+      });
+    },
+  }, ["groups", "user-groups"]);
 
   const installerAliasDefaults = installers.map((id) => id);
 
