@@ -1,6 +1,6 @@
 import { colors } from "$cliffy/ansi/colors.ts";
-import { $ } from "$dax";
 import { workspaceRoot } from "./paths.ts";
+import { runRosCommand } from "./ros_container.ts";
 
 export interface ColconBuildInvocation {
   cwd: string;
@@ -77,8 +77,7 @@ async function runColconBuild(
       `Running '${invocation.cmd.join(" ")}' in ${invocation.cwd}`,
     ),
   );
-  await $`colcon ${colconArgs}`
-    .cwd(invocation.cwd)
-    .stdout("inherit")
-    .stderr("inherit");
+  await runRosCommand(["colcon", ...colconArgs], {
+    cwd: invocation.cwd,
+  });
 }

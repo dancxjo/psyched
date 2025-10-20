@@ -901,6 +901,7 @@ export async function provisionHostProfile(
   const installers = Array.from(
     new Set<string>([...hostInstallers, ...provisionInstallers]),
   );
+  const installerConfigs = cfg.config?.installer ?? {};
   const modules = cfg.modules ?? [];
   const services = cfg.services ?? [];
   const sharedEnv = buildRosEnv();
@@ -931,6 +932,7 @@ export async function provisionHostProfile(
         await runInstaller(id, {
           verbose: provisionOptions.verbose,
           showLogsOnSuccess: provisionOptions.showLogsOnSuccess,
+          config: installerConfigs[id],
         });
       },
     }, [id]);

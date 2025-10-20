@@ -1,8 +1,23 @@
 import { join } from "$std/path/mod.ts";
 import { ProvisionContext } from "./context.ts";
-import { detectUbuntuCodename, fetchBinary, safeRemove } from "./os.ts";
+import {
+  detectDebianRelease,
+  determineDockerChannel,
+  fetchBinary,
+  safeRemove,
+} from "./os.ts";
 
 export async function installDocker(context: ProvisionContext): Promise<void> {
+  const release = await context.step(
+    "Detect Debian/Ubuntu derivative",
+    async (step) => {
+      const info = await detectDebianRelease(step);
+      step.log(`Detected ${info.id} (${info.codename})`);
+      return info;
+    },
+  );
+  const channel = determineDockerChannel(release);
+
   await context.step("Install Docker prerequisites", async (step) => {
     await step.exec(["apt-get", "update"], {
       sudo: true,
@@ -26,7 +41,7 @@ export async function installDocker(context: ProvisionContext): Promise<void> {
     const tmpDir = await Deno.makeTempDir({ prefix: "psh-docker-" });
     try {
       const keyData = await fetchBinary(
-        "https://download.docker.com/linux/ubuntu/gpg",
+        `https://download.docker.com/linux/${channel}/gpg`,
       );
       const keyPub = join(tmpDir, "docker.pub");
       const keyGpg = join(tmpDir, "docker.gpg");
@@ -51,9 +66,8 @@ export async function installDocker(context: ProvisionContext): Promise<void> {
       const arch = (await step.exec(["dpkg", "--print-architecture"], {
         description: "detect architecture",
       })).stdout.trim();
-      const codename = await detectUbuntuCodename(step);
       const repoLine =
-        `deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${codename} stable`;
+        `deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${channel} ${release.codename} stable`;
       const repoPath = join(tmpDir, "docker.list");
       await Deno.writeTextFile(repoPath, `${repoLine}\n`);
       await step.exec([
