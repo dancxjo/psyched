@@ -83,7 +83,7 @@ fi
 # ros-dev-tools pulls in colcon and other build tooling required by the Psyched stack.
 "${SUDO[@]}" apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-ros-base \
-  ros-${ROS_DISTRO}-ros-dev-tools \
+  ros-dev-tools \
   python3-rosdep
 
 COLCON_VENV="/opt/ros/${ROS_DISTRO}/colcon-venv"

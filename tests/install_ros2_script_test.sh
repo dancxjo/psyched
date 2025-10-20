@@ -36,9 +36,8 @@ if (( REMOVE_LINE >= INSTALL_LINE )); then
   exit 1
 fi
 
-if ! grep -Fq 'ros-${ROS_DISTRO:-\${ROS_DISTRO}}-ros-dev-tools' "${ROS_INSTALLER}" && \
-   ! grep -Fq 'ros-${ROS_DISTRO}-ros-dev-tools' "${ROS_INSTALLER}"; then
-  echo "install_ros2.sh must install ros-<distro>-ros-dev-tools alongside ros-base." >&2
+if ! grep -Fq 'ros-dev-tools' "${ROS_INSTALLER}"; then
+  echo "install_ros2.sh must install ros-dev-tools alongside ros-base." >&2
   exit 1
 fi
 

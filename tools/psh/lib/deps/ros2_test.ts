@@ -31,7 +31,7 @@ Deno.test(
     const packages = buildRosBasePackages("jazzy");
     assertEquals(packages, [
       "ros-jazzy-ros-base",
-      "ros-jazzy-ros-dev-tools",
+      "ros-dev-tools",
       "ros-jazzy-rmw-cyclonedds-cpp",
       "python3-rosdep",
     ]);
