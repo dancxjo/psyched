@@ -105,6 +105,19 @@ WORKSPACE
   [[ "${PSYCHED_TEST_MARKER}" == "workspace" ]]
 }
 
+test_activate_help_outputs_usage() {
+  local output
+  output="$({
+    # shellcheck source=../env/psyched_env.sh
+    source "${ENV_SCRIPT}"
+    psyched::activate --help
+  } 2>&1)"
+
+  [[ "${output}" == *"Usage: psyched::activate"* ]]
+  [[ "${output}" != *"unterminated here-document"* ]]
+  [[ "${output}" != *"warning: command substitution"* ]]
+}
+
 scenario "exports default workspace paths" test_exports_defaults
 scenario "detects workspace setup file" test_workspace_setup_detection
 scenario "sources workspace setup script" test_source_workspace_exports_variables
@@ -112,6 +125,7 @@ scenario "sets ROS_DISTRO when unset" test_sets_ros_distro_default
 scenario "preserves caller-provided ROS_DISTRO" test_preserves_existing_ros_distro
 scenario "falls back to ROS setup" test_activate_falls_back_to_ros
 scenario "prefers workspace over ROS when available" test_activate_prefers_workspace
+scenario "prints activate usage without warnings" test_activate_help_outputs_usage
 
 if (( failures > 0 )); then
   printf '\n%d scenario(s) failed.\n' "$failures" >&2
