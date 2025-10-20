@@ -54,9 +54,19 @@ export function buildRosEnv(): Record<string, string> {
 export async function sourcePsychedEnv(): Promise<Record<string, string>> {
   const psychedEnvPath = join(repoRoot(), "env", "psyched_env.sh");
   const command = new Deno.Command("bash", {
-    args: ["-c", `source ${psychedEnvPath} && env`],
+    args: [
+      "-c",
+      `source ${psychedEnvPath} && psyched::activate --quiet && env`,
+    ],
   });
-  const { stdout } = await command.output();
+  const { code, stdout, stderr } = await command.output();
+  if (code !== 0) {
+    const details = new TextDecoder().decode(stderr).trim();
+    const message = details
+      ? `Failed to source Psyched environment: ${details}`
+      : "Failed to source Psyched environment";
+    throw new Error(message);
+  }
   const output = new TextDecoder().decode(stdout);
   const env: Record<string, string> = {};
   for (const line of output.split("\n")) {

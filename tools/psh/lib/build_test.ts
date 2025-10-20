@@ -49,8 +49,24 @@ Deno.test("colcon build invocation forwards arguments after separator", () => {
 
 Deno.test("buildWorkspace delegates to provided runner", async () => {
   const tempWorkspace = Deno.makeTempDirSync();
+  const tempRosDir = Deno.makeTempDirSync();
+  const fakeRosSetup = join(tempRosDir, "setup.bash");
+  const fakeAmentPath = join(tempRosDir, "fake-ament");
+  // Provide a fake ROS environment so psyched::activate can succeed without
+  // requiring the real distro inside the test container.
+  Deno.writeTextFileSync(
+    fakeRosSetup,
+    [
+      "#!/usr/bin/env bash",
+      `export AMENT_PREFIX_PATH=\"${fakeAmentPath}\"`,
+    ].join("\n"),
+  );
   const originalWorkspace = Deno.env.get("PSYCHED_WORKSPACE_DIR");
+  const originalRosSetup = Deno.env.get("PSYCHED_ROS_SETUP");
+  const originalLogSilent = Deno.env.get("PSYCHED_LOG_SILENT");
   Deno.env.set("PSYCHED_WORKSPACE_DIR", tempWorkspace);
+  Deno.env.set("PSYCHED_ROS_SETUP", fakeRosSetup);
+  Deno.env.set("PSYCHED_LOG_SILENT", "1");
   try {
     const invocations: ColconBuildInvocation[] = [];
     await buildWorkspace(["cockpit"], (invocation) => {
@@ -71,13 +87,29 @@ Deno.test("buildWorkspace delegates to provided runner", async () => {
       typeof rosDistro === "string" && rosDistro.length > 0,
       "expected ROS_DISTRO to be populated in invocation environment",
     );
+    assertEquals(
+      invocation.env.AMENT_PREFIX_PATH,
+      fakeAmentPath,
+      "expected ROS environment to expose AMENT_PREFIX_PATH",
+    );
   } finally {
     if (originalWorkspace === undefined) {
       Deno.env.delete("PSYCHED_WORKSPACE_DIR");
     } else {
       Deno.env.set("PSYCHED_WORKSPACE_DIR", originalWorkspace);
     }
+    if (originalRosSetup === undefined) {
+      Deno.env.delete("PSYCHED_ROS_SETUP");
+    } else {
+      Deno.env.set("PSYCHED_ROS_SETUP", originalRosSetup);
+    }
+    if (originalLogSilent === undefined) {
+      Deno.env.delete("PSYCHED_LOG_SILENT");
+    } else {
+      Deno.env.set("PSYCHED_LOG_SILENT", originalLogSilent);
+    }
     Deno.removeSync(tempWorkspace, { recursive: true });
+    Deno.removeSync(tempRosDir, { recursive: true });
   }
 });
 
