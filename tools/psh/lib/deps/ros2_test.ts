@@ -28,14 +28,18 @@ Deno.test("renderRosProfile emits consistent template", () => {
   assertEquals(script, expected);
 });
 
-Deno.test("ROS base package set excludes colcon tooling", () => {
-  const packages = buildRosBasePackages("jazzy");
-  assertEquals(packages, [
-    "ros-jazzy-ros-base",
-    "ros-jazzy-rmw-cyclonedds-cpp",
-    "python3-rosdep",
-  ]);
-});
+Deno.test(
+  "ROS base package set installs development tooling but skips desktop payload",
+  () => {
+    const packages = buildRosBasePackages("jazzy");
+    assertEquals(packages, [
+      "ros-jazzy-ros-base",
+      "ros-jazzy-ros-dev-tools",
+      "ros-jazzy-rmw-cyclonedds-cpp",
+      "python3-rosdep",
+    ]);
+  },
+);
 
 Deno.test("colcon provisioning plan mirrors install script", () => {
   const plan = buildColconProvisionPlan("jazzy");

@@ -37,9 +37,18 @@ export function renderRosProfile(distro: string): string {
   ].join("\n");
 }
 
+/**
+ * Return the minimal ROS 2 apt payload we expect on developer hosts.
+ *
+ * We explicitly depend on the "ros-dev-tools" metapackage so colcon,
+ * vcstool, and the rest of the build tooling land without pulling in the
+ * full desktop image. The desktop metapackage is intentionally excluded to
+ * avoid shipping GUI dependencies onto headless hosts.
+ */
 export function buildRosBasePackages(distro: string): string[] {
   return [
     `ros-${distro}-ros-base`,
+    `ros-${distro}-ros-dev-tools`,
     `ros-${distro}-rmw-cyclonedds-cpp`,
     "python3-rosdep",
   ];
