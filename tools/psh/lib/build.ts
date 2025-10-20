@@ -1,10 +1,12 @@
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
+import { sourcePsychedEnv } from "./ros_env.ts";
 import { workspaceRoot } from "./paths.ts";
 
 export interface ColconBuildInvocation {
   cwd: string;
   cmd: string[];
+  env: Record<string, string>;
 }
 
 export type ColconRunner = (
@@ -38,6 +40,7 @@ export function createColconBuildInvocation(
   return {
     cwd: workspaceRoot(),
     cmd,
+    env: {},
   };
 }
 
@@ -63,7 +66,9 @@ export async function buildWorkspace(
   args: string[],
   runner: ColconRunner = runColconBuild,
 ): Promise<void> {
-  const invocation = createColconBuildInvocation(args);
+  const baseInvocation = createColconBuildInvocation(args);
+  const env = await sourcePsychedEnv();
+  const invocation: ColconBuildInvocation = { ...baseInvocation, env };
   ensureWorkspaceExists(invocation.cwd);
   await runner(invocation);
 }
@@ -79,6 +84,7 @@ async function runColconBuild(
   );
   await $`colcon ${colconArgs}`
     .cwd(invocation.cwd)
+    .env(invocation.env)
     .stdout("inherit")
     .stderr("inherit");
 }
