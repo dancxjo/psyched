@@ -175,6 +175,10 @@ def _normalise_topic_entries(
         if not topic or not type_name:
             continue
         if keep_first and topic in dedup:
+            existing = dedup[topic]
+            template = entry.get("prompt_template")
+            if isinstance(template, str) and template and not existing.get("prompt_template"):
+                existing["prompt_template"] = template
             continue
         cleaned = dict(entry)
         cleaned["topic"] = topic

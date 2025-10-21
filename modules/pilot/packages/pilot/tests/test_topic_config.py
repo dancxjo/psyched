@@ -53,6 +53,17 @@ def test_normalise_topic_entries_keep_first() -> None:
     ]
 
 
+def test_normalise_topic_entries_merges_prompt_template_when_missing() -> None:
+    entries = [
+        {"topic": "/status", "type": "std_msgs/msg/String"},
+        {"topic": "/status", "type": "std_msgs/msg/String", "prompt_template": "{{data.data}}"},
+    ]
+    result = _normalise_topic_entries(entries, keep_first=True)
+    assert result == [
+        {"topic": "/status", "type": "std_msgs/msg/String", "prompt_template": "{{data.data}}"}
+    ]
+
+
 def test_parse_topic_parameter_invalid_json_falls_back() -> None:
     fallback = [{"topic": "/foo", "type": "std_msgs/msg/String"}]
     logger = _StubLogger()
