@@ -1,11 +1,5 @@
 [unit.chat]
 apt = []
-pip = ["ollama"]
-patches = [
-    "modules/chat/scripts/install_ollama.sh",
-    "modules/chat/scripts/enable_ollama_service.sh",
-    "modules/chat/scripts/ensure_ollama_model.sh",
-]
 launch = "modules/chat/launch_unit.sh"
 shutdown = "modules/chat/shutdown_unit.sh"
 cockpit_control = "modules/chat/cockpit/index.html"
