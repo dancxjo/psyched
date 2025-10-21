@@ -16,4 +16,5 @@
 - The pilot automatically subscribes to a minimal set of inputs (host health, `/instant`, `/situation`, `/status`, `/sensations`) so the prompt loop can run even before other modules publish data.
 - Modules can suggest extra inputs by dropping `modules/<name>/pilot/topic_suggestions.json`. Entries should include `topic` and `type` fields; placeholders `{HOST}` and `{HOST_SHORT}` resolve at runtime.
 - Pair each new context topic with a natural-language translator in `modules/<name>/pilot/topic_translator.py` so the prompt receives meaningful summaries via `prompt_template` values.
+- Include `STATIC_PROMPT_SECTIONS` alongside each translator module to explain the module's contributions and remind the LLM that context lines represent a rolling instant window.
 - Override the subscriptions at launch time via the `context_topics` and `sensation_topics` parameters (JSON). Example: `ros2 run pilot pilot_node --ros-args -p context_topics='[{"topic":"/hosts/health/motherbrain","type":"psyched_msgs/msg/HostHealth"}]'`.

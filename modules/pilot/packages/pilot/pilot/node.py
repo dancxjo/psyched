@@ -34,7 +34,11 @@ from .command_script import (
 from .memory_pipeline import prepare_memory_batch
 from .models import FeelingIntentData, SensationRecord
 from .prompt_builder import PilotPromptContext, PromptImage, build_prompt
-from .topic_translation import apply_topic_translation, discover_topic_translators
+from .topic_translation import (
+    TranslatorRegistry,
+    apply_topic_translation,
+    discover_topic_translators,
+)
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
 from .vision import summarise_image_message
 
@@ -450,14 +454,35 @@ class PilotNode(Node):
         self._topic_templates: Dict[str, str] = {}
         self._feedback_publishers: Dict[str, Any] = {}
         self._modules_root = self._discover_modules_root()
-        self._topic_translators = discover_topic_translators(
+
+        host_full, host_short = _resolve_host_names()
+        self._host_full = host_full
+        self._host_short = host_short
+
+        translator_registry: TranslatorRegistry = discover_topic_translators(
             self._modules_root,
             logger=self.get_logger(),
         )
+        self._topic_translators = translator_registry
+        raw_sections = [
+            _expand_topic_template(
+                section,
+                host_full=self._host_full,
+                host_short=self._host_short,
+            )
+            for section in translator_registry.static_sections
+        ]
+        seen_sections: Dict[str, None] = {}
+        self._static_prompt_sections = []
+        for section in raw_sections:
+            text = section.strip()
+            if not text or text in seen_sections:
+                continue
+            seen_sections[text] = None
+            self._static_prompt_sections.append(text)
         self._actions_fallback_logged = False
         self._last_prompt: Optional[str] = None
 
-        host_full, host_short = _resolve_host_names()
         suggestions = _discover_topic_suggestions(
             _suggestions_root(),
             host_full=host_full,
@@ -502,7 +527,7 @@ class PilotNode(Node):
         self._sensation_topics = self._load_topic_configs(
             "sensation_topics", sensation_defaults, self._handle_sensation_message, qos
         )
-        self._seed_minimal_context(host_short)
+        self._seed_minimal_context(self._host_short)
 
         self._timer = self.create_timer(self._debounce_seconds, self._on_timer)
 
@@ -973,24 +998,67 @@ class PilotNode(Node):
     def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[PilotPromptContext]:
         if not self._topic_cache and not self._sensation_records:
             return None
-        topics = {topic: entry["data"] for topic, entry in self._topic_cache.items()}
+        now = time.time()
+        snapshot_timestamp = datetime.now(timezone.utc)
+
+        topics: Dict[str, Dict[str, Any]] = {}
+        stale_topics: List[str] = []
+        for topic, entry in list(self._topic_cache.items()):
+            timestamp = float(entry.get("timestamp", now))
+            age = max(0.0, now - timestamp)
+            if age > self._window_seconds:
+                stale_topics.append(topic)
+                continue
+            value = entry.get("data")
+            captured_at = datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+            snapshot = {
+                "value": value,
+                "age_seconds": age,
+                "captured_at": captured_at,
+            }
+            if isinstance(value, Mapping):
+                summary = value.get("prompt_summary")
+                if isinstance(summary, str) and summary.strip():
+                    snapshot["prompt_summary"] = summary.strip()
+            topics[topic] = snapshot
+
+        if stale_topics:
+            for topic in stale_topics:
+                self._topic_cache.pop(topic, None)
+            self._dirty = True
+
         if status and "/status" not in topics:
-            topics["/status"] = status
+            topics["/status"] = {
+                "value": status,
+                "age_seconds": 0.0,
+                "captured_at": snapshot_timestamp.isoformat(),
+            }
+
         sensations = [record.to_summary() for record in self._recent_sensations()]
         script_snapshot = self._script_status_snapshot()
         if script_snapshot:
             topics["/pilot/scripts"] = {
-                "recent": script_snapshot,
-                "running": [entry for entry in script_snapshot if entry.get("status") == "running"],
+                "value": {
+                    "recent": script_snapshot,
+                    "running": [
+                        entry
+                        for entry in script_snapshot
+                        if entry.get("status") == "running"
+                    ],
+                },
+                "age_seconds": 0.0,
+                "captured_at": snapshot_timestamp.isoformat(),
             }
-        now = time.time()
+
         vision_images: List[PromptImage] = []
-        for topic, entry in self._topic_cache.items():
-            image = entry.get("image")
+        for topic in topics:
+            cache_entry = self._topic_cache.get(topic)
+            if not cache_entry:
+                continue
+            image = cache_entry.get("image")
             if isinstance(image, PromptImage):
-                timestamp = float(entry.get("timestamp", now))
-                if now - timestamp <= self._window_seconds:
-                    vision_images.append(image)
+                vision_images.append(image)
+
         templates = {
             topic: template
             for topic in topics
@@ -999,11 +1067,13 @@ class PilotNode(Node):
         return PilotPromptContext(
             topics=topics,
             topic_templates=templates,
-            status=status or topics.get("/status", {}),
+            status=status or topics.get("/status", {}).get("value", {}),
             sensations=sensations,
             cockpit_actions=actions,
             window_seconds=self._window_seconds,
             vision_images=vision_images,
+            snapshot_timestamp=snapshot_timestamp,
+            static_sections=self._static_prompt_sections,
         )
 
     def _on_timer(self) -> None:

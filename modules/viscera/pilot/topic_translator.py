@@ -143,3 +143,13 @@ def summarise_host_health(payload: Any) -> str:
 TOPIC_TRANSLATORS = {
     "/hosts/health/*": summarise_host_health,
 }
+
+STATIC_PROMPT_SECTIONS = [
+    (
+        "Viscera monitors host vitals via /hosts/health/{HOST_SHORT}. It "
+        "summarises CPU, load, memory, disk, temperature, uptime, and process "
+        "counts as fresh metrics arrive. Read these vitals as rolling instant "
+        "snapshots—older measurements drop away once they fall outside the "
+        "window."
+    )
+]

@@ -42,3 +42,11 @@ def summarise_asr_transcript(payload: Any) -> str:
 TOPIC_TRANSLATORS = {
     "/ear/hole": summarise_asr_transcript,
 }
+
+STATIC_PROMPT_SECTIONS = [
+    (
+        "Ear module streams /ear/hole transcripts summarising the freshest words "
+        "humans speak nearby. Each entry reflects the most recent snippet inside "
+        "the rolling instant window—older utterances scroll away automatically."
+    )
+]

@@ -60,3 +60,12 @@ TOPIC_TRANSLATORS = {
     "/voice": summarise_queue,
     "/voice/spoken": summarise_spoken,
 }
+
+STATIC_PROMPT_SECTIONS = [
+    (
+        "Voice module manages speech for Pete. /voice shows the pending speech "
+        "request waiting in the queue, while /voice/spoken captures what was "
+        "just narrated. Both summaries track the live rolling window so stale "
+        "utterances disappear as new speech flows."
+    )
+]

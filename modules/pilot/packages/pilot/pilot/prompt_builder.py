@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 
+import math
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 from .models import SensationSummary
@@ -77,9 +79,11 @@ class PilotPromptContext:
     sensations: List[SensationSummary]
     cockpit_actions: List[str]
     window_seconds: float
+    snapshot_timestamp: datetime
     topic_templates: Dict[str, str] = field(default_factory=dict)
     status: Dict[str, Any] | None = None
     vision_images: List[PromptImage] = field(default_factory=list)
+    static_sections: List[str] = field(default_factory=list)
 
 
 _TEMPLATE_PATTERN = re.compile(r"{{\s*([a-zA-Z0-9_.]+)\s*}}")
@@ -193,32 +197,63 @@ def _topic_priority(topic: str) -> Tuple[int, Tuple[int, str]]:
     return (3, (0, topic))
 
 
+def _topic_payload(entry: Any) -> Any:
+    if isinstance(entry, Mapping) and "value" in entry:
+        return entry.get("value")
+    return entry
+
+
 def _select_topic_entries(topics: Mapping[str, Any]) -> List[Tuple[str, Any]]:
     """Return an ordered list of topics filtered down to meaningful context."""
 
     entries: List[Tuple[str, Any]] = []
-    for topic, value in topics.items():
+    for topic, entry in topics.items():
         if topic == "/status":
             # Raw status is condensed separately to keep the prompt concise.
             continue
+        value = _topic_payload(entry)
         if _is_voice_topic(topic) or topic == _EAR_ASR_TOPIC:
-            entries.append((topic, value))
+            entries.append((topic, entry))
             continue
         if _is_meaningful_value(value):
-            entries.append((topic, value))
+            entries.append((topic, entry))
     entries.sort(key=lambda item: _topic_priority(item[0]))
     return entries
 
 
+def _format_topic_prefix(entry: Any) -> str:
+    if not isinstance(entry, Mapping):
+        return ""
+    parts: List[str] = []
+    age = entry.get("age_seconds")
+    if isinstance(age, (int, float)):
+        try:
+            age_value = float(age)
+        except (TypeError, ValueError):
+            age_value = None
+        if age_value is not None and math.isfinite(age_value):
+            if abs(age_value) < 0.05:
+                parts.append("just now")
+            else:
+                parts.append(f"{age_value:.1f}s ago")
+    captured_at = entry.get("captured_at")
+    if isinstance(captured_at, str) and captured_at:
+        parts.append(captured_at)
+    if not parts:
+        return ""
+    return "[" + " | ".join(parts) + "] "
+
+
 def _format_topics(entries: Iterable[Tuple[str, Any]], templates: Mapping[str, str]) -> Iterable[str]:
-    for topic, value in entries:
+    for topic, entry in entries:
+        value = _topic_payload(entry)
         template = templates.get(topic)
         if template:
             rendered = _render_template(template, topic=topic, value=value)
-            yield f"- {topic}: {rendered}"
+            yield f"- {_format_topic_prefix(entry)}{topic}: {rendered}"
             continue
         serialised = json.dumps(value, ensure_ascii=False, sort_keys=True)
-        yield f"- {topic}: {serialised}"
+        yield f"- {_format_topic_prefix(entry)}{topic}: {serialised}"
 
 
 def _format_sensations(sensations: Iterable[SensationSummary]) -> str:
@@ -302,7 +337,16 @@ def build_prompt(context: PilotPromptContext) -> str:
 
     lines: List[str] = [_SYSTEM_PROMPT, "", "Context", "-------"]
 
-    lines.append(f"- window_seconds: {context.window_seconds:.2f}")
+    lines.append(f"- rolling_window_seconds: {context.window_seconds:.2f}")
+    lines.append(
+        "- snapshot_captured_at_utc: "
+        + context.snapshot_timestamp.isoformat()
+    )
+    lines.append(
+        "- instant_note: "
+        f"This is a rolling instant covering the last {context.window_seconds:.2f}s; "
+        "entries show how recently they were seen and scroll away once older than this window."
+    )
     if context.status:
         condensed = _condense_status(context.status)
         if condensed:
@@ -313,6 +357,15 @@ def build_prompt(context: PilotPromptContext) -> str:
     lines.append(
         "- recent_sensations: " + _format_sensations(context.sensations)
     )
+
+    if context.static_sections:
+        sections = [section.strip() for section in context.static_sections if section.strip()]
+        if sections:
+            lines.append("")
+            lines.append("Module briefs")
+            lines.append("-------------")
+            for section in sections:
+                lines.append(f"- {section}")
 
     lines.append("")
     lines.append("Topics (prioritised)")
