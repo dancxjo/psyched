@@ -151,12 +151,6 @@ function buildShellArgs(
   return args;
 }
 
-export async function setupService(service: string): Promise<void> {
-  const serviceDir = locateServiceDir(service);
-  const config = loadServiceConfig(serviceDir, service);
-  await runScripts(service, serviceDir, config.setup_scripts, "setup");
-}
-
 export interface ResolvedServiceContext {
   name: string;
   dir: string;
@@ -182,9 +176,48 @@ export function resolveServiceContext(service: string): ResolvedServiceContext {
   };
 }
 
-export async function setupServices(services: string[]): Promise<void> {
+export interface SetupServiceOptions {
+  /** When true, invoke `docker compose build` after setup scripts finish. */
+  build?: boolean;
+}
+
+async function buildComposeImages(
+  context: ResolvedServiceContext,
+): Promise<void> {
+  console.log(
+    colors.cyan(
+      `==> Building Docker images for service '${context.name}'`,
+    ),
+  );
+  let cmd =
+    $`docker compose -f ${context.composePath} -p ${context.project} build`
+      .cwd(context.dir);
+  cmd = cmd.env(context.env);
+  await cmd.stdout("inherit").stderr("inherit");
+}
+
+export async function setupService(
+  service: string,
+  options: SetupServiceOptions = {},
+): Promise<void> {
+  const context = resolveServiceContext(service);
+  await runScripts(
+    service,
+    context.dir,
+    context.config.setup_scripts,
+    "setup",
+  );
+  if (options.build) {
+    await buildComposeImages(context);
+  }
+}
+
+export async function setupServices(
+  services: string[],
+  options: SetupServiceOptions = {},
+): Promise<void> {
   for (const service of services) {
-    await setupService(service);
+    await setupService(service, options);
   }
 }
 

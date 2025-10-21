@@ -8,8 +8,8 @@ import { launchDockerSimulation } from "./lib/docker_env.ts";
 import {
   bringModulesDown,
   bringModulesUp,
-  loadModuleApiActions,
   listModules,
+  loadModuleApiActions,
   moduleStatuses,
   setupModules,
   teardownModules,
@@ -332,7 +332,10 @@ async function main() {
 
     const moduleNames = listModules();
     const apiActions = loadModuleApiActions();
-    const modulesPayload: Record<string, { actions: Record<string, unknown>[] }> = {};
+    const modulesPayload: Record<
+      string,
+      { actions: Record<string, unknown>[] }
+    > = {};
 
     for (const moduleName of moduleNames) {
       const actions: Record<string, unknown>[] = [];
@@ -366,7 +369,8 @@ async function main() {
       if (!definedNames.has("call_service")) {
         actions.push({
           name: "call_service",
-          description: `Invoke ROS services on behalf of the ${moduleName} module`,
+          description:
+            `Invoke ROS services on behalf of the ${moduleName} module`,
           parameters: CALL_SERVICE_SCHEMA,
           returns: CALL_SERVICE_RETURNS,
           streaming: false,
@@ -384,7 +388,9 @@ async function main() {
     for (const [moduleName, info] of Object.entries(modulesPayload)) {
       console.log(`Module: ${moduleName}`);
       for (const action of info.actions) {
-        const name = typeof action.name === "string" ? action.name : "<unknown>";
+        const name = typeof action.name === "string"
+          ? action.name
+          : "<unknown>";
         const description = typeof action.description === "string"
           ? action.description
           : "";
@@ -545,10 +551,11 @@ async function main() {
         const state = status.status === "running"
           ? colors.green("running")
           : status.status === "stopped"
-            ? colors.yellow("stopped")
-            : colors.red("error");
+          ? colors.yellow("stopped")
+          : colors.red("error");
         console.log(
-          `- ${status.name}: ${state}${status.description ? ` – ${status.description}` : ""
+          `- ${status.name}: ${state}${
+            status.description ? ` – ${status.description}` : ""
           }`,
         );
       }
@@ -557,9 +564,13 @@ async function main() {
   serviceCommand
     .command("setup [services...:string]")
     .description("Run setup for services")
-    .action(async (_, ...services: string[]) => {
+    .option(
+      "-b, --build",
+      "Rebuild Docker images for the selected services",
+    )
+    .action(async (options: { build?: boolean }, ...services: string[]) => {
       const targets = resolveServiceTargets("setup", services);
-      await setupServices(targets);
+      await setupServices(targets, { build: options.build ?? false });
     });
 
   serviceCommand
