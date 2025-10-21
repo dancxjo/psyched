@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -414,3 +415,128 @@ def test_publish_topic_action_supports_indexed_payload_map(tmp_path: Path) -> No
     assert ros.publish_calls
     published = ros.publish_calls[0]["payload"]
     assert published["data"] == [64, 200]
+
+
+def test_call_service_action_uses_argument_map(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "memory_recall",
+          "description": "Recall memories via text query",
+          "kind": "call-service",
+          "defaults": {
+            "service": "/memory/recall",
+            "service_type": "memory_interfaces/srv/Recall",
+            "arguments": {
+              "kind": "episodic",
+              "text": "",
+              "limit": 5
+            },
+            "argument_map": {
+              "query": "text",
+              "limit": "limit"
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {"type": "string"},
+              "limit": {"type": "integer"}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+    """
+
+    write_actions_file(tmp_path, "memory", payload)
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    asyncio.run(
+        registry.execute(
+            "memory",
+            "memory_recall",
+            app=None,
+            arguments={"query": "Where is Pete?", "limit": 3},
+            request=None,
+        )
+    )
+
+    assert ros.service_calls
+    call = ros.service_calls[0]
+    assert call["service_name"] == "/memory/recall"
+    assert call["arguments"]["text"] == "Where is Pete?"
+    assert call["arguments"]["limit"] == 3
+
+
+def test_publish_topic_action_supports_pose_text(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "set_goal",
+          "description": "Dispatch a navigation goal",
+          "kind": "publish-topic",
+          "defaults": {
+            "topic": "goal_pose",
+            "message_type": "geometry_msgs/msg/PoseStamped",
+            "payload": {
+              "header": {"frame_id": "map", "stamp": {"sec": 0, "nanosec": 0}},
+              "pose": {
+                "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+              }
+            },
+            "text_parser": "pose_stamped/v1",
+            "text_argument": "command",
+            "payload_map": {
+              "command": null,
+              "frame_id": "header.frame_id",
+              "x": "pose.position.x",
+              "y": "pose.position.y",
+              "orientation_w": "pose.orientation.w"
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {"type": "string"}
+            },
+            "required": ["command"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+    """
+
+    write_actions_file(tmp_path, "nav", payload)
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    asyncio.run(
+        registry.execute(
+            "nav",
+            "set_goal",
+            app=None,
+            arguments={"command": "frame=map x=1.5 y=-0.2 yaw=90deg"},
+            request=None,
+        )
+    )
+
+    assert ros.publish_calls
+    publish = ros.publish_calls[0]
+    assert publish["topic"] == "goal_pose"
+    payload_sent = publish["payload"]
+    assert pytest.approx(payload_sent["pose"]["position"]["x"], rel=1e-6) == 1.5
+    assert pytest.approx(payload_sent["pose"]["position"]["y"], rel=1e-6) == -0.2
+    orientation = payload_sent["pose"]["orientation"]
+    assert pytest.approx(orientation["z"], rel=1e-6) == pytest.approx(math.sin(math.radians(90) / 2.0), rel=1e-6)
+    assert pytest.approx(orientation["w"], rel=1e-6) == pytest.approx(math.cos(math.radians(90) / 2.0), rel=1e-6)

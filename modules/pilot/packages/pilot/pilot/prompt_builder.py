@@ -20,6 +20,7 @@ Rules:
   * Use available_actions() to introspect options and gate behaviour.
   * Scripts execute asynchronously—log intent via voice.say when deferring or awaiting resources.
   * You may call action("module.action", **kwargs) as a fallback form.
+- Base every observation and decision strictly on the provided topics, sensations, images, and status summaries; never assume or invent facts that are not explicitly present.
 - Keep JSON under 512 tokens. No commentary outside JSON.
 -- Additionally, stream the raw LLM response to STDOUT where possible for debugging.
 """
@@ -145,6 +146,8 @@ def _render_template(template: str, *, topic: str, value: Any) -> str:
 
 def _format_topics(topics: Dict[str, Any], templates: Mapping[str, str]) -> Iterable[str]:
     for topic, value in topics.items():
+        if topic == "/status":
+            value = _condense_status(value)
         template = templates.get(topic)
         if template:
             rendered = _render_template(template, topic=topic, value=value)
@@ -164,14 +167,82 @@ def _format_vision_images(images: Iterable[PromptImage]) -> Iterable[str]:
         yield f"- {image.prompt_hint()}"
 
 
+def _group_actions_by_module(actions: Iterable[str]) -> Dict[str, List[str]]:
+    grouped: Dict[str, List[str]] = {}
+    for action in actions:
+        if not action:
+            continue
+        module, _, name = action.partition(".")
+        if not name:
+            module, name = "shared", action
+        grouped.setdefault(module, []).append(name)
+
+    for module_actions in grouped.values():
+        module_actions.sort()
+
+    return dict(sorted(grouped.items()))
+
+
+def _condense_status(status: Any) -> Dict[str, Any]:
+    if not isinstance(status, Mapping):
+        return {"value": status}
+
+    summary: Dict[str, Any] = {}
+
+    modules = status.get("modules")
+    module_names: List[str] = []
+    if isinstance(modules, Mapping):
+        module_names = sorted(str(key) for key in modules.keys())
+    elif isinstance(modules, Sequence) and not isinstance(modules, (str, bytes, bytearray)):
+        for entry in modules:
+            if isinstance(entry, Mapping):
+                name = entry.get("name") or entry.get("slug") or entry.get("display_name")
+                if name:
+                    module_names.append(str(name))
+        module_names.sort()
+    if module_names:
+        summary["modules"] = module_names
+
+    host = status.get("host")
+    if isinstance(host, Mapping):
+        host_summary = {
+            key: host.get(key)
+            for key in ("name", "shortname")
+            if host.get(key)
+        }
+        if host_summary:
+            summary["host"] = host_summary
+
+    bridge = status.get("bridge")
+    if isinstance(bridge, Mapping):
+        bridge_summary = {
+            key: bridge.get(key)
+            for key in ("mode", "video_port", "video_base")
+            if bridge.get(key) is not None
+        }
+        if bridge_summary:
+            summary["bridge"] = bridge_summary
+
+    for key, value in status.items():
+        if key in {"modules", "host", "bridge"}:
+            continue
+        if isinstance(value, (Mapping, Sequence)) and not isinstance(value, (str, bytes, bytearray)):
+            continue
+        summary[key] = value
+
+    return summary
+
+
 def build_prompt(context: PilotPromptContext) -> str:
     """Construct the single-shot LLM prompt for the feeling integrator."""
 
-    lines: List[str] = [_SYSTEM_PROMPT, "", "Context (examples merged each cycle)", "", "topics:"]
+    lines: List[str] = [_SYSTEM_PROMPT, "", "Context (do not make assumptions, use the data here as the source of your information)", "", "topics:"]
     lines.extend(_format_topics(context.topics, context.topic_templates))
 
-    if context.status and "/status" not in context.topics:
-        lines.append(f"- /status: {json.dumps(context.status, ensure_ascii=False, sort_keys=True)}")
+    if context.status:
+        condensed = _condense_status(context.status)
+        if condensed:
+            lines.append(f"- status_summary: {json.dumps(condensed, ensure_ascii=False, sort_keys=True)}")
 
     lines.append(
         "- recent_sensations: "
@@ -181,9 +252,14 @@ def build_prompt(context: PilotPromptContext) -> str:
         f"- window_seconds: {context.window_seconds:.2f}"
     )
     lines.append(
-        "cockpit_actions (from cockpit /api/actions): "
-            + json.dumps(sorted(set(context.cockpit_actions)), ensure_ascii=False)
+        "available_actions_by_module:"
     )
+    grouped_actions = _group_actions_by_module(sorted(set(context.cockpit_actions)))
+    if grouped_actions:
+        for module, actions in grouped_actions.items():
+            lines.append(f"- {module}: {json.dumps(actions, ensure_ascii=False)}")
+    else:
+        lines.append("- none: []")
     if context.vision_images:
         lines.append("")
         lines.append(

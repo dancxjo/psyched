@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "temperature_stream",
+      "description": "Stream ambient temperature readings from /environment/temperature.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/environment/temperature",
+        "message_type": "sensor_msgs/msg/Temperature",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "temperature_fahrenheit_stream",
+      "description": "Stream Fahrenheit temperature readings from /environment/temperature_fahrenheit.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/environment/temperature_fahrenheit",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "humidity_stream",
+      "description": "Stream relative humidity percentages from /environment/humidity_percent.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/environment/humidity_percent",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "thermostat_status_stream",
+      "description": "Stream thermostat backend status messages from /environment/thermostat_status.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/environment/thermostat_status",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    }
+  ]
+}

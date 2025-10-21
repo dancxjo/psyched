@@ -355,6 +355,19 @@ def _build_call_service_action(
 ) -> ModuleAction:
     defaults = dict(definition.defaults)
     allowed_keys = _allowed_argument_keys(definition.parameters)
+    raw_map = defaults.get("argument_map", {})
+    argument_map: Dict[str, Optional[str]] = {}
+    if isinstance(raw_map, Mapping):
+        for key, value in raw_map.items():
+            if not isinstance(key, str):
+                continue
+            key_text = key.strip()
+            if not key_text:
+                continue
+            if isinstance(value, str):
+                argument_map[key_text] = value.strip() or ""
+            elif value is None:
+                argument_map[key_text] = None
 
     async def handler(context) -> ActionResult:
         arguments = context.arguments if isinstance(context.arguments, Mapping) else {}
@@ -373,6 +386,20 @@ def _build_call_service_action(
             payload = {}
         if not isinstance(payload, Mapping):
             raise ActionError("Service arguments must be expressed as a JSON object")
+        arguments_payload: Dict[str, Any] = _merge_mappings({}, dict(payload))
+        reserved_keys = {"service", "service_type", "arguments", "timeout_ms"}
+        for key in allowed_keys:
+            if key in reserved_keys:
+                continue
+            if key not in merged:
+                continue
+            target_field = argument_map.get(key, key)
+            if target_field is None:
+                continue
+            if not target_field:
+                continue
+            value = merged[key]
+            arguments_payload[target_field] = value
         try:
             timeout_seconds = float(timeout_ms) / 1000.0
         except (TypeError, ValueError):
@@ -384,7 +411,7 @@ def _build_call_service_action(
             result = await ros.call_service(
                 service_name=service,
                 service_type=service_type,
-                arguments=payload,
+                arguments=arguments_payload,
                 timeout=timeout_seconds,
             )
         except (ServiceCallError, ValueError) as exc:

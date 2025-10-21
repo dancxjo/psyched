@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "localization_stream",
+      "description": "Stream AMCL pose updates with covariance for localization feedback.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "amcl_pose",
+        "message_type": "geometry_msgs/msg/PoseWithCovarianceStamped",
+        "role": "subscribe",
+        "queue_length": 20
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the stream queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_initial_pose",
+      "description": "Publish an initial pose estimate on /initialpose for the localization stack.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "initialpose",
+        "message_type": "geometry_msgs/msg/PoseWithCovarianceStamped",
+        "payload": {
+          "header": {
+            "frame_id": "map",
+            "stamp": {
+              "sec": 0,
+              "nanosec": 0
+            }
+          },
+          "pose": {
+            "pose": {
+              "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "orientation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 1.0
+              }
+            },
+            "covariance": [
+              0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+              0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+              0.0, 0.0, 0.25, 0.0, 0.0, 0.0,
+              0.0, 0.0, 0.0, 0.25, 0.0, 0.0,
+              0.0, 0.0, 0.0, 0.0, 0.25, 0.0,
+              0.0, 0.0, 0.0, 0.0, 0.0, 0.0685
+            ]
+          }
+        },
+        "text_parser": "pose_with_covariance/v1",
+        "text_argument": "command",
+        "payload_map": {
+          "command": null,
+          "frame_id": "header.frame_id",
+          "x": "pose.pose.position.x",
+          "y": "pose.pose.position.y",
+          "orientation_x": "pose.pose.orientation.x",
+          "orientation_y": "pose.pose.orientation.y",
+          "orientation_z": "pose.pose.orientation.z",
+          "orientation_w": "pose.pose.orientation.w"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Optional pose text such as 'frame=map x=1.5 y=-0.2 yaw=90deg'."
+          },
+          "frame_id": {
+            "type": "string",
+            "description": "Override the target frame id without using the command string."
+          },
+          "x": {
+            "type": "number",
+            "description": "Override X position in metres."
+          },
+          "y": {
+            "type": "number",
+            "description": "Override Y position in metres."
+          },
+          "orientation_x": {
+            "type": "number",
+            "description": "Quaternion X component override."
+          },
+          "orientation_y": {
+            "type": "number",
+            "description": "Quaternion Y component override."
+          },
+          "orientation_z": {
+            "type": "number",
+            "description": "Quaternion Z component override."
+          },
+          "orientation_w": {
+            "type": "number",
+            "description": "Quaternion W component override."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "topic"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "set_goal_pose",
+      "description": "Publish a navigation goal pose on /goal_pose.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "goal_pose",
+        "message_type": "geometry_msgs/msg/PoseStamped",
+        "payload": {
+          "header": {
+            "frame_id": "map",
+            "stamp": {
+              "sec": 0,
+              "nanosec": 0
+            }
+          },
+          "pose": {
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "orientation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0,
+              "w": 1.0
+            }
+          }
+        },
+        "text_parser": "pose_stamped/v1",
+        "text_argument": "command",
+        "payload_map": {
+          "command": null,
+          "frame_id": "header.frame_id",
+          "x": "pose.position.x",
+          "y": "pose.position.y",
+          "orientation_x": "pose.orientation.x",
+          "orientation_y": "pose.orientation.y",
+          "orientation_z": "pose.orientation.z",
+          "orientation_w": "pose.orientation.w"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Optional pose text such as 'frame=map x=2.0 y=1.0 yaw=1.57'."
+          },
+          "frame_id": {
+            "type": "string",
+            "description": "Override the target frame id without using the command string."
+          },
+          "x": {
+            "type": "number",
+            "description": "Override X position in metres."
+          },
+          "y": {
+            "type": "number",
+            "description": "Override Y position in metres."
+          },
+          "orientation_x": {
+            "type": "number",
+            "description": "Quaternion X component override."
+          },
+          "orientation_y": {
+            "type": "number",
+            "description": "Quaternion Y component override."
+          },
+          "orientation_z": {
+            "type": "number",
+            "description": "Quaternion Z component override."
+          },
+          "orientation_w": {
+            "type": "number",
+            "description": "Quaternion W component override."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "topic"
+        ],
+        "additionalProperties": true
+      }
+    }
+  ]
+}

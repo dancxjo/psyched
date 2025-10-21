@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "audio_stream",
+      "description": "Subscribe to raw audio frames published on /audio/raw.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/audio/raw",
+        "message_type": "std_msgs/msg/UInt8MultiArray",
+        "role": "subscribe",
+        "queue_length": 5
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "speech_activity_stream",
+      "description": "Stream the /ear/speech_active boolean activity indicator.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/ear/speech_active",
+        "message_type": "std_msgs/msg/Bool",
+        "role": "subscribe",
+        "queue_length": 10
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "silence_stream",
+      "description": "Subscribe to the /ear/silence flag emitted when sustained silence is detected.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/ear/silence",
+        "message_type": "std_msgs/msg/Bool",
+        "role": "subscribe",
+        "queue_length": 10
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "transcript_stream",
+      "description": "Stream transcript lines produced by the ear module on /ear/hole.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/ear/hole",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 40
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 400,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

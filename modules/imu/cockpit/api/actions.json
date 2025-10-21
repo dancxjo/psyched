@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "imu_stream",
+      "description": "Stream IMU orientation, angular velocity, and linear acceleration from /imu/data.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/imu/data",
+        "message_type": "sensor_msgs/msg/Imu",
+        "role": "subscribe",
+        "queue_length": 20
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

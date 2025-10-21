@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "navsat_fix_stream",
+      "description": "Stream NavSatFix updates published on /gps/fix by the GPS module.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/gps/fix",
+        "message_type": "sensor_msgs/msg/NavSatFix",
+        "role": "subscribe",
+        "queue_length": 20
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "time_reference_stream",
+      "description": "Stream TimeReference messages published on /gps/time_reference.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/gps/time_reference",
+        "message_type": "sensor_msgs/msg/TimeReference",
+        "role": "subscribe",
+        "queue_length": 10
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

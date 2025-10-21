@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "face_detections_stream",
+      "description": "Stream FaceDetections messages emitted on /vision/faces.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/vision/faces",
+        "message_type": "faces_msgs/msg/FaceDetections",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "face_trigger_stream",
+      "description": "Stream JSON payloads signalling face recognition triggers on /vision/face_detected.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/vision/face_detected",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    }
+  ]
+}

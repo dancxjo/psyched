@@ -19,18 +19,22 @@ def test_build_prompt_includes_topics_status_and_actions():
                 vector_length=4,
             )
         ],
-        cockpit_actions=["say(text)", "pause_speech"],
+        cockpit_actions=["voice.say", "voice.pause_speech"],
         window_seconds=3.0,
     )
 
     prompt = build_prompt(context)
 
     assert prompt.startswith("You are PILOT")
-    assert "pause_speech" in prompt
+    assert "available_actions_by_module" in prompt
+    assert "voice" in prompt
+    assert '"pause_speech", "say"' in prompt
     assert "/instant" in prompt
     assert "faces" in prompt
     assert "recent_sensations" in prompt
     assert "vector_length" in prompt
+    assert '"queue_length": 0' in prompt
+    assert "never assume or invent facts" in prompt
 
 
 def test_build_prompt_mentions_vision_images_when_available():

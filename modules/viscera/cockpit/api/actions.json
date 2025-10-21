@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "host_health_stream",
+      "description": "Stream HostHealth telemetry for the selected host.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/hosts/health/host",
+        "message_type": "psyched_msgs/msg/HostHealth",
+        "role": "subscribe",
+        "queue_length": 10
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Override the health topic (e.g. /hosts/health/pete-base)."
+          },
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}
