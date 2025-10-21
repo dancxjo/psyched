@@ -9,7 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence
 from urllib import error, request
 from uuid import uuid4
 
@@ -31,7 +31,7 @@ from .command_script import (
     CommandScriptError,
     CommandScriptInterpreter,
 )
-from .memory_pipeline import prepare_memory_batch
+from .memory_pipeline import MemoryEventDraft, prepare_memory_batch
 from .models import FeelingIntentData, SensationRecord
 from .prompt_builder import PilotPromptContext, PromptImage, build_prompt
 from .topic_translation import (
@@ -39,6 +39,9 @@ from .topic_translation import (
     apply_topic_translation,
     discover_topic_translators,
 )
+
+if TYPE_CHECKING:
+    from memory_interfaces.msg import MemoryEvent
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
 from .vision import summarise_image_message
 
@@ -394,32 +397,121 @@ class OllamaLLMClient(LLMClient):
         return final
 
 
-class RememberdClient:
-    """Minimal JSON-RPC client for rememberd."""
+class MemoryServiceClient:
+    """Lightweight wrapper around the memory module's ROS services."""
 
-    def __init__(self, endpoint: Optional[str] = None, timeout: float = 5.0) -> None:
-        self.endpoint = (endpoint or os.environ.get("REMEMBERD_URL", "")).strip()
-        self.timeout = timeout
-
-    def memorize(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not self.endpoint:
-            _LOGGER.debug("rememberd endpoint not configured; skipping memory write")
-            return None
-        body = json.dumps(payload).encode("utf-8")
-        req = request.Request(
-            self.endpoint,
-            data=body,
-            headers={"Content-Type": "application/json"},
-        )
+    def __init__(self, node: Node, *, timeout: float = 2.0) -> None:
+        self._node = node
+        self._timeout = timeout
+        self._enabled = False
         try:
-            with request.urlopen(req, timeout=self.timeout) as resp:
-                content_type = resp.headers.get("Content-Type", "")
-                if "application/json" in content_type:
-                    return json.loads(resp.read().decode("utf-8"))
-                return None
-        except error.URLError as exc:  # pragma: no cover - network failure path
-            _LOGGER.error("rememberd request failed: %s", exc)
+            from memory_interfaces.msg import MemoryEvent as _MemoryEvent  # type: ignore[import]
+            from memory_interfaces.srv import Associate as _Associate  # type: ignore[import]
+            from memory_interfaces.srv import Memorize as _Memorize  # type: ignore[import]
+        except ImportError:  # pragma: no cover - optional dependency for tests
+            node.get_logger().warning(
+                "memory_interfaces package not available; pilot memory writes disabled"
+            )
+            self._MemoryEvent = None
+            self._Memorize = None
+            self._Associate = None
+            self._memorize_client = None
+            self._associate_client = None
+            self._service_unavailable_logged = {}
+            return
+
+        self._MemoryEvent = _MemoryEvent
+        self._Memorize = _Memorize
+        self._Associate = _Associate
+        self._memorize_client = node.create_client(self._Memorize, "/memory/memorize")
+        self._associate_client = node.create_client(self._Associate, "/memory/associate")
+        self._service_unavailable_logged = {"memorize": False, "associate": False}
+        self._enabled = True
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def build_event_message(
+        self,
+        *,
+        stamp,
+        frame_id: str,
+        kind: str,
+        metadata: Mapping[str, Any],
+        embedding: Optional[Sequence[float]],
+    ) -> Optional["MemoryEvent"]:
+        if not self._enabled or self._MemoryEvent is None:
             return None
+        event_msg = self._MemoryEvent()
+        event_msg.header.stamp = stamp
+        event_msg.header.frame_id = frame_id or "memory"
+        event_msg.kind = kind or "generic"
+        event_msg.json_data = json.dumps(dict(metadata), separators=(",", ":"))
+        event_msg.embedding = [float(value) for value in embedding] if embedding else []
+        return event_msg
+
+    def memorize(self, event: "MemoryEvent", *, flush: bool = True) -> Optional[str]:
+        if not self._enabled or self._memorize_client is None:
+            return None
+        if not self._memorize_client.wait_for_service(timeout_sec=0.0):
+            self._log_unavailable("memorize")
+            return None
+        request_msg = self._Memorize.Request()
+        request_msg.event = event
+        request_msg.flush = flush
+        future = self._memorize_client.call_async(request_msg)
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=self._timeout)
+        if not future.done():
+            future.cancel()
+            self._node.get_logger().warning("memory memorize request timed out")
+            return None
+        if future.exception():
+            self._node.get_logger().warning(f"memory memorize request failed: {future.exception()}")
+            return None
+        response = future.result()
+        if response is None:
+            return None
+        return response.memory_id or None
+
+    def associate(
+        self,
+        *,
+        source_id: str,
+        target_id: str,
+        relation_type: str = "ASSOCIATED_WITH",
+        properties: Optional[Mapping[str, Any]] = None,
+    ) -> bool:
+        if not self._enabled or self._associate_client is None:
+            return False
+        if not self._associate_client.wait_for_service(timeout_sec=0.0):
+            self._log_unavailable("associate")
+            return False
+        request_msg = self._Associate.Request()
+        request_msg.source_id = source_id
+        request_msg.target_id = target_id
+        request_msg.relation_type = relation_type
+        request_msg.json_properties = json.dumps(dict(properties or {}), separators=(",", ":"))
+        future = self._associate_client.call_async(request_msg)
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=self._timeout)
+        if not future.done():
+            future.cancel()
+            self._node.get_logger().warning("memory associate request timed out")
+            return False
+        if future.exception():
+            self._node.get_logger().warning(f"memory associate request failed: {future.exception()}")
+            return False
+        response = future.result()
+        return bool(response and response.success)
+
+    def _log_unavailable(self, service: str) -> None:
+        if not self._enabled:
+            return
+        if not self._service_unavailable_logged.get(service):
+            self._node.get_logger().warning(
+                f"/memory/{service} service not available; memory writes will be skipped until it appears"
+            )
+            self._service_unavailable_logged[service] = True
 
 
 def _ros_time_to_datetime(time_msg) -> datetime:
@@ -431,11 +523,16 @@ def _ros_time_to_datetime(time_msg) -> datetime:
 class PilotNode(Node):
     """ROS node orchestrating the feeling + will integration pipeline."""
 
-    def __init__(self, *, llm_client: Optional[LLMClient] = None, rememberd: Optional[RememberdClient] = None) -> None:
+    def __init__(
+        self,
+        *,
+        llm_client: Optional[LLMClient] = None,
+        memory_client: Optional[MemoryServiceClient] = None,
+    ) -> None:
         super().__init__("pilot")
 
         self._llm_client = llm_client or OllamaLLMClient(model=os.environ.get("FELT_MODEL", "gpt-oss"))
-        self._rememberd = rememberd or RememberdClient()
+        self._memory_client = memory_client or MemoryServiceClient(self)
 
         self._debounce_seconds = self._declare_float_parameter("debounce_seconds", 3.0)
         self._window_seconds = self._declare_float_parameter("window_seconds", 3.0)
@@ -742,6 +839,44 @@ class PilotNode(Node):
                 self._script_runs.append(entry)
             if len(self._script_runs) > 12:
                 del self._script_runs[:-12]
+
+    def _record_memory_batch(self, batch: "MemoryBatch", *, stamp) -> None:
+        """Persist memory events and associations via the memory services."""
+
+        if not batch.events or not self._memory_client.enabled:
+            return
+        memory_ids: Dict[str, str] = {}
+        total_events = len(batch.events)
+        for index, draft in enumerate(batch.events):
+            metadata = dict(draft.metadata)
+            metadata.setdefault("source", draft.source)
+            metadata.setdefault("frame_id", draft.frame_id)
+            metadata.setdefault("memory_tag", draft.tag)
+            event_msg = self._memory_client.build_event_message(
+                stamp=stamp,
+                frame_id=draft.frame_id,
+                kind=draft.kind,
+                metadata=metadata,
+                embedding=draft.embedding,
+            )
+            if event_msg is None:
+                continue
+            memory_id = self._memory_client.memorize(event_msg, flush=index == total_events - 1)
+            if memory_id:
+                memory_ids[draft.tag] = memory_id
+        if not batch.associations or not memory_ids:
+            return
+        for association in batch.associations:
+            source_id = memory_ids.get(association.source_tag)
+            target_id = memory_ids.get(association.target_tag)
+            if not source_id or not target_id:
+                continue
+            self._memory_client.associate(
+                source_id=source_id,
+                target_id=target_id,
+                relation_type=association.relation_type,
+                properties=association.properties,
+            )
 
     def _dispatch_action(
         self, invocation: CommandInvocation, available_actions: List[str]
@@ -1149,14 +1284,9 @@ class PilotNode(Node):
             feeling_id=feeling_id,
         )
         try:
-            self._rememberd.memorize(
-                {
-                    "graph_mutations": batch.graph_mutations,
-                    "vectors": batch.vectors,
-                }
-            )
+            self._record_memory_batch(batch, stamp=msg.stamp)
         except Exception as exc:  # pragma: no cover - external service failure
-            self.get_logger().warning(f"Failed to write to rememberd: {exc}")
+            self.get_logger().warning(f"Failed to write to memory services: {exc}")
 
 
 def main(args: Optional[Sequence[str]] = None) -> None:

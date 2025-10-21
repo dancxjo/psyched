@@ -61,6 +61,9 @@ class EarDashboard extends LitElement {
     speechActive: { state: true },
     silenceDetected: { state: true },
     transcripts: { state: true },
+    fakeTranscriptText: { state: true },
+    fakeTranscriptFeedback: { state: true },
+    fakeTranscriptFeedbackVariant: { state: true },
   };
 
   static styles = [
@@ -176,6 +179,34 @@ class EarDashboard extends LitElement {
         background: var(--lcars-accent);
         box-shadow: 0 0 12px var(--lcars-accent);
       }
+
+      .transcript-form {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .transcript-form label {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .transcript-form textarea,
+      .transcript-form input {
+        width: 100%;
+        min-height: 2.75rem;
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.65rem;
+        border: 1px solid var(--control-surface-border);
+        background: rgba(0, 0, 0, 0.2);
+        color: inherit;
+        resize: vertical;
+      }
+
+      .transcript-form textarea:focus,
+      .transcript-form input:focus {
+        outline: 2px solid rgba(106, 209, 255, 0.6);
+      }
     `,
   ];
 
@@ -190,9 +221,14 @@ class EarDashboard extends LitElement {
     this.speechActive = false;
     this.silenceDetected = true;
     this.transcripts = [];
+    this.fakeTranscriptText = '';
+    this.fakeTranscriptFeedback = '';
+    this.fakeTranscriptFeedbackVariant = '';
     this._sockets = new Map();
+    this._publishers = new Map();
     this._latestAudio = null;
     this._audioRenderScheduled = false;
+    this._fakeTranscriptFeedbackResetHandle = 0;
   }
 
   connectedCallback() {
@@ -210,6 +246,7 @@ class EarDashboard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._teardownAll();
+    this._clearFakeTranscriptFeedbackTimer();
   }
 
   toggleAudioMonitoring() {
@@ -228,6 +265,28 @@ class EarDashboard extends LitElement {
 
   clearTranscripts() {
     this.transcripts = [];
+  }
+
+  async injectFakeTranscript(event) {
+    event.preventDefault();
+    const text = this.fakeTranscriptText.trim();
+    if (!text) {
+      this._setFakeTranscriptFeedback('Enter text to inject a transcript line.', 'warning', true);
+      return;
+    }
+    const publisher = this._ensureFakeTranscriptPublisher();
+    if (!publisher) {
+      this._setFakeTranscriptFeedback('Unable to initialise transcript publisher.', 'error');
+      return;
+    }
+    try {
+      publisher.send(JSON.stringify({ data: text }));
+      this.fakeTranscriptText = '';
+      this._setFakeTranscriptFeedback('Fake transcript injected.', 'success', true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this._setFakeTranscriptFeedback(`Failed to inject transcript: ${message}`, 'error');
+    }
   }
 
   _subscribeAudio() {
@@ -383,6 +442,9 @@ class EarDashboard extends LitElement {
     for (const key of this._sockets.keys()) {
       this._closeSocket(key);
     }
+    for (const key of this._publishers.keys()) {
+      this._closePublisher(key);
+    }
   }
 
   _decodeTopicPayload(event) {
@@ -405,6 +467,82 @@ class EarDashboard extends LitElement {
         <span class="sensor-item__dot" aria-hidden="true"></span>
       </li>
     `;
+  }
+
+  _ensureFakeTranscriptPublisher() {
+    const existing = this._publishers.get('fakeTranscript');
+    if (existing) {
+      return existing;
+    }
+    let socket;
+    try {
+      socket = createTopicSocket({
+        module: 'ear',
+        topic: TRANSCRIPT_TOPIC,
+        type: 'std_msgs/msg/String',
+        role: 'publish',
+      });
+    } catch (error) {
+      console.warn('Ear dashboard failed to create fake transcript publisher', error);
+      return null;
+    }
+    socket.addEventListener('error', () => {
+      this._setFakeTranscriptFeedback('Transcript publisher encountered an error.', 'error');
+    });
+    socket.addEventListener('close', () => {
+      if (this._publishers.get('fakeTranscript') === socket) {
+        this._publishers.delete('fakeTranscript');
+      }
+    });
+    this._publishers.set('fakeTranscript', socket);
+    return socket;
+  }
+
+  _closePublisher(key) {
+    const socket = this._publishers.get(key);
+    if (!socket) {
+      return;
+    }
+    try {
+      socket.close();
+    } catch (_error) {
+      // ignored
+    }
+    this._publishers.delete(key);
+  }
+
+  _setFakeTranscriptFeedback(message, variant = '', autoClear = false) {
+    this.fakeTranscriptFeedback = message;
+    this.fakeTranscriptFeedbackVariant = variant;
+    if (autoClear) {
+      this._scheduleFakeTranscriptFeedbackClear();
+    } else {
+      this._clearFakeTranscriptFeedbackTimer();
+    }
+  }
+
+  _scheduleFakeTranscriptFeedbackClear() {
+    this._clearFakeTranscriptFeedbackTimer();
+    const timerHost = typeof globalThis !== 'undefined' ? globalThis : window;
+    if (!timerHost || typeof timerHost.setTimeout !== 'function') {
+      return;
+    }
+    this._fakeTranscriptFeedbackResetHandle = timerHost.setTimeout(() => {
+      this.fakeTranscriptFeedback = '';
+      this.fakeTranscriptFeedbackVariant = '';
+      this._fakeTranscriptFeedbackResetHandle = 0;
+    }, 3000);
+  }
+
+  _clearFakeTranscriptFeedbackTimer() {
+    if (!this._fakeTranscriptFeedbackResetHandle) {
+      return;
+    }
+    const timerHost = typeof globalThis !== 'undefined' ? globalThis : window;
+    if (timerHost && typeof timerHost.clearTimeout === 'function') {
+      timerHost.clearTimeout(this._fakeTranscriptFeedbackResetHandle);
+    }
+    this._fakeTranscriptFeedbackResetHandle = 0;
   }
 
   render() {
@@ -471,6 +609,37 @@ class EarDashboard extends LitElement {
         <div class="dashboard-row">
           <article class="surface-card surface-card--wide">
             <h3 class="surface-card__title">Transcript log</h3>
+            <form class="transcript-form" @submit=${(event) => this.injectFakeTranscript(event)}>
+              <label>
+                Inject fake ASR transcript
+                <textarea
+                  placeholder="Type a transcript line to append to the log"
+                  .value=${this.fakeTranscriptText}
+                  @input=${(event) => {
+                    this.fakeTranscriptText = event.target.value;
+                  }}
+                ></textarea>
+              </label>
+              <div class="surface-actions">
+                <button type="submit" class="surface-button">Inject transcript</button>
+                <button
+                  type="button"
+                  class="surface-button surface-button--ghost"
+                  @click=${() => {
+                    this.fakeTranscriptText = '';
+                    this._setFakeTranscriptFeedback('', '');
+                  }}
+                  ?disabled=${this.fakeTranscriptText.trim().length === 0}
+                >
+                  Clear input
+                </button>
+              </div>
+              ${this.fakeTranscriptFeedback
+        ? html`<p class="surface-status" data-variant=${this.fakeTranscriptFeedbackVariant || ''}>
+                    ${this.fakeTranscriptFeedback}
+                  </p>`
+        : ''}
+            </form>
             ${this.transcripts.length === 0
         ? html`<p class="surface-empty">Awaiting transcripts…</p>`
         : html`<ol class="transcript-log">

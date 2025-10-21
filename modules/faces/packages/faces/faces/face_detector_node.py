@@ -5,7 +5,7 @@ import hashlib
 import json
 import time
 from types import ModuleType
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Sequence, TYPE_CHECKING
 
 from rcl_interfaces.msg import SetParametersResult
 
@@ -15,7 +15,8 @@ from cv_bridge import CvBridge
 from rclpy.logging import get_logger
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from std_msgs.msg import String
+from psyched_msgs.msg import SensationStamped
+from std_msgs.msg import Header, String
 
 from faces_msgs.msg import FaceDetections
 
@@ -114,16 +115,19 @@ class FaceDetectorNode(Node):
         self.declare_parameter("faces_topic", "/vision/faces")
         self.declare_parameter("face_detected_topic", "/vision/face_detected")
         self.declare_parameter("trigger_cooldown_sec", 2.0)
+        self.declare_parameter("sensation_topic", "/sensations")
 
         self._camera_topic = self._get_param("camera_topic", "/image_raw")
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
         self._face_detected_topic = self._get_param("face_detected_topic", "/vision/face_detected")
+        self._sensation_topic = self._get_param("sensation_topic", "/sensations")
         self._trigger_cooldown = float(self._get_param("trigger_cooldown_sec", 2.0))
         self._last_signature: Optional[str] = None
         self._last_trigger_time: float = 0.0
 
         self._detections_pub = self.create_publisher(FaceDetections, self._faces_topic, SensorDataQoS())
         self._trigger_pub = self.create_publisher(String, self._face_detected_topic, _best_effort_qos(depth=5))
+        self._sensation_pub = self.create_publisher(SensationStamped, self._sensation_topic, SensorDataQoS())
 
         # create the subscription and keep a handle so we can change it at runtime
         self._camera_sub = self.create_subscription(
@@ -171,6 +175,7 @@ class FaceDetectorNode(Node):
         detections_msg = build_face_detections_msg(msg.header, faces, bridge=self._bridge)
         self._detections_pub.publish(detections_msg)
         self.get_logger().info(f"Published FaceDetections to {self._faces_topic} (faces={len(faces)})")
+        self._publish_sensations(msg.header, faces)
 
         signature = self._derive_signature(faces[0].embedding)
         now = time.monotonic()
@@ -192,6 +197,34 @@ class FaceDetectorNode(Node):
             self._last_trigger_time = now
         else:
             self.get_logger().info(f"Skipping trigger publish ({decision}) for signature {signature}")
+
+    def _publish_sensations(self, header: Header, faces: Sequence["ProcessedFace"]) -> None:
+        if not faces:
+            return
+        frame_id = getattr(header, "frame_id", "") if header is not None else ""
+        for face in faces:
+            sensation = SensationStamped()
+            sensation.stamp = header.stamp if header is not None else None
+            sensation.kind = "face"
+            sensation.collection_hint = "faces"
+            payload = {
+                "id": self._derive_signature(face.embedding),
+                "confidence": float(face.confidence),
+                "frame_id": frame_id,
+                "bbox": {
+                    "x": int(face.bbox.x),
+                    "y": int(face.bbox.y),
+                    "width": int(face.bbox.width),
+                    "height": int(face.bbox.height),
+                },
+                "topic": self._faces_topic,
+            }
+            sensation.json_payload = json.dumps(payload, separators=(",", ":"))
+            sensation.vector = np.asarray(face.embedding, dtype=np.float32).tolist()
+            self._sensation_pub.publish(sensation)
+        self.get_logger().info(
+            f"Published {len(faces)} face embedding sensations to {self._sensation_topic}"
+        )
 
     def _on_set_parameters(self, params: list) -> SetParametersResult:
         """Handle parameter updates; when camera_topic changes, recreate subscription."""

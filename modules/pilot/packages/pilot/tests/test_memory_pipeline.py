@@ -6,7 +6,7 @@ from pilot.memory_pipeline import MemoryBatch, prepare_memory_batch
 from pilot.models import FeelingIntentData, SensationRecord
 
 
-def test_prepare_memory_batch_includes_vectors_and_graph_links():
+def test_prepare_memory_batch_builds_events_and_associations():
     feeling = FeelingIntentData(
         situation_overview="Pete is cataloguing faces in the atrium.",
         attitude_emoji="🙂",
@@ -43,12 +43,16 @@ def test_prepare_memory_batch_includes_vectors_and_graph_links():
 
     assert isinstance(batch, MemoryBatch)
     assert batch.feeling_id == "pilot-123"
-    collections = {entry.get("collection") for entry in batch.vectors}
-    assert {"faces", "thoughts", "emotions"}.issubset(collections)
-    assert any(entry.get("text") == "Pete is cataloguing faces in the atrium." for entry in batch.vectors)
-    assert batch.graph_mutations
-    params = batch.graph_mutations[0]["params"]
-    assert params["situation_overview"] == "Pete is cataloguing faces in the atrium."
-    assert params["episode_id"] == "ep1"
-    assert params["sensation_ids"] == ["face_1"]
-    assert "source_topics" in params and "/instant" in params["source_topics"]
+    assert batch.events
+    feeling_event = next(event for event in batch.events if event.tag == "feeling")
+    assert feeling_event.kind == "thoughts"
+    assert feeling_event.metadata["situation_overview"] == "Pete is cataloguing faces in the atrium."
+    assert feeling_event.metadata["episode_id"] == "ep1"
+    sensation_event = next(event for event in batch.events if event.metadata["topic"] == "/sensation/face")
+    assert sensation_event.kind == "faces"
+    assert sensation_event.embedding == [0.1, 0.2, 0.3]
+    assert batch.associations
+    link = batch.associations[0]
+    assert link.source_tag == sensation_event.tag
+    assert link.target_tag == "feeling"
+    assert link.properties["topic"] == "/sensation/face"

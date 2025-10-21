@@ -1,7 +1,7 @@
 [host]
 name = "motherbrain"
 installers = ["ros2", "docker"]
-modules = ["cockpit", "foot", "viscera", "voice", "pilot"]
+modules = ["cockpit", "foot", "viscera", "voice", "pilot", "ear", "memory"]
 
 [config.mod.ear.env]
 EAR_BACKEND = "service"
@@ -13,6 +13,26 @@ port = "ws"
 via = "ws://forebrain.local:5003/asr"
 bind_env = "EAR_SERVICE_URI"
 summary = "Consumes Whisper websocket for speech recognition"
+
+[config.mod.memory.env]
+QDRANT_URL = "http://forebrain.local:6333"
+NEO4J_URI = "bolt://forebrain.local:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "test"
+
+[[config.mod.memory.dependencies]]
+service = "forebrain.vectors"
+port = "http"
+via = "http://forebrain.local:6333"
+bind_env = "QDRANT_URL"
+summary = "Stores memory embeddings in the shared Qdrant cluster"
+
+[[config.mod.memory.dependencies]]
+service = "forebrain.graphs"
+port = "bolt"
+via = "bolt://forebrain.local:7687"
+bind_env = "NEO4J_URI"
+summary = "Persists memory relationships via Neo4j Bolt endpoint"
 
 [config.mod.faces.launch.arguments]
 camera_topic = "/camera/color/image_raw"

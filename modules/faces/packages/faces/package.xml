@@ -8,6 +8,7 @@
 
   <buildtool_depend>ament_python</buildtool_depend>
   <build_depend>faces_msgs</build_depend>
+  <build_depend>psyched_msgs</build_depend>
 
   <exec_depend>faces_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
@@ -16,6 +17,7 @@
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>opencv-python</exec_depend>
   <exec_depend>numpy</exec_depend>
+  <exec_depend>psyched_msgs</exec_depend>
 
   <test_depend>pytest</test_depend>
 
