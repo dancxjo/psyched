@@ -2,6 +2,22 @@ import { join } from "$std/path/mod.ts";
 import { ProvisionContext } from "./context.ts";
 import { fetchBinary, safeRemove } from "./os.ts";
 
+interface CudaRepoSelection {
+  repo: string;
+  requestedVersion: string;
+  matchedVersion: string;
+  fallback: boolean;
+  message?: string;
+}
+
+const CUDA_REPOS: Array<{ version: number; label: string; repo: string }> = [
+  { version: 2404, label: "24.04", repo: "ubuntu2404" },
+  { version: 2204, label: "22.04", repo: "ubuntu2204" },
+  { version: 2004, label: "20.04", repo: "ubuntu2004" },
+  { version: 1804, label: "18.04", repo: "ubuntu1804" },
+  { version: 1604, label: "16.04", repo: "ubuntu1604" },
+];
+
 export async function installCuda(context: ProvisionContext): Promise<void> {
   const already = await hasCuda();
   await context.step("Check existing CUDA toolkit", (step) => {
@@ -37,7 +53,11 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
   await context.step("Configure NVIDIA CUDA repository", async (step) => {
     const tmpDir = await Deno.makeTempDir({ prefix: "psh-cuda-" });
     try {
-      const repo = await determineCudaRepo();
+      const repoSelection = await determineCudaRepo();
+      if (repoSelection.message) {
+        step.log(repoSelection.message);
+      }
+      const repo = repoSelection.repo;
       const keyUrl =
         `https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/3bf863cc.pub`;
       const keyData = await fetchBinary(keyUrl);
@@ -111,19 +131,68 @@ async function hasCuda(): Promise<boolean> {
   }
 }
 
-async function determineCudaRepo(): Promise<string> {
+async function determineCudaRepo(): Promise<CudaRepoSelection> {
   const osRelease = await Deno.readTextFile("/etc/os-release");
+  return selectCudaRepo(osRelease);
+}
+
+/**
+ * Selects the closest matching CUDA repository for the detected Ubuntu release.
+ */
+export function selectCudaRepo(osRelease: string): CudaRepoSelection {
   let versionId = "";
+  let prettyName = "";
   for (const line of osRelease.split(/\r?\n/)) {
     if (line.startsWith("VERSION_ID=")) {
       const [, value] = line.split("=", 2);
       versionId = value.replace(/\"/g, "").trim();
-      break;
+    } else if (line.startsWith("PRETTY_NAME=")) {
+      const [, value] = line.split("=", 2);
+      prettyName = value.replace(/\"/g, "").trim();
     }
   }
-  if (!versionId) {
-    throw new Error("Unable to determine VERSION_ID from /etc/os-release");
+
+  const requestedVersion = versionId || "(unknown)";
+  const targetLabel = prettyName || `VERSION_ID ${requestedVersion}`;
+  const versionNumber = parseVersionId(versionId);
+
+  let selection = CUDA_REPOS[0];
+  let fallback = true;
+  if (versionNumber !== null) {
+    for (const candidate of CUDA_REPOS) {
+      selection = candidate;
+      if (versionNumber >= candidate.version) {
+        fallback = versionNumber !== candidate.version;
+        break;
+      }
+    }
   }
-  const suffix = versionId.replace(/\./g, "");
-  return `ubuntu${suffix}`;
+
+  const message = fallback
+    ? `No CUDA repository published for ${targetLabel}; using ${selection.repo} (${selection.label}) packages.`
+    : undefined;
+
+  return {
+    repo: selection.repo,
+    requestedVersion,
+    matchedVersion: selection.label,
+    fallback,
+    message,
+  };
+}
+
+function parseVersionId(versionId: string): number | null {
+  if (!versionId) {
+    return null;
+  }
+  const match = versionId.match(/^(\d+)\.(\d+)$/);
+  if (!match) {
+    return null;
+  }
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  if (Number.isNaN(major) || Number.isNaN(minor)) {
+    return null;
+  }
+  return (major * 100) + minor;
 }
