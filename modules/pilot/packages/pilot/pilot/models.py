@@ -16,12 +16,13 @@ class FeelingIntentData:
     Example
     -------
     >>> FeelingIntentData(
+    ...     situation_overview="Pete is greeting a friendly face in the atrium.",
     ...     attitude_emoji="🙂",
     ...     thought_sentence="I should wave back.",
     ...     spoken_sentence="Hello there!",
     ...     command_script="nav.move_to(target='person_estimated')",
     ... )
-    FeelingIntentData(attitude_emoji='🙂', thought_sentence='I should wave back.', spoken_sentence='Hello there!', command_script="nav.move_to(target='person_estimated')", goals=[], mood_delta='', memory_collection_raw='', memory_collection_text='', memory_collection_emoji='', episode_id='', situation_id='')
+    FeelingIntentData(situation_overview='Pete is greeting a friendly face in the atrium.', attitude_emoji='🙂', thought_sentence='I should wave back.', spoken_sentence='Hello there!', command_script="nav.move_to(target='person_estimated')", goals=[], mood_delta='', memory_collection_raw='', memory_collection_text='', memory_collection_emoji='', episode_id='', situation_id='')
 
     Notes
     -----
@@ -30,6 +31,7 @@ class FeelingIntentData:
     deliberate.
     """
 
+    situation_overview: str
     attitude_emoji: str
     thought_sentence: str
     spoken_sentence: str

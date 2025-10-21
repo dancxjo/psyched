@@ -42,13 +42,13 @@ def test_default_sensation_topics_contains_primary_stream() -> None:
 
 def test_normalise_topic_entries_keep_first() -> None:
     entries = [
-        {"topic": "/foo", "type": "std_msgs/msg/String"},
+        {"topic": "/foo", "type": "std_msgs/msg/String", "prompt_template": "value={{data}}"},
         {"topic": "/foo", "type": "std_msgs/msg/Int64"},
         {"topic": "/bar", "type": "std_msgs/msg/String"},
     ]
     result = _normalise_topic_entries(entries, keep_first=True)
     assert result == [
-        {"topic": "/foo", "type": "std_msgs/msg/String"},
+        {"topic": "/foo", "type": "std_msgs/msg/String", "prompt_template": "value={{data}}"},
         {"topic": "/bar", "type": "std_msgs/msg/String"},
     ]
 
@@ -66,7 +66,11 @@ def test_discover_topic_suggestions_expands_templates(tmp_path: Path) -> None:
     module_dir.mkdir(parents=True)
     payload = {
         "context_topics": [
-            {"topic": "/hosts/health/{HOST_SHORT}", "type": "psyched_msgs/msg/HostHealth"}
+            {
+                "topic": "/hosts/health/{HOST_SHORT}",
+                "type": "psyched_msgs/msg/HostHealth",
+                "prompt_template": "host={{data.status}}",
+            }
         ],
         "sensation_topics": [
             {"topic": "/custom/{HOST}", "type": "std_msgs/msg/String"}
@@ -80,7 +84,11 @@ def test_discover_topic_suggestions_expands_templates(tmp_path: Path) -> None:
         logger=None,
     )
     assert suggestions["context_topics"] == [
-        {"topic": "/hosts/health/motherbrain", "type": "psyched_msgs/msg/HostHealth"}
+        {
+            "topic": "/hosts/health/motherbrain",
+            "type": "psyched_msgs/msg/HostHealth",
+            "prompt_template": "host={{data.status}}",
+        }
     ]
     assert suggestions["sensation_topics"] == [
         {"topic": "/custom/motherbrain.local", "type": "std_msgs/msg/String"}

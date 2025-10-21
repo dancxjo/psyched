@@ -8,6 +8,7 @@ from pilot.models import FeelingIntentData, SensationRecord
 
 def test_prepare_memory_batch_includes_vectors_and_graph_links():
     feeling = FeelingIntentData(
+        situation_overview="Pete is cataloguing faces in the atrium.",
         attitude_emoji="🙂",
         thought_sentence="I should remember this moment.",
         spoken_sentence="",
@@ -44,8 +45,10 @@ def test_prepare_memory_batch_includes_vectors_and_graph_links():
     assert batch.feeling_id == "pilot-123"
     collections = {entry.get("collection") for entry in batch.vectors}
     assert {"faces", "thoughts", "emotions"}.issubset(collections)
+    assert any(entry.get("text") == "Pete is cataloguing faces in the atrium." for entry in batch.vectors)
     assert batch.graph_mutations
     params = batch.graph_mutations[0]["params"]
+    assert params["situation_overview"] == "Pete is cataloguing faces in the atrium."
     assert params["episode_id"] == "ep1"
     assert params["sensation_ids"] == ["face_1"]
     assert "source_topics" in params and "/instant" in params["source_topics"]
