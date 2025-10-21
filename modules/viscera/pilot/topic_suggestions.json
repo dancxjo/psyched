@@ -2,7 +2,8 @@
   "context_topics": [
     {
       "topic": "/hosts/health/{HOST_SHORT}",
-      "type": "psyched_msgs/msg/HostHealth"
+      "type": "psyched_msgs/msg/HostHealth",
+      "prompt_template": "{{data.prompt_summary}}"
     }
   ],
   "sensation_topics": []
