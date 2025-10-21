@@ -56,6 +56,7 @@ class _FakeRos:
     def __init__(self) -> None:
         self._streams: list[_FakeStream] = []
         self._service_calls: list[Dict[str, Any]] = []
+        self._publish_calls: list[Dict[str, Any]] = []
 
     async def create_topic_stream(self, **_kwargs):  # type: ignore[no-untyped-def]
         stream = _FakeStream({
@@ -72,9 +73,16 @@ class _FakeRos:
         self._service_calls.append(dict(kwargs))
         return {"status": "ok"}
 
+    async def publish_topic(self, **kwargs):  # pragma: no cover - exercised in tests
+        self._publish_calls.append(dict(kwargs))
+
     @property
     def service_calls(self) -> list[Dict[str, Any]]:
         return list(self._service_calls)
+
+    @property
+    def publish_calls(self) -> list[Dict[str, Any]]:
+        return list(self._publish_calls)
 
 
 def test_register_module_api_actions_registers_stream(tmp_path: Path) -> None:
@@ -167,6 +175,68 @@ def test_register_module_api_actions_registers_service(tmp_path: Path) -> None:
     assert call["service_type"] == "std_srvs/srv/Trigger"
     assert call["arguments"] == {"force": False}
     assert call["timeout"] == pytest.approx(1.2)
+
+
+def test_register_module_api_actions_registers_publish(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "say",
+          "description": "Publish speech text to the voice module",
+          "kind": "publish-topic",
+          "defaults": {
+            "topic": "/voice",
+            "message_type": "std_msgs/msg/String",
+            "payload_map": {"text": "data"}
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+    """
+    write_actions_file(tmp_path, "voice", payload)
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        registry.execute(
+            "voice",
+            "say",
+            app=None,
+            arguments={"text": "Hello there"},
+            request=None,
+        )
+    )
+
+    assert result.streaming is False
+    assert result.payload == {
+        "status": "published",
+        "topic": "/voice",
+        "message_type": "std_msgs/msg/String",
+    }
+
+    assert ros.publish_calls == [
+        {
+            "module": "voice",
+            "topic": "/voice",
+            "message_type": "std_msgs/msg/String",
+            "payload": {"data": "Hello there"},
+            "qos": None,
+        }
+    ]
 
 
 def test_register_module_api_actions_uses_extra_roots(tmp_path: Path) -> None:

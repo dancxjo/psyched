@@ -37,6 +37,10 @@ class TopicStreamError(RosClientError):
     """Raised when topic streaming operations fail."""
 
 
+class TopicPublishError(RosClientError):
+    """Raised when publishing to a ROS topic fails."""
+
+
 @dataclass(slots=True)
 class TopicStreamMetadata:
     """Metadata describing a topic stream exposed to the frontend."""
@@ -312,6 +316,40 @@ class RosClient:
             float(timeout),
         )
 
+    async def publish_topic(
+        self,
+        *,
+        module: str,
+        topic: str,
+        message_type: str,
+        payload: Mapping[str, Any],
+        qos: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        """Publish a single message to a ROS topic on behalf of a module."""
+
+        if self._shutdown:
+            raise TopicPublishError("ROS client has been shut down")
+        if not topic or not isinstance(topic, str):
+            raise TopicPublishError("topic must be a non-empty string")
+        if not message_type or not isinstance(message_type, str):
+            raise TopicPublishError("message_type must be a non-empty string")
+        if payload is None or not isinstance(payload, Mapping):
+            raise TopicPublishError("payload must be expressed as a JSON object")
+
+        qos_mapping = dict(qos) if isinstance(qos, Mapping) else None
+        _LOGGER.debug(
+            "Publishing cockpit action payload to %s for module %s", topic, module
+        )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            self._publish_topic_sync,
+            topic,
+            message_type,
+            dict(payload),
+            qos_mapping,
+        )
+
     async def close_stream(self, stream_id: str) -> None:
         """Close and drop a previously created topic stream."""
 
@@ -409,3 +447,27 @@ class RosClient:
             return message_to_ordereddict(response)
         finally:
             self._node.destroy_client(client)
+
+    def _publish_topic_sync(
+        self,
+        topic: str,
+        message_type: str,
+        payload: Dict[str, Any],
+        qos: Optional[Mapping[str, Any]],
+    ) -> None:
+        try:
+            message_cls = get_message(message_type)
+        except (AttributeError, ValueError) as exc:
+            raise TopicPublishError(f"Unknown message type: {message_type}") from exc
+
+        qos_profile = self._build_qos_profile(queue_length=1, overrides=qos)
+        publisher = self._node.create_publisher(message_cls, topic, qos_profile)
+        try:
+            message = message_cls()
+            try:
+                set_message_fields(message, payload)
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise TopicPublishError(f"Failed to populate message for topic {topic}: {exc}") from exc
+            publisher.publish(message)
+        finally:
+            self._node.destroy_publisher(publisher)

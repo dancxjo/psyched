@@ -76,6 +76,9 @@ def stub_ros_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         async def call_service(self, *, service_name: str, service_type: str, arguments=None, timeout: float = 8.0):
             return {"status": "ok"}
 
+        async def publish_topic(self, *, module: str, topic: str, message_type: str, payload, qos=None):
+            await asyncio.sleep(0)
+
         async def close_stream(self, stream_id: str) -> None:
             stream = self._streams.pop(stream_id, None)
             if stream:
