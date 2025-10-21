@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 import tomllib
 
 from .actions import ActionError, ActionResult, ModuleAction
+from .action_transforms import TEXT_PARSERS, ActionTransformError
 
 try:  # pragma: no cover - exercised implicitly when ROS dependencies exist
     from .ros import RosClient, ServiceCallError, TopicPublishError, TopicStreamError
@@ -216,6 +218,64 @@ def _allowed_argument_keys(parameters: Optional[Mapping[str, Any]]) -> set[str]:
     return set()
 
 
+def _merge_mappings(target: Dict[str, Any], updates: Mapping[str, Any]) -> Dict[str, Any]:
+    for key, value in updates.items():
+        if isinstance(value, Mapping):
+            existing = target.get(key)
+            if isinstance(existing, Mapping):
+                merged = dict(existing)
+            else:
+                merged = {}
+            target[key] = _merge_mappings(merged, value)
+        else:
+            target[key] = value
+    return target
+
+
+def _set_payload_path(payload: Dict[str, Any], path: str, value: Any) -> None:
+    if not path:
+        return
+    segments = path.split(".")
+    current: Any = payload
+    for index, segment in enumerate(segments):
+        name, bracket, remainder = segment.partition("[")
+        array_index = None
+        if bracket:
+            remainder = remainder.rstrip("]")
+            if remainder.isdigit():
+                array_index = int(remainder)
+        last_segment = index == len(segments) - 1
+
+        if array_index is None:
+            if not isinstance(current, MutableMapping):
+                return
+            if last_segment:
+                current[name] = value
+            else:
+                next_value = current.get(name)
+                if not isinstance(next_value, MutableMapping):
+                    next_value = {}
+                    current[name] = next_value
+                current = next_value
+        else:
+            if not isinstance(current, MutableMapping):
+                return
+            existing = current.get(name)
+            if not isinstance(existing, list):
+                existing = []
+                current[name] = existing
+            while len(existing) <= array_index:
+                existing.append({})
+            if last_segment:
+                existing[array_index] = value
+            else:
+                next_value = existing[array_index]
+                if not isinstance(next_value, MutableMapping):
+                    next_value = {}
+                    existing[array_index] = next_value
+                current = next_value
+
+
 def _merge_arguments(
     defaults: Mapping[str, Any],
     provided: Mapping[str, Any],
@@ -358,14 +418,21 @@ def _build_publish_topic_action(
     payload_default = defaults.get("payload")
     base_payload: Dict[str, Any] = {}
     if isinstance(payload_default, Mapping):
-        base_payload.update(dict(payload_default))
+        base_payload = copy.deepcopy(dict(payload_default))
 
     raw_map = defaults.get("payload_map", {})
-    payload_map: Dict[str, str] = {}
+    payload_map: Dict[str, Optional[str]] = {}
     if isinstance(raw_map, Mapping):
         for key, value in raw_map.items():
-            if isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip():
-                payload_map[key.strip()] = value.strip()
+            if not isinstance(key, str):
+                continue
+            key_text = key.strip()
+            if not key_text:
+                continue
+            if isinstance(value, str):
+                payload_map[key_text] = value.strip() or ""
+            elif value is None:
+                payload_map[key_text] = None
 
     allowed_keys = _allowed_argument_keys(definition.parameters)
     reserved_keys = {"topic", "message_type", "payload", "qos"}
@@ -385,11 +452,11 @@ def _build_publish_topic_action(
         topic_value = topic_value.strip()
         message_type_value = message_type_value.strip()
 
-        payload: Dict[str, Any] = dict(base_payload)
+        payload: Dict[str, Any] = copy.deepcopy(base_payload)
 
         payload_override = merged.get("payload")
         if isinstance(payload_override, Mapping):
-            payload.update(dict(payload_override))
+            _merge_mappings(payload, dict(payload_override))
         elif payload_override is not None and "payload" in arguments:
             raise ActionError("Payload overrides must be expressed as a JSON object")
 
@@ -399,9 +466,29 @@ def _build_publish_topic_action(
             if key not in arguments:
                 continue
             target_field = payload_map.get(key, key)
+            if target_field is None:
+                continue
             if not target_field:
                 continue
-            payload[target_field] = arguments[key]
+            _set_payload_path(payload, target_field, arguments[key])
+
+        parser_key = defaults.get("text_parser")
+        parser = None
+        if isinstance(parser_key, str):
+            parser = TEXT_PARSERS.get(parser_key.strip())
+        text_argument = defaults.get("text_argument", "command")
+        if parser and isinstance(text_argument, str):
+            argument_key = text_argument.strip() or "command"
+            if argument_key in arguments and arguments[argument_key] is not None:
+                command_value = str(arguments[argument_key]).strip()
+                if not command_value:
+                    raise ActionError("Command text must be a non-empty string")
+                try:
+                    parsed_payload = parser(command_value)
+                except ActionTransformError as exc:
+                    raise ActionError(str(exc)) from exc
+                if isinstance(parsed_payload, Mapping):
+                    _merge_mappings(payload, parsed_payload)
 
         try:
             await ros.publish_topic(

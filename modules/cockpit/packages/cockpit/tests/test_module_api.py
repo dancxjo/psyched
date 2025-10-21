@@ -302,3 +302,115 @@ def test_register_module_api_actions_uses_manifest_name(tmp_path: Path) -> None:
 
     action = registry.get("pilot", "debug_stream")
     assert action.description == "Stream pilot debug"
+
+
+def test_publish_topic_action_supports_text_parser(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "cmd_vel_text",
+          "description": "Parse a textual command into cmd_vel",
+          "kind": "publish-topic",
+          "defaults": {
+            "topic": "cmd_vel",
+            "message_type": "geometry_msgs/msg/Twist",
+            "payload": {
+              "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
+              "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+            },
+            "text_parser": "twist/v1",
+            "text_argument": "command",
+            "payload_map": {
+              "command": null,
+              "linear_x": "linear.x",
+              "angular_z": "angular.z"
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {"type": "string"},
+              "linear_x": {"type": "number"},
+              "angular_z": {"type": "number"}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+    """
+
+    write_actions_file(tmp_path, "foot", payload)
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        registry.execute(
+            "foot",
+            "cmd_vel_text",
+            app=None,
+            arguments={"command": "forward 0.4 turn_right 1.2"},
+            request=None,
+        )
+    )
+
+    assert result.streaming is False
+    assert ros.publish_calls and ros.publish_calls[0]["topic"] == "cmd_vel"
+    payload_sent = ros.publish_calls[0]["payload"]
+    assert payload_sent["linear"]["x"] == pytest.approx(0.4)
+    assert payload_sent["angular"]["z"] == pytest.approx(-1.2)
+
+
+def test_publish_topic_action_supports_indexed_payload_map(tmp_path: Path) -> None:
+    payload = """
+    {
+      "actions": [
+        {
+          "name": "set_power_led",
+          "description": "Update the Create power LED",
+          "kind": "publish-topic",
+          "defaults": {
+            "topic": "power_led",
+            "message_type": "std_msgs/msg/UInt8MultiArray",
+            "payload": {"data": [0, 128]},
+            "payload_map": {
+              "color": "data[0]",
+              "intensity": "data[1]"
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "color": {"type": "integer"},
+              "intensity": {"type": "integer"}
+            },
+            "required": ["color", "intensity"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+    """
+
+    write_actions_file(tmp_path, "foot", payload)
+    registry = ActionRegistry()
+    ros = _FakeRos()
+
+    register_module_api_actions(registry, modules_root=tmp_path, ros=ros)  # type: ignore[arg-type]
+
+    asyncio.run(
+        registry.execute(
+            "foot",
+            "set_power_led",
+            app=None,
+            arguments={"color": 64, "intensity": 200},
+            request=None,
+        )
+    )
+
+    assert ros.publish_calls
+    published = ros.publish_calls[0]["payload"]
+    assert published["data"] == [64, 200]

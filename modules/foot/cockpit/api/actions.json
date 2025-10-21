@@ -1,0 +1,382 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "cmd_vel_text",
+      "description": "Parse a natural-language velocity command or component overrides into /cmd_vel geometry_msgs/msg/Twist output.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "cmd_vel",
+        "message_type": "geometry_msgs/msg/Twist",
+        "payload": {
+          "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
+          "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+        },
+        "text_parser": "twist/v1",
+        "text_argument": "command",
+        "payload_map": {
+          "command": null,
+          "linear_x": "linear.x",
+          "linear_y": "linear.y",
+          "linear_z": "linear.z",
+          "angular_x": "angular.x",
+          "angular_y": "angular.y",
+          "angular_z": "angular.z"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Text command such as 'forward 0.2 turn_left 0.5'. Aliases like vx=0.1 or wz=-0.2 are also supported."
+          },
+          "linear_x": {
+            "type": "number",
+            "description": "Optional direct override for linear.x in m/s."
+          },
+          "linear_y": {
+            "type": "number",
+            "description": "Optional direct override for linear.y in m/s."
+          },
+          "linear_z": {
+            "type": "number",
+            "description": "Optional direct override for linear.z in m/s."
+          },
+          "angular_x": {
+            "type": "number",
+            "description": "Optional direct override for angular.x in rad/s."
+          },
+          "angular_y": {
+            "type": "number",
+            "description": "Optional direct override for angular.y in rad/s."
+          },
+          "angular_z": {
+            "type": "number",
+            "description": "Optional direct override for angular.z in rad/s."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "cmd_vel_stop",
+      "description": "Publish a zeroed geometry_msgs/msg/Twist to stop the Create base.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "cmd_vel",
+        "message_type": "geometry_msgs/msg/Twist",
+        "payload": {
+          "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
+          "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+        }
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "dock",
+      "description": "Command the Create base to begin docking.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "dock",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "undock",
+      "description": "Command the Create base to depart from the dock.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "undock",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "clean_button",
+      "description": "Simulate pressing the Create base clean button.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "clean_button",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "spot_button",
+      "description": "Simulate pressing the Create base spot button.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "spot_button",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "dock_button",
+      "description": "Simulate pressing the Create base dock button.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "dock_button",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {"type": "object", "additionalProperties": false},
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "set_ascii_text",
+      "description": "Update the Create vacuum ASCII display (up to four characters).",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "set_ascii",
+        "message_type": "std_msgs/msg/UInt8MultiArray",
+        "payload": {"data": []},
+        "text_parser": "ascii/v1",
+        "text_argument": "text",
+        "payload_map": {"text": null}
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4,
+            "description": "Display text to render (characters beyond the first four are ignored)."
+          }
+        },
+        "required": ["text"],
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "set_power_led",
+      "description": "Set the Create base power LED colour (0=green..255=red) and intensity.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "power_led",
+        "message_type": "std_msgs/msg/UInt8MultiArray",
+        "payload": {"data": [0, 128]},
+        "payload_map": {
+          "color": "data[0]",
+          "intensity": "data[1]"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255,
+            "description": "Colour value where 0 is green and 255 is red."
+          },
+          "intensity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255,
+            "description": "Brightness value (0-255)."
+          }
+        },
+        "required": ["color", "intensity"],
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "define_song",
+      "description": "Program a song slot on the Create drive base using MIDI note values and durations.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "define_song",
+        "message_type": "create_msgs/msg/DefineSong",
+        "payload_map": {
+          "song": "song",
+          "length": "length",
+          "notes": "notes",
+          "durations": "durations"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "song": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "Song slot to program on the Create base. Valid IDs are 0-4."
+          },
+          "length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "description": "Number of notes in the song. Must match the length of the notes and durations arrays."
+          },
+          "notes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "integer",
+              "minimum": 30,
+              "maximum": 127
+            },
+            "description": "MIDI note numbers for each step. Use 30 to insert a rest."
+          },
+          "durations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.9844
+            },
+            "description": "Durations in seconds for each note. Maximum value is 255/64 (~3.98s)."
+          }
+        },
+        "required": ["song", "length", "notes", "durations"],
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "play_song",
+      "description": "Request playback of a previously defined song on the Create drive base.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "play_song",
+        "message_type": "create_msgs/msg/PlaySong",
+        "payload_map": {
+          "song": "song"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "song": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "Song slot to play on the Create base. Use the same ID supplied to define_song."
+          }
+        },
+        "required": ["song"],
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "topic": {"type": "string"},
+          "message_type": {"type": "string"}
+        },
+        "required": ["status", "topic"],
+        "additionalProperties": true
+      }
+    }
+  ]
+}
