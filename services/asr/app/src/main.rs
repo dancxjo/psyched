@@ -15,7 +15,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use futures::{SinkExt, StreamExt};
 use hound::{SampleFormat, WavSpec, WavWriter};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{error, info, warn};
@@ -43,6 +43,15 @@ struct SegmentMessage {
     start_ms: u32,
     end_ms: u32,
     words: Vec<WordTiming>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChunkPayload {
+    #[serde(rename = "type")]
+    kind: String,
+    sample_rate: Option<u32>,
+    channels: Option<u32>,
+    pcm: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +178,7 @@ async fn ws_handler(
 }
 
 async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Result<()> {
+    info!("ASR websocket client connected");
     let (mut sender, mut receiver) = socket.split();
 
     let (pcm_tx, pcm_rx) = mpsc::channel::<Vec<u8>>(64);
@@ -197,6 +207,8 @@ async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Resul
     });
 
     let processor = tokio::spawn(run_connection(service.clone(), pcm_rx, out_tx));
+    let mut warned_sample_rate = false;
+    let mut warned_channels = false;
 
     while let Some(Ok(message)) = receiver.next().await {
         match message {
@@ -209,7 +221,56 @@ async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Resul
                 break;
             }
             Message::Text(text) => {
-                warn!(payload = %text, "unexpected text frame received");
+                let trimmed = text.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                match serde_json::from_str::<ChunkPayload>(trimmed) {
+                    Ok(chunk) if chunk.kind.eq_ignore_ascii_case("chunk") => {
+                        if let Some(rate) = chunk.sample_rate {
+                            if rate != service.sample_rate && !warned_sample_rate {
+                                warn!(
+                                    expected = service.sample_rate,
+                                    received = rate,
+                                    "client sample rate mismatches service configuration"
+                                );
+                                warned_sample_rate = true;
+                            }
+                        }
+                        if let Some(channels) = chunk.channels {
+                            if channels != 1 && !warned_channels {
+                                warn!(
+                                    channels = channels,
+                                    "client reported unsupported channel count; assuming mono audio"
+                                );
+                                warned_channels = true;
+                            }
+                        }
+                        let Some(pcm_b64) = chunk.pcm.as_deref() else {
+                            warn!("chunk payload missing pcm field");
+                            continue;
+                        };
+                        let pcm_bytes = match BASE64_STANDARD.decode(pcm_b64.trim().as_bytes()) {
+                            Ok(bytes) => bytes,
+                            Err(error) => {
+                                warn!(%error, "failed to decode base64 pcm payload");
+                                continue;
+                            }
+                        };
+                        if pcm_bytes.is_empty() {
+                            continue;
+                        }
+                        if pcm_tx.send(pcm_bytes).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(chunk) => {
+                        warn!(kind = %chunk.kind, "unsupported text frame received from client");
+                    }
+                    Err(error) => {
+                        warn!(%error, payload = %trimmed, "failed to parse text frame from client");
+                    }
+                }
             }
             Message::Ping(_) | Message::Pong(_) => {}
         }
@@ -220,6 +281,7 @@ async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Resul
         error!(error = %err, "processor task join failed");
     }
     send_task.abort();
+    info!("ASR websocket client disconnected");
     Ok(())
 }
 
