@@ -8,14 +8,27 @@ interface CudaRepoSelection {
   matchedVersion: string;
   fallback: boolean;
   message?: string;
+  packages: string[];
 }
 
-const CUDA_REPOS: Array<{ version: number; label: string; repo: string }> = [
+const DEFAULT_CUDA_PACKAGES = ["cuda-toolkit", "cuda-drivers"];
+
+const CUDA_REPOS: Array<
+  { version: number; label: string; repo: string; packages?: string[] }
+> = [
   { version: 2404, label: "24.04", repo: "ubuntu2404" },
   { version: 2204, label: "22.04", repo: "ubuntu2204" },
   { version: 2004, label: "20.04", repo: "ubuntu2004" },
   { version: 1804, label: "18.04", repo: "ubuntu1804" },
-  { version: 1604, label: "16.04", repo: "ubuntu1604" },
+  {
+    version: 1604,
+    label: "16.04",
+    repo: "ubuntu1604",
+    packages: [
+      "cuda-toolkit-11-3",
+      "cuda-drivers",
+    ],
+  },
 ];
 
 export async function installCuda(context: ProvisionContext): Promise<void> {
@@ -50,10 +63,11 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
     );
   });
 
+  const repoSelection = await determineCudaRepo();
+
   await context.step("Configure NVIDIA CUDA repository", async (step) => {
     const tmpDir = await Deno.makeTempDir({ prefix: "psh-cuda-" });
     try {
-      const repoSelection = await determineCudaRepo();
       if (repoSelection.message) {
         step.log(repoSelection.message);
       }
@@ -105,7 +119,8 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
   });
 
   await context.step("Install CUDA packages", async (step) => {
-    const packages = ["cuda-toolkit-12-4", "nvidia-driver-535"];
+    const packages = repoSelection.packages;
+    step.log(`Installing packages: ${packages.join(", ")}`);
     await step.exec(["apt-get", "install", "-y", ...packages], {
       sudo: true,
       description: "install cuda packages",
@@ -178,6 +193,7 @@ export function selectCudaRepo(osRelease: string): CudaRepoSelection {
     matchedVersion: selection.label,
     fallback,
     message,
+    packages: selection.packages ?? DEFAULT_CUDA_PACKAGES,
   };
 }
 
