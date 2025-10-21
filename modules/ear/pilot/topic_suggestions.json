@@ -1,0 +1,10 @@
+{
+  "context_topics": [
+    {
+      "topic": "/ear/hole",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "latest ASR transcript: {{value}}"
+    }
+  ],
+  "sensation_topics": []
+}

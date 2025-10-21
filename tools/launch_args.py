@@ -43,19 +43,6 @@ def _is_flat_mapping(candidate: ConfigMapping) -> bool:
     return all(not isinstance(value, Mapping) for value in candidate.values())
 
 
-def _extract_arguments(candidate: object) -> ConfigMapping | None:
-    """Return the launch argument mapping from ``candidate`` when available."""
-
-    if not isinstance(candidate, Mapping):
-        return None
-    arguments = candidate.get("arguments")
-    if isinstance(arguments, Mapping):
-        return arguments
-    if _is_flat_mapping(candidate):
-        return candidate
-    return None
-
-
 def _module_entry(raw: ConfigMapping, module: str) -> ConfigMapping | None:
     """Return the configuration table for ``module`` when available."""
 
@@ -79,9 +66,10 @@ def _resolve_argument_table(raw: ConfigMapping, module: str) -> ConfigMapping:
         return {}
 
     launch_entry = module_entry.get("launch")
-    launch_args = _extract_arguments(launch_entry)
-    if launch_args is not None:
-        return launch_args
+    if isinstance(launch_entry, Mapping):
+        explicit_launch_args = launch_entry.get("arguments")
+        if isinstance(explicit_launch_args, Mapping):
+            return explicit_launch_args
 
     explicit_args = module_entry.get("arguments")
     if isinstance(explicit_args, Mapping):

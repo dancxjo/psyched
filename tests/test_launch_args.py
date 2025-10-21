@@ -22,13 +22,13 @@ def test_module_launch_arguments_from_config_scope(tmp_path: Path) -> None:
     config = write(
         tmp_path,
         """
-[config.mod.chat.launch.arguments]
+[config.mod.voice.launch.arguments]
 model = "gpt-oss:20b"
 max_history = 8
 """,
     )
 
-    assert toml_to_launch_arguments(config, module="chat") == [
+    assert toml_to_launch_arguments(config, module="voice") == [
         "model:=\"gpt-oss:20b\"",
         "max_history:=8",
     ]
@@ -54,14 +54,14 @@ launch = true
 
 def test_empty_config_returns_empty_list(tmp_path: Path) -> None:
     config = write(tmp_path, "")
-    assert toml_to_launch_arguments(config, module="chat") == []
+    assert toml_to_launch_arguments(config, module="voice") == []
 
 
 def test_unknown_module_returns_empty(tmp_path: Path) -> None:
     config = write(
         tmp_path,
         """
-[config.mod.chat.launch.arguments]
+[config.mod.voice.launch.arguments]
 model = "gpt-oss"
 """,
     )
