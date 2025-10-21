@@ -53,7 +53,7 @@ def test_build_prompt_structures_context_and_actions() -> None:
 
     prompt = build_prompt(context)
 
-    assert prompt.startswith("You are PILOT")
+    assert prompt.startswith("You are an autonomous artificial embodied being")
     assert "Context\n-------" in prompt
     assert "- rolling_window_seconds: 3.00" in prompt
     assert _SNAPSHOT_TS.isoformat() in prompt
