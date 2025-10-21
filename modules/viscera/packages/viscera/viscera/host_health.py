@@ -20,7 +20,7 @@ import os
 import shutil
 import socket
 import time
-from typing import Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, Tuple
 
 
 def _safe_float(value: object, *, scale: float = 1.0) -> float:
@@ -33,6 +33,26 @@ def _safe_float(value: object, *, scale: float = 1.0) -> float:
     if not math.isfinite(number):
         return math.nan
     return number * scale
+
+
+def _resolve_host_identity(
+    host: str | None = None, host_short: str | None = None
+) -> Tuple[str, str]:
+    """Return ``(host, host_short)`` with deterministic fallbacks."""
+
+    resolved_host = (host or "").strip()
+    if not resolved_host:
+        try:  # pragma: no cover - networking quirks.
+            resolved_host = socket.gethostname() or ""
+        except Exception:
+            resolved_host = ""
+    if not resolved_host:
+        resolved_host = "host"
+
+    resolved_short = (host_short or "").strip()
+    if not resolved_short:
+        resolved_short = resolved_host.split(".")[0] or resolved_host
+    return resolved_host, resolved_short
 
 
 def _default_clock() -> float:
@@ -52,6 +72,8 @@ class HostHealthSample:
     encoded as NaN.
     """
 
+    host: str = "host"
+    host_short: str = "host"
     cpu_percent: float = math.nan
     load_avg_1: float = math.nan
     load_avg_5: float = math.nan
@@ -62,6 +84,10 @@ class HostHealthSample:
     disk_used_percent_root: float = math.nan
     temp_c: float = math.nan
     uptime_sec: float = math.nan
+    swap_used_percent: float = math.nan
+    swap_total_mb: float = math.nan
+    swap_used_mb: float = math.nan
+    process_count: float = math.nan
 
 
 class HostHealthSampler:
@@ -86,6 +112,8 @@ class HostHealthSampler:
         psutil_module: Any | None = _AUTO,
         mount_point: str = "/",
         clock: Callable[[], float] = _default_clock,
+        host: str | None = None,
+        host_short: str | None = None,
     ) -> None:
         if psutil_module is _AUTO:
             try:  # pragma: no cover - import guard survives environments without psutil.
@@ -97,6 +125,7 @@ class HostHealthSampler:
             self._psutil = psutil_module
         self._mount_point = mount_point
         self._clock = clock
+        self._host, self._host_short = _resolve_host_identity(host, host_short)
 
     # Public API -----------------------------------------------------
     def sample(self) -> HostHealthSample:
@@ -106,10 +135,14 @@ class HostHealthSampler:
         load_1, load_5, load_15 = self._sample_load_average()
         mem_used_percent, mem_total_mb, mem_used_mb = self._sample_memory()
         disk_used_percent = self._sample_disk_usage()
+        swap_used_percent, swap_total_mb, swap_used_mb = self._sample_swap_memory()
         temperature = self._sample_temperature()
         uptime = self._sample_uptime()
+        process_count = self._sample_process_count()
 
         return HostHealthSample(
+            host=self._host,
+            host_short=self._host_short,
             cpu_percent=cpu_percent,
             load_avg_1=load_1,
             load_avg_5=load_5,
@@ -120,6 +153,10 @@ class HostHealthSampler:
             disk_used_percent_root=disk_used_percent,
             temp_c=temperature,
             uptime_sec=uptime,
+            swap_used_percent=swap_used_percent,
+            swap_total_mb=swap_total_mb,
+            swap_used_mb=swap_used_mb,
+            process_count=process_count,
         )
 
     # Sampling helpers -----------------------------------------------
@@ -228,17 +265,70 @@ class HostHealthSampler:
         except (FileNotFoundError, PermissionError, OSError, IndexError):
             return math.nan
 
+    def _sample_swap_memory(self) -> tuple[float, float, float]:
+        psutil = self._psutil
+        if psutil is not None and hasattr(psutil, "swap_memory"):
+            try:
+                swap = psutil.swap_memory()
+                total_mb = _safe_float(getattr(swap, "total", math.nan), scale=1.0 / (1024 * 1024))
+                used_mb = _safe_float(getattr(swap, "used", math.nan), scale=1.0 / (1024 * 1024))
+                percent = _safe_float(getattr(swap, "percent", math.nan))
+                if math.isnan(percent) and not math.isnan(total_mb) and total_mb > 0.0 and not math.isnan(used_mb):
+                    percent = max(0.0, min(100.0, (used_mb / total_mb) * 100.0))
+                return percent, total_mb, used_mb
+            except Exception:
+                pass
+        try:
+            data: Dict[str, float] = {}
+            with open("/proc/meminfo", "r", encoding="utf-8") as meminfo:
+                for line in meminfo:
+                    key, value = line.split(":", 1)
+                    parts = value.strip().split()
+                    if not parts:
+                        continue
+                    data[key.strip()] = float(parts[0])
+            total_kb = data.get("SwapTotal")
+            free_kb = data.get("SwapFree")
+            if not total_kb or total_kb <= 0.0:
+                return math.nan, math.nan, math.nan
+            used_kb = total_kb - (free_kb or 0.0)
+            total_mb = total_kb / 1024.0
+            used_mb = used_kb / 1024.0
+            percent = max(0.0, min(100.0, (used_kb / total_kb) * 100.0))
+            return percent, total_mb, used_mb
+        except (FileNotFoundError, PermissionError, OSError, ValueError):
+            return math.nan, math.nan, math.nan
+
+    def _sample_process_count(self) -> float:
+        psutil = self._psutil
+        if psutil is not None:
+            try:
+                if hasattr(psutil, "pids"):
+                    return float(len(psutil.pids()))
+                if hasattr(psutil, "process_iter"):
+                    return float(sum(1 for _ in psutil.process_iter()))
+            except Exception:
+                pass
+        try:
+            entries = os.listdir("/proc")
+        except (FileNotFoundError, PermissionError, OSError):
+            return math.nan
+        count = sum(1 for entry in entries if entry.isdigit())
+        return float(count)
+
 
 def host_shortname() -> str:
     """Return the short hostname for the current machine."""
 
-    try:
-        hostname = socket.gethostname()
-    except Exception:  # pragma: no cover - extremely defensive.
-        return "host"
-    if not hostname:
-        return "host"
-    return hostname.split(".")[0]
+    _, short = _resolve_host_identity()
+    return short
+
+
+def host_fullname() -> str:
+    """Return the fully qualified hostname for the current machine."""
+
+    host, _ = _resolve_host_identity()
+    return host
 
 
 def host_health_topic() -> str:
@@ -251,5 +341,6 @@ __all__ = [
     "HostHealthSample",
     "HostHealthSampler",
     "host_health_topic",
+    "host_fullname",
     "host_shortname",
 ]

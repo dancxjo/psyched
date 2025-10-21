@@ -3,6 +3,8 @@
 # Values are expressed as floating point percentages where applicable. Missing
 # readings are encoded as NaN in the ROS message.
 std_msgs/Header header
+string host
+string host_short
 float32 cpu_percent
 float32 load_avg_1
 float32 load_avg_5
@@ -13,3 +15,7 @@ float32 mem_used_mb
 float32 disk_used_percent_root
 float32 temp_c
 float32 uptime_sec
+float32 swap_used_percent
+float32 swap_total_mb
+float32 swap_used_mb
+float32 process_count

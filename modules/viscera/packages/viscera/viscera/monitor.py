@@ -38,12 +38,16 @@ class SystemMetricsProbe:
     def sample(self) -> SystemState:
         """Collect a :class:`SystemState` snapshot."""
 
+        timestamp = self.clock()
         battery = self._sample_battery()
         cpu = self._sample_cpu()
         memory = self._sample_memory()
         disk = self._sample_disk()
+        swap = self._sample_swap()
+        uptime = self._sample_uptime(timestamp)
+        temperature = self._sample_temperature()
+        process_count = self._sample_process_count()
         foot = self.foot_state_provider() if self.foot_state_provider else None
-        timestamp = self.clock()
         return SystemState(
             timestamp=timestamp,
             battery=battery,
@@ -51,6 +55,10 @@ class SystemMetricsProbe:
             memory_load=memory,
             disk_fill_level=disk,
             foot=foot,
+            swap_fraction=swap,
+            uptime_sec=uptime,
+            temperature_c=temperature,
+            process_count=process_count,
         )
 
     # Sampling helpers -------------------------------------------------
@@ -108,6 +116,88 @@ class SystemMetricsProbe:
         if usage.total <= 0:
             return None
         return _clamp(usage.used / usage.total)
+
+    def _sample_swap(self) -> Optional[float]:
+        psutil = self.psutil_module
+        if psutil is not None and hasattr(psutil, "swap_memory"):
+            try:
+                swap = psutil.swap_memory()
+                total = getattr(swap, "total", 0) or 0
+                used = getattr(swap, "used", 0) or 0
+                if total <= 0:
+                    return None
+                return _clamp(used / total)
+            except Exception:
+                pass
+        try:
+            with open("/proc/meminfo", "r", encoding="utf-8") as meminfo:
+                stats = {}
+                for line in meminfo:
+                    key, value = line.split(":", 1)
+                    parts = value.strip().split()
+                    if not parts:
+                        continue
+                    stats[key.strip()] = float(parts[0])  # values reported in kB
+            total = stats.get("SwapTotal")
+            free = stats.get("SwapFree")
+            if not total or total <= 0.0:
+                return None
+            used = total - (free or 0.0)
+            return _clamp(used / total)
+        except (FileNotFoundError, PermissionError, OSError, ValueError):
+            return None
+
+    def _sample_uptime(self, now: datetime) -> Optional[float]:
+        psutil = self.psutil_module
+        if psutil is not None and hasattr(psutil, "boot_time"):
+            try:
+                boot_time = float(psutil.boot_time())
+                if boot_time > 0:
+                    return max(0.0, now.timestamp() - boot_time)
+            except Exception:
+                pass
+        try:
+            with open("/proc/uptime", "r", encoding="utf-8") as proc_uptime:
+                first_field = proc_uptime.read().split()[0]
+                return float(first_field)
+        except (FileNotFoundError, PermissionError, OSError, IndexError, ValueError):
+            return None
+
+    def _sample_temperature(self) -> Optional[float]:
+        psutil = self.psutil_module
+        if psutil is None or not hasattr(psutil, "sensors_temperatures"):
+            return None
+        try:
+            temps = psutil.sensors_temperatures() or {}
+        except Exception:
+            return None
+        for readings in temps.values():
+            for entry in readings:
+                value = getattr(entry, "current", None)
+                if value is None:
+                    continue
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    def _sample_process_count(self) -> Optional[float]:
+        psutil = self.psutil_module
+        if psutil is not None:
+            try:
+                if hasattr(psutil, "pids"):
+                    return float(len(psutil.pids()))
+                if hasattr(psutil, "process_iter"):
+                    return float(sum(1 for _ in psutil.process_iter()))
+            except Exception:
+                pass
+        try:
+            entries = os.listdir("/proc")
+        except (FileNotFoundError, PermissionError, OSError):
+            return None
+        count = sum(1 for entry in entries if entry.isdigit())
+        return float(count)
 
 
 class Viscera:

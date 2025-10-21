@@ -62,11 +62,16 @@ class SystemState:
     memory_load: Optional[float] = None
     disk_fill_level: Optional[float] = None
     foot: Optional[FootState] = None
+    swap_fraction: Optional[float] = None
+    uptime_sec: Optional[float] = None
+    temperature_c: Optional[float] = None
+    process_count: Optional[float] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cpu_load", _clamp(self.cpu_load))
         object.__setattr__(self, "memory_load", _clamp(self.memory_load))
         object.__setattr__(self, "disk_fill_level", _clamp(self.disk_fill_level))
+        object.__setattr__(self, "swap_fraction", _clamp(self.swap_fraction))
 
 
 __all__ = ["BatteryState", "FootState", "SystemState"]

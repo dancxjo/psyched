@@ -223,10 +223,136 @@ def stability_feeler(state: SystemState) -> List[Sentiment]:
     return _ensure_sentences(sentiments)
 
 
+def temperature_feeler(state: SystemState) -> List[Sentiment]:
+    """Interpret thermal readings as comfort cues."""
+
+    temperature = state.temperature_c
+    if temperature is None:
+        return []
+
+    sentiments: List[Sentiment] = []
+    if temperature >= 85.0:
+        sentiments.append(
+            Sentiment(
+                name="overheated",
+                intensity=0.92,
+                narrative="I feel scorched; my cores are blazing hot.",
+                evidence={"temperature_c": temperature},
+                tags=("thermal", "critical"),
+            )
+        )
+    elif temperature >= 70.0:
+        sentiments.append(
+            Sentiment(
+                name="flush",
+                intensity=0.68,
+                narrative="I feel flushed; heat ripples through my frame.",
+                evidence={"temperature_c": temperature},
+                tags=("thermal", "stress"),
+            )
+        )
+    elif temperature <= 35.0:
+        sentiments.append(
+            Sentiment(
+                name="cooled",
+                intensity=0.32,
+                narrative="I feel cooled and crisp inside.",
+                evidence={"temperature_c": temperature},
+                tags=("thermal", "calm"),
+            )
+        )
+    return _ensure_sentences(sentiments)
+
+
+def uptime_feeler(state: SystemState) -> List[Sentiment]:
+    """Translate uptime into feelings of rest, focus, or fatigue."""
+
+    uptime = state.uptime_sec
+    if uptime is None:
+        return []
+
+    hours = uptime / 3600.0
+    sentiments: List[Sentiment] = []
+    if hours >= 120:
+        sentiments.append(
+            Sentiment(
+                name="exhausted",
+                intensity=0.88,
+                narrative="I feel exhausted; I've been awake for ages.",
+                evidence={"uptime_hours": hours},
+                tags=("rest", "fatigue"),
+            )
+        )
+    elif hours >= 72:
+        sentiments.append(
+            Sentiment(
+                name="wired",
+                intensity=0.64,
+                narrative="I feel wired; rest has been a distant memory.",
+                evidence={"uptime_hours": hours},
+                tags=("rest", "strain"),
+            )
+        )
+    elif hours <= 4:
+        sentiments.append(
+            Sentiment(
+                name="refreshed",
+                intensity=0.36,
+                narrative="I feel refreshed from a recent reboot.",
+                evidence={"uptime_hours": hours},
+                tags=("rest", "clarity"),
+            )
+        )
+    return _ensure_sentences(sentiments)
+
+
+def swap_feeler(state: SystemState) -> List[Sentiment]:
+    """Surface swapping pressure as bodily unease."""
+
+    swap_fraction = state.swap_fraction
+    if swap_fraction is None:
+        return []
+
+    sentiments: List[Sentiment] = []
+    if swap_fraction >= 0.85:
+        sentiments.append(
+            Sentiment(
+                name="swamped",
+                intensity=0.82,
+                narrative="I feel swamped; my memory is paging furiously.",
+                evidence={"swap_fraction": swap_fraction},
+                tags=("memory", "stress"),
+            )
+        )
+    elif swap_fraction >= 0.6:
+        sentiments.append(
+            Sentiment(
+                name="restless_memory",
+                intensity=0.58,
+                narrative="I feel my thoughts shuffling restlessly into swap.",
+                evidence={"swap_fraction": swap_fraction},
+                tags=("memory",),
+            )
+        )
+    return _ensure_sentences(sentiments)
+
+
 DEFAULT_FEELERS: Sequence[Feeler] = (
     hunger_feeler,
     load_feeler,
     stability_feeler,
+    temperature_feeler,
+    uptime_feeler,
+    swap_feeler,
 )
 
-__all__ = ["Feeler", "DEFAULT_FEELERS", "hunger_feeler", "load_feeler", "stability_feeler"]
+__all__ = [
+    "Feeler",
+    "DEFAULT_FEELERS",
+    "hunger_feeler",
+    "load_feeler",
+    "stability_feeler",
+    "temperature_feeler",
+    "uptime_feeler",
+    "swap_feeler",
+]

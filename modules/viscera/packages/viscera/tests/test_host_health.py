@@ -3,20 +3,30 @@ from __future__ import annotations
 
 import math
 
-from viscera.host_health import HostHealthSampler, host_health_topic, host_shortname
+from viscera.host_health import HostHealthSampler, host_health_topic, host_shortname, host_fullname
 
 
 def test_sampler_without_psutil() -> None:
     """Ensure fallback sampling works when psutil is unavailable."""
 
-    sampler = HostHealthSampler(psutil_module=None)
+    sampler = HostHealthSampler(
+        psutil_module=None,
+        host="motherbrain.local",
+        host_short="motherbrain",
+    )
     sample = sampler.sample()
+    assert sample.host == "motherbrain.local"
+    assert sample.host_short == "motherbrain"
     assert isinstance(sample.cpu_percent, float)
     assert isinstance(sample.mem_used_percent, float)
     # Disk usage should either be a float percentage or NaN on exotic filesystems.
     assert isinstance(sample.disk_used_percent_root, float)
     # Uptime should be non-negative when available.
     assert math.isnan(sample.uptime_sec) or sample.uptime_sec >= 0.0
+    assert isinstance(sample.swap_used_percent, float)
+    assert isinstance(sample.swap_total_mb, float)
+    assert isinstance(sample.swap_used_mb, float)
+    assert isinstance(sample.process_count, float)
 
 
 class _FakeVm:
@@ -33,6 +43,12 @@ class _FakeDisk:
 
 class _FakeTemp:
     current = 55.5
+
+
+class _FakeSwap:
+    percent = 12.5
+    total = 4 * 1024**3
+    used = 512 * 1024**2
 
 
 class _FakePsutil:
@@ -55,13 +71,26 @@ class _FakePsutil:
     def boot_time(self):
         return 100.0
 
+    def swap_memory(self):
+        return _FakeSwap()
+
+    def pids(self):
+        return list(range(128))
+
 
 def test_sampler_with_psutil_stub() -> None:
     """Verify that psutil integrations populate deterministic values."""
 
     fake_psutil = _FakePsutil()
-    sampler = HostHealthSampler(psutil_module=fake_psutil, clock=lambda: 200.0)
+    sampler = HostHealthSampler(
+        psutil_module=fake_psutil,
+        clock=lambda: 200.0,
+        host="motherbrain.example",
+        host_short="motherbrain",
+    )
     sample = sampler.sample()
+    assert sample.host == "motherbrain.example"
+    assert sample.host_short == "motherbrain"
 
     assert math.isclose(sample.cpu_percent, 66.6, rel_tol=1e-3)
     assert math.isclose(sample.mem_used_percent, 42.0, rel_tol=1e-3)
@@ -70,6 +99,10 @@ def test_sampler_with_psutil_stub() -> None:
     assert math.isclose(sample.disk_used_percent_root, 40.0, rel_tol=1e-3)
     assert math.isclose(sample.temp_c, 55.5, rel_tol=1e-3)
     assert math.isclose(sample.uptime_sec, 100.0, rel_tol=1e-3)
+    assert math.isclose(sample.swap_used_percent, 12.5, rel_tol=1e-3)
+    assert math.isclose(sample.swap_total_mb, 4096.0, rel_tol=1e-3)
+    assert math.isclose(sample.swap_used_mb, 512.0, rel_tol=1e-3)
+    assert math.isclose(sample.process_count, 128.0, rel_tol=1e-3)
 
 
 def test_host_topic_helpers() -> None:
@@ -77,5 +110,7 @@ def test_host_topic_helpers() -> None:
 
     shortname = host_shortname()
     assert shortname
+    fullname = host_fullname()
+    assert fullname
     topic = host_health_topic()
     assert topic.endswith(shortname)

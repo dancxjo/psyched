@@ -32,6 +32,7 @@ class VisceraDashboard extends LitElement {
     lastUpdate: { state: true },
     metrics: { state: true },
     topic: { type: String, reflect: true },
+    hostInfo: { state: true },
   };
 
   static styles = [
@@ -70,6 +71,7 @@ class VisceraDashboard extends LitElement {
     this.lastUpdate = 'Never';
     this.metrics = this.#blankMetrics();
     this.topic = '';
+    this.hostInfo = { host: '', hostShort: '' };
   }
 
   connectedCallback() {
@@ -100,6 +102,10 @@ class VisceraDashboard extends LitElement {
       diskPercent: null,
       tempC: null,
       uptimeSec: null,
+      swapPercent: null,
+      swapUsedMb: null,
+      swapTotalMb: null,
+      processCount: null,
     };
   }
 
@@ -147,6 +153,10 @@ class VisceraDashboard extends LitElement {
         return;
       }
       const data = payload.data;
+      this.hostInfo = {
+        host: stringifyOrEmpty(data.host),
+        hostShort: stringifyOrEmpty(data.host_short),
+      };
       this.metrics = {
         cpuPercent: toOptionalNumber(data.cpu_percent),
         loadAvg1: toOptionalNumber(data.load_avg_1),
@@ -158,6 +168,10 @@ class VisceraDashboard extends LitElement {
         diskPercent: toOptionalNumber(data.disk_used_percent_root),
         tempC: toOptionalNumber(data.temp_c),
         uptimeSec: toOptionalNumber(data.uptime_sec),
+        swapPercent: toOptionalNumber(data.swap_used_percent),
+        swapUsedMb: toOptionalNumber(data.swap_used_mb),
+        swapTotalMb: toOptionalNumber(data.swap_total_mb),
+        processCount: toOptionalNumber(data.process_count),
       };
       this.status = 'Live';
       this.lastUpdate = new Date().toLocaleTimeString();
@@ -210,6 +224,14 @@ class VisceraDashboard extends LitElement {
     return `${memUsedMb.toFixed(0)} / ${memTotalMb.toFixed(0)} MiB`;
   }
 
+  #formatSwap() {
+    const { swapUsedMb, swapTotalMb } = this.metrics;
+    if (swapUsedMb == null || swapTotalMb == null) {
+      return '—';
+    }
+    return `${swapUsedMb.toFixed(0)} / ${swapTotalMb.toFixed(0)} MiB`;
+  }
+
   #formatUptime(value) {
     if (typeof value !== 'number' || Number.isNaN(value)) {
       return '—';
@@ -221,12 +243,31 @@ class VisceraDashboard extends LitElement {
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   }
 
+  #formatProcessCount() {
+    const { processCount } = this.metrics;
+    if (typeof processCount !== 'number' || Number.isNaN(processCount)) {
+      return '—';
+    }
+    return processCount.toFixed(0);
+  }
+
+  #formatHostLabel() {
+    const short = (this.hostInfo && this.hostInfo.hostShort) || '';
+    const full = (this.hostInfo && this.hostInfo.host) || '';
+    if (short) {
+      return full && full !== short ? `${short} (${full})` : short;
+    }
+    return full || '—';
+  }
+
   render() {
     return html`
       <section class="surface-grid surface-grid--medium surface-grid--dense">
         <div class="dashboard-status">
           <span class="surface-chip" data-variant="${this.#renderStatusChipVariant()}">${this.status}</span>
-          <p class="surface-note dashboard-status__note">Last update ${this.lastUpdate}</p>
+          <p class="surface-note dashboard-status__note">
+            Host ${this.#formatHostLabel()} · Last update ${this.lastUpdate}
+          </p>
         </div>
         <article class="surface-card surface-card--compact metric-card">
           <h3 class="surface-card__title">CPU load</h3>
@@ -278,6 +319,26 @@ class VisceraDashboard extends LitElement {
           </div>
           <p class="surface-note">Hours · Minutes · Seconds</p>
         </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Swap activity</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Utilisation</span>
+            <span class="surface-metric__value surface-metric__value--large">
+              ${this.#formatPercent(this.metrics.swapPercent)}
+            </span>
+          </div>
+          <p class="surface-note surface-mono">${this.#formatSwap()}</p>
+        </article>
+        <article class="surface-card surface-card--compact metric-card">
+          <h3 class="surface-card__title">Process load</h3>
+          <div class="surface-metric">
+            <span class="surface-metric__label">Processes</span>
+            <span class="surface-metric__value surface-metric__value--large surface-mono">
+              ${this.#formatProcessCount()}
+            </span>
+          </div>
+          <p class="surface-note">Active processes detected on host</p>
+        </article>
       </section>
     `;
   }
@@ -293,6 +354,13 @@ function toOptionalNumber(value) {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stringifyOrEmpty(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return String(value).trim();
 }
 
 function resolveHostHealthTopic() {

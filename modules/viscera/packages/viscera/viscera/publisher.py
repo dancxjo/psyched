@@ -58,7 +58,9 @@ class HostHealthPublisher(Node):
     def _to_message(self, sample: HostHealthSample) -> HostHealth:
         msg = HostHealth()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = self._frame_id
+        msg.header.frame_id = self._frame_id or sample.host_short
+        msg.host = sample.host
+        msg.host_short = sample.host_short
         msg.cpu_percent = _sanitise(sample.cpu_percent)
         msg.load_avg_1 = _sanitise(sample.load_avg_1)
         msg.load_avg_5 = _sanitise(sample.load_avg_5)
@@ -69,6 +71,10 @@ class HostHealthPublisher(Node):
         msg.disk_used_percent_root = _sanitise(sample.disk_used_percent_root)
         msg.temp_c = _sanitise(sample.temp_c)
         msg.uptime_sec = _sanitise(sample.uptime_sec)
+        msg.swap_used_percent = _sanitise(sample.swap_used_percent)
+        msg.swap_total_mb = _sanitise(sample.swap_total_mb)
+        msg.swap_used_mb = _sanitise(sample.swap_used_mb)
+        msg.process_count = _sanitise(sample.process_count)
         return msg
 
 

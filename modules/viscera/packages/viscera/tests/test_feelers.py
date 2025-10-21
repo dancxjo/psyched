@@ -4,7 +4,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List
 
-from viscera.feelers import hunger_feeler, load_feeler, stability_feeler
+from viscera.feelers import (
+    hunger_feeler,
+    load_feeler,
+    stability_feeler,
+    temperature_feeler,
+    uptime_feeler,
+    swap_feeler,
+)
 from viscera.monitor import SystemMetricsProbe, Viscera
 from viscera.state import BatteryState, FootState, SystemState
 
@@ -18,6 +25,10 @@ def make_state(**kwargs) -> SystemState:
         memory_load=0.2,
         disk_fill_level=0.2,
         foot=None,
+        swap_fraction=None,
+        uptime_sec=None,
+        temperature_c=None,
+        process_count=None,
     )
     defaults.update(kwargs)
     return SystemState(**defaults)
@@ -77,6 +88,33 @@ class TestStabilityFeeler:
         ), sentiments
 
 
+class TestTemperatureFeeler:
+    """Thermal readings influence comfort."""
+
+    def test_overheated_when_too_warm(self) -> None:
+        state = make_state(temperature_c=86.0)
+        sentiments = temperature_feeler(state)
+        assert any("scorched" in sentiment.narrative.lower() for sentiment in sentiments), sentiments
+
+
+class TestUptimeFeeler:
+    """Reboots and long runs influence restfulness."""
+
+    def test_recent_reboot_feels_refreshed(self) -> None:
+        state = make_state(uptime_sec=2 * 3600.0)
+        sentiments = uptime_feeler(state)
+        assert any("refreshed" in sentiment.narrative.lower() for sentiment in sentiments), sentiments
+
+
+class TestSwapFeeler:
+    """Swap pressure nudges the robot's mood."""
+
+    def test_heavy_swap_feels_swamped(self) -> None:
+        state = make_state(swap_fraction=0.9)
+        sentiments = swap_feeler(state)
+        assert any("swamped" in sentiment.narrative.lower() for sentiment in sentiments), sentiments
+
+
 class TestVisceraCoordinator:
     """Integration scenarios for the high level coordinator."""
 
@@ -109,6 +147,11 @@ class TestSystemMetricsProbe:
         assert 0.0 <= (snapshot.cpu_load or 0.0) <= 1.0
         assert 0.0 <= (snapshot.memory_load or 0.0) <= 1.0
         assert 0.0 <= (snapshot.disk_fill_level or 0.0) <= 1.0
+        if snapshot.swap_fraction is not None:
+            assert 0.0 <= snapshot.swap_fraction <= 1.0
+        if snapshot.uptime_sec is not None:
+            assert snapshot.uptime_sec >= 0.0
+        if snapshot.process_count is not None:
+            assert snapshot.process_count >= 0.0
         assert snapshot.foot is not None
         assert snapshot.foot.hazard_contacts == 1
-
