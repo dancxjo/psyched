@@ -35,7 +35,7 @@ Deno.test("runSetupWorkflow provisions host then modules and services", async ()
     includeModules: false,
     includeServices: false,
   });
-  assertEquals(calls, ["host", "psh:mod setup", "psh:srv setup"]);
+  assertEquals(calls, ["host", "psh:mod setup", "psh:build", "psh:srv setup"]);
 });
 
 Deno.test("runSetupWorkflow respects skip flags", async () => {

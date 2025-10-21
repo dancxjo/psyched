@@ -83,10 +83,11 @@ Provisioning automatically applies those directives and sets the ROS 2 domain ID
 
 ```bash
 psh mod setup cockpit
+psh build
 psh up cockpit
 ```
 
-Then visit **http://<host>:8088/** to access the cockpit (HTTP + WebSocket bridge).
+Run `psh build` after module setup to compile the ROS workspace, then visit **http://<host>:8088/** to access the cockpit (HTTP + WebSocket bridge).
 Launch other modules or services using `psh up <name>`; stop them with `psh down <name>`.
 
 ---
@@ -176,7 +177,7 @@ A lightweight `psyched` function in `.bashrc` ensures correct sourcing on login.
 
 ## Testing & validation
 
-* Build ROS packages via `colcon build`.
+* Build ROS packages via `psh build` (wrapper around `colcon build --symlink-install`).
 * Run unit tests with `colcon test`.
 * Manual integration tests through Cockpit dashboard.
 

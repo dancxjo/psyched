@@ -818,9 +818,10 @@ interface RosWorkspacePlan {
   modules: string[];
   rosdepRequired: boolean;
   rosdepSkipKeys: string[];
-  colconRequired: boolean;
-  colconPackages: string[];
-  colconArgs: string[];
+  buildRequired: boolean;
+  buildModules: string[];
+  buildPackages: string[];
+  buildArgs: string[];
 }
 
 export interface RosdepInvocation {
@@ -830,16 +831,8 @@ export interface RosdepInvocation {
   modules: string[];
 }
 
-export interface ColconInvocation {
-  workspace: string;
-  packages: string[];
-  buildArgs: string[];
-  modules: string[];
-}
-
 export interface RosBuildPlannerRunner {
   rosdep(invocation: RosdepInvocation): Promise<void>;
-  colcon(invocation: ColconInvocation): Promise<void>;
 }
 
 const defaultRosBuildRunner: RosBuildPlannerRunner = {
@@ -856,16 +849,6 @@ const defaultRosBuildRunner: RosBuildPlannerRunner = {
       args.push("--skip-keys", skipKeys.join(" "));
     }
     await $`rosdep ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
-  },
-  async colcon({ workspace, packages, buildArgs }: ColconInvocation) {
-    const args = ["build", "--symlink-install"];
-    if (packages.length) {
-      args.push("--packages-select", ...packages);
-    }
-    if (buildArgs.length) {
-      args.push(...buildArgs);
-    }
-    await $`colcon ${args}`.cwd(workspace).stdout("inherit").stderr("inherit");
   },
 };
 
@@ -889,9 +872,10 @@ export class RosBuildPlanner {
       modules: [],
       rosdepRequired: false,
       rosdepSkipKeys: [],
-      colconRequired: false,
-      colconPackages: [],
-      colconArgs: [],
+      buildRequired: false,
+      buildModules: [],
+      buildPackages: [],
+      buildArgs: [],
     };
     plan.modules.push(module);
     if (!ros.skip_rosdep) {
@@ -901,12 +885,13 @@ export class RosBuildPlanner {
       }
     }
     if (!ros.skip_colcon) {
-      plan.colconRequired = true;
+      plan.buildRequired = true;
+      plan.buildModules.push(module);
       if (ros.packages?.length) {
-        plan.colconPackages.push(...ros.packages);
+        plan.buildPackages.push(...ros.packages);
       }
       if (ros.build_args?.length) {
-        plan.colconArgs.push(...ros.build_args);
+        plan.buildArgs.push(...ros.build_args);
       }
     }
     this.#plans.set(workspace, plan);
@@ -932,16 +917,30 @@ export class RosBuildPlanner {
           colors.yellow(`[${label}] skipping rosdep (skip_rosdep=true)`),
         );
       }
-      if (plan.colconRequired) {
+      if (plan.buildRequired) {
+        const buildLabel = plan.buildModules.length
+          ? plan.buildModules.join(", ")
+          : label;
+        const packages = dedupePreserveOrder(plan.buildPackages);
+        if (packages.length) {
+          console.log(
+            colors.dim(
+              `[${buildLabel}] packages queued for workspace build: ${packages.join(", ")}`,
+            ),
+          );
+        }
+        if (plan.buildArgs.length) {
+          console.log(
+            colors.dim(
+              `[${buildLabel}] additional colcon arguments: ${plan.buildArgs.join(" ")}`,
+            ),
+          );
+        }
         console.log(
-          colors.cyan(`[${label}] running colcon build in ${plan.workspace}`),
+          colors.yellow(
+            `[${buildLabel}] colcon build deferred during 'psh mod setup'; run 'psh build' to compile the workspace.`,
+          ),
         );
-        await this.#runner.colcon({
-          workspace: plan.workspace,
-          packages: dedupePreserveOrder(plan.colconPackages),
-          buildArgs: [...plan.colconArgs],
-          modules: [...plan.modules],
-        });
       } else if (plan.modules.length) {
         console.log(
           colors.yellow(`[${label}] skipping colcon build (skip_colcon=true)`),

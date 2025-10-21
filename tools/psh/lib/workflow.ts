@@ -96,6 +96,8 @@ export async function runSetupWorkflow(
   if (!skipModules) {
     console.log(colors.cyan("==> Configuring modules via 'psh mod setup'"));
     await pshInvoker(["mod", "setup"]);
+    console.log(colors.cyan("==> Building workspace via 'psh build'"));
+    await pshInvoker(["build"]);
   } else {
     console.log(colors.yellow("Skipping module setup stage"));
   }

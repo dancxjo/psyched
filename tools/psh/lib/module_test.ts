@@ -212,20 +212,17 @@ Deno.test(
 );
 
 Deno.test(
-  "RosBuildPlanner aggregates rosdep and colcon invocations per workspace",
+  "RosBuildPlanner aggregates rosdep invocation and defers workspace build",
   async () => {
     const tempWorkspace = Deno.makeTempDirSync();
     try {
       const invocations: Array<{
-        type: "rosdep" | "colcon";
+        type: "rosdep";
         payload: unknown;
       }> = [];
       const runner: RosBuildPlannerRunner = {
         async rosdep(invocation) {
           invocations.push({ type: "rosdep", payload: invocation });
-        },
-        async colcon(invocation) {
-          invocations.push({ type: "colcon", payload: invocation });
         },
       };
       const planner = new RosBuildPlanner(runner);
@@ -240,9 +237,21 @@ Deno.test(
         build_args: ["--cmake-args", "-DCMAKE_BUILD_TYPE=Release"],
         skip_rosdep: true,
       });
-      await planner.execute();
+      const messages: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        const rendered = args.map((arg) =>
+          typeof arg === "string" ? colors.stripColor(arg) : String(arg)
+        ).join(" ");
+        messages.push(rendered);
+      };
+      try {
+        await planner.execute();
+      } finally {
+        console.log = originalLog;
+      }
 
-      assertEquals(invocations.length, 2);
+      assertEquals(invocations.length, 1);
 
       const rosdepCall = invocations[0];
       assertEquals(rosdepCall.type, "rosdep");
@@ -255,21 +264,18 @@ Deno.test(
       assertEquals(rosdepPayload.skipKeys, ["foo"]);
       assertEquals(rosdepPayload.modules, ["alpha", "beta"]);
 
-      const colconCall = invocations[1];
-      assertEquals(colconCall.type, "colcon");
-      const colconPayload = colconCall.payload as {
-        workspace: string;
-        packages: string[];
-        buildArgs: string[];
-        modules: string[];
-      };
-      assertEquals(colconPayload.workspace, tempWorkspace);
-      assertEquals(colconPayload.packages, ["alpha_pkg", "beta_pkg"]);
-      assertEquals(colconPayload.buildArgs, [
-        "--cmake-args",
-        "-DCMAKE_BUILD_TYPE=Release",
-      ]);
-      assertEquals(colconPayload.modules, ["alpha", "beta"]);
+      const stripped = messages.map((line) => colors.stripColor(line));
+      const buildNotice = stripped.find((line) =>
+        line.includes("colcon build deferred") && line.includes("psh build")
+      );
+      assert(buildNotice, "expected deferred build notice to be logged");
+      const packageLog = stripped.find((line) =>
+        line.includes("packages queued for workspace build")
+      );
+      assert(
+        packageLog?.includes("alpha_pkg, beta_pkg"),
+        "expected package list in deferred build log",
+      );
     } finally {
       Deno.removeSync(tempWorkspace, { recursive: true });
     }
@@ -277,7 +283,7 @@ Deno.test(
 );
 
 Deno.test(
-  "RosBuildPlanner skips rosdep and colcon when all modules opt out",
+  "RosBuildPlanner skips rosdep when all modules opt out",
   async () => {
     const tempWorkspace = Deno.makeTempDirSync();
     try {
@@ -285,9 +291,6 @@ Deno.test(
       const runner: RosBuildPlannerRunner = {
         async rosdep() {
           calls.push("rosdep");
-        },
-        async colcon() {
-          calls.push("colcon");
         },
       };
       const planner = new RosBuildPlanner(runner);
