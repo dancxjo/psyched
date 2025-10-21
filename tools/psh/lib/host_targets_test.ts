@@ -52,10 +52,45 @@ denoTest("defaultServiceTargets respects host service directives", () => {
     const servicesForSetup = defaultServiceTargets("setup");
     assertEquals(servicesForSetup, ["asr", "tts", "llm", "graphs", "vectors"]);
     const servicesForUp = defaultServiceTargets("up");
-    assertEquals(servicesForUp, []);
+    assertEquals(servicesForUp, ["asr", "tts", "llm", "graphs", "vectors"]);
   });
   resetHostTargetCache();
   __internals__.reset();
+});
+
+denoTest("defaultServiceTargets honour disabled services", () => {
+  const hostName = "__services_disable__";
+  const path = join(hostsRoot(), `${hostName}.json`);
+  const config = {
+    host: {
+      name: hostName,
+      services: ["alpha"],
+    },
+    services: {
+      alpha: {
+        up: false,
+      },
+    },
+  };
+  Deno.writeTextFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+  try {
+    withEnv("PSH_HOST", hostName, () => {
+      resetHostTargetCache();
+      __internals__.reset();
+      const setupServices = defaultServiceTargets("setup");
+      assertEquals(setupServices, ["alpha"]);
+      const upServices = defaultServiceTargets("up");
+      assertEquals(upServices, []);
+    });
+  } finally {
+    resetHostTargetCache();
+    __internals__.reset();
+    try {
+      Deno.removeSync(path);
+    } catch (_error) {
+      // ignore
+    }
+  }
 });
 
 denoTest("defaultServiceTargets ignore undeclared services", () => {

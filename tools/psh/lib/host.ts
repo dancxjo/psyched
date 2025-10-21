@@ -1,5 +1,7 @@
 import { extname, join, resolve } from "$std/path/mod.ts";
+import { parse as parseJsonc } from "$std/jsonc/mod.ts";
 import { parse as parseToml } from "$std/toml/mod.ts";
+import { parse as parseYaml } from "$std/yaml/mod.ts";
 import { DepGraph } from "$deps/dependency-graph";
 import { colors } from "$cliffy/ansi/colors.ts";
 import { $ } from "$dax";
@@ -13,6 +15,10 @@ import { ensureEssentialUserGroups } from "./user_groups.ts";
 /** Supported host manifest file extension. */
 const HOST_CONFIG_EXTENSIONS = [
   ".toml",
+  ".json",
+  ".jsonc",
+  ".yaml",
+  ".yml",
 ] as const;
 
 type HostConfigExtension = typeof HOST_CONFIG_EXTENSIONS[number];
@@ -335,6 +341,7 @@ function normalizeServiceDirective(
   context: NormalizationContext,
   location: string,
   fallbackName?: string,
+  defaultUp?: boolean,
 ): ServiceDirective {
   if (raw === undefined || raw === null) {
     raw = {};
@@ -356,7 +363,29 @@ function normalizeServiceDirective(
     );
   }
 
-  return { ...raw, name } as ServiceDirective;
+  const normalized = { ...raw } as Record<string, unknown>;
+  const upRaw = normalized["up"];
+  let up = coerceBoolean(upRaw);
+  if (upRaw !== undefined && up === undefined) {
+    throw new HostConfigFormatError(
+      context.path,
+      `Expected ${location}.up to be a boolean, received ${
+        describeType(upRaw)
+      }.`,
+    );
+  }
+
+  if (up === undefined && defaultUp === true) {
+    up = true;
+  }
+
+  if (up === undefined) {
+    delete normalized["up"];
+  } else {
+    normalized["up"] = up;
+  }
+
+  return { ...normalized, name } as ServiceDirective;
 }
 
 function normalizeServiceDirectives(
@@ -391,6 +420,7 @@ function normalizeServiceDirectives(
           context,
           `services.${serviceName}`,
           serviceName,
+          true,
         ),
       );
     } else {
@@ -400,6 +430,7 @@ function normalizeServiceDirectives(
           context,
           `services.${serviceName}`,
           serviceName,
+          true,
         ),
       );
     }

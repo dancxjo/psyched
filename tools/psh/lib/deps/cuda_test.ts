@@ -14,7 +14,8 @@ Deno.test("selectCudaRepo returns exact match for Ubuntu 24.04", () => {
   assertEquals(result.requestedVersion, "24.04");
   assertEquals(result.fallback, false);
   assertEquals(result.message, undefined);
-  assertEquals(result.packages, ["cuda-toolkit", "cuda-drivers"]);
+  assertEquals(result.packages, ["cuda-toolkit"]);
+  assertEquals(result.driverPackage, "cuda-drivers");
 });
 
 Deno.test("selectCudaRepo falls back when repository is not published", () => {
@@ -30,7 +31,8 @@ Deno.test("selectCudaRepo falls back when repository is not published", () => {
   assertEquals(result.requestedVersion, "25.04");
   assert(result.fallback);
   assert(result.message?.includes("25.04"));
-  assertEquals(result.packages, ["cuda-toolkit", "cuda-drivers"]);
+  assertEquals(result.packages, ["cuda-toolkit"]);
+  assertEquals(result.driverPackage, undefined);
 });
 
 Deno.test("selectCudaRepo handles missing VERSION_ID", () => {
@@ -44,7 +46,8 @@ Deno.test("selectCudaRepo handles missing VERSION_ID", () => {
   assertEquals(result.repo, "ubuntu2404");
   assertEquals(result.requestedVersion, "(unknown)");
   assert(result.fallback);
-  assertEquals(result.packages, ["cuda-toolkit", "cuda-drivers"]);
+  assertEquals(result.packages, ["cuda-toolkit"]);
+  assertEquals(result.driverPackage, undefined);
 });
 
 Deno.test("selectCudaRepo applies legacy package defaults for Ubuntu 16.04", () => {
@@ -57,6 +60,7 @@ Deno.test("selectCudaRepo applies legacy package defaults for Ubuntu 16.04", () 
   const result = selectCudaRepo(osRelease);
 
   assertEquals(result.repo, "ubuntu1604");
-  assertEquals(result.packages, ["cuda-toolkit-11-3", "cuda-drivers"]);
+  assertEquals(result.packages, ["cuda-toolkit-11-3"]);
   assertEquals(result.fallback, false);
+  assertEquals(result.driverPackage, "cuda-drivers");
 });

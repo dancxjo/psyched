@@ -9,12 +9,20 @@ interface CudaRepoSelection {
   fallback: boolean;
   message?: string;
   packages: string[];
+  driverPackage?: string;
 }
 
-const DEFAULT_CUDA_PACKAGES = ["cuda-toolkit", "cuda-drivers"];
+const DEFAULT_CUDA_PACKAGES = ["cuda-toolkit"];
+const DEFAULT_DRIVER_PACKAGE = "cuda-drivers";
 
 const CUDA_REPOS: Array<
-  { version: number; label: string; repo: string; packages?: string[] }
+  {
+    version: number;
+    label: string;
+    repo: string;
+    packages?: string[];
+    driverPackage?: string;
+  }
 > = [
   { version: 2404, label: "24.04", repo: "ubuntu2404" },
   { version: 2204, label: "22.04", repo: "ubuntu2204" },
@@ -26,13 +34,14 @@ const CUDA_REPOS: Array<
     repo: "ubuntu1604",
     packages: [
       "cuda-toolkit-11-3",
-      "cuda-drivers",
     ],
+    driverPackage: "cuda-drivers",
   },
 ];
 
 export async function installCuda(context: ProvisionContext): Promise<void> {
   const already = await hasCuda();
+  const driverInstalled = await hasNvidiaDriver();
   await context.step("Check existing CUDA toolkit", (step) => {
     if (already) {
       step.log("Detected CUDA tools; reinstall to ensure latest packages.");
@@ -119,7 +128,21 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
   });
 
   await context.step("Install CUDA packages", async (step) => {
-    const packages = repoSelection.packages;
+    const packages = [...repoSelection.packages];
+    const driverPackage = driverInstalled
+      ? undefined
+      : repoSelection.driverPackage;
+    if (driverInstalled) {
+      step.log(
+        "Existing NVIDIA driver detected; skipping driver installation.",
+      );
+    } else if (driverPackage) {
+      packages.push(driverPackage);
+    } else {
+      step.log(
+        "No driver package specified for this distro; ensure GPU drivers are managed separately.",
+      );
+    }
     step.log(`Installing packages: ${packages.join(", ")}`);
     await step.exec(["apt-get", "install", "-y", ...packages], {
       sudo: true,
@@ -130,17 +153,29 @@ export async function installCuda(context: ProvisionContext): Promise<void> {
 }
 
 async function hasCuda(): Promise<boolean> {
-  const checks = [
-    new Deno.Command("nvidia-smi", { stdout: "null", stderr: "null" }).output(),
-    new Deno.Command("nvcc", {
+  const driverAvailable = await hasNvidiaDriver();
+  if (!driverAvailable) {
+    return false;
+  }
+  try {
+    const result = await new Deno.Command("nvcc", {
       args: ["--version"],
       stdout: "null",
       stderr: "null",
-    }).output(),
-  ];
+    }).output();
+    return result.success;
+  } catch {
+    return false;
+  }
+}
+
+async function hasNvidiaDriver(): Promise<boolean> {
   try {
-    const results = await Promise.all(checks);
-    return results.every((result) => result.success);
+    const result = await new Deno.Command("nvidia-smi", {
+      stdout: "null",
+      stderr: "null",
+    }).output();
+    return result.success;
   } catch {
     return false;
   }
@@ -194,6 +229,9 @@ export function selectCudaRepo(osRelease: string): CudaRepoSelection {
     fallback,
     message,
     packages: selection.packages ?? DEFAULT_CUDA_PACKAGES,
+    driverPackage: fallback
+      ? undefined
+      : selection.driverPackage ?? DEFAULT_DRIVER_PACKAGE,
   };
 }
 
