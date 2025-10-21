@@ -32,6 +32,8 @@ if [[ -n "${CHAT_MODEL:-}" ]]; then
 fi
 if [[ -n "${CHAT_OLLAMA_HOST:-}" ]]; then
   ARGS+=("ollama_host:=${CHAT_OLLAMA_HOST}")
+elif [[ -n "${OLLAMA_HOST:-}" ]]; then
+  ARGS+=("ollama_host:=${OLLAMA_HOST}")
 fi
 if [[ -n "${CHAT_MAX_HISTORY:-}" ]]; then
   ARGS+=("max_history:=${CHAT_MAX_HISTORY}")

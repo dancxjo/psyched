@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import sys
@@ -182,6 +183,20 @@ if "requests" not in sys.modules:
         def json(self) -> dict[str, object]:
             return self._payload
 
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise RuntimeError(f"status {self.status_code}")
+
+        def iter_lines(self, decode_unicode: bool = False):  # noqa: ANN001
+            data = json.dumps(self._payload)
+            if decode_unicode:
+                yield data
+            else:
+                yield data.encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
     def _fake_get(url: str, *args, **kwargs):  # noqa: ANN001
         if url.endswith("/api/modules"):
             return _Response(
@@ -295,6 +310,19 @@ def test_chatnode_defaults_to_llama32_model() -> None:
     node = ChatNode()
 
     assert node.model == "gpt-oss:20b"
+
+
+def test_chatnode_defaults_to_services_llm_host() -> None:
+    original = os.environ.get("OLLAMA_HOST")
+    try:
+        os.environ.pop("OLLAMA_HOST", None)
+        node = ChatNode()
+        assert node.ollama_host == "http://127.0.0.1:11434"
+    finally:
+        if original is None:
+            os.environ.pop("OLLAMA_HOST", None)
+        else:
+            os.environ["OLLAMA_HOST"] = original
 
 
 def test_chatnode_generate_response_uses_ollama_directly() -> None:

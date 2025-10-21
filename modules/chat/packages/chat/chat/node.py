@@ -12,8 +12,6 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 from psyched_msgs.msg import Message as MsgMessage, Transcript
 
-# Use the official `ollama` python client directly. Fail fast if missing so
-# deployments know to install it. We'll use streaming if the client exposes it.
 logger = logging.getLogger("psyched.chat.node")
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -21,22 +19,9 @@ if not logger.handlers:
     logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
-logger.info("Importing ollama client")
-try:  # pragma: no cover - import compatibility shim
-    from ollama import Ollama  # type: ignore
-except ImportError:  # pragma: no cover
-    import ollama  # type: ignore
-
-    class Ollama:  # type: ignore[override]
-        """Compatibility wrapper for older code expecting ``ollama.Ollama``."""
-
-        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN003, D401
-            self._client = ollama.Client(*args, **kwargs)
-
-        def __getattr__(self, name: str):
-            return getattr(self._client, name)
-
 import requests  # type: ignore
+
+from .ollama_client import OllamaServiceClient, OllamaServiceError
 
 
 def _normalize_voice_text(text: str) -> str:
@@ -92,33 +77,44 @@ class ChatNode(Node):
         self.pending_to_confirm: List[str] = []
         self.max_history: int = int(self.declare_parameter("max_history", 20).get_parameter_value().integer_value)
 
-        self.model: str = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b")
-        self.ollama_host: str = _normalise_ollama_host(os.environ.get("OLLAMA_HOST", ""))
+        model_param = self.declare_parameter("model", os.environ.get("OLLAMA_MODEL", "gpt-oss:20b"))
+        self.model = (self._extract_parameter_str(model_param, "gpt-oss:20b") or "gpt-oss:20b").strip()
+        if not self.model:
+            self.model = "gpt-oss:20b"
 
-        # Initialize Ollama client (direct). Ollama client API may accept a
-        # host/base_url; set up a client instance and detect streaming support.
-        self._client = None
+        host_param = self.declare_parameter("ollama_host", os.environ.get("OLLAMA_HOST", ""))
+        configured_host = self._extract_parameter_str(host_param, "").strip()
+        env_host = str(os.environ.get("OLLAMA_HOST", "")).strip()
+        candidate_host = _normalise_ollama_host(configured_host or env_host)
+        self.ollama_host = candidate_host or "http://127.0.0.1:11434"
+        logger.info("Using Ollama service at %s", self.ollama_host)
+
+        self._ollama_client = OllamaServiceClient(host=self.ollama_host, logger=logger)
+        self._ollama_chat = lambda messages, stream_callback=None: self._call_ollama(  # noqa: E731
+            messages,
+            stream_callback=stream_callback,
+        )
+
+    @staticmethod
+    def _extract_parameter_str(parameter: Any, default: str) -> str:
         try:
-            # The `ollama` package exposes an Ollama client which accepts a
-            # `host` kwarg in some versions. Try constructing it; if it fails
-            # the exception will propagate (we want fast failure).
-            try:
-                self._client = Ollama(host=self.ollama_host or None)
-            except TypeError:
-                # older/newer client variants may differ; try no-arg
-                self._client = Ollama()
-            logger.info(f"Ollama client initialized, model={self.model}, host={self.ollama_host}")
-        except Exception as exc:
-            logger.exception("Failed to initialize Ollama client")
-            raise
-
-        self._serve_proc = None
-        # detect streaming capability (we'll attempt to call `stream` if present)
-        self._supports_stream = hasattr(self._client, "stream") or hasattr(self._client, "create_stream")
-        logger.debug(f"Ollama streaming supported: {self._supports_stream}")
-
-        # wrapper used by _generate_response
-        self._ollama_chat = lambda messages, stream_callback=None: self._call_ollama(messages, stream_callback=stream_callback)
+            if hasattr(parameter, "value"):
+                raw = getattr(parameter, "value")
+            elif hasattr(parameter, "get_parameter_value"):
+                value = parameter.get_parameter_value()
+                for attr in ("string_value", "double_value", "integer_value"):
+                    if hasattr(value, attr):
+                        candidate = getattr(value, attr)
+                        if isinstance(candidate, (str, int, float)):
+                            return str(candidate)
+                return str(value)
+            else:
+                raw = parameter
+            if raw is None:
+                return default
+            return str(raw)
+        except Exception:
+            return default
 
     def _compose_system_message(self) -> str:
         base = "You are a helpful assistant."
@@ -144,78 +140,22 @@ class ChatNode(Node):
             pass
         return base
 
-    def _call_ollama(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
-        """Call Ollama directly using the `ollama` client.
-
-        messages is a list of {"role":"system|user|assistant","content":"..."}.
-        If streaming is supported and a stream_callback is given, emit tokens
-        to the callback as they arrive; otherwise return the full response.
-        """
-        if not self._client:
-            raise RuntimeError("Ollama client not initialized")
-
-        # Build a simple prompt for the Ollama chat model. Ollama's Python
-        # client APIs vary; many environments provide a `chat` or `generate`
-        # method. We'll try a few common names and raise if none are present.
-        payload = {"model": self.model, "messages": messages}
-
-        logger.debug("Calling Ollama with payload: %s", payload)
-
-        # Streaming path
+    def _call_ollama(
+        self,
+        messages: List[Dict[str, str]],
+        stream_callback: Optional[Callable[[str], None]] = None,
+    ) -> str:
         try:
-            if stream_callback and self._supports_stream:
-                # Try client.stream(...) signature
-                if hasattr(self._client, "stream"):
-                    for chunk in self._client.stream(model=self.model, messages=messages):
-                        token = str(chunk or "")
-                        stream_callback(token)
-                    return ""
-                # some clients may expose create_stream
-                if hasattr(self._client, "create_stream"):
-                    for chunk in self._client.create_stream(model=self.model, messages=messages):
-                        token = str(chunk or "")
-                        stream_callback(token)
-                    return ""
+            return self._ollama_client.chat(
+                model=self.model,
+                messages=messages,
+                stream_callback=stream_callback,
+            )
+        except OllamaServiceError as exc:
+            self.get_logger().error(f"Ollama service unavailable: {exc}")
+            return ""
         except Exception as exc:
-            logger.exception("Ollama streaming failed: %s", exc)
-
-        # Non-streaming path: try client.chat/generate/predict
-        try:
-            if hasattr(self._client, "chat"):
-                resp = self._client.chat(model=self.model, messages=messages)
-            elif hasattr(self._client, "generate"):
-                resp = self._client.generate(model=self.model, messages=messages)
-            elif hasattr(self._client, "predict"):
-                resp = self._client.predict(model=self.model, messages=messages)
-            else:
-                # Last resort: call the local Ollama HTTP API directly via requests
-                if not self.ollama_host:
-                    raise RuntimeError("No ollama host configured and client lacks chat API")
-                url = self.ollama_host.rstrip("/") + "/api/chat"
-                r = requests.post(url, json={"model": self.model, "messages": messages}, timeout=30)
-                r.raise_for_status()
-                data = r.json()
-                # try common response shapes
-                if isinstance(data, dict):
-                    if isinstance(data.get("message"), dict):
-                        return str(data["message"].get("content", "")).strip()
-                    choices = data.get("choices") or []
-                    if choices and isinstance(choices[0], dict):
-                        return str(choices[0].get("message", {}).get("content", "")).strip()
-                return ""
-
-            # Extract text depending on response shape
-            if isinstance(resp, str):
-                return resp.strip()
-            if hasattr(resp, "text"):
-                return str(resp.text or "").strip()
-            # some clients return an object with 'content' attribute
-            if hasattr(resp, "content"):
-                return str(getattr(resp, "content", "") or "").strip()
-            # fallback to stringifying
-            return str(resp or "").strip()
-        except Exception as exc:
-            logger.exception("Ollama call failed: %s", exc)
+            self.get_logger().error(f"Unexpected Ollama error: {exc}")
             return ""
 
     def _generate_response(self, messages: List[Dict[str, str]], stream_callback: Optional[Callable[[str], None]] = None) -> str:
@@ -322,11 +262,6 @@ class ChatNode(Node):
             self.history = self.history[-self.max_history :]
 
     def destroy_node(self) -> None:  # type: ignore[override]
-        try:
-            if self._serve_proc is not None:
-                self._serve_proc.terminate()
-        except Exception:
-            pass
         super().destroy_node()
 
 
