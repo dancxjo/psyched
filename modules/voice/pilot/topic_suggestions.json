@@ -1,0 +1,15 @@
+{
+  "context_topics": [
+    {
+      "topic": "/voice",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "latest queued speech request: {{value}}"
+    },
+    {
+      "topic": "/voice/spoken",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "most recent spoken sentence: {{value}}"
+    }
+  ],
+  "sensation_topics": []
+}

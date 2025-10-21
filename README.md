@@ -51,7 +51,7 @@ Psyched is organized around three ideas:
 ### Cognitive intent
 
 Beyond robotics, **Psyched** prototypes a modular cognition framework:
-sensors feed **ear** and **eye** modules; impressions move through **chat**, **voice**, and planned **memory** services (Neo4j + Qdrant) to form a persistent autobiographical record.
+sensors feed **ear** and **eye** modules; impressions flow through the **pilot** for reasoning, are expressed via **voice**, and will eventually persist in planned **memory** services (Neo4j + Qdrant) to form a durable autobiographical record.
 In time, Pete’s “psyche” will be able to recall, reason, and act across sessions.
 
 ---
@@ -194,8 +194,8 @@ A lightweight `psyched` function in `.bashrc` ensures correct sourcing on login.
 
 ## Roadmap
 
-* Expand Cockpit topics beyond `/conversation`.
-* Add full **ear/chat/voice** stack.
+* Expand Cockpit topics for speech and transcript monitoring.
+* Add full **ear/voice** stack.
 * Integrate Neo4j + Qdrant memory daemons.
 * CI for Cargo + Deno + Colcon builds.
 * Declarative `pete.toml` hardware manifest for auto-introspection.

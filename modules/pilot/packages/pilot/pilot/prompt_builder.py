@@ -4,7 +4,7 @@ import json
 import re
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 from .models import SensationSummary
 
@@ -32,7 +32,7 @@ _SCHEMA_HINT = {
     "spoken_sentence": "Hey there—good to see you!",
     "command_script": "\n".join(
         [
-            "# Resume chatting and approach if navigation is idle.",
+            "# Resume the conversation and approach if navigation is idle.",
             "if 'nav.move_to' in available_actions():",
             "    voice.resume_speech()",
             "    nav.move_to(target='person_estimated')",
@@ -83,6 +83,18 @@ class PilotPromptContext:
 
 
 _TEMPLATE_PATTERN = re.compile(r"{{\s*([a-zA-Z0-9_.]+)\s*}}")
+
+_EAR_ASR_TOPIC = "/ear/hole"
+_VOICE_TOPIC_ORDER = [
+    "/voice/spoken",
+    "/voice",
+    "/voice/pause",
+    "/voice/resume",
+    "/voice/clear",
+]
+
+_CORE_TOPIC_PREFIXES = ("/hosts/health/",)
+_CORE_TOPIC_ORDER = ["/instant", "/situation"]
 
 
 def _stringify(value: Any) -> str:
@@ -144,10 +156,62 @@ def _render_template(template: str, *, topic: str, value: Any) -> str:
     return _TEMPLATE_PATTERN.sub(_replacement, template)
 
 
-def _format_topics(topics: Dict[str, Any], templates: Mapping[str, str]) -> Iterable[str]:
+def _is_meaningful_value(value: Any) -> bool:
+    """Return ``True`` when *value* contains information worth surfacing."""
+
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, Mapping):
+        return any(_is_meaningful_value(v) for v in value.values())
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return any(_is_meaningful_value(v) for v in value)
+    return True
+
+
+def _is_voice_topic(topic: str) -> bool:
+    """Return ``True`` when *topic* belongs to the voice module namespace."""
+
+    return topic == "/voice" or topic.startswith("/voice/")
+
+
+def _topic_priority(topic: str) -> Tuple[int, Tuple[int, str]]:
+    """Return a sortable priority tuple that favours voice, ASR, and core context."""
+
+    if topic in _VOICE_TOPIC_ORDER:
+        return (0, (_VOICE_TOPIC_ORDER.index(topic), topic))
+    if _is_voice_topic(topic):
+        return (0, (len(_VOICE_TOPIC_ORDER), topic))
+    if topic == _EAR_ASR_TOPIC:
+        return (1, (0, topic))
+    if topic in _CORE_TOPIC_ORDER:
+        return (2, (_CORE_TOPIC_ORDER.index(topic), topic))
+    for prefix in _CORE_TOPIC_PREFIXES:
+        if topic.startswith(prefix):
+            return (2, (len(_CORE_TOPIC_ORDER), topic))
+    return (3, (0, topic))
+
+
+def _select_topic_entries(topics: Mapping[str, Any]) -> List[Tuple[str, Any]]:
+    """Return an ordered list of topics filtered down to meaningful context."""
+
+    entries: List[Tuple[str, Any]] = []
     for topic, value in topics.items():
         if topic == "/status":
-            value = _condense_status(value)
+            # Raw status is condensed separately to keep the prompt concise.
+            continue
+        if _is_voice_topic(topic) or topic == _EAR_ASR_TOPIC:
+            entries.append((topic, value))
+            continue
+        if _is_meaningful_value(value):
+            entries.append((topic, value))
+    entries.sort(key=lambda item: _topic_priority(item[0]))
+    return entries
+
+
+def _format_topics(entries: Iterable[Tuple[str, Any]], templates: Mapping[str, str]) -> Iterable[str]:
+    for topic, value in entries:
         template = templates.get(topic)
         if template:
             rendered = _render_template(template, topic=topic, value=value)
@@ -236,24 +300,33 @@ def _condense_status(status: Any) -> Dict[str, Any]:
 def build_prompt(context: PilotPromptContext) -> str:
     """Construct the single-shot LLM prompt for the feeling integrator."""
 
-    lines: List[str] = [_SYSTEM_PROMPT, "", "Context (do not make assumptions, use the data here as the source of your information)", "", "topics:"]
-    lines.extend(_format_topics(context.topics, context.topic_templates))
+    lines: List[str] = [_SYSTEM_PROMPT, "", "Context", "-------"]
 
+    lines.append(f"- window_seconds: {context.window_seconds:.2f}")
     if context.status:
         condensed = _condense_status(context.status)
         if condensed:
-            lines.append(f"- status_summary: {json.dumps(condensed, ensure_ascii=False, sort_keys=True)}")
+            lines.append(
+                "- status_summary: "
+                + json.dumps(condensed, ensure_ascii=False, sort_keys=True)
+            )
+    lines.append(
+        "- recent_sensations: " + _format_sensations(context.sensations)
+    )
 
-    lines.append(
-        "- recent_sensations: "
-        + _format_sensations(context.sensations)
-    )
-    lines.append(
-        f"- window_seconds: {context.window_seconds:.2f}"
-    )
-    lines.append(
-        "available_actions_by_module:"
-    )
+    lines.append("")
+    lines.append("Topics (prioritised)")
+    lines.append("--------------------")
+    topic_entries = _select_topic_entries(context.topics)
+    formatted_topics = list(_format_topics(topic_entries, context.topic_templates))
+    if formatted_topics:
+        lines.extend(formatted_topics)
+    else:
+        lines.append("- none")
+
+    lines.append("")
+    lines.append("Available actions")
+    lines.append("-----------------")
     grouped_actions = _group_actions_by_module(sorted(set(context.cockpit_actions)))
     if grouped_actions:
         for module, actions in grouped_actions.items():
@@ -262,15 +335,14 @@ def build_prompt(context: PilotPromptContext) -> str:
         lines.append("- none: []")
     if context.vision_images:
         lines.append("")
-        lines.append(
-            "vision_images (robot's current view provided via the Ollama images API):"
-        )
+        lines.append("Vision")
+        lines.append("------")
         lines.extend(_format_vision_images(context.vision_images))
         lines.append(
             "These frames show what the robot is seeing currently; reference them when reasoning."
         )
     lines.append("")
-    lines.append("Schema to emit")
-    lines.append("")
+    lines.append("Schema")
+    lines.append("------")
     lines.append(json.dumps(_SCHEMA_HINT, ensure_ascii=False, indent=2))
     return "\n".join(lines)

@@ -1,4 +1,4 @@
-# Chat message used by the chat module
+# Structured conversational message exchanged between modules
 string role   # e.g., 'system' | 'user' | 'assistant'
 string content
 string speaker   # optional speaker label (e.g., 'user', 'assistant')

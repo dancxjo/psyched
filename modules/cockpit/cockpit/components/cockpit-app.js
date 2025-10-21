@@ -5,7 +5,6 @@ import { surfaceStyles } from './cockpit-style.js';
 
 // Component registry - maps module names to their component tag names
 const MODULE_COMPONENTS = {
-  chat: 'chat-dashboard',
   ear: 'ear-dashboard',
   eye: 'eye-dashboard',
   faces: 'faces-dashboard',
@@ -186,7 +185,6 @@ class CockpitApp extends LitElement {
   renderComponent(tagName) {
     // Create the component element dynamically based on tag name
     const tagMap = {
-      'chat-dashboard': html`<chat-dashboard></chat-dashboard>`,
       'ear-dashboard': html`<ear-dashboard></ear-dashboard>`,
       'eye-dashboard': html`<eye-dashboard></eye-dashboard>`,
       'faces-dashboard': html`<faces-dashboard></faces-dashboard>`,
