@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "name": "say",
+      "description": "Queue text for speech synthesis via the voice module.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "/voice",
+        "message_type": "std_msgs/msg/String",
+        "payload_map": {
+          "text": "data"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to speak aloud via the voice queue.",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "topic"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "pause_speech",
+      "description": "Pause queued speech playback.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "/voice/pause",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "resume_speech",
+      "description": "Resume playback of queued speech.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "/voice/resume",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "clear_queue",
+      "description": "Clear pending speech without playing it.",
+      "kind": "publish-topic",
+      "defaults": {
+        "topic": "/voice/clear",
+        "message_type": "std_msgs/msg/Empty",
+        "payload": {}
+      },
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import tomllib
 from .actions import ActionError, ActionResult, ModuleAction
 
 try:  # pragma: no cover - exercised implicitly when ROS dependencies exist
-    from .ros import RosClient, ServiceCallError, TopicStreamError
+    from .ros import RosClient, ServiceCallError, TopicPublishError, TopicStreamError
 except ImportError:  # pragma: no cover - fallback for environments without rclpy
     RosClient = Any  # type: ignore[assignment]
 
@@ -22,6 +22,9 @@ except ImportError:  # pragma: no cover - fallback for environments without rclp
         """Placeholder error raised when ROS dependencies are unavailable."""
 
     class TopicStreamError(Exception):
+        """Placeholder error raised when ROS dependencies are unavailable."""
+
+    class TopicPublishError(Exception):
         """Placeholder error raised when ROS dependencies are unavailable."""
 
 _LOGGER = logging.getLogger(__name__)
@@ -199,6 +202,8 @@ def _build_action(
         return _build_stream_topic_action(module, definition, ros)
     if kind == "call-service":
         return _build_call_service_action(module, definition, ros)
+    if kind == "publish-topic":
+        return _build_publish_topic_action(module, definition, ros)
     raise ValueError(f"Unsupported action kind: {definition.kind}")
 
 
@@ -330,6 +335,96 @@ def _build_call_service_action(
     return ModuleAction(
         name=definition.name,
         description=definition.description or f"Invoke ROS services on behalf of the {module} module",
+        parameters=definition.parameters or {},
+        handler=handler,
+        returns=definition.returns,
+        streaming=False,
+    )
+
+
+def _build_publish_topic_action(
+    module: str,
+    definition: ActionDefinition,
+    ros: RosClient,
+) -> ModuleAction:
+    defaults = dict(definition.defaults)
+    topic_default = defaults.get("topic")
+    message_type_default = defaults.get("message_type")
+    if not isinstance(topic_default, str) or not topic_default.strip():
+        raise ValueError("publish-topic actions must define a non-empty topic default")
+    if not isinstance(message_type_default, str) or not message_type_default.strip():
+        raise ValueError("publish-topic actions must define a non-empty message_type default")
+
+    payload_default = defaults.get("payload")
+    base_payload: Dict[str, Any] = {}
+    if isinstance(payload_default, Mapping):
+        base_payload.update(dict(payload_default))
+
+    raw_map = defaults.get("payload_map", {})
+    payload_map: Dict[str, str] = {}
+    if isinstance(raw_map, Mapping):
+        for key, value in raw_map.items():
+            if isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip():
+                payload_map[key.strip()] = value.strip()
+
+    allowed_keys = _allowed_argument_keys(definition.parameters)
+    reserved_keys = {"topic", "message_type", "payload", "qos"}
+
+    async def handler(context) -> ActionResult:
+        arguments = context.arguments if isinstance(context.arguments, Mapping) else {}
+        merged = _merge_arguments(defaults, arguments, allowed_keys | {"payload"})
+
+        topic_value = merged.get("topic", topic_default)
+        message_type_value = merged.get("message_type", message_type_default)
+        qos_override = merged.get("qos")
+
+        if not isinstance(topic_value, str) or not topic_value.strip():
+            raise ActionError("Configured topic must be a non-empty string")
+        if not isinstance(message_type_value, str) or not message_type_value.strip():
+            raise ActionError("Configured message_type must be a non-empty string")
+        topic_value = topic_value.strip()
+        message_type_value = message_type_value.strip()
+
+        payload: Dict[str, Any] = dict(base_payload)
+
+        payload_override = merged.get("payload")
+        if isinstance(payload_override, Mapping):
+            payload.update(dict(payload_override))
+        elif payload_override is not None and "payload" in arguments:
+            raise ActionError("Payload overrides must be expressed as a JSON object")
+
+        for key in allowed_keys:
+            if key in reserved_keys:
+                continue
+            if key not in arguments:
+                continue
+            target_field = payload_map.get(key, key)
+            if not target_field:
+                continue
+            payload[target_field] = arguments[key]
+
+        try:
+            await ros.publish_topic(
+                module=module,
+                topic=topic_value,
+                message_type=message_type_value,
+                payload=payload,
+                qos=qos_override if isinstance(qos_override, Mapping) else None,
+            )
+        except (TopicPublishError, ValueError) as exc:
+            raise ActionError(str(exc)) from exc
+
+        return ActionResult(
+            payload={
+                "status": "published",
+                "topic": topic_value,
+                "message_type": message_type_value,
+            }
+        )
+
+    return ModuleAction(
+        name=definition.name,
+        description=definition.description or f"Publish ROS topic traffic for the {module} module",
         parameters=definition.parameters or {},
         handler=handler,
         returns=definition.returns,
