@@ -997,10 +997,8 @@ class PilotNode(Node):
             return
 
         prompt = build_prompt(context)
-        try:
-            self._last_prompt = prompt[:4096]
-        except Exception:
-            self._last_prompt = prompt
+        # Preserve the full prompt so debug snapshots reflect exactly what the LLM received.
+        self._last_prompt = prompt
         try:
             images_payload = [img.base64_data for img in context.vision_images] or None
             raw_response = self._llm_client.generate(prompt, images=images_payload)
