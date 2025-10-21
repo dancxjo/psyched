@@ -3,7 +3,7 @@
     {
       "topic": "/ear/hole",
       "type": "std_msgs/msg/String",
-      "prompt_template": "latest ASR transcript: {{value}}"
+      "prompt_template": "{{data.prompt_summary}}"
     }
   ],
   "sensation_topics": []

@@ -3,12 +3,12 @@
     {
       "topic": "/voice",
       "type": "std_msgs/msg/String",
-      "prompt_template": "latest queued speech request: {{value}}"
+      "prompt_template": "{{data.prompt_summary}}"
     },
     {
       "topic": "/voice/spoken",
       "type": "std_msgs/msg/String",
-      "prompt_template": "most recent spoken sentence: {{value}}"
+      "prompt_template": "{{data.prompt_summary}}"
     }
   ],
   "sensation_topics": []

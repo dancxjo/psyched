@@ -34,6 +34,7 @@ from .command_script import (
 from .memory_pipeline import prepare_memory_batch
 from .models import FeelingIntentData, SensationRecord
 from .prompt_builder import PilotPromptContext, PromptImage, build_prompt
+from .topic_translation import apply_topic_translation, discover_topic_translators
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
 from .vision import summarise_image_message
 
@@ -146,7 +147,11 @@ def _default_context_topics(host_short: str) -> List[Dict[str, str]]:
     """Return the minimal default context topic subscriptions."""
 
     return [
-        {"topic": f"/hosts/health/{host_short}", "type": "psyched_msgs/msg/HostHealth"},
+        {
+            "topic": f"/hosts/health/{host_short}",
+            "type": "psyched_msgs/msg/HostHealth",
+            "prompt_template": "{{data.prompt_summary}}",
+        },
         {"topic": "/instant", "type": "std_msgs/msg/String"},
         {"topic": "/situation", "type": "std_msgs/msg/String"},
         {"topic": "/status", "type": "std_msgs/msg/String"},
@@ -445,6 +450,10 @@ class PilotNode(Node):
         self._topic_templates: Dict[str, str] = {}
         self._feedback_publishers: Dict[str, Any] = {}
         self._modules_root = self._discover_modules_root()
+        self._topic_translators = discover_topic_translators(
+            self._modules_root,
+            logger=self.get_logger(),
+        )
         self._actions_fallback_logged = False
         self._last_prompt: Optional[str] = None
 
@@ -639,6 +648,12 @@ class PilotNode(Node):
             return
 
         sanitised, prompt_image = summarise_image_message(topic, msg, data)
+        sanitised = apply_topic_translation(
+            topic,
+            sanitised,
+            self._topic_translators,
+            logger=self.get_logger(),
+        )
         entry = {"data": sanitised, "timestamp": time.time()}
         if prompt_image is not None:
             entry["image"] = prompt_image
