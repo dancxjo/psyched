@@ -11,6 +11,10 @@ modules = [
     "memory",
     "eye",
     "nav",
+    "faces",
+    # "gps",
+    # "hypothalamus",
+    # "imu",
 ]
 
 [config.mod.ear.env]
