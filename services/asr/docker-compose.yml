@@ -1,7 +1,7 @@
 services:
   asr:
     build:
-      context: ..
+      context: ../..
       dockerfile: services/asr/docker/whisper-asr.Dockerfile
     image: psyched-whisper-asr:local
     restart: unless-stopped

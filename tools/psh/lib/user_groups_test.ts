@@ -11,6 +11,7 @@ Deno.test("essentialGroups merges defaults and extras without duplicates", () =>
   assertEquals(result.sort(), [
     "audio",
     "dialout",
+    "docker",
     "gpio",
     "i2c",
     "plugdev",

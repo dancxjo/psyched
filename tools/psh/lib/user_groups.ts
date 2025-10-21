@@ -7,6 +7,7 @@ const ESSENTIAL_GROUPS = [
   "video",
   "gpio",
   "plugdev",
+  "docker",
   "render",
 ] as const;
 
