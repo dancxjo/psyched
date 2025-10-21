@@ -48,7 +48,7 @@ class HostHealthPublisher(Node):
         self._publisher = self.create_publisher(HostHealth, self._topic, qos)
         self._timer = self.create_timer(max(0.1, interval_sec), self._publish_once)
         self._frame_id = frame_id
-        self.get_logger().info("Publishing host health metrics on %s", self._topic)
+        self.get_logger().info(f"Publishing host health metrics on {self._topic}")
 
     def _publish_once(self) -> None:
         sample = self._sampler.sample()
