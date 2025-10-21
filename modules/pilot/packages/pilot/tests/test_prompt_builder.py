@@ -35,6 +35,8 @@ def test_build_prompt_includes_topics_status_and_actions():
     assert "vector_length" in prompt
     assert '"queue_length": 0' in prompt
     assert "never assume or invent facts" in prompt
+    assert "first observation field" in prompt
+    assert "translate the provided data" in prompt
 
 
 def test_build_prompt_mentions_vision_images_when_available():
