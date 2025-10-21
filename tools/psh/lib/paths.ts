@@ -58,13 +58,13 @@ function candidateIsRepoRoot(candidate: string): boolean {
 }
 
 export function repoRoot(): string {
-  const cacheKey = "repo";
+  const override = Deno.env.get("PSYCHED_REPO_ROOT");
+  const cacheKey = override ? `repo:${override}` : "repo";
   const cached = repoRootCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const override = Deno.env.get("PSYCHED_REPO_ROOT");
   if (override) {
     const expanded = expandTilde(override);
     if (candidateIsRepoRoot(expanded)) {
@@ -84,7 +84,7 @@ export function repoRoot(): string {
     let current = resolve(root);
     while (true) {
       if (candidateIsRepoRoot(current)) {
-        repoRootCache.set(cacheKey, current);
+        repoRootCache.set("repo", current);
         return current;
       }
       const parent = dirname(current);

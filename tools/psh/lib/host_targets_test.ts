@@ -37,9 +37,21 @@ denoTest("defaultModuleTargets ignore undeclared modules", () => {
     resetHostTargetCache();
     __internals__.reset();
     const setupModules = defaultModuleTargets("setup");
-    assertEquals(setupModules, ["cockpit"]);
+    assertEquals(setupModules, [
+      "cockpit",
+      "foot",
+      "viscera",
+      "voice",
+      "pilot",
+    ]);
     const launchModules = defaultModuleTargets("launch");
-    assertEquals(launchModules, []);
+    assertEquals(launchModules, [
+      "cockpit",
+      "foot",
+      "viscera",
+      "voice",
+      "pilot",
+    ]);
   });
   resetHostTargetCache();
   __internals__.reset();
@@ -77,6 +89,7 @@ denoTest("defaultServiceTargets honour disabled services", () => {
     withEnv("PSH_HOST", hostName, () => {
       resetHostTargetCache();
       __internals__.reset();
+      __internals__.setServiceLister(() => ["alpha"]);
       const setupServices = defaultServiceTargets("setup");
       assertEquals(setupServices, ["alpha"]);
       const upServices = defaultServiceTargets("up");
@@ -119,6 +132,7 @@ denoTest("defaultServiceTargets ignore undeclared services", () => {
     withEnv("PSH_HOST", hostName, () => {
       resetHostTargetCache();
       __internals__.reset();
+      __internals__.setServiceLister(() => ["alpha"]);
       const setupServices = defaultServiceTargets("setup");
       assertEquals(setupServices, ["alpha"]);
       const upServices = defaultServiceTargets("up");
