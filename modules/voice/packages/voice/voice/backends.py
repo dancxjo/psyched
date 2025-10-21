@@ -88,6 +88,57 @@ class SpeechBackend(Protocol):
         """
 
 
+class FailoverSpeechBackend:
+    """Wrap a primary backend and fall back to an alternate on failure.
+
+    The wrapper forwards all playback requests to the primary backend until a
+    failure matching ``failure_exceptions`` occurs. From that point onward the
+    fallback backend is used for all subsequent requests. This keeps recovery
+    logic contained within the backend layer so callers such as
+    :class:`~voice.queue.SpeechQueue` do not need to reason about retries or
+    backend replacement.
+    """
+
+    def __init__(
+        self,
+        primary: SpeechBackend,
+        fallback: SpeechBackend,
+        *,
+        failure_exceptions: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
+        log_warning: Callable[[str], None] | None = None,
+    ) -> None:
+        if not failure_exceptions:
+            raise ValueError("failure_exceptions must contain at least one exception type")
+        self._primary = primary
+        self._fallback = fallback
+        self._failure_exceptions = failure_exceptions
+        self._using_fallback = False
+        self._log_warning = log_warning or _LOGGER.warning
+        self._primary_name = primary.__class__.__name__
+        self._fallback_name = fallback.__class__.__name__
+
+    def speak(
+        self,
+        text: str,
+        stop_event: threading.Event,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
+        backend = self._fallback if self._using_fallback else self._primary
+        try:
+            backend.speak(text, stop_event, progress_callback)
+            return
+        except SpeechInterrupted:
+            raise
+        except self._failure_exceptions as error:
+            if self._using_fallback:
+                raise
+            self._using_fallback = True
+            self._log_warning(
+                f"{self._primary_name} failed with {error!r}; switching to {self._fallback_name}",
+            )
+            self._fallback.speak(text, stop_event, progress_callback)
+            return
+
 @dataclass(slots=True)
 class PrintSpeechBackend:
     """Speech backend that prints text to a stream.
@@ -679,4 +730,3 @@ class WebsocketTTSSpeechBackend:
                 process.wait(timeout=1)
             except Exception:  # pragma: no cover - defensive cleanup
                 _LOGGER.debug("Playback process did not exit cleanly", exc_info=True)
-

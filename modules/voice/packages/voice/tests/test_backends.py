@@ -7,11 +7,11 @@ import json
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterable, Iterator, List
+from typing import Callable, Iterable, Iterator, List
 
 import pytest
 
-from voice.backends import SpeechInterrupted, WebsocketTTSSpeechBackend
+from voice.backends import FailoverSpeechBackend, SpeechInterrupted, WebsocketTTSSpeechBackend
 
 
 @dataclass
@@ -76,6 +76,23 @@ def _process_factory(process: _FakeProcess):
         return process
 
     return factory
+
+
+class _RecordingBackend:
+    """Test helper that records texts passed to ``speak``."""
+
+    def __init__(self) -> None:
+        self.spoken: list[str] = []
+
+    def speak(
+        self,
+        text: str,
+        stop_event: threading.Event,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> None:
+        self.spoken.append(text)
+        if progress_callback:
+            progress_callback(text)
 
 
 def test_websocket_backend_streams_audio_and_reports_progress() -> None:
@@ -159,3 +176,54 @@ def test_websocket_backend_raises_on_service_error() -> None:
     with pytest.raises(RuntimeError, match="boom"):
         backend.speak("oops", threading.Event())
 
+
+def test_failover_backend_switches_to_fallback_on_connection_error() -> None:
+    """Connection failures trigger the fallback backend and stick permanently."""
+
+    class _FailingBackend:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def speak(
+            self,
+            text: str,
+            stop_event: threading.Event,
+            progress_callback: Callable[[str], None] | None = None,
+        ) -> None:
+            self.calls += 1
+            raise ConnectionRefusedError("no transport")
+
+    primary = _FailingBackend()
+    fallback = _RecordingBackend()
+    backend = FailoverSpeechBackend(primary, fallback)
+    progress: list[str] = []
+    backend.speak("hello", threading.Event(), progress.append)
+
+    assert primary.calls == 1
+    assert fallback.spoken == ["hello"]
+    assert progress == ["hello"]
+
+    backend.speak("again", threading.Event())
+    assert primary.calls == 1  # primary no longer used
+    assert fallback.spoken[-1] == "again"
+
+
+def test_failover_backend_propagates_interrupts() -> None:
+    """Speech interruptions should bubble up without activating the fallback."""
+
+    class _InterruptingBackend:
+        def speak(
+            self,
+            text: str,
+            stop_event: threading.Event,
+            progress_callback: Callable[[str], None] | None = None,
+        ) -> None:
+            raise SpeechInterrupted("stop requested")
+
+    fallback = _RecordingBackend()
+    backend = FailoverSpeechBackend(_InterruptingBackend(), fallback)
+
+    with pytest.raises(SpeechInterrupted):
+        backend.speak("hello", threading.Event())
+
+    assert fallback.spoken == []

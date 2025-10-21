@@ -9,6 +9,7 @@ from std_msgs.msg import Empty, String
 
 from .backends import (
     EspeakSpeechBackend,
+    FailoverSpeechBackend,
     PrintSpeechBackend,
     SpeechBackend,
     WebsocketTTSSpeechBackend,
@@ -60,6 +61,7 @@ class VoiceNode(Node):
         backend_name = (
             str(self.declare_parameter("backend", "print").value).strip().lower()
         )
+        logger = self.get_logger()
         if backend_name == "print":
             return PrintSpeechBackend()
         if backend_name == "espeak":
@@ -72,8 +74,24 @@ class VoiceNode(Node):
         if backend_name in {"websocket", "coqui"}:
             backend = self._create_websocket_backend()
             if backend is not None:
+                espeak_backend = self._initialise_espeak_backend(
+                    "falling back to print backend",
+                )
+                if espeak_backend is not None:
+                    logger.info(
+                        "Websocket speech backend initialised; will fall back to espeak if connection fails",
+                    )
+                    return FailoverSpeechBackend(
+                        backend,
+                        espeak_backend,
+                        failure_exceptions=(ConnectionError, TimeoutError),
+                        log_warning=logger.warning,
+                    )
+                logger.warning(
+                    "espeak backend unavailable; running without websocket failover",
+                )
                 return backend
-            self.get_logger().warning(
+            logger.warning(
                 "Falling back to espeak backend after websocket backend initialisation failure",
             )
             espeak_backend = self._initialise_espeak_backend(
@@ -82,7 +100,7 @@ class VoiceNode(Node):
             if espeak_backend is not None:
                 return espeak_backend
             return PrintSpeechBackend()
-        self.get_logger().warning(
+        logger.warning(
             f"Unknown backend '{backend_name}'; defaulting to print backend"
         )
         return PrintSpeechBackend()
@@ -195,4 +213,3 @@ def main(args: list[str] | None = None) -> None:
         executor.remove_node(node)
         node.destroy_node()
         rclpy.shutdown()
-

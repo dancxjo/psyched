@@ -102,6 +102,54 @@ def _make_node_with_backend(value: str) -> tuple[VoiceNode, _RecordingLogger]:
     return node, logger
 
 
+def test_websocket_backend_configures_failover_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Websocket backends are wrapped with espeak failover when possible."""
+
+    node, logger = _make_node_with_backend("websocket")
+    primary_backend = object()
+    fallback_backend = object()
+    constructed: dict[str, object] = {}
+
+    node._create_websocket_backend = lambda: primary_backend  # type: ignore[assignment]
+    monkeypatch.setattr("voice.node.EspeakSpeechBackend", lambda: fallback_backend)
+
+    class _DummyFailover:
+        def __init__(
+            self,
+            primary: object,
+            fallback: object,
+            *,
+            failure_exceptions: tuple[type[Exception], ...],
+            log_warning,
+        ) -> None:
+            constructed.update(
+                {
+                    "primary": primary,
+                    "fallback": fallback,
+                    "failure_exceptions": failure_exceptions,
+                    "log_warning": log_warning,
+                    "instance": self,
+                }
+            )
+
+    monkeypatch.setattr("voice.node.FailoverSpeechBackend", _DummyFailover)
+
+    backend = node._create_backend()
+
+    assert backend is constructed["instance"]
+    assert constructed["primary"] is primary_backend
+    assert constructed["fallback"] is fallback_backend
+    assert constructed["failure_exceptions"] == (ConnectionError, TimeoutError)
+    log_warning = constructed["log_warning"]
+    assert hasattr(log_warning, "__self__") and log_warning.__self__ is logger
+    assert (
+        "Websocket speech backend initialised; will fall back to espeak if connection fails"
+        in logger.infos
+    )
+
+
 def test_websocket_backend_falls_back_to_espeak(monkeypatch: pytest.MonkeyPatch) -> None:
     """When websocket initialisation fails the node should try espeak."""
 
