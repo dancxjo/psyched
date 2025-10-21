@@ -8,6 +8,7 @@ from pilot.models import SensationSummary
 def test_build_prompt_includes_topics_status_and_actions():
     context = PilotPromptContext(
         topics={"/instant": "Saw a familiar person waving.", "/status": {"speech": "paused"}},
+        topic_templates={},
         status={"speech": "paused", "queue_length": 0},
         sensations=[
             SensationSummary(
@@ -37,6 +38,7 @@ def test_build_prompt_mentions_vision_images_when_available():
 
     context = PilotPromptContext(
         topics={"/instant": "Investigating the lab."},
+        topic_templates={},
         status={"speech": "active"},
         sensations=[],
         cockpit_actions=["nav.move_to"],
@@ -56,3 +58,24 @@ def test_build_prompt_mentions_vision_images_when_available():
     assert "robot is seeing currently" in prompt
     assert "/camera/color/image_raw/compressed" in prompt
     assert "AAECAw==" not in prompt
+
+
+def test_build_prompt_uses_topic_templates_for_custom_formatting():
+    context = PilotPromptContext(
+        topics={
+            "/custom/state": {"pose": {"x": 1.0, "y": -0.5}, "status": "ready"},
+            "/instant": "Standing by",
+        },
+        topic_templates={
+            "/custom/state": "state: x={{data.pose.x}} y={{data.pose.y}} status={{data.status}}",
+        },
+        status={},
+        sensations=[],
+        cockpit_actions=["voice.say"],
+        window_seconds=1.0,
+    )
+
+    prompt = build_prompt(context)
+
+    assert "state: x=1.0 y=-0.5 status=ready" in prompt
+    assert "/custom/state" in prompt

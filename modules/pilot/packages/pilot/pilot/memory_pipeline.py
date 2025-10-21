@@ -59,6 +59,22 @@ def prepare_memory_batch(
     emoji_collection = _default_collection(feeling.memory_collection_emoji, "emotions")
     text_collection = _default_collection(feeling.memory_collection_text, "thoughts")
 
+    if feeling.situation_overview:
+        vectors.append(
+            {
+                "collection": text_collection,
+                "text": feeling.situation_overview,
+                "payload": {
+                    "kind": "situation_overview",
+                    "feeling_id": feeling_id,
+                    "episode_id": feeling.episode_id,
+                    "situation_id": feeling.situation_id,
+                    "source_topics": source_topics,
+                    "timestamp": timestamp_iso,
+                },
+            }
+        )
+
     if feeling.attitude_emoji:
         vectors.append(
             {
@@ -120,7 +136,7 @@ def prepare_memory_batch(
                 "MERGE (e:Episodic {id:$episode_id})\n"
                 "MERGE (s:Situation {id:$situation_id})\n"
                 "MERGE (f:FeelingIntent {id:$feeling_id})\n"
-                "SET f.attitude_emoji=$attitude_emoji, f.thought=$thought_sentence, "
+                "SET f.situation_overview=$situation_overview, f.attitude_emoji=$attitude_emoji, f.thought=$thought_sentence, "
                 "f.spoken=$spoken_sentence, f.goals=$goals, f.mood_delta=$mood_delta, "
                 "f.timestamp=$timestamp, f.source_topics=$source_topics, "
                 "f.emoji_collection=$emoji_collection, f.text_collection=$text_collection\n"
@@ -135,6 +151,7 @@ def prepare_memory_batch(
                 "episode_id": feeling.episode_id,
                 "situation_id": feeling.situation_id,
                 "feeling_id": feeling_id,
+                "situation_overview": feeling.situation_overview,
                 "attitude_emoji": feeling.attitude_emoji,
                 "thought_sentence": feeling.thought_sentence,
                 "spoken_sentence": feeling.spoken_sentence,

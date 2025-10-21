@@ -16,6 +16,7 @@ class _Stamp:
 class FeelingIntent:
     stamp: _Stamp = field(default_factory=_Stamp)
     source_topics: List[str] = field(default_factory=list)
+    situation_overview: str = ""
     attitude_emoji: str = ""
     thought_sentence: str = ""
     spoken_sentence: str = ""

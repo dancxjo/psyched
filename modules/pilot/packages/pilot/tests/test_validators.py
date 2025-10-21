@@ -19,6 +19,7 @@ def _allowed_actions() -> list[str]:
 
 def test_parse_feeling_intent_json_success(allowed_actions):
     payload = {
+        "situation_overview": "Pete is in the lab receiving a friendly wave.",
         "attitude_emoji": "🙂🤔",
         "thought_sentence": "I should greet them calmly.",
         "spoken_sentence": "Hello there!",
@@ -41,6 +42,7 @@ else:
     result = parse_feeling_intent_json(json.dumps(payload), allowed_actions)
 
     assert result.attitude_emoji == "🙂🤔"
+    assert result.situation_overview.startswith("Pete is in the lab")
     assert result.spoken_sentence == "Hello there!"
     assert "voice.resume_speech()" in result.command_script
     assert "nav.move_to" in result.command_script
@@ -57,6 +59,7 @@ else:
 
 def test_parse_feeling_intent_json_rejects_bad_emoji(allowed_actions):
     payload = {
+        "situation_overview": "",  # invalid because overview must be present
         "attitude_emoji": "abc",
         "thought_sentence": "A single sentence only.",
         "spoken_sentence": "",
@@ -70,6 +73,7 @@ def test_parse_feeling_intent_json_rejects_bad_emoji(allowed_actions):
 
 def test_parse_feeling_intent_json_rejects_multi_sentence_thought(allowed_actions):
     payload = {
+        "situation_overview": "Observing the room.",
         "attitude_emoji": "🙂",
         "thought_sentence": "First sentence. Second sentence.",
         "spoken_sentence": "",
@@ -83,6 +87,7 @@ def test_parse_feeling_intent_json_rejects_multi_sentence_thought(allowed_action
 
 def test_parse_feeling_intent_json_rejects_unknown_command(allowed_actions):
     payload = {
+        "situation_overview": "Observing the room.",
         "attitude_emoji": "🙂",
         "thought_sentence": "Respond with kindness.",
         "spoken_sentence": "",
@@ -96,6 +101,7 @@ def test_parse_feeling_intent_json_rejects_unknown_command(allowed_actions):
 
 def test_parse_feeling_intent_accepts_module_qualified_actions(allowed_actions):
     payload = {
+        "situation_overview": "Observing the room.",
         "attitude_emoji": "🙂",
         "thought_sentence": "Approach the person.",
         "spoken_sentence": "",
@@ -109,6 +115,7 @@ def test_parse_feeling_intent_accepts_module_qualified_actions(allowed_actions):
 
 def test_parse_feeling_intent_json_rejects_empty_script(allowed_actions):
     payload = {
+        "situation_overview": "Observing the room.",
         "attitude_emoji": "🙂",
         "thought_sentence": "Do something.",
         "spoken_sentence": "",
@@ -122,10 +129,25 @@ def test_parse_feeling_intent_json_rejects_empty_script(allowed_actions):
 
 def test_parse_feeling_intent_json_rejects_non_string_script(allowed_actions):
     payload = {
+        "situation_overview": "Observing the room.",
         "attitude_emoji": "🙂",
         "thought_sentence": "Do something.",
         "spoken_sentence": "",
         "command_script": 42,
+        "goals": [],
+    }
+
+    with pytest.raises(FeelingIntentValidationError):
+        parse_feeling_intent_json(json.dumps(payload), allowed_actions)
+
+
+def test_parse_feeling_intent_json_rejects_long_overview(allowed_actions):
+    payload = {
+        "situation_overview": " ".join(["busy lab"] * 80),
+        "attitude_emoji": "🙂",
+        "thought_sentence": "Hold position politely.",
+        "spoken_sentence": "",
+        "command_script": "voice.pause_speech()",
         "goals": [],
     }
 

@@ -32,7 +32,7 @@ from .command_script import (
     CommandScriptInterpreter,
 )
 from .memory_pipeline import prepare_memory_batch
-from .models import SensationRecord
+from .models import FeelingIntentData, SensationRecord
 from .prompt_builder import PilotPromptContext, PromptImage, build_prompt
 from .validators import FeelingIntentValidationError, parse_feeling_intent_json
 from .vision import summarise_image_message
@@ -44,6 +44,83 @@ if not _LOGGER.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [pilot.node] %(message)s"))
     _LOGGER.addHandler(handler)
 _LOGGER.setLevel(logging.INFO)
+
+
+_FEEDBACK_FIELD_TOPICS: Dict[str, Dict[str, str]] = {
+    "situation_overview": {
+        "topic": "/pilot/context/situation_overview",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "attitude_emoji": {
+        "topic": "/pilot/context/attitude_emoji",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "thought_sentence": {
+        "topic": "/pilot/context/thought_sentence",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "spoken_sentence": {
+        "topic": "/pilot/context/spoken_sentence",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "command_script": {
+        "topic": "/pilot/context/command_script",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "goals": {
+        "topic": "/pilot/context/goals",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "mood_delta": {
+        "topic": "/pilot/context/mood_delta",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "memory_collection_raw": {
+        "topic": "/pilot/context/memory_collection_raw",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "memory_collection_text": {
+        "topic": "/pilot/context/memory_collection_text",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "memory_collection_emoji": {
+        "topic": "/pilot/context/memory_collection_emoji",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "episode_id": {
+        "topic": "/pilot/context/episode_id",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+    "situation_id": {
+        "topic": "/pilot/context/situation_id",
+        "type": "std_msgs/msg/String",
+        "prompt_template": "{{data.data}}",
+    },
+}
+
+
+def _feedback_context_topics() -> List[Dict[str, str]]:
+    """Return context topic entries for pilot feedback publications."""
+
+    entries: List[Dict[str, str]] = []
+    for meta in _FEEDBACK_FIELD_TOPICS.values():
+        item = {"topic": meta["topic"], "type": meta["type"]}
+        template = meta.get("prompt_template")
+        if isinstance(template, str) and template:
+            item["prompt_template"] = template
+        entries.append(item)
+    return entries
 
 
 def _resolve_host_names(env: Optional[Mapping[str, str]] = None) -> tuple[str, str]:
@@ -89,7 +166,7 @@ def _normalise_topic_entries(
 ) -> List[Dict[str, str]]:
     """Return topic/type entries with duplicates removed while preserving order."""
 
-    dedup: Dict[str, Dict[str, str]] = {}
+    dedup: Dict[str, Dict[str, Any]] = {}
     for entry in entries:
         if not isinstance(entry, Mapping):
             continue
@@ -99,7 +176,10 @@ def _normalise_topic_entries(
             continue
         if keep_first and topic in dedup:
             continue
-        dedup[topic] = {"topic": topic, "type": type_name}
+        cleaned = dict(entry)
+        cleaned["topic"] = topic
+        cleaned["type"] = type_name
+        dedup[topic] = cleaned
     return list(dedup.values())
 
 
@@ -155,7 +235,11 @@ def _discover_topic_suggestions(
                 if not topic or not type_name:
                     continue
                 expanded_topic = _expand_topic_template(topic, host_full=host_full, host_short=host_short)
-                suggestions[key].append({"topic": expanded_topic, "type": type_name})
+                suggestion = {"topic": expanded_topic, "type": type_name}
+                template = entry.get("prompt_template")
+                if isinstance(template, str) and template:
+                    suggestion["prompt_template"] = template
+                suggestions[key].append(suggestion)
     return suggestions
 
 
@@ -342,6 +426,7 @@ class PilotNode(Node):
 
         self._debounce_seconds = self._declare_float_parameter("debounce_seconds", 3.0)
         self._window_seconds = self._declare_float_parameter("window_seconds", 3.0)
+        self._feedback_topics_enabled = self._declare_bool_parameter("feedback_topics_enabled", True)
 
         self._topic_cache: Dict[str, Dict[str, Any]] = {}
         self._sensation_records: List[tuple[float, SensationRecord]] = []
@@ -353,6 +438,8 @@ class PilotNode(Node):
         self._script_runs: List[Dict[str, Any]] = []
         self._script_lock = threading.Lock()
         self._action_schemas: Dict[str, Dict[str, Any]] = {}
+        self._topic_templates: Dict[str, str] = {}
+        self._feedback_publishers: Dict[str, Any] = {}
         self._modules_root = self._discover_modules_root()
         self._actions_fallback_logged = False
         self._last_prompt: Optional[str] = None
@@ -364,8 +451,11 @@ class PilotNode(Node):
             host_short=host_short,
             logger=self.get_logger(),
         )
+        context_entries = _default_context_topics(host_short)
+        if self._feedback_topics_enabled:
+            context_entries.extend(_feedback_context_topics())
         context_defaults = _normalise_topic_entries(
-            _default_context_topics(host_short) + suggestions["context_topics"],
+            context_entries + suggestions["context_topics"],
             keep_first=True,
         )
         sensation_defaults = _normalise_topic_entries(
@@ -378,6 +468,9 @@ class PilotNode(Node):
         qos.reliability = ReliabilityPolicy.RELIABLE
 
         self.publisher = self.create_publisher(FeelingIntent, "pilot/intent", qos)
+
+        if self._feedback_topics_enabled:
+            self._initialise_feedback_publishers(qos)
 
         # Debug publisher: emits JSON snapshots for cockpit debugging
         try:
@@ -407,6 +500,66 @@ class PilotNode(Node):
             return float(value)
         except (TypeError, ValueError):
             return float(default)
+
+    def _declare_bool_parameter(self, name: str, default: bool) -> bool:
+        param = self.declare_parameter(name, bool(default))
+        value = getattr(param, "value", default)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return bool(default)
+
+    def _initialise_feedback_publishers(self, qos: QoSProfile) -> None:
+        for field, meta in _FEEDBACK_FIELD_TOPICS.items():
+            topic_name = meta["topic"]
+            publisher = self.create_publisher(StdString, topic_name, qos)
+            self._feedback_publishers[field] = publisher
+            template = meta.get("prompt_template")
+            if isinstance(template, str) and template:
+                self._topic_templates.setdefault(topic_name, template)
+
+    @staticmethod
+    def _serialise_feedback_value(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (list, tuple, dict)):
+            try:
+                return json.dumps(value, ensure_ascii=False, sort_keys=True)
+            except (TypeError, ValueError):
+                return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    def _publish_feedback_topics(self, feeling: FeelingIntentData) -> None:
+        if not self._feedback_topics_enabled or not self._feedback_publishers:
+            return
+
+        payloads: Dict[str, Any] = {
+            "situation_overview": feeling.situation_overview,
+            "attitude_emoji": feeling.attitude_emoji,
+            "thought_sentence": feeling.thought_sentence,
+            "spoken_sentence": feeling.spoken_sentence,
+            "command_script": feeling.command_script,
+            "goals": feeling.goals,
+            "mood_delta": feeling.mood_delta,
+            "memory_collection_raw": feeling.memory_collection_raw,
+            "memory_collection_text": feeling.memory_collection_text,
+            "memory_collection_emoji": feeling.memory_collection_emoji,
+            "episode_id": feeling.episode_id,
+            "situation_id": feeling.situation_id,
+        }
+
+        for field, value in payloads.items():
+            publisher = self._feedback_publishers.get(field)
+            if publisher is None:
+                continue
+            msg = StdString()
+            msg.data = self._serialise_feedback_value(value)
+            publisher.publish(msg)
 
     def _load_topic_configs(
         self,
@@ -443,6 +596,9 @@ class PilotNode(Node):
             self._subscriptions.append(subscription)
             mapping[topic] = msg_type
             subscriptions.append(f"{topic} ({type_name})")
+            template = entry.get("prompt_template")
+            if isinstance(template, str) and template:
+                self._topic_templates[topic] = template
 
         if subscriptions:
             self.get_logger().info(
@@ -816,8 +972,14 @@ class PilotNode(Node):
                 timestamp = float(entry.get("timestamp", now))
                 if now - timestamp <= self._window_seconds:
                     vision_images.append(image)
+        templates = {
+            topic: template
+            for topic in topics
+            if (template := self._topic_templates.get(topic))
+        }
         return PilotPromptContext(
             topics=topics,
+            topic_templates=templates,
             status=status or topics.get("/status", {}),
             sensations=sensations,
             cockpit_actions=actions,
@@ -859,6 +1021,7 @@ class PilotNode(Node):
         msg.stamp = self.get_clock().now().to_msg()
         source_topics = sorted(set(context.topics.keys()) | {record.topic for record in recent_records})
         msg.source_topics = source_topics
+        msg.situation_overview = feeling_data.situation_overview
         msg.attitude_emoji = feeling_data.attitude_emoji
         msg.thought_sentence = feeling_data.thought_sentence
         msg.spoken_sentence = feeling_data.spoken_sentence
@@ -873,6 +1036,8 @@ class PilotNode(Node):
 
         self.publisher.publish(msg)
         self._dirty = False
+
+        self._publish_feedback_topics(feeling_data)
 
         # Execute the generated script asynchronously so the LLM loop can continue.
         try:

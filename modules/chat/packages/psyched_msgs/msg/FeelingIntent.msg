@@ -1,6 +1,7 @@
 builtin_interfaces/Time stamp
 string[] source_topics
 
+string situation_overview
 string attitude_emoji
 string thought_sentence
 string spoken_sentence

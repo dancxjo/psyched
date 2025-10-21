@@ -18,6 +18,7 @@ _SENTENCE_TERMINATOR_PATTERN = re.compile(r"[.?!]")
 _MULTIPLE_SENTENCE_PATTERN = re.compile(r"[.?!].+?[.?!]")
 _MAX_SCRIPT_CHARACTERS = 4096
 _MAX_SCRIPT_LINES = 200
+_MAX_OVERVIEW_CHARACTERS = 320
 _COMMAND_INTERPRETER = CommandScriptInterpreter()
 
 def _is_single_sentence(text: str) -> bool:
@@ -55,6 +56,14 @@ def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> 
 
     if not isinstance(payload, dict):
         raise FeelingIntentValidationError("LLM output must be a JSON object")
+
+    overview = str(payload.get("situation_overview", "")).strip()
+    if not overview:
+        raise FeelingIntentValidationError("situation_overview must describe the current environment")
+    if len(overview) > _MAX_OVERVIEW_CHARACTERS:
+        raise FeelingIntentValidationError(
+            f"situation_overview must be <= {_MAX_OVERVIEW_CHARACTERS} characters"
+        )
 
     attitude = str(payload.get("attitude_emoji", ""))
     if not _is_valid_emoji_string(attitude):
@@ -99,6 +108,7 @@ def parse_feeling_intent_json(raw_json: str, allowed_actions: Sequence[str]) -> 
     situation_id = str(payload.get("situation_id", "")).strip()
 
     return FeelingIntentData(
+        situation_overview=overview,
         attitude_emoji=attitude,
         thought_sentence=thought,
         spoken_sentence=spoken,
