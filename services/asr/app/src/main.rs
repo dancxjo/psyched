@@ -11,13 +11,15 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use futures::{SinkExt, StreamExt};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{error, info, warn};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 #[derive(Clone)]
 struct WhisperService {
@@ -43,7 +45,7 @@ struct SegmentMessage {
     words: Vec<WordTiming>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SegmentInternal {
     text: String,
     start_s: f32,
@@ -62,8 +64,12 @@ struct TrackedSegment {
 #[derive(Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 enum OutgoingMessage {
-    Ready { sample_rate: u32 },
-    Partial { segments: Vec<SegmentMessage> },
+    Ready {
+        sample_rate: u32,
+    },
+    Partial {
+        segments: Vec<SegmentMessage>,
+    },
     Final {
         text: String,
         start_ms: u32,
@@ -71,7 +77,9 @@ enum OutgoingMessage {
         audio_base64: String,
         segments: Vec<SegmentMessage>,
     },
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[tokio::main]
@@ -103,23 +111,24 @@ async fn main() -> Result<()> {
         .context("invalid WEBSOCKET_PORT")?;
 
     info!(model_path = %model_path, "loading whisper model");
-    let context = WhisperContext::new(&model_path)
+    let context = WhisperContext::new_with_params(&model_path, WhisperContextParameters::default())
         .with_context(|| format!("failed to load whisper model from {model_path}"))?;
 
-    let service = WhisperService {
+    let service = Arc::new(WhisperService {
         context: Arc::new(Mutex::new(context)),
         sample_rate,
         stability_hits: stability_hits.max(1),
         hop: Duration::from_millis(hop_ms.max(100)),
         min_duration: Duration::from_millis(min_duration_ms.max(100)),
-    };
-
-    let shared = Arc::new(service);
+    });
 
     let app = Router::new()
         .route("/asr", get(ws_handler))
-        .with_state(shared.clone())
-        .route("/health", get(|| async { Json(serde_json::json!({"status": "ok"})) }));
+        .with_state(service.clone())
+        .route(
+            "/health",
+            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        );
 
     let addr: SocketAddr = format!("{}:{}", listen_host, listen_port)
         .parse()
@@ -162,7 +171,7 @@ async fn ws_handler(
 async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Result<()> {
     let (mut sender, mut receiver) = socket.split();
 
-    let (pcm_tx, mut pcm_rx) = mpsc::channel::<Vec<u8>>(64);
+    let (pcm_tx, pcm_rx) = mpsc::channel::<Vec<u8>>(64);
     let (out_tx, mut out_rx) = mpsc::channel::<OutgoingMessage>(64);
 
     out_tx
@@ -208,7 +217,7 @@ async fn handle_socket(service: Arc<WhisperService>, socket: WebSocket) -> Resul
 
     drop(pcm_tx);
     if let Err(err) = processor.await {
-    error!(error = %err, "processor task join failed");
+        error!(error = %err, "processor task join failed");
     }
     send_task.abort();
     Ok(())
@@ -251,12 +260,11 @@ async fn run_connection(
                     continue;
                 }
                 let audio: Vec<f32> = buffer.iter().copied().collect();
-                match service.transcribe(&audio).await {
+                match service.transcribe(audio).await {
                     Ok(segments) => {
                         if segments.is_empty() {
                             continue;
                         }
-                        let offset_seconds = total_consumed_samples as f32 / sample_rate;
                         let offset_seconds = total_consumed_samples as f32 / sample_rate;
                         let (finalised, mut new_tracked) = reconcile_segments(
                             &segments,
@@ -322,7 +330,7 @@ async fn run_connection(
                                         text,
                                         start_ms,
                                         end_ms,
-                                        audio_base64: base64::encode(wav_bytes),
+                                        audio_base64: BASE64_STANDARD.encode(&wav_bytes),
                                         segments: final_segments,
                                     };
                                     let _ = out_tx.send(payload).await;
@@ -350,11 +358,10 @@ async fn run_connection(
 }
 
 impl WhisperService {
-    async fn transcribe(&self, audio: &[f32]) -> Result<Vec<SegmentInternal>> {
+    async fn transcribe(&self, audio: Vec<f32>) -> Result<Vec<SegmentInternal>> {
         let ctx = self.context.clone();
-        let sample_rate = self.sample_rate;
-        tokio::task::spawn_blocking(move || {
-            let mut guard = ctx
+        Ok(tokio::task::spawn_blocking(move || {
+            let guard = ctx
                 .lock()
                 .map_err(|_| anyhow!("failed to lock whisper context"))?;
             let mut state = guard
@@ -372,7 +379,7 @@ impl WhisperService {
             params.set_n_threads(std::cmp::max(1, num_cpus::get() as i32 - 1));
 
             state
-                .full(params, audio)
+                .full(params, &audio)
                 .context("whisper full() failed")?;
 
             let mut segments = Vec::new();
@@ -387,7 +394,10 @@ impl WhisperService {
                 let mut word_start = None;
                 for t in 0..token_count {
                     let token = state.full_get_token_data(s, t)?;
-                    let piece = guard.token_to_str(token.id).to_string();
+                    let piece = guard
+                        .token_to_str(token.id)
+                        .context("failed to convert token to string")?
+                        .to_string();
                     let clean = piece.replace('▁', " ");
                     if piece.contains('▁') {
                         if let Some(start) = word_start.take() {
@@ -408,7 +418,11 @@ impl WhisperService {
                     }
                     current.push_str(&clean);
                     let end = token.t1 as f32 / 100.0;
-                    if end > start_s && current.trim().ends_with(|c: char| c == ' ' || c == ',' || c == '.' ) {
+                    if end > start_s
+                        && current
+                            .trim()
+                            .ends_with(|c: char| c == ' ' || c == ',' || c == '.')
+                    {
                         if let Some(start) = word_start.take() {
                             let word = current.trim().to_string();
                             if !word.is_empty() {
@@ -444,7 +458,7 @@ impl WhisperService {
 
             Ok::<_, anyhow::Error>(segments)
         })
-        .await??
+        .await??)
     }
 }
 
@@ -521,20 +535,21 @@ fn reconcile_segments(
 }
 
 fn encode_wav(samples: &[f32], sample_rate: u32) -> Result<Vec<u8>> {
-    let cursor = Cursor::new(Vec::new());
-    let spec = WavSpec {
-        channels: 1,
-        sample_rate,
-        bits_per_sample: 16,
-        sample_format: SampleFormat::Int,
-    };
-    let mut writer = WavWriter::new(cursor, spec)?;
-    for &sample in samples {
-        let clamped = sample.clamp(-1.0, 1.0);
-        let value = (clamped * i16::MAX as f32) as i16;
-        writer.write_sample(value)?;
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let spec = WavSpec {
+            channels: 1,
+            sample_rate,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        };
+        let mut writer = WavWriter::new(&mut cursor, spec)?;
+        for &sample in samples {
+            let clamped = sample.clamp(-1.0, 1.0);
+            let value = (clamped * i16::MAX as f32) as i16;
+            writer.write_sample(value)?;
+        }
+        writer.finalize()?;
     }
-    let cursor = writer.into_inner()?;
     Ok(cursor.into_inner())
 }
-*** End File

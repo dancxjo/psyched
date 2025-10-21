@@ -21,7 +21,6 @@ tokio = { version = "1", features = [
 ] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-whisper-rs = { version = "0.11", default-features = false, features = [
-    "dynamic",
-] }
+# Upstream removed the legacy 'dynamic' feature; rely on the default CPU backend.
+whisper-rs = { version = "0.11", default-features = false }
 num_cpus = "1"

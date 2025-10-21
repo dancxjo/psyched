@@ -1,4 +1,4 @@
-FROM rust:1.78-slim AS builder
+FROM rust:1.81-slim AS builder
 WORKDIR /app
 
 # Dependencies required to build whisper.cpp via whisper-rs
