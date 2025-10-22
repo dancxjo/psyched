@@ -1,4 +1,6 @@
+
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import {
   buildEyeSettingsPayload,
@@ -8,6 +10,18 @@ import {
 function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+const DEFAULT_PREVIEW_STREAMS = [
+  ['/camera/color/image_raw/compressed', 'sensor_msgs/msg/CompressedImage'],
+  ['/camera/color/image_raw', 'sensor_msgs/msg/Image'],
+  ['/kinect_ros2/image_raw/compressed', 'sensor_msgs/msg/CompressedImage'],
+  ['/kinect_ros2/image_raw', 'sensor_msgs/msg/Image'],
+  ['/image_raw/compressed', 'sensor_msgs/msg/CompressedImage'],
+  ['/image_raw', 'sensor_msgs/msg/Image'],
+];
+
+const PREVIEW_TIMEOUT_MS = 6000;
+const PREVIEW_RECONNECT_DELAY_MS = 1500;
 
 /**
  * Dashboard for the Eye module exposing Kinect stream controls.
@@ -30,6 +44,14 @@ class EyeDashboard extends LitElement {
     statusTone: { state: true },
     captureFeedback: { state: true },
     captureHistory: { state: true },
+    previewMode: { state: true },
+    previewFrameUrl: { state: true },
+    previewFrameReady: { state: true },
+    previewSource: { state: true },
+    previewEncoding: { state: true },
+    previewWidth: { state: true },
+    previewHeight: { state: true },
+    previewTimestamp: { state: true },
   };
 
   static styles = [
@@ -80,7 +102,30 @@ class EyeDashboard extends LitElement {
         place-items: center;
         color: var(--lcars-muted);
         text-align: center;
-        padding: 1.5rem;
+        padding: 0.5rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .preview__frame {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 0.65rem;
+        box-shadow: 0 0 18px rgba(0, 0, 0, 0.4);
+      }
+
+      .preview__placeholder {
+        display: grid;
+        gap: 0.25rem;
+      }
+
+      .preview__details {
+        margin: 0.5rem 0 0;
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lcars-muted);
       }
 
       .capture-history {
@@ -126,20 +171,81 @@ class EyeDashboard extends LitElement {
     this.statusTone = 'info';
     this.captureFeedback = '';
     this.captureHistory = [];
+    this.previewMode = 'idle';
+    this.previewFrameUrl = '';
+    this.previewFrameReady = false;
+    this.previewSource = '';
+    this.previewEncoding = '';
+    this.previewWidth = this.width;
+    this.previewHeight = this.height;
+    this.previewTimestamp = '';
+
+    this._previewCandidates = [];
+    this._previewCandidateIndex = 0;
+    this._activePreviewCandidate = null;
+    this._previewSocket = null;
+    this._previewTimeoutId = null;
+    this._reconnectTimer = null;
+    this._frameObjectUrl = '';
+    this._latestRawFrame = null;
+    this._frameRenderScheduled = false;
+    this._imageDataCache = null;
+    this._connected = false;
+
+    this._handlePreviewEvent = this._handlePreviewEvent.bind(this);
+    this._handlePreviewError = this._handlePreviewError.bind(this);
+    this._handlePreviewClose = this._handlePreviewClose.bind(this);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._connected = true;
+    this._previewCandidates = this._resolvePreviewCandidates();
+    this._previewCandidateIndex = 0;
+    this._startPreviewStream();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._connected = false;
+    this._teardownPreview();
   }
 
   render() {
+    const hasFrame = this.previewFrameReady && (this.previewMode === 'image' ? Boolean(this.previewFrameUrl) : this.previewMode === 'canvas');
+    const details = hasFrame
+      ? [
+          this.previewSource ? `Topic: ${this.previewSource}` : '',
+          this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
+          this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
+          this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
+        ].filter(Boolean).join(' • ')
+      : '';
+
     return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Stream preview</h3>
           <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
-          <div class="preview" role="img" aria-label="Live video preview placeholder">
-            <div>
-              <p>Preview stream placeholder</p>
-              <p>${this.width}×${this.height} @ ${this.frameRate} FPS</p>
-            </div>
+          <div class="preview" role="img" aria-label="Live video preview">
+            ${this.previewMode === 'image' && this.previewFrameUrl
+              ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye colour stream preview" />`
+              : ''}
+            ${this.previewMode === 'canvas'
+              ? html`<canvas
+                  class="preview__frame preview__canvas"
+                  width="${this.previewWidth || this.width}"
+                  height="${this.previewHeight || this.height}"
+                ></canvas>`
+              : ''}
+            ${!hasFrame
+              ? html`<div class="preview__placeholder">
+                  <p>${this.previewSource ? `Waiting for ${this.previewSource}` : 'Initialising preview stream…'}</p>
+                  <p>${this.width}×${this.height} @ ${this.frameRate} FPS</p>
+                </div>`
+              : ''}
           </div>
+          ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
             <button type="button" class="surface-button" @click=${this.markLive}>Mark feed live</button>
             <button type="button" class="surface-button surface-button--ghost" @click=${this.markIdle}>
@@ -341,6 +447,453 @@ class EyeDashboard extends LitElement {
   markIdle() {
     this.statusMessage = 'Awaiting stream status updates…';
     this.statusTone = 'info';
+  }
+
+  _resolvePreviewCandidates() {
+    const attribute = this.getAttribute('data-preview-topics') || this.dataset.previewTopics || '';
+    const parsed = this._parsePreviewAttribute(attribute);
+    const defaults = DEFAULT_PREVIEW_STREAMS.map(([topic, messageType]) => ({ topic, messageType }));
+    const seen = new Set();
+    return [...parsed, ...defaults].filter((candidate) => {
+      if (!candidate || typeof candidate.topic !== 'string' || typeof candidate.messageType !== 'string') {
+        return false;
+      }
+      const topic = candidate.topic.trim();
+      const messageType = candidate.messageType.trim();
+      if (!topic || !messageType) {
+        return false;
+      }
+      const key = `${topic}|${messageType}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+
+  _parsePreviewAttribute(value) {
+    if (!value || typeof value !== 'string') {
+      return [];
+    }
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const [topicPart, typePart] = entry.split('|').map((chunk) => chunk.trim());
+        if (!topicPart) {
+          return null;
+        }
+        const messageType = typePart || (topicPart.endsWith('/compressed') ? 'sensor_msgs/msg/CompressedImage' : 'sensor_msgs/msg/Image');
+        return { topic: topicPart, messageType };
+      })
+      .filter(Boolean);
+  }
+
+  _startPreviewStream() {
+    if (!this._connected) {
+      return;
+    }
+    if (this._previewCandidateIndex >= this._previewCandidates.length) {
+      this.statusMessage = 'No preview streams configured.';
+      this.statusTone = 'error';
+      return;
+    }
+    this._clearPreviewSocket();
+    if (this._previewTimeoutId) {
+      clearTimeout(this._previewTimeoutId);
+      this._previewTimeoutId = null;
+    }
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
+    const candidate = this._previewCandidates[this._previewCandidateIndex];
+    this._activePreviewCandidate = candidate;
+    this.previewSource = candidate.topic;
+    this.statusMessage = `Connecting to ${candidate.topic}…`;
+    this.statusTone = 'info';
+    this._resetPreviewState();
+
+    try {
+      const socket = createTopicSocket({
+        module: 'eye',
+        topic: candidate.topic,
+        type: candidate.messageType,
+        role: 'subscribe',
+        queueLength: 2,
+      });
+      this._previewSocket = socket;
+      socket.addEventListener('message', this._handlePreviewEvent);
+      socket.addEventListener('error', this._handlePreviewError);
+      socket.addEventListener('close', this._handlePreviewClose);
+      socket.ready.catch((error) => this._handlePreviewError(error));
+      this._previewTimeoutId = setTimeout(() => this._handlePreviewTimeout(), PREVIEW_TIMEOUT_MS);
+    } catch (error) {
+      console.error('Failed to initialise preview stream', error);
+      this._advancePreviewCandidate();
+    }
+  }
+
+  _teardownPreview() {
+    if (this._previewTimeoutId) {
+      clearTimeout(this._previewTimeoutId);
+      this._previewTimeoutId = null;
+    }
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    this._latestRawFrame = null;
+    this._frameRenderScheduled = false;
+    this._imageDataCache = null;
+    this._activePreviewCandidate = null;
+    this._clearPreviewSocket();
+    this._revokeObjectUrl();
+    this._resetPreviewState();
+  }
+
+  _resetPreviewState() {
+    this.previewMode = 'idle';
+    this.previewFrameUrl = '';
+    this.previewFrameReady = false;
+    this.previewEncoding = '';
+    this.previewTimestamp = '';
+    this.previewWidth = this.width;
+    this.previewHeight = this.height;
+  }
+
+  _clearPreviewSocket() {
+    if (!this._previewSocket) {
+      return;
+    }
+    this._previewSocket.removeEventListener('message', this._handlePreviewEvent);
+    this._previewSocket.removeEventListener('error', this._handlePreviewError);
+    this._previewSocket.removeEventListener('close', this._handlePreviewClose);
+    try {
+      this._previewSocket.close();
+    } catch (_error) {
+      // Ignore shutdown errors.
+    }
+    this._previewSocket = null;
+  }
+
+  _handlePreviewEvent(event) {
+    if (!event || typeof event.data !== 'string') {
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch (_error) {
+      return;
+    }
+    if (!payload || typeof payload !== 'object') {
+      return;
+    }
+    if (payload.event === 'status') {
+      this._handlePreviewStatus(payload.data || {});
+      return;
+    }
+    if (payload.event !== 'message') {
+      return;
+    }
+    const message = payload.data || {};
+    if (message && typeof message === 'object' && Array.isArray(message.data) && typeof message.format === 'string') {
+      if (this._renderCompressedFrame(message)) {
+        this._onPreviewFrameReceived();
+      }
+      return;
+    }
+    if (message && typeof message === 'object' && 'encoding' in message && message.data) {
+      if (this._renderRawFrame(message)) {
+        this._onPreviewFrameReceived();
+      }
+    }
+  }
+
+  _handlePreviewStatus(status) {
+    const state = typeof status?.state === 'string' ? status.state.toLowerCase() : '';
+    if (state === 'ready' && !this.previewFrameReady) {
+      this.statusMessage = 'Connected. Waiting for frames…';
+      this.statusTone = 'info';
+    } else if (state === 'closed') {
+      this.previewFrameReady = false;
+      this.statusMessage = 'Stream closed by backend. Reconnecting…';
+      this.statusTone = 'warning';
+      this._scheduleReconnect();
+    }
+  }
+
+  _handlePreviewError(error) {
+    if (!this._connected) {
+      return;
+    }
+    console.warn('Eye preview socket error', error);
+    if (!this.previewFrameReady) {
+      this.statusMessage = 'Preview stream unavailable, trying fallback…';
+      this.statusTone = 'warning';
+      this._advancePreviewCandidate();
+    } else {
+      this.statusMessage = 'Stream error encountered. Reconnecting…';
+      this.statusTone = 'warning';
+      this.previewFrameReady = false;
+      this._scheduleReconnect();
+    }
+  }
+
+  _handlePreviewClose() {
+    if (!this._connected) {
+      return;
+    }
+    if (!this.previewFrameReady) {
+      this._advancePreviewCandidate();
+    } else {
+      this.statusMessage = 'Stream disconnected. Attempting reconnect…';
+      this.statusTone = 'warning';
+      this.previewFrameReady = false;
+      this._scheduleReconnect();
+    }
+  }
+
+  _handlePreviewTimeout() {
+    this._previewTimeoutId = null;
+    if (this.previewFrameReady) {
+      return;
+    }
+    this.statusMessage = 'No frames received; checking alternate stream…';
+    this.statusTone = 'warning';
+    this._advancePreviewCandidate();
+  }
+
+  _advancePreviewCandidate() {
+    this._clearPreviewSocket();
+    if (this._previewTimeoutId) {
+      clearTimeout(this._previewTimeoutId);
+      this._previewTimeoutId = null;
+    }
+    this.previewFrameReady = false;
+    this._previewCandidateIndex += 1;
+    if (this._previewCandidateIndex >= this._previewCandidates.length) {
+      this.statusMessage = 'Unable to open preview stream.';
+      this.statusTone = 'error';
+      return;
+    }
+    this._startPreviewStream();
+  }
+
+  _scheduleReconnect() {
+    if (this._reconnectTimer || !this._connected) {
+      return;
+    }
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      if (!this._connected) {
+        return;
+      }
+      this._startPreviewStream();
+    }, PREVIEW_RECONNECT_DELAY_MS);
+  }
+
+  _onPreviewFrameReceived() {
+    if (this._previewTimeoutId) {
+      clearTimeout(this._previewTimeoutId);
+      this._previewTimeoutId = null;
+    }
+    if (!this.previewFrameReady) {
+      this.statusMessage = 'Live stream detected.';
+      this.statusTone = 'success';
+    }
+    this.previewFrameReady = true;
+    this.previewTimestamp = new Date().toLocaleTimeString();
+  }
+
+  _renderCompressedFrame(message) {
+    const data = Array.isArray(message.data) ? Uint8Array.from(message.data) : message.data;
+    if (!(data instanceof Uint8Array) || data.length === 0) {
+      return false;
+    }
+    const mimeType = this._resolveMimeType(message.format);
+    const blob = new Blob([data], { type: mimeType });
+    this._revokeObjectUrl();
+    this._frameObjectUrl = URL.createObjectURL(blob);
+    this.previewFrameUrl = this._frameObjectUrl;
+    this.previewMode = 'image';
+    this.previewEncoding = `compressed (${mimeType.replace('image/', '')})`;
+    if (typeof message.width === 'number' && message.width > 0) {
+      this.previewWidth = message.width;
+    }
+    if (typeof message.height === 'number' && message.height > 0) {
+      this.previewHeight = message.height;
+    }
+    return true;
+  }
+
+  _renderRawFrame(message) {
+    const encoding = typeof message.encoding === 'string' ? message.encoding.toLowerCase() : '';
+    const width = Number(message.width) || 0;
+    const height = Number(message.height) || 0;
+    if (!encoding || !width || !height) {
+      return false;
+    }
+    const buffer = this._toUint8Array(message.data);
+    if (!buffer.length) {
+      return false;
+    }
+    this.previewMode = 'canvas';
+    this.previewEncoding = encoding;
+    this.previewWidth = width;
+    this.previewHeight = height;
+    this._latestRawFrame = { message, buffer };
+    this._scheduleRawFrameDraw();
+    return true;
+  }
+
+  _scheduleRawFrameDraw() {
+    if (this._frameRenderScheduled) {
+      return;
+    }
+    this._frameRenderScheduled = true;
+    requestAnimationFrame(() => this._flushRawFrame());
+  }
+
+  async _flushRawFrame() {
+    this._frameRenderScheduled = false;
+    const frame = this._latestRawFrame;
+    if (!frame || !this._connected) {
+      return;
+    }
+    await this.updateComplete;
+    if (!this._connected) {
+      return;
+    }
+    const canvas = this.renderRoot?.querySelector('.preview__canvas');
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      return;
+    }
+    if (canvas.width !== this.previewWidth) {
+      canvas.width = this.previewWidth;
+    }
+    if (canvas.height !== this.previewHeight) {
+      canvas.height = this.previewHeight;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    const drawn = this._drawImageData(ctx, frame.message, frame.buffer);
+    if (!drawn) {
+      this.previewFrameReady = false;
+    }
+  }
+
+  _drawImageData(ctx, message, buffer) {
+    const encoding = typeof message.encoding === 'string' ? message.encoding.toLowerCase() : '';
+    const width = Number(message.width) || 0;
+    const height = Number(message.height) || 0;
+    const bytesPerPixel = this._bytesPerPixel(encoding);
+    if (!bytesPerPixel || !width || !height) {
+      return false;
+    }
+    const rowStride = Number(message.step) || width * bytesPerPixel;
+    if (buffer.length < rowStride * height) {
+      return false;
+    }
+    if (!this._imageDataCache || this._imageDataCache.width !== width || this._imageDataCache.height !== height) {
+      this._imageDataCache = ctx.createImageData(width, height);
+    }
+    const target = this._imageDataCache.data;
+    const bigEndian = Boolean(message.is_bigendian);
+    for (let y = 0; y < height; y += 1) {
+      const srcRow = y * rowStride;
+      const destRow = y * width * 4;
+      for (let x = 0; x < width; x += 1) {
+        const srcIndex = srcRow + x * bytesPerPixel;
+        const destIndex = destRow + x * 4;
+        if (destIndex + 3 >= target.length || srcIndex >= buffer.length) {
+          continue;
+        }
+        if (encoding === 'rgb8') {
+          target[destIndex] = buffer[srcIndex];
+          target[destIndex + 1] = buffer[srcIndex + 1];
+          target[destIndex + 2] = buffer[srcIndex + 2];
+          target[destIndex + 3] = 255;
+        } else if (encoding === 'bgr8') {
+          target[destIndex] = buffer[srcIndex + 2];
+          target[destIndex + 1] = buffer[srcIndex + 1];
+          target[destIndex + 2] = buffer[srcIndex];
+          target[destIndex + 3] = 255;
+        } else if (encoding === 'mono8') {
+          const value = buffer[srcIndex];
+          target[destIndex] = value;
+          target[destIndex + 1] = value;
+          target[destIndex + 2] = value;
+          target[destIndex + 3] = 255;
+        } else if (encoding === 'mono16') {
+          const byteA = buffer[srcIndex + (bigEndian ? 0 : 1)] ?? 0;
+          const byteB = buffer[srcIndex + (bigEndian ? 1 : 0)] ?? 0;
+          const value = (byteA << 8) | byteB;
+          const normalized = Math.min(255, Math.max(0, value >> 8));
+          target[destIndex] = normalized;
+          target[destIndex + 1] = normalized;
+          target[destIndex + 2] = normalized;
+          target[destIndex + 3] = 255;
+        }
+      }
+    }
+    ctx.putImageData(this._imageDataCache, 0, 0);
+    return true;
+  }
+
+  _resolveMimeType(format) {
+    const value = typeof format === 'string' ? format.toLowerCase() : '';
+    if (value.includes('png')) {
+      return 'image/png';
+    }
+    if (value.includes('bmp')) {
+      return 'image/bmp';
+    }
+    return 'image/jpeg';
+  }
+
+  _bytesPerPixel(encoding) {
+    switch (encoding) {
+      case 'rgb8':
+      case 'bgr8':
+        return 3;
+      case 'mono8':
+        return 1;
+      case 'mono16':
+        return 2;
+      default:
+        return 0;
+    }
+  }
+
+  _toUint8Array(data) {
+    if (data instanceof Uint8Array) {
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return Uint8Array.from(data);
+    }
+    if (data && typeof data === 'object' && typeof data.length === 'number') {
+      try {
+        return Uint8Array.from(data);
+      } catch (_error) {
+        return new Uint8Array();
+      }
+    }
+    return new Uint8Array();
+  }
+
+  _revokeObjectUrl() {
+    if (this._frameObjectUrl) {
+      URL.revokeObjectURL(this._frameObjectUrl);
+      this._frameObjectUrl = '';
+    }
   }
 }
 
