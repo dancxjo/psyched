@@ -4,7 +4,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY tools/tts_websocket /app/tools/tts_websocket
+COPY services/tts/tts_websocket /app/tts_websocket
 
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
@@ -17,4 +17,4 @@ RUN set -eux; \
     pip install --no-cache-dir "TTS==0.15.5" "websockets==15.0.1"
 
 EXPOSE 5002
-CMD ["python", "-m", "tools.tts_websocket.websocket_server"]
+CMD ["python", "/app/tts_websocket/websocket_server.py"]
