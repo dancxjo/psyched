@@ -141,7 +141,7 @@ class CockpitApp extends LitElement {
       return html`<section class="cockpit-error">
         <h2>Failed to load modules</h2>
         <p>${this.errorMessage}</p>
-        <button type="button" @click=${() => this.refresh()}>Retry</button>
+        <button type="button" @click=${() => this.refresh()}>&r; Retry</button>
       </section>`;
     }
     if (!this.modules.length) {

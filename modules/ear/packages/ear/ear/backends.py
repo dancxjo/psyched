@@ -200,6 +200,7 @@ class ServiceASREarBackend(AudioAwareBackend):
         self._queue: "queue.Queue[tuple[bytes, int, int] | None]" = queue.Queue()
         self._fallback_factory = fallback_factory
         self._delegate: AudioAwareBackend | None = None
+        self._last_text: str = ""
 
     def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
         """Queue audio to forward to the websocket service or fallback backend."""
@@ -244,34 +245,15 @@ class ServiceASREarBackend(AudioAwareBackend):
 
         try:
             async with websockets.connect(self._uri, open_timeout=self._connect_timeout) as ws:
-                while not stop_event.is_set():
-                    try:
-                        item = await asyncio.to_thread(self._queue.get, True, 0.1)
-                    except queue.Empty:
-                        continue
-                    if item is None:
-                        break
-                    pcm, sample_rate, channels = item
-                    payload = {
-                        "type": "chunk",
-                        "sample_rate": sample_rate,
-                        "channels": channels,
-                        "pcm": base64.b64encode(pcm).decode("ascii"),
-                    }
-                    await ws.send(json.dumps(payload))
-                    response = await ws.recv()
-                    if isinstance(response, bytes):
-                        continue
-                    if not response:
-                        continue
-                    try:
-                        decoded = json.loads(response)
-                    except json.JSONDecodeError:
-                        text = response.strip()
-                    else:
-                        text = str(decoded.get("text", "")).strip()
-                    if text:
-                        publish(text)
+                self._last_text = ""
+                tasks = [
+                    asyncio.create_task(self._pump_audio_chunks(ws, stop_event)),
+                    asyncio.create_task(self._receive_service_messages(ws, publish, stop_event)),
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, Exception):
+                        raise result
         except (OSError, asyncio.TimeoutError, WebSocketException) as error:
             raise BackendUnavailableError(
                 f"Failed to connect to ASR service at {self._uri}"
@@ -301,3 +283,86 @@ class ServiceASREarBackend(AudioAwareBackend):
                 f"ASR service unavailable at {self._uri}; using {fallback.__class__.__name__} fallback",
             )
             fallback.run(publish, stop_event)
+
+    async def _pump_audio_chunks(self, ws, stop_event: threading.Event) -> None:
+        from websockets.exceptions import WebSocketException
+
+        while not stop_event.is_set():
+            try:
+                item = await asyncio.to_thread(self._queue.get, True, 0.1)
+            except queue.Empty:
+                continue
+            if item is None:
+                break
+            pcm, sample_rate, channels = item
+            payload = {
+                "type": "chunk",
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "pcm": base64.b64encode(pcm).decode("ascii"),
+            }
+            try:
+                await ws.send(json.dumps(payload))
+            except WebSocketException as error:
+                raise error
+
+    async def _receive_service_messages(self, ws, publish: PublishCallback, stop_event: threading.Event) -> None:
+        from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+
+        while not stop_event.is_set():
+            try:
+                response = await asyncio.wait_for(ws.recv(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+            except (ConnectionClosedError, ConnectionClosedOK):
+                break
+            if isinstance(response, bytes):
+                continue
+            self._process_service_message(response, publish)
+
+    def _process_service_message(self, message: str, publish: PublishCallback) -> None:
+        text = self._extract_text_from_message(message)
+        if not text:
+            return
+        if text == self._last_text:
+            return
+        self._last_text = text
+        publish(text)
+
+    def _extract_text_from_message(self, message: str) -> str:
+        trimmed = message.strip()
+        if not trimmed:
+            return ""
+        if trimmed.startswith("{"):
+            try:
+                payload = json.loads(trimmed)
+            except json.JSONDecodeError:
+                return trimmed
+            event = str(payload.get("event", "")).lower()
+            if event == "ready":
+                sample_rate = payload.get("sample_rate")
+                if sample_rate:
+                    _LOGGER.debug("ASR service ready (sample_rate=%s)", sample_rate)
+                return ""
+            if event == "error":
+                message_text = str(payload.get("message", "")).strip()
+                if message_text:
+                    _LOGGER.error("ASR service error: %s", message_text)
+                return ""
+            if event in {"partial", "final"}:
+                segments = payload.get("segments") or []
+                parts: list[str] = []
+                for segment in segments:
+                    if not isinstance(segment, dict):
+                        continue
+                    part = str(segment.get("text", "")).strip()
+                    if part:
+                        parts.append(part)
+                segment_text = " ".join(parts).strip()
+                if event == "partial":
+                    return segment_text
+                text_value = str(payload.get("text", "")).strip()
+                return text_value or segment_text
+            text_value = str(payload.get("text", "")).strip()
+            return text_value
+        return trimmed

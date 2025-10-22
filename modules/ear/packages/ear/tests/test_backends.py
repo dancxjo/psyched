@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import io
 import threading
 from collections.abc import Callable
@@ -148,3 +149,37 @@ def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest
         (b"second", 16000, 1),
     ]
     assert fallback_backend.closed.is_set()
+
+
+def test_service_backend_processes_partial_and_final_payloads() -> None:
+    """Service backend should publish deduplicated partial and final transcripts."""
+
+    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/ws")
+    collector = _PublishCollector()
+
+    partial_payload = json.dumps(
+        {
+            "event": "partial",
+            "segments": [
+                {"text": "hello"},
+                {"text": "world"},
+            ],
+        },
+    )
+    backend._process_service_message(partial_payload, collector)
+    # Duplicate partial payloads should be ignored.
+    backend._process_service_message(partial_payload, collector)
+
+    final_payload = json.dumps(
+        {
+            "event": "final",
+            "text": "hello world!",
+            "segments": [
+                {"text": "hello"},
+                {"text": "world!"},
+            ],
+        },
+    )
+    backend._process_service_message(final_payload, collector)
+
+    assert collector.items == ["hello world", "hello world!"]

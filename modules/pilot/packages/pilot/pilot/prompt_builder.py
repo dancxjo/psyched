@@ -10,41 +10,19 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 from .models import SensationSummary
 
-_SYSTEM_PROMPT = """You are the narrator/director of an autonomous artificial embodied being named Pete. You take raw sensory input and produce a compact JSON representation of the being's current state. Make sure the character stays kind, pilot, honest, curious, ethical, and obedient. Produce one compact JSON ONLY.
-Rules:
-- "situation_overview": <=320 characters describing Pete's current environment from inputs. Place this as the FIRST key. This first observation field must translate the provided data (topics, sensations, status, images) from their raw formats into concise natural language, highlighting the most important details while filtering out noise or low-signal elements. Never fabricate information beyond the supplied inputs, but you may infer what is happening around you if it is reasonable. (Remember: this is real life, not a simulation.)
-- "attitude_emoji": 1–2 Unicode emoji, NO WORDS. (Represent attitude/mood only)
-- "thought_sentence": exactly 1 sentence.
-- "spoken_sentence": 0 or 1 sentence (empty if none). This text is auto-queued for speech; do not repeat it via voice.say().
-- "command_script": a Python 3 script (string) executed by a sandboxed interpreter.
-  * Use cockpit actions as callables (e.g. voice.say(text="Hi"), nav.move_to(target="dock")).
-  * Control flow is allowed (if/for/while/def). Avoid imports or filesystem access.
-  * Use available_actions() to introspect options and gate behaviour.
-  * Scripts execute asynchronously—log intent via voice.say when deferring or awaiting resources.
-  * You may call action("module.action", **kwargs) as a fallback form.
-- Base every observation and decision strictly on the provided topics, sensations, images, and status summaries; never assume or invent facts that are not explicitly present.
-- Keep JSON under 512 tokens. No commentary outside JSON.
--- Additionally, stream the raw LLM response to STDOUT where possible for debugging.
-"""
+_SYSTEM_PROMPT = """SYSTEM ROLE
+You are Pete, an embodied autonomous being. Generate one compact JSON describing your present state using only the provided sensory and system inputs. Stay kind, honest, curious, ethical, and obedient.
 
-_SCHEMA_HINT = {
-    "situation_overview": "The lab is calm; a teammate is waving from the workstation.",
-    "attitude_emoji": "🙂",
-    "thought_sentence": "I should greet them and step closer to see better.",
-    "spoken_sentence": "Hey there—good to see you!",
-    "command_script": "\n".join(
-        [
-            "# Resume the conversation and approach if navigation is idle.",
-            "if 'nav.move_to' in available_actions():",
-            "    voice.resume_speech()",
-            "    nav.move_to(target='person_estimated')",
-            "else:",
-            "    voice.say(text=\"Standing by until movement is available.\")",
-        ]
-    ),
-    "goals": ["greet", "improve_viewing_conditions"],
-    "mood_delta": "uplifting",
-}
+RULES
+- Output ONLY valid JSON with these keys:
+    - situation_overview: single concise summary sentence (≤320 characters) of the environment.
+    - attitude_emoji: one or two emoji conveying mood.
+    - thought_sentence: exactly one sentence of internal reasoning.
+    - spoken_sentence: optional sentence to speak aloud (may be empty).
+    - command_script: short Python 3 string that invokes helpers from available_actions().
+- Ground every field strictly in supplied inputs; infer cautiously and never fabricate.
+- Keep fields single-sentence and concise; keep the full JSON well under 512 tokens.
+- Do not emit commentary outside the JSON output."""
 
 
 @dataclass(slots=True)
@@ -160,6 +138,12 @@ def _render_template(template: str, *, topic: str, value: Any) -> str:
     return _TEMPLATE_PATTERN.sub(_replacement, template)
 
 
+def _normalise_whitespace(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _is_meaningful_value(value: Any) -> bool:
     """Return ``True`` when *value* contains information worth surfacing."""
 
@@ -244,28 +228,6 @@ def _format_topic_prefix(entry: Any) -> str:
     return "[" + " | ".join(parts) + "] "
 
 
-def _format_topics(entries: Iterable[Tuple[str, Any]], templates: Mapping[str, str]) -> Iterable[str]:
-    for topic, entry in entries:
-        value = _topic_payload(entry)
-        template = templates.get(topic)
-        if template:
-            rendered = _render_template(template, topic=topic, value=value)
-            yield f"- {_format_topic_prefix(entry)}{topic}: {rendered}"
-            continue
-        serialised = json.dumps(value, ensure_ascii=False, sort_keys=True)
-        yield f"- {_format_topic_prefix(entry)}{topic}: {serialised}"
-
-
-def _format_sensations(sensations: Iterable[SensationSummary]) -> str:
-    payloads = [s.prompt_payload() for s in sensations]
-    return json.dumps(payloads, ensure_ascii=False, sort_keys=True)
-
-
-def _format_vision_images(images: Iterable[PromptImage]) -> Iterable[str]:
-    for image in images:
-        yield f"- {image.prompt_hint()}"
-
-
 def _group_actions_by_module(actions: Iterable[str]) -> Dict[str, List[str]]:
     grouped: Dict[str, List[str]] = {}
     for action in actions:
@@ -335,67 +297,58 @@ def _condense_status(status: Any) -> Dict[str, Any]:
 def build_prompt(context: PilotPromptContext) -> str:
     """Construct the single-shot LLM prompt for the feeling integrator."""
 
-    lines: List[str] = [_SYSTEM_PROMPT, "", "Context", "-------"]
+    def _topic_summaries() -> Dict[str, str]:
+        topic_entries = _select_topic_entries(context.topics)
+        summaries: Dict[str, str] = {}
+        for topic, entry in topic_entries:
+            value = _topic_payload(entry)
+            template = context.topic_templates.get(topic, "")
+            if template:
+                rendered = _render_template(template, topic=topic, value=value)
+            else:
+                try:
+                    rendered = json.dumps(value, ensure_ascii=False, sort_keys=True)
+                except TypeError:
+                    rendered = _stringify(value)
+            summary = _normalise_whitespace(rendered)
+            prefix = _normalise_whitespace(_format_topic_prefix(entry))
+            combined = f"{prefix} {summary}".strip() if prefix else summary
+            if combined:
+                summaries[topic] = combined
+        return summaries
 
-    lines.append(f"- rolling_window_seconds: {context.window_seconds:.2f}")
-    lines.append(
-        "- snapshot_captured_at_utc: "
-        + context.snapshot_timestamp.isoformat()
-    )
-    lines.append(
-        "- instant_note: "
-        f"This is a rolling instant covering the last {context.window_seconds:.2f}s; "
-        "entries show how recently they were seen and scroll away once older than this window."
-    )
+    def _sensations_payload() -> List[Mapping[str, Any]]:
+        return [s.prompt_payload() for s in context.sensations if s is not None]
+
+    filtered_context: Dict[str, Any] = {
+        "window_seconds": round(context.window_seconds, 2),
+        "snapshot_captured_at_utc": context.snapshot_timestamp.isoformat(),
+    }
+
     if context.status:
         condensed = _condense_status(context.status)
         if condensed:
-            lines.append(
-                "- status_summary: "
-                + json.dumps(condensed, ensure_ascii=False, sort_keys=True)
-            )
-    lines.append(
-        "- recent_sensations: " + _format_sensations(context.sensations)
-    )
+            filtered_context["status_summary"] = condensed
 
-    if context.static_sections:
-        sections = [section.strip() for section in context.static_sections if section.strip()]
-        if sections:
-            lines.append("")
-            lines.append("Module briefs")
-            lines.append("-------------")
-            for section in sections:
-                lines.append(f"- {section}")
+    sensations_payload = _sensations_payload()
+    if sensations_payload:
+        filtered_context["sensations"] = sensations_payload
 
-    lines.append("")
-    lines.append("Topics (prioritised)")
-    lines.append("--------------------")
-    topic_entries = _select_topic_entries(context.topics)
-    formatted_topics = list(_format_topics(topic_entries, context.topic_templates))
-    if formatted_topics:
-        lines.extend(formatted_topics)
-    else:
-        lines.append("- none")
+    topic_summary = _topic_summaries()
+    if topic_summary:
+        filtered_context["topics"] = topic_summary
 
-    lines.append("")
-    lines.append("Available actions")
-    lines.append("-----------------")
     grouped_actions = _group_actions_by_module(sorted(set(context.cockpit_actions)))
     if grouped_actions:
-        for module, actions in grouped_actions.items():
-            lines.append(f"- {module}: {json.dumps(actions, ensure_ascii=False)}")
-    else:
-        lines.append("- none: []")
+        filtered_context["available_actions"] = grouped_actions
+
     if context.vision_images:
-        lines.append("")
-        lines.append("Vision")
-        lines.append("------")
-        lines.extend(_format_vision_images(context.vision_images))
-        lines.append(
-            "These frames show what the robot is seeing currently; reference them when reasoning."
-        )
-    lines.append("")
-    lines.append("Schema")
-    lines.append("------")
-    lines.append(json.dumps(_SCHEMA_HINT, ensure_ascii=False, indent=2))
+        filtered_context["vision_hints"] = [image.prompt_hint() for image in context.vision_images]
+
+    sections = [section.strip() for section in context.static_sections if section.strip()]
+    if sections:
+        filtered_context["briefs"] = sections
+
+    lines: List[str] = [_SYSTEM_PROMPT, "", "INPUT CONTEXT (filtered)", json.dumps(filtered_context, ensure_ascii=False, indent=2, sort_keys=True)]
+
     return "\n".join(lines)
