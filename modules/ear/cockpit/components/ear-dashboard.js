@@ -611,14 +611,14 @@ class EarDashboard extends LitElement {
             <h3 class="surface-card__title">Transcript log</h3>
             <form class="transcript-form" @submit=${(event) => this.injectFakeTranscript(event)}>
               <label>
-                Inject fake ASR transcript
-                <textarea
+                Inject fake ASR transcript (bleep)
+                <input type="text"
                   placeholder="Type a transcript line to append to the log"
                   .value=${this.fakeTranscriptText}
                   @input=${(event) => {
-                    this.fakeTranscriptText = event.target.value;
-                  }}
-                ></textarea>
+        this.fakeTranscriptText = event.target.value;
+      }}
+                >
               </label>
               <div class="surface-actions">
                 <button type="submit" class="surface-button">Inject transcript</button>
@@ -626,9 +626,9 @@ class EarDashboard extends LitElement {
                   type="button"
                   class="surface-button surface-button--ghost"
                   @click=${() => {
-                    this.fakeTranscriptText = '';
-                    this._setFakeTranscriptFeedback('', '');
-                  }}
+        this.fakeTranscriptText = '';
+        this._setFakeTranscriptFeedback('', '');
+      }}
                   ?disabled=${this.fakeTranscriptText.trim().length === 0}
                 >
                   Clear input
