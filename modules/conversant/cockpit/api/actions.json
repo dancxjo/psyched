@@ -1,0 +1,73 @@
+{
+    "version": 1,
+    "actions": [
+        {
+            "name": "hesitate",
+            "description": "Trigger an immediate hesitation or filler utterance.",
+            "kind": "publish-topic",
+            "defaults": {
+                "topic": "/conversant/hesitate",
+                "message_type": "std_msgs/msg/Empty",
+                "payload": {}
+            },
+            "parameters": {
+                "type": "object",
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "handle_concern",
+            "description": "Queue a concern for Conversant to acknowledge. Accepts raw text or JSON payload.",
+            "kind": "publish-topic",
+            "defaults": {
+                "topic": "/conversant/concern",
+                "message_type": "std_msgs/msg/String",
+                "payload_map": {
+                    "text": "data"
+                }
+            },
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Concern text or JSON payload with keys like concern, thread_id, escalate.",
+                        "minLength": 1,
+                        "maxLength": 400
+                    }
+                },
+                "required": [
+                    "text"
+                ],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "turn_taking_mode",
+            "description": "Adjust Conversant's turn-taking profile. Provide a preset name or JSON payload.",
+            "kind": "publish-topic",
+            "defaults": {
+                "topic": "/conversant/turn_control",
+                "message_type": "std_msgs/msg/String",
+                "payload_map": {
+                    "mode": "data"
+                }
+            },
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "description": "Mode preset (aggressive, balanced, patient) or JSON payload for advanced control.",
+                        "minLength": 1,
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "mode"
+                ],
+                "additionalProperties": false
+            }
+        }
+    ]
+}

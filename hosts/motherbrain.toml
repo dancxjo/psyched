@@ -6,6 +6,7 @@ modules = [
     "foot",
     "viscera",
     "voice",
+    "conversant",
     "pilot",
     "ear",
     "memory",
@@ -71,6 +72,13 @@ port = "ws"
 via = "ws://forebrain.local:5002/tts"
 bind_env = "VOICE_TTS_URL"
 summary = "Streams synthesized speech from the forebrain TTS service"
+
+[config.mod.conversant.env]
+CONVERSANT_MODE = "balanced"
+CONVERSANT_SILENCE_MS = "900"
+CONVERSANT_THREAD_TTL_SECONDS = "240"
+CONVERSANT_VAD_TOPIC = "/ear/speech_active"
+CONVERSANT_SILENCE_TOPIC = "/ear/silence"
 
 [config.mod.hypothalamus]
 display_name = "Hypothalamus"

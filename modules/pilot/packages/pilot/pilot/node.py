@@ -540,6 +540,10 @@ class PilotNode(Node):
 
         self._topic_cache: Dict[str, Dict[str, Any]] = {}
         self._sensation_records: List[tuple[float, SensationRecord]] = []
+        self._conversation_threads: Dict[str, List[Dict[str, Any]]] = {}
+        self._conversation_thread_order: List[str] = []
+        self._conversant_topic_name: str = "/conversant/memory_event"
+        self._conversation_subscription = None
         self._subscriptions: List[Any] = []
         self._dirty = False
 
@@ -601,6 +605,26 @@ class PilotNode(Node):
         qos = QoSProfile(depth=10)
         qos.history = QoSHistoryPolicy.KEEP_LAST
         qos.reliability = ReliabilityPolicy.RELIABLE
+
+        conversant_param = self.declare_parameter("conversant_memory_topic", "/conversant/memory_event").value
+        conversant_topic = str(conversant_param).strip() or "/conversant/memory_event"
+        self._conversant_topic_name = conversant_topic
+        try:
+            self._conversation_subscription = self.create_subscription(
+                StdString,
+                conversant_topic,
+                self._handle_conversant_memory_event,
+                qos,
+            )
+            self._subscriptions.append(self._conversation_subscription)
+            self.get_logger().info(
+                f"Subscribing to conversant memory events on {conversant_topic}"
+            )
+        except Exception as exc:
+            self.get_logger().warning(
+                f"Failed to subscribe to conversant memory events: {exc}"
+            )
+            self._conversation_subscription = None
 
         self.publisher = self.create_publisher(FeelingIntent, "pilot/intent", qos)
 
@@ -805,6 +829,59 @@ class PilotNode(Node):
             vector=vector,
         )
         self._sensation_records.append((time.monotonic(), record))
+        self._dirty = True
+
+    def _handle_conversant_memory_event(self, msg: StdString) -> None:
+        raw_text = str(getattr(msg, "data", "") or "")
+        try:
+            payload = json.loads(raw_text) if raw_text else {}
+        except json.JSONDecodeError:
+            payload = {"text": raw_text}
+        if not isinstance(payload, dict):
+            payload = {"value": payload}
+
+        kind = str(payload.get("kind") or "conversation")
+        collection_hint = str(payload.get("collection_hint") or kind)
+        record = SensationRecord(
+            topic=self._conversant_topic_name,
+            kind=kind,
+            collection_hint=collection_hint,
+            json_payload=json.dumps(payload, separators=(",", ":")),
+            vector=[],
+        )
+        self._sensation_records.append((time.monotonic(), record))
+        self._dirty = True
+
+        thread_id = str(payload.get("thread_id") or "").strip()
+        if not thread_id:
+            return
+
+        history = self._conversation_threads.setdefault(thread_id, [])
+        snapshot = {
+            "role": payload.get("role"),
+            "text": payload.get("text"),
+            "intent": payload.get("intent"),
+            "timestamp": payload.get("timestamp"),
+            "emoji": payload.get("emoji"),
+        }
+        history.append(snapshot)
+        if len(history) > 12:
+            del history[:-12]
+
+        if thread_id in self._conversation_thread_order:
+            self._conversation_thread_order.remove(thread_id)
+        self._conversation_thread_order.append(thread_id)
+        while len(self._conversation_thread_order) > 12:
+            evicted = self._conversation_thread_order.pop(0)
+            if evicted != thread_id:
+                self._conversation_threads.pop(evicted, None)
+
+        self._topic_cache["/conversation/threads"] = {
+            "data": {
+                "threads": {tid: list(entries) for tid, entries in self._conversation_threads.items()},
+            },
+            "timestamp": time.time(),
+        }
         self._dirty = True
 
     def _recent_sensations(self) -> List[SensationRecord]:

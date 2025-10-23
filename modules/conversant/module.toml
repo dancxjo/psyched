@@ -1,0 +1,15 @@
+[unit.conversant]
+apt = []
+pip = []
+launch = "modules/conversant/launch_unit.sh"
+shutdown = "modules/conversant/shutdown_unit.sh"
+cockpit_control = "modules/conversant/cockpit/index.html"
+
+[unit.conversant.ros]
+workspace = "."
+packages = ["conversant"]
+
+[cockpit]
+display_name = "Conversant"
+description = "Turn-taking and conversation handler"
+regimes = ["conversation"]
