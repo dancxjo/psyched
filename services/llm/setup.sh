@@ -12,7 +12,7 @@ if ! command -v docker >/dev/null 2>&1; then
 	exit 1
 fi
 
-if ! mkdir -p "${OLLAMA_DATA_DIR}"; then
+if ! sudo mkdir -p "${OLLAMA_DATA_DIR}"; then
 	echo "[ERROR] Failed to create ${OLLAMA_DATA_DIR}. Try running with elevated permissions." >&2
 	exit 1
 fi

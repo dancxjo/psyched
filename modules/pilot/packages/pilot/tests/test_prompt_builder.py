@@ -50,6 +50,12 @@ def test_build_prompt_structures_context_and_actions() -> None:
             )
         ],
         cockpit_actions=["voice.say", "voice.pause_speech"],
+        action_contract={
+            "voice": {
+                "pause_speech()": "Pause queued speech playback.",
+                "say(text: str)": "Queue text-to-speech output for the voice module.",
+            }
+        },
         window_seconds=3.0,
         snapshot_timestamp=_SNAPSHOT_TS,
         static_sections=[
@@ -59,20 +65,20 @@ def test_build_prompt_structures_context_and_actions() -> None:
 
     prompt = build_prompt(context)
 
-    assert prompt.startswith("You are an autonomous artificial embodied being")
-    assert "Context\n-------" in prompt
-    assert "- rolling_window_seconds: 3.00" in prompt
-    assert _SNAPSHOT_TS.isoformat() in prompt
-    assert "- status_summary:" in prompt
-    assert "recent_sensations" in prompt
-    assert "Topics (prioritised)" in prompt
-    assert "Available actions\n-----------------" in prompt
-    assert '\"pause_speech\", \"say\"' in prompt
-    assert "Module briefs" in prompt
-    assert "Voice module exposes" in prompt
-    assert "/voice/spoken" in prompt
-    assert "faces" in prompt
-    assert '\"queue_length\": 0' in prompt
+    assert prompt.startswith("SYSTEM ROLE")
+    _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
+    payload = json.loads(payload_text)
+    assert payload["window_seconds"] == 3.0
+    assert payload["snapshot_captured_at_utc"] == _SNAPSHOT_TS.isoformat()
+    assert payload["status_summary"] == {"speech": "paused", "queue_length": 0}
+    assert payload["sensations"][0]["kind"] == "face"
+    assert "/voice/spoken" in payload["topics"]
+    assert payload["available_actions"]["voice"]["say(text: str)"] == "Queue text-to-speech output for the voice module."
+    assert list(payload["available_actions"]["voice"].keys()) == [
+        "pause_speech()",
+        "say(text: str)",
+    ]
+    assert "Voice module exposes /voice (pending speech) and /voice/spoken (recent narration)." in payload.get("briefs", [])
 
 
 def test_build_prompt_mentions_vision_images_when_available() -> None:
@@ -96,10 +102,9 @@ def test_build_prompt_mentions_vision_images_when_available() -> None:
     )
 
     prompt = build_prompt(context)
-
-    assert "Vision" in prompt
-    assert "robot is seeing currently" in prompt
-    assert "/camera/color/image_raw/compressed" in prompt
+    _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
+    payload = json.loads(payload_text)
+    assert "/camera/color/image_raw/compressed" in payload.get("vision_hints", [])[0]
     assert "AAECAw==" not in prompt
 
 
@@ -122,9 +127,9 @@ def test_build_prompt_uses_topic_templates_for_custom_formatting() -> None:
     )
 
     prompt = build_prompt(context)
-
-    assert "state: x=1.0 y=-0.5 status=ready" in prompt
-    assert "/custom/state" in prompt
+    _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
+    payload = json.loads(payload_text)
+    assert "state: x=1.0 y=-0.5 status=ready" in payload["topics"]["/custom/state"]
 
 
 def test_build_prompt_prioritises_voice_and_asr_topics() -> None:
@@ -146,13 +151,13 @@ def test_build_prompt_prioritises_voice_and_asr_topics() -> None:
     )
 
     prompt = build_prompt(context)
-
-    topics_section = prompt.split("Topics (prioritised)\n--------------------\n", 1)[1]
-    assert "/voice/spoken" in topics_section
-    assert "/voice" in topics_section
-    assert "/ear/hole" in topics_section
-    assert "/misc" not in topics_section
-    assert topics_section.index("/voice/spoken") < topics_section.index("/ear/hole")
+    _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
+    payload = json.loads(payload_text)
+    topics_payload = payload["topics"]
+    assert "/voice/spoken" in topics_payload
+    assert "/voice" in topics_payload
+    assert "/ear/hole" in topics_payload
+    assert "/misc" not in topics_payload
 
 
 def test_build_prompt_labels_topic_age_and_captured_time() -> None:
@@ -170,7 +175,9 @@ def test_build_prompt_labels_topic_age_and_captured_time() -> None:
     )
 
     prompt = build_prompt(context)
-
-    assert "[0.1s ago" in prompt
-    assert "[1.7s ago" in prompt
-    assert (_SNAPSHOT_TS - timedelta(seconds=1.7)).isoformat() in prompt
+    _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
+    payload = json.loads(payload_text)
+    instant_meta = payload["topics"]["/instant"]
+    voice_meta = payload["topics"]["/voice"]
+    assert instant_meta.startswith("just now") or "0.1" in instant_meta
+    assert "1.7" in voice_meta

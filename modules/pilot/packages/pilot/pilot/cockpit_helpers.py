@@ -3,58 +3,90 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Mapping, MutableMapping, Tuple
+
+__all__ = [
+    "load_local_cockpit_actions",
+    "normalise_cockpit_modules_payload",
+    "render_action_signature",
+]
+
+_SIGNATURE_TYPE_MAP = {
+    "string": "str",
+    "number": "float",
+    "integer": "int",
+    "boolean": "bool",
+    "array": "list",
+    "object": "dict",
+}
+
+
+def _coerce_parameters(value: Any) -> Dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
+
+
+def render_action_signature(name: str, parameters: Mapping[str, Any] | None) -> str:
+    if not name:
+        return "()"
+    if not parameters:
+        return f"{name}()"
+    props = parameters.get("properties") if isinstance(parameters, Mapping) else None
+    if not isinstance(props, Mapping) or not props:
+        return f"{name}()"
+
+    ordered = OrderedDict()
+    for key in props.keys():
+        ordered[str(key)] = props[key]
+
+    parts: list[str] = []
+    for key, spec in ordered.items():
+        if not isinstance(spec, Mapping):
+            hint = "object"
+        else:
+            raw_type = spec.get("type")
+            if isinstance(raw_type, str):
+                hint = _SIGNATURE_TYPE_MAP.get(raw_type.lower(), raw_type)
+            else:
+                hint = "object"
+            if hint == "list" and isinstance(spec.get("items"), Mapping):
+                item_spec = spec.get("items", {})
+                item_type = item_spec.get("type") if isinstance(item_spec, Mapping) else None
+                if isinstance(item_type, str):
+                    hint = f"list[{_SIGNATURE_TYPE_MAP.get(item_type.lower(), item_type)}]"
+        parts.append(f"{key}: {hint}")
+    joined = ", ".join(parts)
+    return f"{name}({joined})"
 
 
 def load_local_cockpit_actions(
     modules_root: Path,
     *,
     logger: Any | None = None,
-) -> Tuple[list[str], Dict[str, Dict[str, Any]]]:
+) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
     """Return cockpit actions discovered under *modules_root*.
 
-    Parameters
-    ----------
-    modules_root:
-        Base directory containing module folders (e.g. ``.../modules``).
-    logger:
-        Optional logger receiving debug information when manifests cannot be
-        parsed.
-
-    Returns
-    -------
-    tuple[list[str], dict[str, dict[str, Any]]]
-        ``(actions, schemas)`` where *actions* is a list of fully-qualified
-        ``"module.action"`` identifiers and *schemas* maps those identifiers to
-        their parameter schemas.
-
-    Examples
-    --------
-    >>> from pathlib import Path
-    >>> root = Path("/tmp/modules")
-    >>> (root / "alpha" / "cockpit" / "api").mkdir(parents=True, exist_ok=True)
-    >>> (root / "alpha" / "cockpit" / "api" / "actions.json").write_text(
-    ...     '{"actions": [{"name": "ping", "parameters": {"text": {"type": "string"}}}]}'
-    ... )
-    >>> load_local_cockpit_actions(root)[0]
-    ['alpha.ping']
-
-    The helper mirrors the logic used by the ``psh`` CLI so the pilot can rely
-    on the same manifests without shelling out to ``psh``.
+    The helper yields two parallel mappings: ``metadata`` stores rich action
+    descriptors keyed by fully-qualified name (``module.action``) while
+    ``schemas`` exposes the raw JSON Schema fragments used for argument
+    validation. Each descriptor includes a generated ``signature`` so downstream
+    consumers can present callable summaries without re-deriving them.
     """
 
-    actions: list[str] = []
+    metadata: Dict[str, Dict[str, Any]] = {}
     schemas: Dict[str, Dict[str, Any]] = {}
 
     try:
         module_dirs = sorted(p for p in modules_root.iterdir() if p.is_dir())
     except FileNotFoundError:
-        return actions, schemas
+            return metadata, schemas
     except OSError as exc:  # pragma: no cover - filesystem race conditions
         if logger is not None:
             logger.warning("Failed to enumerate modules at %s: %s", modules_root, exc)
-        return actions, schemas
+            return metadata, schemas
 
     for module_dir in module_dirs:
         actions_file = module_dir / "cockpit" / "api" / "actions.json"
@@ -85,12 +117,22 @@ def load_local_cockpit_actions(
             if not name:
                 continue
             fq_name = f"{module_dir.name}.{name}"
-            actions.append(fq_name)
-            params = entry.get("parameters")
-            if isinstance(params, Mapping):
-                schemas[fq_name] = dict(params)
+            params = _coerce_parameters(entry.get("parameters"))
+            schemas[fq_name] = params
+            description = str(entry.get("description") or "").strip()
+            signature = str(entry.get("signature") or "").strip()
+            if not signature:
+                signature = render_action_signature(name, params)
+            metadata[fq_name] = {
+                "module": module_dir.name,
+                "name": name,
+                "signature": signature,
+                "description": description,
+                "parameters": params,
+                "streaming": bool(entry.get("streaming")),
+            }
 
-    return actions, schemas
+    return metadata, schemas
 
 
 def normalise_cockpit_modules_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:

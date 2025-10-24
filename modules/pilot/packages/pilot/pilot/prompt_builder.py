@@ -64,6 +64,7 @@ class PilotPromptContext:
     cockpit_actions: List[str]
     window_seconds: float
     snapshot_timestamp: datetime
+    action_contract: Dict[str, Dict[str, str]] = field(default_factory=dict)
     topic_templates: Dict[str, str] = field(default_factory=dict)
     status: Dict[str, Any] | None = None
     vision_images: List[PromptImage] = field(default_factory=list)
@@ -234,22 +235,6 @@ def _format_topic_prefix(entry: Any) -> str:
     return "[" + " | ".join(parts) + "] "
 
 
-def _group_actions_by_module(actions: Iterable[str]) -> Dict[str, List[str]]:
-    grouped: Dict[str, List[str]] = {}
-    for action in actions:
-        if not action:
-            continue
-        module, _, name = action.partition(".")
-        if not name:
-            module, name = "shared", action
-        grouped.setdefault(module, []).append(name)
-
-    for module_actions in grouped.values():
-        module_actions.sort()
-
-    return dict(sorted(grouped.items()))
-
-
 def _condense_status(status: Any) -> Dict[str, Any]:
     if not isinstance(status, Mapping):
         return {"value": status}
@@ -344,9 +329,15 @@ def build_prompt(context: PilotPromptContext) -> str:
     if topic_summary:
         filtered_context["topics"] = topic_summary
 
-    grouped_actions = _group_actions_by_module(sorted(set(context.cockpit_actions)))
-    if grouped_actions:
-        filtered_context["available_actions"] = grouped_actions
+    if context.action_contract:
+        sorted_contract = {
+            module: {
+                signature: description
+                for signature, description in sorted(entries.items(), key=lambda item: item[0])
+            }
+            for module, entries in sorted(context.action_contract.items(), key=lambda item: item[0])
+        }
+        filtered_context["available_actions"] = sorted_contract
 
     if context.vision_images:
         filtered_context["vision_hints"] = [image.prompt_hint() for image in context.vision_images]

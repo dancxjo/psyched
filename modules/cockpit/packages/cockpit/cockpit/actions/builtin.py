@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping
 
 from cockpit.actions import ActionError, ActionResult, ModuleAction
 from cockpit.ros import RosClient, ServiceCallError, TopicStreamError
@@ -26,6 +27,47 @@ def register_builtin_actions(
                 _service_call_action(module_name, ros),
             ],
         )
+
+
+_STREAM_TOPIC_RETURN_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "stream": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "module": {"type": "string"},
+                "topic": {"type": "string"},
+                "message_type": {"type": "string"},
+                "role": {"type": "string"},
+            },
+            "required": ["id", "module", "topic", "message_type", "role"],
+            "additionalProperties": True,
+        }
+    },
+    "required": ["stream"],
+    "additionalProperties": False,
+}
+
+
+_SERVICE_CALL_RETURN_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "result": {
+            "description": "Raw ROS service response payload",
+            "type": [
+                "object",
+                "array",
+                "string",
+                "number",
+                "boolean",
+                "null",
+            ],
+        }
+    },
+    "required": ["result"],
+    "additionalProperties": False,
+}
 
 
 def _topic_stream_action(module: str, ros: RosClient) -> ModuleAction:
@@ -106,25 +148,7 @@ def _topic_stream_action(module: str, ros: RosClient) -> ModuleAction:
         parameters=parameters,
         streaming=True,
         handler=handler,
-        returns={
-            "type": "object",
-            "properties": {
-                "stream": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string"},
-                        "module": {"type": "string"},
-                        "topic": {"type": "string"},
-                        "message_type": {"type": "string"},
-                        "role": {"type": "string"},
-                    },
-                    "required": ["id", "module", "topic", "message_type", "role"],
-                    "additionalProperties": False,
-                },
-            },
-            "required": ["stream"],
-            "additionalProperties": False,
-        },
+        returns=deepcopy(_STREAM_TOPIC_RETURN_SCHEMA),
     )
 
 
@@ -195,12 +219,5 @@ def _service_call_action(module: str, ros: RosClient) -> ModuleAction:
         parameters=parameters,
         streaming=False,
         handler=handler,
-        returns={
-            "type": "object",
-            "properties": {
-                "result": {"type": "object"},
-            },
-            "required": ["result"],
-            "additionalProperties": False,
-        },
+        returns=deepcopy(_SERVICE_CALL_RETURN_SCHEMA),
     )

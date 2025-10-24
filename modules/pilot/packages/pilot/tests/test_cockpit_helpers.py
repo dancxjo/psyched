@@ -48,14 +48,19 @@ def test_load_local_cockpit_actions_reads_all_modules(tmp_path: Path) -> None:
         },
     )
 
-    actions, schemas = load_local_cockpit_actions(modules_root)
+    metadata, schemas = load_local_cockpit_actions(modules_root)
 
-    assert actions == [
-        "alpha.say_hi",
+    assert sorted(metadata.keys()) == [
         "alpha.noop",
+        "alpha.say_hi",
         "beta.wave",
     ]
+    assert metadata["alpha.say_hi"]["signature"].startswith("say_hi(")
+    assert metadata["alpha.say_hi"]["description"] == "Speak a greeting"
+    assert metadata["beta.wave"]["module"] == "beta"
+
     assert schemas == {
+        "alpha.noop": {},
         "alpha.say_hi": {"text": {"type": "string"}},
         "beta.wave": {"duration": {"type": "number"}},
     }
@@ -66,9 +71,9 @@ def test_load_local_cockpit_actions_handles_missing_root(tmp_path: Path) -> None
 
     empty_root = tmp_path / "no-modules-here"
 
-    actions, schemas = load_local_cockpit_actions(empty_root)
+    metadata, schemas = load_local_cockpit_actions(empty_root)
 
-    assert actions == []
+    assert metadata == {}
     assert schemas == {}
 
 

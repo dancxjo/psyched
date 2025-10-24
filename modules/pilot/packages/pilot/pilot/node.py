@@ -6,6 +6,7 @@ import os
 import socket
 import threading
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,7 @@ from std_msgs.msg import String as StdString
 from .cockpit_helpers import (
     load_local_cockpit_actions,
     normalise_cockpit_modules_payload,
+    render_action_signature,
 )
 from .command_script import (
     CommandInvocation,
@@ -116,6 +118,8 @@ _FEEDBACK_FIELD_TOPICS: Dict[str, Dict[str, str]] = {
         "prompt_template": "{{data.data}}",
     },
 }
+
+_IGNORED_ACTION_NAMES = {"call_service", "stream_topic"}
 
 
 def _feedback_context_topics() -> List[Dict[str, str]]:
@@ -1140,35 +1144,45 @@ class PilotNode(Node):
         except Exception as exc:  # pragma: no cover - defensive guard
             self.get_logger().warning(f"Failed to emit debug snapshot: {exc}")
 
-    def _fetch_actions(self) -> List[str]:
-        # Prefer fetching actions from cockpit HTTP API if available via env var
+    def _fetch_actions(
+        self,
+        *,
+        status: Mapping[str, Any] | None,
+    ) -> tuple[List[str], Dict[str, Dict[str, str]]]:
         cockpit_url = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
+        active_modules = self._active_modules_from_status(status)
+        metadata: Dict[str, Dict[str, Any]] = {}
+
         try:
-            # Try HTTP first
             req = request.Request(cockpit_url + "/api/actions")
             with request.urlopen(req, timeout=2.0) as resp:
                 body = resp.read().decode("utf-8")
             data = json.loads(body) if body else {}
-            modules = data.get("modules") if isinstance(data, dict) else {}
-            actions: List[str] = []
-            self._action_schemas = {}
-            if isinstance(modules, dict):
+            modules = data.get("modules") if isinstance(data, Mapping) else {}
+            if isinstance(modules, Mapping):
                 for module_name, info in modules.items():
-                    raw_actions = info.get("actions") if isinstance(info, Mapping) else []
-                    if not isinstance(raw_actions, list):
+                    actions = info.get("actions") if isinstance(info, Mapping) else []
+                    if not isinstance(actions, list):
                         continue
-                    for act in raw_actions:
-                        if not isinstance(act, Mapping):
+                    for entry in actions:
+                        if not isinstance(entry, Mapping):
                             continue
-                        name = act.get("name")
-                        if isinstance(name, str):
-                            fq_name = f"{module_name}.{name}"
-                            actions.append(fq_name)
-                            params = act.get("parameters")
-                            if isinstance(params, Mapping):
-                                self._action_schemas[fq_name] = dict(params)
-            if actions:
-                return actions
+                        name = str(entry.get("name") or "").strip()
+                        if not name:
+                            continue
+                        fq_name = f"{module_name}.{name}"
+                        params_raw = entry.get("parameters")
+                        parameters = dict(params_raw) if isinstance(params_raw, Mapping) else {}
+                        metadata[fq_name] = {
+                            "module": module_name,
+                            "name": name,
+                            "signature": str(entry.get("signature") or "").strip(),
+                            "description": str(entry.get("description") or "").strip(),
+                            "parameters": parameters,
+                            "streaming": bool(entry.get("streaming")),
+                        }
+            if metadata:
+                return self._assemble_action_catalogue(metadata, active_modules)
             raise ValueError("no actions from cockpit API")
         except Exception as exc:
             if not self._actions_fallback_logged:
@@ -1181,12 +1195,89 @@ class PilotNode(Node):
                     f"Falling back to local cockpit actions: {exc}"
                 )
 
-        actions, schemas = load_local_cockpit_actions(
+        metadata, _schemas = load_local_cockpit_actions(
             self._modules_root,
             logger=self.get_logger(),
         )
-        self._action_schemas = schemas
-        return actions
+        return self._assemble_action_catalogue(metadata, active_modules)
+
+    def _active_modules_from_status(
+        self,
+        status: Mapping[str, Any] | None,
+    ) -> set[str] | None:
+        if not isinstance(status, Mapping):
+            return None
+        modules = status.get("modules")
+        if not isinstance(modules, Mapping) or not modules:
+            return None
+
+        active: set[str] = set()
+        for name, info in modules.items():
+            if not isinstance(info, Mapping):
+                continue
+            if self._module_is_active(info):
+                active.add(str(name))
+        return active if active else set()
+
+    @staticmethod
+    def _module_is_active(info: Mapping[str, Any]) -> bool:
+        if bool(info.get("active")):
+            return True
+        status_value = info.get("status")
+        if isinstance(status_value, str) and status_value.strip().lower() in {"running", "active"}:
+            return True
+
+        systemd = info.get("systemd")
+        if isinstance(systemd, Mapping):
+            if bool(systemd.get("active")):
+                return True
+            active_state = systemd.get("active_state")
+            if isinstance(active_state, str) and active_state.strip().lower() in {"active", "activating", "reloading"}:
+                return True
+            sub_state = systemd.get("sub_state")
+            if isinstance(sub_state, str) and sub_state.strip().lower() in {"running", "listening"}:
+                return True
+        return False
+
+    def _assemble_action_catalogue(
+        self,
+        metadata: Mapping[str, Mapping[str, Any]],
+        active_modules: set[str] | None,
+    ) -> tuple[List[str], Dict[str, Dict[str, str]]]:
+        allowed: List[str] = []
+        contract: Dict[str, OrderedDict[str, str]] = {}
+        self._action_schemas = {}
+
+        for fq_name, entry in metadata.items():
+            module = str(entry.get("module") or fq_name.split(".", 1)[0])
+            if active_modules is not None and module not in active_modules:
+                continue
+
+            name = str(entry.get("name") or "").strip()
+            if not name or name in _IGNORED_ACTION_NAMES:
+                continue
+
+            params_raw = entry.get("parameters")
+            params: Dict[str, Any] = dict(params_raw) if isinstance(params_raw, Mapping) else {}
+
+            signature = str(entry.get("signature") or "").strip()
+            if not signature:
+                signature = render_action_signature(name, params)
+
+            description = str(entry.get("description") or "").strip()
+
+            allowed.append(fq_name)
+            bucket = contract.setdefault(module, OrderedDict())
+            bucket[signature] = description
+            if params:
+                self._action_schemas[fq_name] = params
+
+        allowed.sort()
+        ordered_contract = {
+            module: dict(actions)
+            for module, actions in sorted(contract.items())
+        }
+        return allowed, ordered_contract
 
     def _fetch_status(self) -> Dict[str, Any]:
         cockpit_url = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
@@ -1207,7 +1298,13 @@ class PilotNode(Node):
         """Deprecated helper retained for compatibility; not used with scripts."""
         raise RuntimeError("_parse_command is no longer supported")
 
-    def _build_prompt_context(self, actions: List[str], status: Dict[str, Any]) -> Optional[PilotPromptContext]:
+    def _build_prompt_context(
+        self,
+        actions: List[str],
+        status: Dict[str, Any],
+        *,
+        action_contract: Mapping[str, Mapping[str, str]],
+    ) -> Optional[PilotPromptContext]:
         if not self._topic_cache and not self._sensation_records:
             return None
         now = time.time()
@@ -1282,6 +1379,7 @@ class PilotNode(Node):
             status=status or topics.get("/status", {}).get("value", {}),
             sensations=sensations,
             cockpit_actions=actions,
+            action_contract={module: dict(entries) for module, entries in action_contract.items()},
             window_seconds=self._window_seconds,
             vision_images=vision_images,
             snapshot_timestamp=snapshot_timestamp,
@@ -1291,9 +1389,9 @@ class PilotNode(Node):
     def _on_timer(self) -> None:
         if not self._dirty and not self._sensation_records:
             return
-        actions = self._fetch_actions()
         status = self._fetch_status()
-        context = self._build_prompt_context(actions, status)
+        actions, action_contract = self._fetch_actions(status=status)
+        context = self._build_prompt_context(actions, status, action_contract=action_contract)
         if not context:
             return
 
