@@ -498,6 +498,7 @@ export async function provisionHostProfile(
 export {
   availableHosts,
   locateHostConfig,
+  loadHostConfig,
   readHostConfig,
   HostConfigFormatError,
   HostConfigNotFoundError,
