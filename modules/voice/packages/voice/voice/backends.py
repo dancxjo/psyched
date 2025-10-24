@@ -104,7 +104,11 @@ class FailoverSpeechBackend:
         primary: SpeechBackend,
         fallback: SpeechBackend,
         *,
-        failure_exceptions: tuple[type[Exception], ...] = (ConnectionError, TimeoutError),
+        failure_exceptions: tuple[type[Exception], ...] = (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+        ),
         log_warning: Callable[[str], None] | None = None,
     ) -> None:
         if not failure_exceptions:

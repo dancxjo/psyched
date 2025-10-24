@@ -84,7 +84,6 @@ class VoiceNode(Node):
                     return FailoverSpeechBackend(
                         backend,
                         espeak_backend,
-                        failure_exceptions=(ConnectionError, TimeoutError),
                         log_warning=logger.warning,
                     )
                 logger.warning(

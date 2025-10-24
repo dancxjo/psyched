@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -207,6 +208,35 @@ def test_failover_backend_switches_to_fallback_on_connection_error() -> None:
     assert primary.calls == 1  # primary no longer used
     assert fallback.spoken[-1] == "again"
 
+
+def test_failover_backend_switches_to_fallback_on_socket_error() -> None:
+    """Socket-level failures should also activate the fallback backend."""
+
+    class _FailingBackend:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def speak(
+            self,
+            text: str,
+            stop_event: threading.Event,
+            progress_callback: Callable[[str], None] | None = None,
+        ) -> None:
+            self.calls += 1
+            raise socket.gaierror(socket.EAI_NONAME, "name or service not known")
+
+    primary = _FailingBackend()
+    fallback = _RecordingBackend()
+    backend = FailoverSpeechBackend(primary, fallback)
+
+    backend.speak("dns failure", threading.Event())
+
+    assert primary.calls == 1
+    assert fallback.spoken == ["dns failure"]
+
+    backend.speak("still fallback", threading.Event())
+    assert primary.calls == 1
+    assert fallback.spoken[-1] == "still fallback"
 
 def test_failover_backend_propagates_interrupts() -> None:
     """Speech interruptions should bubble up without activating the fallback."""
