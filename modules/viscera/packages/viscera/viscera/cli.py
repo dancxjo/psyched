@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
-from typing import Iterable
+from typing import Any, Dict, Iterable
 
 from .feelers import DEFAULT_FEELERS
 from .monitor import SystemMetricsProbe, Viscera
+from .state import BatteryState, FootState, SystemState
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -27,6 +29,37 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _state_stats(state: SystemState) -> Dict[str, Any]:
+    """Return a serialisable snapshot of :class:`SystemState` metrics."""
+
+    battery: BatteryState = state.battery
+    foot: FootState | None = state.foot
+    return {
+        "timestamp": state.timestamp.isoformat(),
+        "battery": {
+            "charge_fraction": battery.charge_fraction,
+            "is_charging": battery.is_charging,
+            "temperature_c": battery.temperature_c,
+            "health_fraction": battery.health_fraction,
+        },
+        "cpu_load": state.cpu_load,
+        "memory_load": state.memory_load,
+        "disk_fill_level": state.disk_fill_level,
+        "swap_fraction": state.swap_fraction,
+        "uptime_sec": state.uptime_sec,
+        "temperature_c": state.temperature_c,
+        "process_count": state.process_count,
+        "foot": None
+        if foot is None
+        else {
+            "hazard_contacts": foot.hazard_contacts,
+            "is_slipping": foot.is_slipping,
+            "contact_confidence": foot.contact_confidence,
+            "temperature_c": foot.temperature_c,
+        },
+    }
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     """Entry point for the ``viscera_monitor`` console script."""
 
@@ -39,8 +72,21 @@ def main(argv: Iterable[str] | None = None) -> int:
     try:
         while True:
             state = probe.sample()
-            for sentence in viscera.narrate(state):
-                print(sentence)
+            stats_json = json.dumps(_state_stats(state), sort_keys=True)
+            sentiments = viscera.feelings(state)
+            if not sentiments:
+                print(f"[viscera] stats={stats_json}")
+            else:
+                for sentiment in sentiments:
+                    evidence_json = json.dumps(dict(sentiment.evidence), sort_keys=True)
+                    tags_repr = f"[{', '.join(sentiment.tags)}]" if sentiment.tags else "[]"
+                    print(
+                        f"{sentiment.narrative} "
+                        f"| intensity={sentiment.intensity:.3f} "
+                        f"| tags={tags_repr} "
+                        f"| evidence={evidence_json} "
+                        f"| stats={stats_json}"
+                    )
             time.sleep(max(0.1, args.interval))
     except KeyboardInterrupt:
         return 0
