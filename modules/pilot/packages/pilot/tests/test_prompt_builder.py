@@ -39,7 +39,13 @@ def test_build_prompt_structures_context_and_actions() -> None:
                 topic="/sensation/face",
                 kind="face",
                 collection_hint="faces",
-                json_payload=json.dumps({"id": "f_93", "meta": {"name_hint": "Ava"}}),
+                json_payload=json.dumps(
+                    {
+                        "memory_id": "f_93",
+                        "vector_id": "vec_93",
+                        "meta": {"name_hint": "Ava"},
+                    }
+                ),
                 vector_length=4,
             )
         ],

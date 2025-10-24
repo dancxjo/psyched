@@ -4,8 +4,9 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from dataclasses import dataclass
 from types import ModuleType
-from typing import Optional, Sequence, TYPE_CHECKING
+from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
 
 from rcl_interfaces.msg import SetParametersResult
 
@@ -26,6 +27,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .processing import (  # type: ignore[attr-defined]
         BasicEmbeddingExtractor,
         FaceProcessor,
+        ProcessedFace,
         HaarCascadeDetector,
     )
 
@@ -97,6 +99,98 @@ def _get_processing_module() -> ModuleType:
     return _processing
 
 
+@dataclass(frozen=True)
+class MemoryWriteResult:
+    """Outcome returned after attempting to persist an embedding."""
+
+    memory_id: Optional[str]
+    vector_id: Optional[str]
+
+
+class MemoryClient:
+    """Thin wrapper around the memory module's ROS services."""
+
+    def __init__(self, node: Node, *, kind: str = "faces", timeout: float = 0.75) -> None:
+        self._node = node
+        self._kind = kind
+        self._timeout = float(timeout)
+        self._enabled = False
+        self._warned: dict[str, bool] = {"memorize": False}
+        try:
+            from memory_interfaces.msg import MemoryEvent as _MemoryEvent  # type: ignore[import]
+            from memory_interfaces.srv import Memorize as _Memorize  # type: ignore[import]
+        except ImportError:
+            node.get_logger().info(
+                "memory_interfaces not available; faces memory bridge disabled"
+            )
+            self._MemoryEvent = None
+            self._Memorize = None
+            self._memorize_client = None
+            return
+
+        self._MemoryEvent = _MemoryEvent
+        self._Memorize = _Memorize
+        self._memorize_client = node.create_client(self._Memorize, "/memory/memorize")
+        self._enabled = True
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def memorize(
+        self,
+        *,
+        header: Optional[Header],
+        embedding: Sequence[float],
+        metadata: Mapping[str, Any],
+        flush: bool,
+    ) -> MemoryWriteResult:
+        if not self._enabled or self._MemoryEvent is None or self._memorize_client is None:
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+        if not embedding:
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+        if not self._memorize_client.wait_for_service(timeout_sec=0.0):
+            if not self._warned["memorize"]:
+                self._node.get_logger().warning(
+                    "/memory/memorize unavailable; face embeddings will stay local until it appears"
+                )
+                self._warned["memorize"] = True
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+
+        event_msg = self._MemoryEvent()
+        try:
+            if header is not None:
+                event_msg.header.stamp = header.stamp
+                event_msg.header.frame_id = getattr(header, "frame_id", "") or "faces"
+            else:
+                event_msg.header.frame_id = "faces"
+        except Exception:
+            event_msg.header.frame_id = "faces"
+        event_msg.kind = self._kind
+        event_msg.json_data = json.dumps(dict(metadata), separators=(",", ":"))
+        event_msg.embedding = [float(value) for value in embedding]
+
+        request = self._Memorize.Request()
+        request.event = event_msg
+        request.flush = bool(flush)
+        future = self._memorize_client.call_async(request)
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=self._timeout)
+        if not future.done():
+            future.cancel()
+            self._node.get_logger().warning("/memory/memorize call timed out")
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+        exc = future.exception()
+        if exc is not None:
+            self._node.get_logger().warning(f"/memory/memorize call failed: {exc}")
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+        response = future.result()
+        if response is None:
+            return MemoryWriteResult(memory_id=None, vector_id=None)
+        memory_id = response.memory_id or None
+        vector_id = response.vector_id or None
+        return MemoryWriteResult(memory_id=memory_id, vector_id=vector_id)
+
+
 class FaceDetectorNode(Node):
     """Detect faces from camera frames and publish crops and embeddings."""
 
@@ -116,12 +210,19 @@ class FaceDetectorNode(Node):
         self.declare_parameter("face_detected_topic", "/vision/face_detected")
         self.declare_parameter("trigger_cooldown_sec", 2.0)
         self.declare_parameter("sensation_topic", "/sensations")
+        self.declare_parameter("memory.enabled", True)
+        self.declare_parameter("memory.flush", True)
+        self.declare_parameter("memory.timeout_sec", 0.75)
 
         self._camera_topic = self._get_param("camera_topic", "/image_raw")
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
         self._face_detected_topic = self._get_param("face_detected_topic", "/vision/face_detected")
         self._sensation_topic = self._get_param("sensation_topic", "/sensations")
         self._trigger_cooldown = float(self._get_param("trigger_cooldown_sec", 2.0))
+        self._memory_flush = bool(self._get_param("memory.flush", True))
+        memory_enabled = bool(self._get_param("memory.enabled", True))
+        memory_timeout = float(self._get_param("memory.timeout_sec", 0.75))
+        self._memory_client = MemoryClient(self, kind="faces", timeout=memory_timeout) if memory_enabled else None
         self._last_signature: Optional[str] = None
         self._last_trigger_time: float = 0.0
 
@@ -146,6 +247,12 @@ class FaceDetectorNode(Node):
         )
         # Extra visibility: node is watching for frames
         self.get_logger().info("Keeping an eye out for faces...")
+        if self._memory_client is None or not self._memory_client.enabled:
+            self.get_logger().info("Face memory bridge disabled; embeddings will not be persisted")
+        else:
+            self.get_logger().info(
+                f"Face memory bridge enabled (flush={'on' if self._memory_flush else 'off'})"
+            )
 
     def _get_param(self, name: str, default: object) -> object:
         value = self.get_parameter(name).value
@@ -175,7 +282,7 @@ class FaceDetectorNode(Node):
         detections_msg = build_face_detections_msg(msg.header, faces, bridge=self._bridge)
         self._detections_pub.publish(detections_msg)
         self.get_logger().info(f"Published FaceDetections to {self._faces_topic} (faces={len(faces)})")
-        self._publish_sensations(msg.header, faces)
+        sensation_payloads = self._publish_sensations(msg.header, faces)
 
         signature = self._derive_signature(faces[0].embedding)
         now = time.monotonic()
@@ -188,7 +295,13 @@ class FaceDetectorNode(Node):
             decision = "duplicate_within_cooldown"
 
         if decision in ("new_signature", "cooldown_elapsed"):
-            payload = {"name": "Stranger", "signature": signature}
+            first_payload = sensation_payloads[0] if sensation_payloads else {}
+            payload = {
+                "name": "Stranger",
+                "memory_id": str(first_payload.get("memory_id", "")),
+                "vector_id": str(first_payload.get("vector_id", "")),
+                "collection": first_payload.get("collection", "faces"),
+            }
             trigger_msg = String()
             trigger_msg.data = json.dumps(payload)
             self._trigger_pub.publish(trigger_msg)
@@ -198,33 +311,76 @@ class FaceDetectorNode(Node):
         else:
             self.get_logger().info(f"Skipping trigger publish ({decision}) for signature {signature}")
 
-    def _publish_sensations(self, header: Header, faces: Sequence["ProcessedFace"]) -> None:
+    def _publish_sensations(self, header: Header, faces: Sequence["ProcessedFace"]) -> list[dict[str, Any]]:
+        payloads: list[dict[str, Any]] = []
         if not faces:
-            return
+            return payloads
         frame_id = getattr(header, "frame_id", "") if header is not None else ""
+        memory_client = self._memory_client if self._memory_client and self._memory_client.enabled else None
+
         for face in faces:
+            bbox = {
+                "x": int(face.bbox.x),
+                "y": int(face.bbox.y),
+                "width": int(face.bbox.width),
+                "height": int(face.bbox.height),
+            }
+            embedding_values = np.asarray(face.embedding, dtype=np.float32).tolist()
+            metadata = self._build_memory_metadata(frame_id=frame_id, bbox=bbox, face=face, embedding_dim=len(embedding_values))
+            memory_result = MemoryWriteResult(memory_id=None, vector_id=None)
+            if memory_client is not None:
+                memory_result = memory_client.memorize(
+                    header=header,
+                    embedding=embedding_values,
+                    metadata=metadata,
+                    flush=self._memory_flush,
+                )
+
+            payload = {
+                "memory_id": memory_result.memory_id or "",
+                "vector_id": memory_result.vector_id or "",
+                "collection": "faces",
+                "confidence": float(face.confidence),
+                "frame_id": frame_id,
+                "bbox": bbox,
+                "topic": self._faces_topic,
+                "embedding_dim": len(embedding_values),
+            }
+
             sensation = SensationStamped()
             sensation.stamp = header.stamp if header is not None else None
             sensation.kind = "face"
             sensation.collection_hint = "faces"
-            payload = {
-                "id": self._derive_signature(face.embedding),
-                "confidence": float(face.confidence),
-                "frame_id": frame_id,
-                "bbox": {
-                    "x": int(face.bbox.x),
-                    "y": int(face.bbox.y),
-                    "width": int(face.bbox.width),
-                    "height": int(face.bbox.height),
-                },
-                "topic": self._faces_topic,
-            }
             sensation.json_payload = json.dumps(payload, separators=(",", ":"))
-            sensation.vector = np.asarray(face.embedding, dtype=np.float32).tolist()
+            sensation.vector = embedding_values
             self._sensation_pub.publish(sensation)
+            payloads.append(payload)
+
         self.get_logger().info(
             f"Published {len(faces)} face embedding sensations to {self._sensation_topic}"
         )
+        return payloads
+
+    def _build_memory_metadata(
+        self,
+        *,
+        frame_id: str,
+        bbox: Mapping[str, int],
+        face: "ProcessedFace",
+        embedding_dim: int,
+    ) -> dict[str, Any]:
+        return {
+            "source": "faces/detector",
+            "topic": self._faces_topic,
+            "collection_hint": "faces",
+            "frame_id": frame_id or "faces",
+            "embedding_dim": int(embedding_dim),
+            "payload": {
+                "bbox": dict(bbox),
+                "confidence": float(face.confidence),
+                "topic": self._faces_topic,
+            },
+        }
 
     def _on_set_parameters(self, params: list) -> SetParametersResult:
         """Handle parameter updates; when camera_topic changes, recreate subscription."""

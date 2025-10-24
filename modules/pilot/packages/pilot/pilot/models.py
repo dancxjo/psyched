@@ -116,5 +116,5 @@ class SensationRecord:
             payload = json.loads(self.json_payload) if self.json_payload else {}
         except json.JSONDecodeError:
             return None
-        value = payload.get("id")
+        value = payload.get("memory_id") or payload.get("vector_id") or payload.get("id")
         return str(value) if value is not None else None

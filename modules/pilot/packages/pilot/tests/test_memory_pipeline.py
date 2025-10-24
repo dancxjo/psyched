@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from pilot.memory_pipeline import MemoryBatch, prepare_memory_batch
@@ -27,7 +28,14 @@ def test_prepare_memory_batch_builds_events_and_associations():
             topic="/sensation/face",
             kind="face",
             collection_hint="faces",
-            json_payload="{\"id\": \"face_1\"}",
+            json_payload=json.dumps(
+                {
+                    "memory_id": "mem_face_1",
+                    "vector_id": "vec_face_1",
+                    "bbox": {"x": 10, "y": 20, "width": 64, "height": 64},
+                },
+                separators=(",", ":"),
+            ),
             vector=[0.1, 0.2, 0.3],
         )
     ]
@@ -51,6 +59,8 @@ def test_prepare_memory_batch_builds_events_and_associations():
     sensation_event = next(event for event in batch.events if event.metadata["topic"] == "/sensation/face")
     assert sensation_event.kind == "faces"
     assert sensation_event.embedding == [0.1, 0.2, 0.3]
+    assert sensation_event.metadata["payload"]["memory_id"] == "mem_face_1"
+    assert sensation_event.metadata["payload"]["vector_id"] == "vec_face_1"
     assert batch.associations
     link = batch.associations[0]
     assert link.source_tag == sensation_event.tag
