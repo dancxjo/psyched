@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 from urllib import request
+from urllib.parse import urlparse, urlunparse
 
 import rclpy
 from rclpy.node import Node
@@ -45,13 +46,74 @@ class ConcernResponse:
 class ConcernResponder:
     """Optionally delegate concern handling to a lightweight local endpoint."""
 
-    def __init__(self, node: Node, endpoint: Optional[str], *, timeout: float = 2.5) -> None:
+    _OLLAMA_SUFFIXES = {"/api/generate", "/api/chat"}
+
+    def __init__(
+        self,
+        node: Node,
+        endpoint: Optional[str],
+        *,
+        model: Optional[str] = None,
+        timeout: float = 2.5,
+    ) -> None:
         self._node = node
-        self._endpoint = endpoint.strip() if endpoint else ""
+        self._raw_endpoint = endpoint.strip() if endpoint else ""
         self._timeout = timeout
+        self._model = (model or "").strip()
+        self._mode = "disabled"
+        self._http_endpoint: Optional[str] = None
+        self._ollama_endpoint: Optional[str] = None
+        self._ollama_timeout = max(timeout, 12.0)
+        self._configure_endpoint()
+
+    def _configure_endpoint(self) -> None:
+        if not self._raw_endpoint:
+            return
+
+        parsed = urlparse(self._raw_endpoint)
+        scheme = parsed.scheme.lower()
+
+        if not scheme:
+            parsed = urlparse(f"http://{self._raw_endpoint}")
+            scheme = parsed.scheme.lower()
+
+        if scheme.startswith("ollama"):
+            base_scheme = "http"
+            if "+" in scheme:
+                _, base_scheme = scheme.split("+", 1)
+            rebuilt = parsed._replace(scheme=base_scheme)
+            target = urlunparse(rebuilt)
+            self._configure_ollama_endpoint(target)
+            return
+
+        if scheme in {"http", "https"}:
+            suffix = parsed.path.rstrip("/")
+            if suffix in self._OLLAMA_SUFFIXES or suffix.endswith("/api/generate"):
+                target = urlunparse(parsed)
+                self._configure_ollama_endpoint(target)
+                return
+
+        self._mode = "http"
+        self._http_endpoint = urlunparse(parsed)
+
+    def _configure_ollama_endpoint(self, endpoint: str) -> None:
+        endpoint = endpoint.rstrip("/")
+        if not endpoint.endswith("/api/generate") and not endpoint.endswith("/api/chat"):
+            endpoint = f"{endpoint}/api/generate"
+        self._mode = "ollama"
+        self._ollama_endpoint = endpoint
+        if not self._model:
+            self._model = "gemma3:latest"
 
     def enabled(self) -> bool:
-        return bool(self._endpoint)
+        return self._mode != "disabled"
+
+    def describe(self) -> str:
+        if self._mode == "ollama":
+            return f"ollama({self._model})"
+        if self._mode == "http":
+            return "http-endpoint"
+        return "disabled"
 
     def generate(
         self,
@@ -60,8 +122,23 @@ class ConcernResponder:
         thread: ConversationThread,
         state: Dict[str, Any],
     ) -> ConcernResponse:
-        if not self._endpoint:
+        if not self.enabled():
             return self._fallback(concern, thread=thread)
+
+        if self._mode == "ollama":
+            return self._generate_with_ollama(concern=concern, thread=thread, state=state)
+        return self._generate_with_http(concern=concern, thread=thread, state=state)
+
+    def _generate_with_http(
+        self,
+        *,
+        concern: str,
+        thread: ConversationThread,
+        state: Dict[str, Any],
+    ) -> ConcernResponse:
+        if not self._http_endpoint:
+            return self._fallback(concern, thread=thread)
+
         payload = {
             "concern": concern,
             "thread_id": thread.thread_id,
@@ -70,7 +147,7 @@ class ConcernResponder:
         }
         body = json.dumps(payload).encode("utf-8")
         req = request.Request(
-            self._endpoint,
+            self._http_endpoint,
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -92,6 +169,126 @@ class ConcernResponder:
             )
             return self._fallback(concern, thread=thread)
 
+        return self._normalise_response(data, concern=concern, thread=thread)
+
+    def _generate_with_ollama(
+        self,
+        *,
+        concern: str,
+        thread: ConversationThread,
+        state: Dict[str, Any],
+    ) -> ConcernResponse:
+        if not self._ollama_endpoint:
+            return self._fallback(concern, thread=thread)
+
+        prompt = self._build_ollama_prompt(concern=concern, thread=thread, state=state)
+        payload = {
+            "model": self._model or "gemma3:latest",
+            "prompt": prompt,
+            "stream": False,
+            "format": "json",
+            "options": {
+                "temperature": 0.2,
+                "top_p": 0.9,
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            self._ollama_endpoint,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with request.urlopen(req, timeout=self._ollama_timeout) as resp:
+                outer_text = resp.read().decode("utf-8")
+        except Exception as exc:  # pragma: no cover - network failure path
+            self._node.get_logger().warning(
+                "Ollama concern responder failed: %s", exc
+            )
+            return self._fallback(concern, thread=thread)
+
+        try:
+            outer = json.loads(outer_text)
+        except json.JSONDecodeError:
+            self._node.get_logger().warning(
+                "Ollama concern responder returned invalid JSON: %s", outer_text
+            )
+            return self._fallback(concern, thread=thread)
+
+        error_message = outer.get("error")
+        if error_message:
+            self._node.get_logger().warning(
+                "Ollama concern responder returned an error: %s", error_message
+            )
+            return self._fallback(concern, thread=thread)
+
+        response_text = outer.get("response", "")
+        if not isinstance(response_text, str):
+            self._node.get_logger().warning(
+                "Ollama concern responder missing response field"
+            )
+            return self._fallback(concern, thread=thread)
+
+        response_text = response_text.strip()
+        if not response_text:
+            self._node.get_logger().warning(
+                "Ollama concern responder returned empty response"
+            )
+            return self._fallback(concern, thread=thread)
+
+        try:
+            data = json.loads(response_text)
+        except json.JSONDecodeError:
+            self._node.get_logger().warning(
+                "Ollama concern responder produced non-JSON payload: %s",
+                response_text,
+            )
+            return self._fallback(concern, thread=thread)
+
+        return self._normalise_response(data, concern=concern, thread=thread)
+
+    def _build_ollama_prompt(
+        self,
+        *,
+        concern: str,
+        thread: ConversationThread,
+        state: Dict[str, Any],
+    ) -> str:
+        turns = []
+        for turn in thread.turns[-6:]:
+            role = "Operator" if turn.role == "user" else "Pete"
+            text = (turn.text or "").strip().replace("\n", " ")
+            if text:
+                turns.append(f"{role}: {text}")
+        history = "\n".join(turns) if turns else "none"
+        state_json = json.dumps(state, ensure_ascii=True)
+        concern_text = concern.strip()
+
+        prompt_lines = [
+            "You are Pete's on-device concern responder.",
+            "Thread history (most recent last):",
+            history,
+            "",
+            f"Current concern: {concern_text}",
+            "",
+            "Respond with a JSON object containing keys 'speak', 'intent', and 'escalate'.",
+            "- 'speak' is a short, empathetic sentence with 25 words or fewer.",
+            "- 'intent' may be an empty string when no follow-up is required.",
+            "- 'escalate' is true only for urgent or safety-critical issues.",
+            f"Context state: {state_json}",
+            "Return only the JSON object.",
+        ]
+        return "\n".join(prompt_lines)
+
+    def _normalise_response(
+        self,
+        data: Any,
+        *,
+        concern: str,
+        thread: ConversationThread,
+    ) -> ConcernResponse:
         if not isinstance(data, dict):
             self._node.get_logger().warning(
                 "Concern responder response must be an object"
@@ -100,7 +297,14 @@ class ConcernResponder:
 
         speak = str(data.get("speak") or "").strip()
         intent = str(data.get("next_intent") or data.get("intent") or "").strip()
-        escalate = bool(data.get("escalate_to_pilot") or data.get("escalate"))
+
+        escalate_raw = data.get("escalate_to_pilot")
+        if escalate_raw is None:
+            escalate_raw = data.get("escalate")
+        if isinstance(escalate_raw, str):
+            escalate = escalate_raw.strip().lower() in {"1", "true", "yes", "on"}
+        else:
+            escalate = bool(escalate_raw)
 
         if not speak:
             return self._fallback(concern, thread=thread)
@@ -132,7 +336,8 @@ class ConversantNode(Node):
         filler_value = self.declare_parameter("filler_phrases", "").value
         phrases = self._parse_phrase_list(filler_value)
         self._filler_phrases: List[str] = phrases or list(_DEFAULT_FILLERS)
-        self._local_llm_url = self._declare_str("local_llm_url", "")
+    self._local_llm_url = self._declare_str("local_llm_url", "")
+    self._local_llm_model = self._declare_str("local_llm_model", "")
         self._memory_topic = self._declare_str("memory_topic", "/conversant/memory_event")
         self._vad_topic = self._declare_str("vad_topic", "/ear/speech_active")
         self._silence_topic = self._declare_str("silence_topic", "/ear/silence")
@@ -159,7 +364,11 @@ class ConversantNode(Node):
         self.create_subscription(String, self._spoken_topic, self._handle_spoken, 10)
 
         self._thread_store = ThreadStore(ttl_seconds=self._thread_ttl_seconds, max_turns=24)
-        self._responder = ConcernResponder(self, self._local_llm_url or None)
+        self._responder = ConcernResponder(
+            self,
+            self._local_llm_url or None,
+            model=self._local_llm_model or None,
+        )
         self._state = {
             "mood": "neutral",
             "situation": "",
@@ -182,7 +391,7 @@ class ConversantNode(Node):
             self._mode,
             self._silence_ms,
             ", ".join(self._filler_phrases),
-            "enabled" if self._responder.enabled() else "disabled",
+            self._responder.describe(),
         )
 
     # ------------------------------------------------------------------ helpers

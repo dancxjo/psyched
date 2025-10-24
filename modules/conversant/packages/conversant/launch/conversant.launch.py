@@ -19,6 +19,7 @@ def generate_launch_description() -> LaunchDescription:
     thread_ttl = LaunchConfiguration("thread_ttl_seconds")
     filler_phrases = LaunchConfiguration("filler_phrases")
     local_llm_url = LaunchConfiguration("local_llm_url")
+    local_llm_model = LaunchConfiguration("local_llm_model")
     memory_topic = LaunchConfiguration("memory_topic")
     vad_topic = LaunchConfiguration("vad_topic")
     silence_topic = LaunchConfiguration("silence_topic")
@@ -37,6 +38,7 @@ def generate_launch_description() -> LaunchDescription:
         _declare("thread_ttl_seconds", "180", "Idle seconds before conversation threads expire."),
         _declare("filler_phrases", "", "Optional comma-separated list of filler phrases."),
         _declare("local_llm_url", "", "Optional HTTP endpoint for short concern responses."),
+    _declare("local_llm_model", "", "Optional model identifier when using an Ollama endpoint."),
         _declare("memory_topic", "/conversant/memory_event", "Topic used to publish conversation memory events."),
         _declare("vad_topic", "/ear/speech_active", "Speech activity topic from the Ear module."),
         _declare("silence_topic", "/ear/silence", "Silence detection topic from the Ear module."),
@@ -57,6 +59,7 @@ def generate_launch_description() -> LaunchDescription:
             "thread_ttl_seconds": ParameterValue(thread_ttl, value_type=int),
             "filler_phrases": filler_phrases,
             "local_llm_url": local_llm_url,
+            "local_llm_model": local_llm_model,
             "memory_topic": memory_topic,
             "vad_topic": vad_topic,
             "silence_topic": silence_topic,

@@ -24,6 +24,7 @@ SILENCE_MS=${CONVERSANT_SILENCE_MS:-900}
 THREAD_TTL=${CONVERSANT_THREAD_TTL_SECONDS:-180}
 FILLERS=${CONVERSANT_FILLER_PHRASES:-}
 LOCAL_LLM_URL=${CONVERSANT_LOCAL_LLM_URL:-}
+LOCAL_LLM_MODEL=${CONVERSANT_LOCAL_LLM_MODEL:-}
 MEMORY_TOPIC=${CONVERSANT_MEMORY_TOPIC:-/conversant/memory_event}
 VAD_TOPIC=${CONVERSANT_VAD_TOPIC:-/ear/speech_active}
 SILENCE_TOPIC=${CONVERSANT_SILENCE_TOPIC:-/ear/silence}
@@ -59,6 +60,10 @@ fi
 
 if [[ -n "${LOCAL_LLM_URL}" ]]; then
   LAUNCH_ARGS+=("local_llm_url:=${LOCAL_LLM_URL}")
+fi
+
+if [[ -n "${LOCAL_LLM_MODEL}" ]]; then
+  LAUNCH_ARGS+=("local_llm_model:=${LOCAL_LLM_MODEL}")
 fi
 
 exec ros2 launch conversant conversant.launch.py "${LAUNCH_ARGS[@]}"

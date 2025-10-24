@@ -1,6 +1,7 @@
 [host]
 name = "motherbrain"
 installers = ["ros2", "docker"]
+services = ["llm"]
 modules = [
     "cockpit",
     "foot",
@@ -13,9 +14,7 @@ modules = [
     "eye",
     "nav",
     "faces",
-    # "gps",
-    # "hypothalamus",
-    # "imu",
+    "imu",
 ]
 
 [config.mod.ear.env]
@@ -79,6 +78,15 @@ CONVERSANT_SILENCE_MS = "900"
 CONVERSANT_THREAD_TTL_SECONDS = "240"
 CONVERSANT_VAD_TOPIC = "/ear/speech_active"
 CONVERSANT_SILENCE_TOPIC = "/ear/silence"
+CONVERSANT_LOCAL_LLM_URL = "http://motherbrain.local:11434/api/generate"
+CONVERSANT_LOCAL_LLM_MODEL = "gemma3:latest"
+
+[[config.mod.conversant.dependencies]]
+service = "motherbrain.llm"
+port = "http"
+via = "http://motherbrain.local:11434/api/generate"
+bind_env = "CONVERSANT_LOCAL_LLM_URL"
+summary = "Generates short concern responses via the Ollama runtime"
 
 [config.mod.hypothalamus]
 display_name = "Hypothalamus"
