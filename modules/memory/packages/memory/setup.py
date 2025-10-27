@@ -5,13 +5,13 @@ package_name = 'memory'
 setup(
     name=package_name,
     version='0.1.0',
-    packages=find_packages(exclude=['tests']),
+    packages=find_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools', 'neo4j>=5.15,<6', 'qdrant-client>=1.7,<2'],
-    zip_safe=True,
+    zip_safe=False,
     maintainer='Psyched Maintainers',
     maintainer_email='pete@psyched.local',
     description='Memory module connecting Qdrant vector storage with Neo4j.',
