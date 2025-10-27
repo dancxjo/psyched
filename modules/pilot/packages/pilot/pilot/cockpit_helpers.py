@@ -130,6 +130,7 @@ def load_local_cockpit_actions(
                 "description": description,
                 "parameters": params,
                 "streaming": bool(entry.get("streaming")),
+                "kind": str(entry.get("kind") or "").strip(),
             }
 
     return metadata, schemas

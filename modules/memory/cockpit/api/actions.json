@@ -2,112 +2,70 @@
   "version": 1,
   "actions": [
     {
-      "name": "recall_text",
-      "description": "Call /memory/recall with a text query to retrieve related memories.",
-      "kind": "call-service",
+      "name": "memorize_event",
+      "signature": "memorize_event(kind: str, data: dict, flush: bool = True)",
+      "description": "Persist a structured memory event with optional immediate flush control.",
+      "kind": "python-handler",
       "defaults": {
-        "service": "/memory/recall",
-        "service_type": "memory_interfaces/srv/Recall",
-        "arguments": {
-          "kind": "episodic",
-          "text": "",
-          "limit": 5,
-          "embedding": []
-        },
-        "argument_map": {
-          "text": "text",
-          "limit": "limit",
-          "kind": "kind"
-        }
+        "callable": "modules.memory.cockpit.actions:memorize_event_action",
+        "service": "/memory/memorize",
+        "service_type": "memory_interfaces/srv/Memorize"
       },
       "parameters": {
         "type": "object",
         "properties": {
-          "text": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Natural language query used to derive the recall vector."
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 50,
-            "description": "Maximum number of memories to return (default 5)."
-          },
           "kind": {
             "type": "string",
-            "description": "Memory collection kind when recalling (default 'episodic')."
-          }
-        },
-        "required": [
-          "text"
-        ],
-        "additionalProperties": false
-      },
-      "returns": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "object",
-            "description": "Raw service response structure."
-          }
-        },
-        "additionalProperties": true
-      }
-    },
-    {
-      "name": "memorize_event",
-      "description": "Call /memory/memorize with a prepared MemoryEvent payload.",
-      "kind": "call-service",
-      "defaults": {
-        "service": "/memory/memorize",
-        "service_type": "memory_interfaces/srv/Memorize",
-        "arguments": {
-          "event": {
-            "header": {
-              "frame_id": "memory",
-              "stamp": {
-                "sec": 0,
-                "nanosec": 0
-              }
-            },
-            "kind": "generic",
-            "json_data": "{}",
-            "embedding": []
+            "description": "Memory collection kind (e.g. episodic, semantic).",
+            "minLength": 1
           },
-          "flush": true
-        },
-        "argument_map": {
-          "event": "event",
-          "flush": "flush"
-        }
-      },
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "event": {
+          "data": {
             "type": "object",
-            "description": "Complete MemoryEvent structure (header, kind, json_data, optional embedding)."
+            "description": "JSON-serialisable payload describing the memory contents.",
+            "additionalProperties": true
           },
           "flush": {
             "type": "boolean",
-            "description": "Set to false to batch vector upserts instead of forcing immediate flush."
+            "description": "Set false to batch vector updates instead of forcing an immediate write.",
+            "default": true
           }
         },
-        "required": [
-          "event"
-        ],
+        "required": ["kind", "data"],
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "recall_text",
+      "signature": "recall_text(query: str, k: int = 5, kind: str = 'episodic')",
+      "description": "Search stored memories using a natural-language query.",
+      "kind": "python-handler",
+      "defaults": {
+        "callable": "modules.memory.cockpit.actions:recall_text_action",
+        "service": "/memory/recall",
+        "service_type": "memory_interfaces/srv/Recall"
       },
-      "returns": {
+      "parameters": {
         "type": "object",
         "properties": {
-          "result": {
-            "type": "object",
-            "description": "Raw response containing memory_id and vector_id."
+          "query": {
+            "type": "string",
+            "description": "Natural language query text used to drive vector recall.",
+            "minLength": 1
+          },
+          "k": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default 5).",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 5
+          },
+          "kind": {
+            "type": "string",
+            "description": "Memory collection kind to search (default 'episodic')."
           }
         },
-        "additionalProperties": true
+        "required": ["query"],
+        "additionalProperties": false
       }
     }
   ]

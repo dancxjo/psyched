@@ -58,6 +58,8 @@ class ModuleAction:
     description: str
     parameters: Mapping[str, Any]
     handler: ActionHandler
+    signature: str
+    kind: str
     returns: Optional[Mapping[str, Any]] = None
     streaming: bool = False
 
@@ -68,6 +70,8 @@ class ModuleAction:
             "name": self.name,
             "description": self.description,
             "parameters": dict(self.parameters),
+            "signature": self.signature,
+            "kind": self.kind,
             "streaming": self.streaming,
         }
         if self.returns is not None:

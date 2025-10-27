@@ -1180,6 +1180,7 @@ class PilotNode(Node):
                             "description": str(entry.get("description") or "").strip(),
                             "parameters": parameters,
                             "streaming": bool(entry.get("streaming")),
+                            "kind": str(entry.get("kind") or "").strip(),
                         }
             if metadata:
                 return self._assemble_action_catalogue(metadata, active_modules)
@@ -1255,6 +1256,10 @@ class PilotNode(Node):
 
             name = str(entry.get("name") or "").strip()
             if not name or name in _IGNORED_ACTION_NAMES:
+                continue
+
+            kind = str(entry.get("kind") or "").strip().lower()
+            if kind in {"call-service", "stream-topic"}:
                 continue
 
             params_raw = entry.get("parameters")

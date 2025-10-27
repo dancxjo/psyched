@@ -146,9 +146,11 @@ def _topic_stream_action(module: str, ros: RosClient) -> ModuleAction:
         name="stream_topic",
         description=f"Stream ROS topic traffic for the {module} module",
         parameters=parameters,
-        streaming=True,
         handler=handler,
+        signature="stream_topic(topic: str, message_type: str, role: str, queue_length: int, qos: dict)",
+        kind="stream-topic",
         returns=deepcopy(_STREAM_TOPIC_RETURN_SCHEMA),
+        streaming=True,
     )
 
 
@@ -217,7 +219,9 @@ def _service_call_action(module: str, ros: RosClient) -> ModuleAction:
         name="call_service",
         description=f"Invoke ROS services on behalf of the {module} module",
         parameters=parameters,
-        streaming=False,
         handler=handler,
+        signature="call_service(service: str, service_type: str, arguments: dict, timeout_ms: int)",
+        kind="call-service",
         returns=deepcopy(_SERVICE_CALL_RETURN_SCHEMA),
+        streaming=False,
     )

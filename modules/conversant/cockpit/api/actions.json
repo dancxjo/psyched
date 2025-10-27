@@ -3,6 +3,7 @@
     "actions": [
         {
             "name": "hesitate",
+            "signature": "hesitate()",
             "description": "Trigger an immediate hesitation or filler utterance.",
             "kind": "publish-topic",
             "defaults": {
@@ -17,6 +18,7 @@
         },
         {
             "name": "handle_concern",
+            "signature": "handle_concern(text: str)",
             "description": "Queue a concern for Conversant to acknowledge. Accepts raw text or JSON payload.",
             "kind": "publish-topic",
             "defaults": {
@@ -44,6 +46,7 @@
         },
         {
             "name": "turn_taking_mode",
+            "signature": "turn_taking_mode(mode: str)",
             "description": "Adjust Conversant's turn-taking profile. Provide a preset name or JSON payload.",
             "kind": "publish-topic",
             "defaults": {
