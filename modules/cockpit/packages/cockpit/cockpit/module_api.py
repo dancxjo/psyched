@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import importlib
+import inspect
 import json
 import logging
 from dataclasses import dataclass
+from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
 import tomllib
 
@@ -42,6 +45,7 @@ class ActionDefinition:
     defaults: Mapping[str, Any]
     parameters: Optional[Mapping[str, Any]] = None
     returns: Optional[Mapping[str, Any]] = None
+    signature: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -87,6 +91,9 @@ def load_module_api_definition(module_dir: Path) -> Optional[ModuleApiDefinition
         defaults = _coerce_mapping(raw.get("defaults"))
         parameters = _coerce_mapping(raw.get("parameters")) or None
         returns = _coerce_mapping(raw.get("returns")) or None
+        signature = raw.get("signature")
+        if isinstance(signature, str):
+            signature = signature.strip() or None
         definitions.append(
             ActionDefinition(
                 name=name,
@@ -95,6 +102,7 @@ def load_module_api_definition(module_dir: Path) -> Optional[ModuleApiDefinition
                 defaults=defaults,
                 parameters=parameters,
                 returns=returns,
+                signature=signature,
             )
         )
     return ModuleApiDefinition(version=version, actions=definitions)
@@ -206,6 +214,8 @@ def _build_action(
         return _build_call_service_action(module, definition, ros)
     if kind == "publish-topic":
         return _build_publish_topic_action(module, definition, ros)
+    if kind == "python-handler":
+        return _build_python_handler_action(module, definition, ros)
     raise ValueError(f"Unsupported action kind: {definition.kind}")
 
 
@@ -294,6 +304,7 @@ def _build_stream_topic_action(
     definition: ActionDefinition,
     ros: RosClient,
 ) -> ModuleAction:
+    signature = definition.signature or _render_signature(definition.name, definition.parameters)
     defaults = dict(definition.defaults)
     allowed_keys = _allowed_argument_keys(definition.parameters)
 
@@ -343,6 +354,8 @@ def _build_stream_topic_action(
         description=definition.description or f"Stream ROS topic traffic for the {module} module",
         parameters=definition.parameters or {},
         handler=handler,
+        signature=signature,
+        kind=definition.kind,
         returns=definition.returns,
         streaming=True,
     )
@@ -353,6 +366,7 @@ def _build_call_service_action(
     definition: ActionDefinition,
     ros: RosClient,
 ) -> ModuleAction:
+    signature = definition.signature or _render_signature(definition.name, definition.parameters)
     defaults = dict(definition.defaults)
     allowed_keys = _allowed_argument_keys(definition.parameters)
     raw_map = defaults.get("argument_map", {})
@@ -424,6 +438,8 @@ def _build_call_service_action(
         description=definition.description or f"Invoke ROS services on behalf of the {module} module",
         parameters=definition.parameters or {},
         handler=handler,
+        signature=signature,
+        kind=definition.kind,
         returns=definition.returns,
         streaming=False,
     )
@@ -434,6 +450,7 @@ def _build_publish_topic_action(
     definition: ActionDefinition,
     ros: RosClient,
 ) -> ModuleAction:
+    signature = definition.signature or _render_signature(definition.name, definition.parameters)
     defaults = dict(definition.defaults)
     topic_default = defaults.get("topic")
     message_type_default = defaults.get("message_type")
@@ -541,6 +558,73 @@ def _build_publish_topic_action(
         description=definition.description or f"Publish ROS topic traffic for the {module} module",
         parameters=definition.parameters or {},
         handler=handler,
+        signature=signature,
+        kind=definition.kind,
+        returns=definition.returns,
+        streaming=False,
+    )
+
+
+def _resolve_callable(path: str) -> Callable[..., Any]:
+    module_path, sep, attr = path.partition(":")
+    if not sep:
+        module_path, attr = path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, attr)
+
+
+def _build_python_handler_action(
+    module: str,
+    definition: ActionDefinition,
+    ros: RosClient,
+) -> ModuleAction:
+    signature = definition.signature or _render_signature(definition.name, definition.parameters)
+    target = definition.defaults.get("callable")
+    if not isinstance(target, str) or not target.strip():
+        raise ValueError("python-handler actions must provide a callable string in defaults.callable")
+
+    try:
+        handler_callable = _resolve_callable(target.strip())
+    except Exception as exc:  # pragma: no cover - import resolution errors depend on environment
+        raise ValueError(f"Failed to import python handler {target!r}: {exc}") from exc
+
+    if not callable(handler_callable):
+        raise ValueError(f"Resolved object for {target!r} is not callable")
+
+    accepted = inspect.signature(handler_callable).parameters
+
+    async def handler(context) -> ActionResult:
+        kwargs: Dict[str, Any] = {}
+        if "context" in accepted:
+            kwargs["context"] = context
+        if "ros" in accepted:
+            kwargs["ros"] = ros
+        if "module" in accepted:
+            kwargs["module"] = module
+        if "definition" in accepted:
+            kwargs["definition"] = definition
+
+        result = handler_callable(**kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+
+        if isinstance(result, ActionResult):
+            return result
+        if isinstance(result, Mapping):
+            return ActionResult(payload=dict(result))
+        if result is None:
+            return ActionResult()
+        raise ActionError(
+            "python-handler actions must return an ActionResult, mapping, or None"
+        )
+
+    return ModuleAction(
+        name=definition.name,
+        description=definition.description or f"Invoke custom cockpit handler for the {module} module",
+        parameters=definition.parameters or {},
+        handler=handler,
+        signature=signature,
+        kind=definition.kind,
         returns=definition.returns,
         streaming=False,
     )
@@ -558,3 +642,44 @@ __all__ = [
     "load_module_api_definition",
     "register_module_api_actions",
 ]
+_SIGNATURE_TYPE_MAP = {
+    "string": "str",
+    "number": "float",
+    "integer": "int",
+    "boolean": "bool",
+    "array": "list",
+    "object": "dict",
+}
+
+
+def _render_signature(name: str, parameters: Optional[Mapping[str, Any]]) -> str:
+    if not name:
+        return "()"
+    if not parameters:
+        return f"{name}()"
+    props = parameters.get("properties") if isinstance(parameters, Mapping) else None
+    if not isinstance(props, Mapping) or not props:
+        return f"{name}()"
+
+    ordered = OrderedDict()
+    for key in props.keys():
+        ordered[str(key)] = props[key]
+
+    parts: list[str] = []
+    for key, spec in ordered.items():
+        if not isinstance(spec, Mapping):
+            hint = "object"
+        else:
+            raw_type = spec.get("type")
+            if isinstance(raw_type, str):
+                hint = _SIGNATURE_TYPE_MAP.get(raw_type.lower(), raw_type)
+            else:
+                hint = "object"
+            if hint == "list" and isinstance(spec.get("items"), Mapping):
+                item_spec = spec.get("items", {})
+                item_type = item_spec.get("type") if isinstance(item_spec, Mapping) else None
+                if isinstance(item_type, str):
+                    hint = f"list[{_SIGNATURE_TYPE_MAP.get(item_type.lower(), item_type)}]"
+        parts.append(f"{key}: {hint}")
+    joined = ", ".join(parts)
+    return f"{name}({joined})"

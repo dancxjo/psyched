@@ -3,6 +3,7 @@
   "actions": [
     {
       "name": "say",
+      "signature": "say(text: str)",
       "description": "Queue text for speech synthesis via the voice module.",
       "kind": "publish-topic",
       "defaults": {
@@ -49,6 +50,7 @@
     },
     {
       "name": "pause_speech",
+      "signature": "pause_speech()",
       "description": "Pause queued speech playback.",
       "kind": "publish-topic",
       "defaults": {
@@ -63,6 +65,7 @@
     },
     {
       "name": "resume_speech",
+      "signature": "resume_speech()",
       "description": "Resume playback of queued speech.",
       "kind": "publish-topic",
       "defaults": {
@@ -77,6 +80,7 @@
     },
     {
       "name": "clear_queue",
+      "signature": "clear_queue()",
       "description": "Clear pending speech without playing it.",
       "kind": "publish-topic",
       "defaults": {
