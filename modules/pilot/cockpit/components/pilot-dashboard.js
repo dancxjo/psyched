@@ -338,16 +338,16 @@ class PilotDashboard extends LitElement {
             Topics the pilot is currently including in the prompt context.
           </p>
           ${this.config.contextTopics.length
-            ? html`
+          ? html`
               <ul class="chip-list">
                 ${this.config.contextTopics.map((topic) =>
-                  html`
+            html`
                     <li class="chip">${topic}</li>
                   `
-                )}
+          )}
               </ul>
             `
-            : html`
+          : html`
               <p class="empty-placeholder">No context topics observed yet.</p>
             `}
         </section>
@@ -357,16 +357,16 @@ class PilotDashboard extends LitElement {
             Recent sensation topics contributing to short-term memory.
           </p>
           ${this.config.sensationTopics.length
-            ? html`
+          ? html`
               <ul class="chip-list">
                 ${this.config.sensationTopics.map((topic) =>
-                  html`
+            html`
                     <li class="chip">${topic}</li>
                   `
-                )}
+          )}
               </ul>
             `
-            : html`
+          : html`
               <p class="empty-placeholder">No sensation streams recorded yet.</p>
             `}
         </section>
@@ -383,67 +383,67 @@ class PilotDashboard extends LitElement {
           ? html`
             <ul class="intent-feed">
               ${this.intentFeed.map(
-                (entry) =>
-                  html`
+            (entry) =>
+              html`
                     <li class="intent-entry">
                       <div class="intent-entry__meta">
                         <span class="intent-entry__emoji">${entry
-                          .attitudeEmoji || "🤖"}</span>
+                  .attitudeEmoji || "🤖"}</span>
                         <span>${entry.displayTime}</span>
                         ${entry.episodeId
-                          ? html`
+                  ? html`
                             <span>Episode ${entry.episodeId}</span>
                           `
-                          : null} ${entry.situationId
-                          ? html`
+                  : null} ${entry.situationId
+                    ? html`
                             <span>Situation ${entry.situationId}</span>
                           `
-                          : null}
+                    : null}
                       </div>
                       ${entry.spokenSentence
-                        ? html`
+                  ? html`
                           <p class="surface-note">"${entry
-                            .spokenSentence}"</p>
+                      .spokenSentence}"</p>
                         `
-                        : null} ${entry.thoughtSentence
-                        ? html`
+                  : null} ${entry.thoughtSentence
+                    ? html`
                           <p class="section-note">${entry.thoughtSentence}</p>
                         `
-                        : null} ${entry.goals.length
-                        ? html`
+                    : null} ${entry.goals.length
+                      ? html`
                           <p class="intent-entry__goals">
                             Goals: ${entry.goals.join(", ")}
                           </p>
                         `
-                        : null} ${entry.commandScript
+                      : null} ${entry.commandScript
                         ? html`
                           <pre class="intent-entry__script">${entry
                             .commandScript}</pre>
                         `
                         : null} ${entry.sourceTopics.length
-                        ? html`
+                          ? html`
                           <p class="intent-entry__topics">
                             Sources: ${entry.sourceTopics.join(", ")}
                           </p>
                         `
-                        : null} ${entry.moodDelta
-                        ? html`
+                          : null} ${entry.moodDelta
+                            ? html`
                           <p class="section-note">Mood delta: ${entry
-                            .moodDelta}</p>
+                                .moodDelta}</p>
                         `
-                        : null}
+                            : null}
                       ${entry.memory && entry.memory.text
-                        ? html`
+                  ? html`
                           <p class="section-note">
                             Memory: ${entry.memory.emoji
-                              ? `${entry.memory.emoji} `
-                              : ""}${entry.memory.text}
+                      ? `${entry.memory.emoji} `
+                      : ""}${entry.memory.text}
                           </p>
                         `
-                        : null}
+                  : null}
                     </li>
                   `,
-              )}
+          )}
             </ul>
           `
           : html`
@@ -479,47 +479,47 @@ class PilotDashboard extends LitElement {
       content: html`
           <p class="section-note">
             Sliding window of sensation summaries captured over the last ${this
-                .config.windowSeconds != null
-              ? this.config.windowSeconds.toFixed(1)
-              : "—"}
+          .config.windowSeconds != null
+          ? this.config.windowSeconds.toFixed(1)
+          : "—"}
             seconds.
           </p>
           ${this.recentSensations.length
-            ? html`
+          ? html`
               <ul class="sensations-list">
                 ${this.recentSensations.slice(0, 8).map(
-                  (sensation) =>
-                    html`
+            (sensation) =>
+              html`
                       <li class="sensations-entry">
                         <p class="sensations-entry__meta">
                           <strong>${sensation.kind ||
-                            "unknown"}</strong> via ${sensation
-                            .topic} ${sensation.hint
-                            ? html`
+                "unknown"}</strong> via ${sensation
+                  .topic} ${sensation.hint
+                    ? html`
                               <span>(${sensation.hint})</span>
                             `
-                            : null}
+                    : null}
                         </p>
                         ${sensation.jsonPayload
-                          ? html`
+                  ? html`
                             <pre class="intent-entry__script">${sensation
-                              .jsonPayload}</pre>
+                      .jsonPayload}</pre>
                           `
-                          : html`
+                  : html`
                             <p class="section-note">No JSON payload supplied.</p>
                           `}
                         <p class="section-note">Vector length: ${sensation
-                          .vectorLength}</p>
+                  .vectorLength}</p>
                       </li>
                     `,
-                )}
+          )}
               </ul>
             `
-            : html`
+          : html`
               <p class="empty-placeholder">No sensations recorded in the current window.</p>
             `}
         `,
-      });
+    });
 
     const scriptsCard = this.renderSurfaceCard({
       id: "pilot-scripts",
@@ -533,59 +533,59 @@ class PilotDashboard extends LitElement {
           ? html`
             <ul class="scripts-list">
               ${this.scriptRuns.slice(0, 6).map(
-                (script) =>
-                  html`
+            (script) =>
+              html`
                     <li class="script-entry">
                       <p class="script-entry__meta">
                         <span class="script-entry__status">${script
-                          .status}</span>
+                  .status}</span>
                         ${script.source
-                          ? html`
+                  ? html`
                             <span>• ${script.source}</span>
                           `
-                          : null} ${script.startedAt
-                          ? html`
+                  : null} ${script.startedAt
+                    ? html`
                             <span>• ${script.startedAt}</span>
                           `
-                          : null} ${script.finishedAt
-                          ? html`
+                    : null} ${script.finishedAt
+                      ? html`
                             <span>→ ${script.finishedAt}</span>
                           `
-                          : null}
+                      : null}
                       </p>
                       ${script.error
-                        ? html`
+                  ? html`
                           <p class="surface-status" data-variant="error">${script
-                            .error}</p>
+                      .error}</p>
                         `
-                        : null} ${script.usedActions.length
-                        ? html`
+                  : null} ${script.usedActions.length
+                    ? html`
                           <p class="section-note">
                             Actions: ${script.usedActions.join(", ")}
                           </p>
                         `
-                        : null} ${script.actions.length
-                        ? html`
+                    : null} ${script.actions.length
+                      ? html`
                           <ul class="script-entry__actions">
                             ${script.actions.map(
-                              (action) =>
-                                html`
+                        (action) =>
+                          html`
                                   <li>
                                     ${action.action || "unknown"} – ${action
-                                      .status} ${action.timestamp
-                                      ? html`
+                              .status} ${action.timestamp
+                                ? html`
                                         <span>(${action.timestamp})</span>
                                       `
-                                      : null}
+                                : null}
                                   </li>
                                 `,
-                            )}
+                      )}
                           </ul>
                         `
-                        : null}
+                      : null}
                     </li>
                   `,
-              )}
+          )}
             </ul>
           `
           : html`
@@ -596,30 +596,30 @@ class PilotDashboard extends LitElement {
 
     const lastLLMCard = this.lastLLM
       ? this.renderSurfaceCard({
-          id: "pilot-latest-llm",
-          title: "Latest LLM response",
-          wide: true,
-          content: html`
+        id: "pilot-latest-llm",
+        title: "Latest LLM response",
+        wide: true,
+        content: html`
             <p class="section-note">
               Trimmed copy of the model output that informed the most recent FeelingIntent
               message.
             </p>
             <pre class="llm-output">${this.lastLLM}</pre>
           `,
-        })
+      })
       : null;
 
     const cards = [
       statusCard,
+      sensationsCard,
+      scriptsCard,
+      lastLLMCard,
       html`
         <div class="pilot-dashboard__intent-prompt">
           ${intentCard}
           ${promptCard}
         </div>
       `,
-      sensationsCard,
-      scriptsCard,
-      lastLLMCard,
     ].filter(Boolean);
 
     return html`
@@ -745,8 +745,8 @@ class PilotDashboard extends LitElement {
       const snapshot = typeof snapshotPayload === "string"
         ? JSON.parse(snapshotPayload)
         : typeof snapshotPayload === "object" && snapshotPayload !== null
-        ? snapshotPayload
-        : null;
+          ? snapshotPayload
+          : null;
       const normalised = normaliseDebugSnapshot(snapshot);
       this.moduleStatus = normalised.status;
       this.lastHeartbeat = normalised.heartbeat;
