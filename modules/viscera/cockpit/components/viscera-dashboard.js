@@ -2,8 +2,21 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 
-function createVisceraSocket(options) {
-  return createTopicSocket({ module: 'viscera', ...options });
+function createVisceraSocket(options = {}) {
+  const action = options.action || 'host_health_stream';
+  const actionArguments = {};
+  if (typeof options.topic === 'string' && options.topic.trim()) {
+    actionArguments.topic = options.topic.trim();
+  }
+  if (Number.isFinite(options.queueLength) && options.queueLength > 0) {
+    actionArguments.queue_length = Math.floor(options.queueLength);
+  }
+  return createTopicSocket({
+    module: 'viscera',
+    ...options,
+    action,
+    arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+  });
 }
 
 const HOST_HEALTH_MSG_TYPE = 'psyched_msgs/msg/HostHealth';

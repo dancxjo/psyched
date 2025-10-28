@@ -2,6 +2,303 @@
   "version": 1,
   "actions": [
     {
+      "name": "battery_charge_stream",
+      "description": "Stream battery charge readings (Ah) from battery/charge.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/charge",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_capacity_stream",
+      "description": "Stream reported pack capacity (Ah) from battery/capacity.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/capacity",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_charge_ratio_stream",
+      "description": "Stream relative charge level (0-1) from battery/charge_ratio.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/charge_ratio",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_voltage_stream",
+      "description": "Stream instantaneous battery voltage from battery/voltage.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/voltage",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_current_stream",
+      "description": "Stream measured battery current draw from battery/current.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/current",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_temperature_stream",
+      "description": "Stream pack temperature readings from battery/temperature.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/temperature",
+        "message_type": "std_msgs/msg/Int16",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "battery_charging_state_stream",
+      "description": "Stream Create charging state transitions from battery/charging_state.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "battery/charging_state",
+        "message_type": "create_msgs/msg/ChargingState",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "bumper_stream",
+      "description": "Stream bumper contact events published on bumper.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "bumper",
+        "message_type": "create_msgs/msg/Bumper",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "cliff_stream",
+      "description": "Stream cliff sensor state transitions from cliff.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "cliff",
+        "message_type": "create_msgs/msg/Cliff",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "wheeldrop_stream",
+      "description": "Stream wheel drop notifications from wheeldrop.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "wheeldrop",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "clean_button_stream",
+      "description": "Stream clean button press events from clean_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "clean_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "spot_button_stream",
+      "description": "Stream spot button press events from spot_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "spot_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "dock_button_stream",
+      "description": "Stream dock button press events from dock_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "dock_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "day_button_stream",
+      "description": "Stream day scheduling button events from day_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "day_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "hour_button_stream",
+      "description": "Stream hour scheduling button events from hour_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "hour_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "minute_button_stream",
+      "description": "Stream minute scheduling button events from minute_button.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "minute_button",
+        "message_type": "std_msgs/msg/Empty",
+        "role": "subscribe",
+        "queue_length": 5
+      }
+    },
+    {
+      "name": "ir_omni_stream",
+      "description": "Stream omni-directional IR sensor values from ir_omni.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "ir_omni",
+        "message_type": "std_msgs/msg/UInt16",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "joint_states_stream",
+      "description": "Stream joint_states published by the Create driver.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "joint_states",
+        "message_type": "sensor_msgs/msg/JointState",
+        "role": "subscribe",
+        "queue_length": 20
+      }
+    },
+    {
+      "name": "mode_stream",
+      "description": "Stream Create operating mode messages from mode.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "mode",
+        "message_type": "create_msgs/msg/Mode",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "odom_stream",
+      "description": "Stream nav_msgs/Odometry messages from odom.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "odom",
+        "message_type": "nav_msgs/msg/Odometry",
+        "role": "subscribe",
+        "queue_length": 40
+      }
+    },
+    {
+      "name": "main_brush_motor_stream",
+      "description": "Stream main brush motor current readings from main_brush_motor.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "main_brush_motor",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "side_brush_motor_stream",
+      "description": "Stream side brush motor current readings from side_brush_motor.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "side_brush_motor",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "vacuum_motor_stream",
+      "description": "Stream vacuum motor current readings from vacuum_motor.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "vacuum_motor",
+        "message_type": "std_msgs/msg/Float32",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
+      "name": "diagnostics_stream",
+      "description": "Stream diagnostic_msgs/DiagnosticArray updates from diagnostics.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "diagnostics",
+        "message_type": "diagnostic_msgs/msg/DiagnosticArray",
+        "role": "subscribe",
+        "queue_length": 20
+      }
+    },
+    {
+      "name": "parameter_events_stream",
+      "description": "Stream parameter events emitted on parameter_events.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "parameter_events",
+        "message_type": "rcl_interfaces/msg/ParameterEvent",
+        "role": "subscribe",
+        "queue_length": 20
+      }
+    },
+    {
+      "name": "tf_stream",
+      "description": "Stream TF transforms broadcast on tf for the base frame.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "tf",
+        "message_type": "tf2_msgs/msg/TFMessage",
+        "role": "subscribe",
+        "queue_length": 50
+      }
+    },
+    {
+      "name": "tf_static_stream",
+      "description": "Stream static TF transforms broadcast on tf_static.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "tf_static",
+        "message_type": "tf2_msgs/msg/TFMessage",
+        "role": "subscribe",
+        "queue_length": 10
+      }
+    },
+    {
       "name": "cmd_vel_text",
       "description": "Parse a natural-language velocity command or component overrides into /cmd_vel geometry_msgs/msg/Twist output.",
       "kind": "publish-topic",

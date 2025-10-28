@@ -1,8 +1,25 @@
 import { createTopicSocket } from "/js/cockpit.js";
 import "/components/joystick-control.js";
+import { normaliseTopic, streamActionForTopic } from "../utils/streams.js";
 
 function createFootSocket(options, onError) {
-  const socket = createTopicSocket({ module: "foot", ...options });
+  const topic = options?.topic ?? "";
+  const action = options?.action || streamActionForTopic(topic);
+  const canonicalTopic = normaliseTopic(topic);
+  const actionArguments = {};
+  if (canonicalTopic) {
+    actionArguments.topic = canonicalTopic;
+  }
+  const socket = createTopicSocket({
+    module: "foot",
+    ...options,
+    ...(action
+      ? {
+          action,
+          arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+        }
+      : {}),
+  });
   const handler = typeof onError === "function" ? onError : () => undefined;
   socket.ready.catch((error) => {
     try {
