@@ -11,13 +11,24 @@ from typing import Any, Dict, List, Optional, Sequence
 from urllib import request
 from urllib.parse import urlparse, urlunparse
 
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Bool, Empty, String
+try:  # pragma: no cover - exercised when ROS 2 dependencies are present
+    import rclpy
+    from rclpy.node import Node
+    from std_msgs.msg import Bool, Empty, String
+except ImportError:  # pragma: no cover - fallback for test environments without ROS
+    rclpy = None  # type: ignore[assignment]
+
+    class Node:  # type: ignore[override]
+        """Placeholder ``Node`` used when ROS 2 libraries are unavailable."""
+
+        def __init__(self, *_: object, **__: object) -> None:
+            raise RuntimeError("rclpy is required to instantiate ConversantNode")
+
+    Bool = Empty = String = object  # type: ignore[assignment]
 
 from .threads import ConversationThread, ConversationTurn, ThreadStore, serialise_turn
 
-__all__ = ["ConversantNode", "main"]
+__all__ = ["ConversantNode", "main", "_enrich_metadata_with_topic"]
 
 
 _DEFAULT_FILLERS = [
@@ -324,6 +335,30 @@ class ConcernResponder:
         return ConcernResponse(speak=speak, intent="", escalate=False)
 
 
+def _enrich_metadata_with_topic(
+    metadata: Optional[Dict[str, str]],
+    *,
+    topic: str,
+) -> Dict[str, str]:
+    """Return *metadata* with the active conversation topic attached when present.
+
+    Parameters
+    ----------
+    metadata:
+        Optional metadata dictionary supplied by the caller. A shallow copy is
+        returned to avoid mutating the original mapping.
+    topic:
+        Candidate topic text published by :class:`ConversantNode`. Whitespace is
+        trimmed and empty topics are ignored.
+    """
+
+    enriched: Dict[str, str] = dict(metadata or {})
+    topic_text = str(topic or "").strip()
+    if topic_text and "topic" not in enriched:
+        enriched["topic"] = topic_text
+    return enriched
+
+
 class ConversantNode(Node):
     """ROS node that manages conversational pacing and concerns."""
 
@@ -336,8 +371,8 @@ class ConversantNode(Node):
         filler_value = self.declare_parameter("filler_phrases", "").value
         phrases = self._parse_phrase_list(filler_value)
         self._filler_phrases: List[str] = phrases or list(_DEFAULT_FILLERS)
-    self._local_llm_url = self._declare_str("local_llm_url", "")
-    self._local_llm_model = self._declare_str("local_llm_model", "")
+        self._local_llm_url = self._declare_str("local_llm_url", "")
+        self._local_llm_model = self._declare_str("local_llm_model", "")
         self._memory_topic = self._declare_str("memory_topic", "/conversant/memory_event")
         self._vad_topic = self._declare_str("vad_topic", "/ear/speech_active")
         self._silence_topic = self._declare_str("silence_topic", "/ear/silence")
@@ -373,7 +408,11 @@ class ConversantNode(Node):
             "mood": "neutral",
             "situation": "",
             "participants": [],
+            "topic": "",
         }
+
+        self._topic_topic = self._declare_str("topic_topic", "/conversant/topic")
+        self._topic_pub = self.create_publisher(String, self._topic_topic, 10)
 
         self._last_thread_id: Optional[str] = None
         self._voice_paused = False
@@ -393,6 +432,7 @@ class ConversantNode(Node):
             ", ".join(self._filler_phrases),
             self._responder.describe(),
         )
+        self._broadcast_topic()
 
     # ------------------------------------------------------------------ helpers
     def _declare_int(self, name: str, default: int) -> int:
@@ -453,12 +493,16 @@ class ConversantNode(Node):
         intent: str = "",
         metadata: Optional[Dict[str, str]] = None,
     ) -> tuple[ConversationThread, ConversationTurn]:
+        enriched_metadata = _enrich_metadata_with_topic(
+            metadata,
+            topic=self._state.get("topic", ""),
+        )
         thread, turn = self._thread_store.append(
             thread_id=thread_id,
             role=role,
             text=text,
             intent=intent,
-            metadata=metadata,
+            metadata=enriched_metadata,
         )
         self._last_thread_id = thread.thread_id
         return thread, turn
@@ -642,6 +686,19 @@ class ConversantNode(Node):
             self._state["situation"] = situation.strip()
         if isinstance(participants, Sequence) and not isinstance(participants, str):
             self._state["participants"] = [str(item).strip() for item in participants if str(item).strip()]
+        topic = payload.get("topic") or payload.get("conversation_topic")
+        if isinstance(topic, str):
+            cleaned = topic.strip()
+            if cleaned != self._state.get("topic", ""):
+                self._state["topic"] = cleaned
+                self._broadcast_topic()
+
+    def _broadcast_topic(self) -> None:
+        """Publish the current conversation topic for cockpit consumers."""
+
+        message = String()
+        message.data = self._state.get("topic", "")
+        self._topic_pub.publish(message)
 
     def _parse_concern_payload(self, raw: str) -> Dict[str, str]:
         if not raw:
