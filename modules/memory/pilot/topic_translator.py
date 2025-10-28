@@ -2,14 +2,68 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import json
+from typing import Any, Dict, Mapping
 
-# No dynamic topic translations yet, but keep the mapping ready so additional
-# telemetry topics can plug in without touching pilot internals.
-TOPIC_TRANSLATORS: Dict[str, Any] = {}
 
-# Static prompt sections teach the pilot that the memory module is available
-# over ROS services for storing and recalling contextual traces.
+def _load_payload(payload: Any) -> Mapping[str, Any] | None:
+    if isinstance(payload, Mapping):
+        data = payload.get("data")
+        if isinstance(data, Mapping):
+            return data
+        if isinstance(data, str):
+            text = data.strip()
+            if not text:
+                return None
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return None
+            if isinstance(parsed, Mapping):
+                return parsed
+    elif isinstance(payload, str):
+        text = payload.strip()
+        if not text:
+            return None
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, Mapping):
+            return parsed
+    return None
+
+
+def summarise_pilot_feed(payload: Any) -> str:
+    """Summarise JSON records streamed on ``/memory/pilot_feed``.
+
+    Examples
+    --------
+    >>> summarise_pilot_feed({"data": '{"kind": "thought", "summary": "heard hello"}'})
+    'Memory update (thought): "heard hello".'
+    >>> summarise_pilot_feed({})
+    'Memory update channel is quiet.'
+    """
+
+    record = _load_payload(payload)
+    if not record:
+        return "Memory update channel is quiet."
+    kind = str(record.get("kind") or "entry").strip()
+    summary = str(record.get("summary") or "").strip()
+    if summary:
+        return f'Memory update ({kind}): "{summary}".'
+    metadata = record.get("metadata")
+    if isinstance(metadata, Mapping):
+        keys = sorted(str(key) for key in metadata.keys())
+        if keys:
+            return f"Memory update ({kind}) with metadata keys: {', '.join(keys)}."
+    return f"Memory update ({kind})."
+
+
+TOPIC_TRANSLATORS: Dict[str, Any] = {
+    "/memory/pilot_feed": summarise_pilot_feed,
+}
+
 STATIC_PROMPT_SECTIONS = [
     (
         "Memory module persists Pete's sensations and pilot outputs via "
@@ -25,5 +79,4 @@ STATIC_PROMPT_SECTIONS = [
 ]
 
 
-def __all__() -> list[str]:  # pragma: no cover - module metadata helper
-    return ["TOPIC_TRANSLATORS", "STATIC_PROMPT_SECTIONS"]
+__all__ = ["TOPIC_TRANSLATORS", "STATIC_PROMPT_SECTIONS", "summarise_pilot_feed"]
