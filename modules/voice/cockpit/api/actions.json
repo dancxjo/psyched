@@ -4,7 +4,7 @@
     {
       "name": "say",
       "signature": "say(text: str)",
-      "description": "Queue text for speech synthesis via the voice module.",
+      "description": "Enqueue text-to-speech playback in the voice module queue.",
       "kind": "publish-topic",
       "defaults": {
         "topic": "/voice",
@@ -18,7 +18,7 @@
         "properties": {
           "text": {
             "type": "string",
-            "description": "Text to speak aloud via the voice queue.",
+            "description": "Text to enqueue for playback; it will be spoken via the voice queue without immediate execution.",
             "minLength": 1,
             "maxLength": 400
           }
