@@ -1,9 +1,10 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { surfaceStyles } from '/components/cockpit-style.js';
-import { createTopicSocket } from '/js/cockpit.js';
+import { createTopicSocket, callModuleAction } from '/js/cockpit.js';
 import {
   buildMemoryQueryPayload,
   buildMemoryStorePayload,
+  normaliseRecallResults,
 } from './memory-dashboard.helpers.js';
 
 function makeId(prefix) {
@@ -293,7 +294,7 @@ class MemoryDashboard extends LitElement {
     </li>`;
   }
 
-  handleQuerySubmit(event) {
+  async handleQuerySubmit(event) {
     event.preventDefault();
     const payload = buildMemoryQueryPayload({ query: this.queryText, topK: this.queryTopK });
     if (!payload.ok) {
@@ -308,14 +309,32 @@ class MemoryDashboard extends LitElement {
         composed: true,
       }),
     );
-    this.statusMessage = 'Query dispatched to the memory service.';
-    this.statusTone = 'success';
-    this.recordResult({
-      title: 'Simulated recall',
-      body: 'Pete greeted visitors near the entrance and recorded badge IDs.',
-      score: Math.random(),
-      tags: ['simulation'],
-    });
+    this.statusMessage = 'Searching stored memories…';
+    this.statusTone = 'info';
+    try {
+      const response = await callModuleAction('memory', 'recall_text', {
+        query: payload.value.query,
+        k: payload.value.top_k,
+      });
+      const results = normaliseRecallResults(response.result?.results);
+      const entries = results
+        .slice(0, 30)
+        .map((result) => this._buildResultEntry(result));
+      this.queryResults = entries;
+      if (entries.length === 0) {
+        this.statusMessage = 'No memories matched the query.';
+        this.statusTone = 'warning';
+      } else {
+        const count = entries.length;
+        this.statusMessage = `Received ${count} matching ${count === 1 ? 'memory' : 'memories'}.`;
+        this.statusTone = 'success';
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.queryFeedback = message;
+      this.statusMessage = 'Memory recall failed.';
+      this.statusTone = 'error';
+    }
   }
 
   handleStoreSubmit(event) {
@@ -632,15 +651,51 @@ class MemoryDashboard extends LitElement {
   }
 
   recordResult(result) {
-    const entry = {
-      id: makeId('memory'),
-      timestamp: new Date().toLocaleTimeString(),
-      title: result.title,
-      body: result.body,
-      score: result.score ?? 0,
-      tags: Array.isArray(result.tags) ? result.tags : [],
-    };
+    const entry = this._buildResultEntry(result);
     this.queryResults = [entry, ...this.queryResults].slice(0, 30);
+  }
+
+  _buildResultEntry(result) {
+    const memoryId = typeof result.memoryId === 'string' && result.memoryId.trim() ? result.memoryId.trim() : '';
+    const id = memoryId || makeId('memory');
+    const numericScore = Number(result.score);
+    const score = Number.isFinite(numericScore) ? numericScore : 0;
+    const tags = Array.isArray(result.tags)
+      ? result.tags.map((tag) => this._safeString(tag)).filter(Boolean)
+      : [];
+    const rawTimestamp = typeof result.timestamp === 'string' || result.timestamp instanceof Date
+      ? result.timestamp
+      : '';
+    const displayTimestamp = this._formatResultTimestamp(rawTimestamp);
+    const fallbackTime = this._formatTimestamp(new Date());
+    const timestamp = displayTimestamp || fallbackTime || '';
+    const title = this._safeString(result.title) || 'Memory entry';
+    const body = this._safeString(result.body);
+    return {
+      id,
+      timestamp,
+      title,
+      body,
+      score,
+      tags,
+    };
+  }
+
+  _formatResultTimestamp(value) {
+    if (value instanceof Date) {
+      return this._formatTimestamp(value);
+    }
+    const parsed = this._toDate(value);
+    if (parsed) {
+      return this._formatTimestamp(parsed);
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+    return '';
   }
 }
 

@@ -42,6 +42,166 @@ export function buildMemoryStorePayload(draft) {
 }
 
 /**
+ * Normalise raw recall records returned by the memory service into
+ * dashboard-friendly entries.
+ *
+ * @param {RawRecallResult[] | undefined | null} rawResults Raw JSON response from the recall action.
+ * @returns {NormalisedRecallEntry[]}
+ */
+export function normaliseRecallResults(rawResults) {
+  if (!Array.isArray(rawResults)) {
+    return [];
+  }
+  const entries = [];
+  for (const raw of rawResults) {
+    const normalised = _normaliseRecallResult(raw);
+    if (normalised) {
+      entries.push(normalised);
+    }
+  }
+  return entries;
+}
+
+function _normaliseRecallResult(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const memoryId = _safeString(raw.memory_id);
+  const score = _safeNumber(raw.score);
+  const metadata = _parseMetadata(raw.json_metadata);
+  const title = _resolveTitle(metadata);
+  const body = _resolveBody(metadata);
+  const tags = _collectTags(metadata);
+  const timestamp = _resolveTimestamp(metadata);
+  return {
+    memoryId,
+    timestamp,
+    title,
+    body,
+    score,
+    tags,
+  };
+}
+
+function _parseMetadata(raw) {
+  if (raw && typeof raw === 'object') {
+    return raw;
+  }
+  if (typeof raw !== 'string') {
+    return {};
+  }
+  const text = raw.trim();
+  if (!text) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function _safeString(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+function _safeNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function _resolveTitle(metadata) {
+  const candidates = [
+    metadata.title,
+    metadata.memory_tag,
+    metadata.topic,
+    metadata.label,
+    metadata.summary,
+    metadata.body,
+    metadata.kind,
+  ];
+  const title = _firstNonEmpty(candidates) || 'Memory entry';
+  return _truncate(title, 120);
+}
+
+function _resolveBody(metadata) {
+  const candidates = [
+    metadata.summary,
+    metadata.body,
+    metadata.spoken_sentence,
+    metadata.thought_sentence,
+    metadata.situation_overview,
+    metadata.notes,
+    metadata.description,
+    metadata.observation,
+  ];
+  const body = _firstNonEmpty(candidates) || '';
+  return _truncate(body, 280);
+}
+
+function _collectTags(metadata) {
+  const bucket = new Set();
+  const arraySources = [metadata.tags, metadata.labels, metadata.source_topics];
+  for (const source of arraySources) {
+    if (!Array.isArray(source)) {
+      continue;
+    }
+    for (const tag of source) {
+      const text = _safeString(tag);
+      if (text) {
+        bucket.add(text);
+      }
+    }
+  }
+  const singleSources = [
+    metadata.memory_tag,
+    metadata.memory_collection_text,
+    metadata.kind,
+  ];
+  for (const single of singleSources) {
+    const text = _safeString(single);
+    if (text) {
+      bucket.add(text);
+    }
+  }
+  return Array.from(bucket);
+}
+
+function _resolveTimestamp(metadata) {
+  const keys = [
+    'timestamp',
+    'observed_at',
+    'recorded_at',
+    'created_at',
+    'occurred_at',
+    'time',
+  ];
+  const raw = _firstNonEmpty(keys.map((key) => metadata[key]));
+  return raw || '';
+}
+
+function _firstNonEmpty(values) {
+  for (const value of values) {
+    const text = _safeString(value);
+    if (text) {
+      return text;
+    }
+  }
+  return '';
+}
+
+function _truncate(text, limit) {
+  if (text.length <= limit) {
+    return text;
+  }
+  return `${text.slice(0, limit)}…`;
+}
+
+/**
  * @typedef {object} MemoryQueryPayload
  * @property {string} query Natural language query text.
  * @property {number} top_k Maximum number of results requested.
@@ -52,4 +212,21 @@ export function buildMemoryStorePayload(draft) {
  * @property {string} title Memory title.
  * @property {string} body Memory content.
  * @property {string[]} tags Optional tag list.
+ */
+
+/**
+ * @typedef {object} RawRecallResult
+ * @property {string} memory_id Identifier of the recalled memory node.
+ * @property {number|string} score Similarity score returned by Qdrant.
+ * @property {string|object} json_metadata Metadata emitted by the memory service.
+ */
+
+/**
+ * @typedef {object} NormalisedRecallEntry
+ * @property {string} memoryId Parsed memory identifier.
+ * @property {string} timestamp Raw timestamp string, when available.
+ * @property {string} title Human readable title derived from metadata.
+ * @property {string} body Concise summary extracted from metadata.
+ * @property {number} score Numeric similarity score.
+ * @property {string[]} tags Collected tag list describing the memory.
  */
