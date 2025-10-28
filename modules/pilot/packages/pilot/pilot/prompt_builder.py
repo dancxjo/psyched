@@ -49,6 +49,7 @@ class PromptImage:
     topic: str
     description: str
     base64_data: str
+    captured_at: float | None = None
 
     def prompt_hint(self) -> str:
         """Return a concise hint suitable for inline prompt instructions."""

@@ -8,6 +8,7 @@ import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence
@@ -120,6 +121,29 @@ _FEEDBACK_FIELD_TOPICS: Dict[str, Dict[str, str]] = {
 }
 
 _IGNORED_ACTION_NAMES = {"call_service", "stream_topic"}
+
+
+def _sort_images_by_recency(images: Sequence[PromptImage]) -> List[PromptImage]:
+    """Return images ordered from most recent to oldest."""
+
+    return sorted(
+        images,
+        key=lambda image: (
+            image.captured_at is not None,
+            float(image.captured_at) if image.captured_at is not None else float("-inf"),
+        ),
+        reverse=True,
+    )
+
+
+def _latest_image_base64(images: Sequence[PromptImage]) -> Optional[str]:
+    """Return the freshest base64-encoded image payload if available."""
+
+    for image in _sort_images_by_recency(images):
+        data = str(image.base64_data or "").strip()
+        if data:
+            return data
+    return None
 
 
 def _feedback_context_topics() -> List[Dict[str, str]]:
@@ -921,7 +945,7 @@ class PilotNode(Node):
         )
         entry = {"data": sanitised, "timestamp": time.time()}
         if prompt_image is not None:
-            entry["image"] = prompt_image
+            entry["image"] = replace(prompt_image, captured_at=entry["timestamp"])
         self._topic_cache[topic] = entry
         self._dirty = True
 
@@ -1487,14 +1511,15 @@ class PilotNode(Node):
                 "captured_at": snapshot_timestamp.isoformat(),
             }
 
-        vision_images: List[PromptImage] = []
+        vision_candidates: List[PromptImage] = []
         for topic in topics:
             cache_entry = self._topic_cache.get(topic)
             if not cache_entry:
                 continue
             image = cache_entry.get("image")
             if isinstance(image, PromptImage):
-                vision_images.append(image)
+                vision_candidates.append(image)
+        vision_images = _sort_images_by_recency(vision_candidates)
 
         templates = {
             topic: template
@@ -1527,7 +1552,8 @@ class PilotNode(Node):
         # Preserve the full prompt so debug snapshots reflect exactly what the LLM received.
         self._last_prompt = prompt
         try:
-            images_payload = [img.base64_data for img in context.vision_images] or None
+            latest_image = _latest_image_base64(context.vision_images)
+            images_payload = [latest_image] if latest_image else None
             raw_response = self._llm_client.generate(prompt, images=images_payload)
             feeling_data = parse_feeling_intent_json(raw_response, actions)
         except (RuntimeError, FeelingIntentValidationError) as exc:
