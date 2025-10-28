@@ -53,7 +53,7 @@ def test_build_prompt_structures_context_and_actions() -> None:
         action_contract={
             "voice": {
                 "pause_speech()": "Pause queued speech playback.",
-                "say(text: str)": "Queue text-to-speech output for the voice module.",
+                "say(text: str)": "Enqueue text-to-speech playback in the voice module queue.",
             }
         },
         window_seconds=3.0,
@@ -73,12 +73,22 @@ def test_build_prompt_structures_context_and_actions() -> None:
     assert payload["status_summary"] == {"speech": "paused", "queue_length": 0}
     assert payload["sensations"][0]["kind"] == "face"
     assert "/voice/spoken" in payload["topics"]
-    assert payload["available_actions"]["voice"]["say(text: str)"] == "Queue text-to-speech output for the voice module."
+    assert (
+        payload["available_actions"]["voice"]["say(text: str)"]
+        == "Enqueue text-to-speech playback in the voice module queue."
+    )
     assert list(payload["available_actions"]["voice"].keys()) == [
         "pause_speech()",
         "say(text: str)",
     ]
-    assert "Voice module exposes /voice (pending speech) and /voice/spoken (recent narration)." in payload.get("briefs", [])
+    assert (
+        "Voice module exposes /voice (pending speech) and /voice/spoken (recent narration)."
+        in payload.get("briefs", [])
+    )
+    assert (
+        "The spoken_sentence is read aloud immediately from the voice queue"
+        in prompt
+    )
 
 
 def test_build_prompt_mentions_vision_images_when_available() -> None:
