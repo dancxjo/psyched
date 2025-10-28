@@ -632,6 +632,22 @@ class PilotNode(Node):
 
         self.publisher = self.create_publisher(FeelingIntent, "pilot/intent", qos)
 
+        voice_topic_param = self.declare_parameter("voice_input_topic", "/voice").value
+        voice_topic = str(voice_topic_param).strip() or "/voice"
+        self._voice_topic_name = voice_topic
+        self._voice_publisher = None
+        self._last_spoken_sentence: Optional[str] = None
+        try:
+            self._voice_publisher = self.create_publisher(StdString, voice_topic, qos)
+            self.get_logger().info(
+                f"Voice feedback enabled; publishing spoken sentences to {voice_topic}"
+            )
+        except Exception as exc:  # pragma: no cover - ROS publisher creation failures are host-specific
+            self.get_logger().warning(
+                f"Failed to initialise voice publisher on {voice_topic}: {exc}"
+            )
+            self._voice_publisher = None
+
         if self._feedback_topics_enabled:
             self._initialise_feedback_publishers(qos)
 
@@ -723,6 +739,35 @@ class PilotNode(Node):
             msg = StdString()
             msg.data = self._serialise_feedback_value(value)
             publisher.publish(msg)
+
+    def _queue_spoken_sentence(self, text: str) -> None:
+        """Publish *text* to the voice topic when it contains speech content."""
+
+        publisher = getattr(self, "_voice_publisher", None)
+        if publisher is None:
+            return
+
+        cleaned = str(text).strip()
+        if not cleaned:
+            return
+
+        if getattr(self, "_last_spoken_sentence", None) == cleaned:
+            return
+
+        message = StdString()
+        message.data = cleaned
+        try:
+            publisher.publish(message)
+        except Exception as exc:  # pragma: no cover - ROS publishers may fail on specific hosts
+            self.get_logger().warning(
+                f"Failed to publish spoken sentence to {getattr(self, '_voice_topic_name', '/voice')}: {exc}"
+            )
+            return
+
+        self._last_spoken_sentence = cleaned
+        self.get_logger().info(
+            f"Queued spoken sentence on {getattr(self, '_voice_topic_name', '/voice')}: {cleaned}"
+        )
 
     def _load_topic_configs(
         self,
@@ -1440,6 +1485,7 @@ class PilotNode(Node):
         self._dirty = False
 
         self._publish_feedback_topics(feeling_data)
+        self._queue_spoken_sentence(feeling_data.spoken_sentence)
 
         # Execute the generated script asynchronously so the LLM loop can continue.
         try:
