@@ -1,0 +1,10 @@
+{
+  "context_topics": [
+    {
+      "topic": "/imu/data",
+      "type": "sensor_msgs/msg/Imu",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}

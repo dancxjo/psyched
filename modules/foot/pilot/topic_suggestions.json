@@ -1,0 +1,15 @@
+{
+  "context_topics": [
+    {
+      "topic": "/create_driver/battery/charge_ratio",
+      "type": "std_msgs/msg/Float32",
+      "prompt_template": "{{data.prompt_summary}}"
+    },
+    {
+      "topic": "/create_driver/odom",
+      "type": "nav_msgs/msg/Odometry",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}

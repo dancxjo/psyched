@@ -1,0 +1,10 @@
+{
+  "context_topics": [
+    {
+      "topic": "/memory/pilot_feed",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}

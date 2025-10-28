@@ -1,0 +1,10 @@
+{
+  "context_topics": [
+    {
+      "topic": "/ublox_gps_node/fix",
+      "type": "sensor_msgs/msg/NavSatFix",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}

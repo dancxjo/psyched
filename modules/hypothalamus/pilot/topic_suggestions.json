@@ -1,0 +1,20 @@
+{
+  "context_topics": [
+    {
+      "topic": "/environment/temperature",
+      "type": "sensor_msgs/msg/Temperature",
+      "prompt_template": "{{data.prompt_summary}}"
+    },
+    {
+      "topic": "/environment/humidity_percent",
+      "type": "std_msgs/msg/Float32",
+      "prompt_template": "{{data.prompt_summary}}"
+    },
+    {
+      "topic": "/environment/thermostat_status",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}

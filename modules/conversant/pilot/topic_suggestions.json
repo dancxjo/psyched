@@ -1,0 +1,10 @@
+{
+  "context_topics": [
+    {
+      "topic": "/conversant/topic",
+      "type": "std_msgs/msg/String",
+      "prompt_template": "{{data.prompt_summary}}"
+    }
+  ],
+  "sensation_topics": []
+}
