@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Entry point used by ros2 launch/run to start the conversant agent."""
+
+from __future__ import annotations
+
+from conversant.node import main
+
+
+if __name__ == "__main__":
+    main()

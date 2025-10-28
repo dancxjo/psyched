@@ -11,4 +11,9 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(
+  PROGRAMS scripts/conversant_agent
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

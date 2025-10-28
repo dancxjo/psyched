@@ -1,0 +1,2 @@
+[console_scripts]
+conversant_agent = conversant.node:main

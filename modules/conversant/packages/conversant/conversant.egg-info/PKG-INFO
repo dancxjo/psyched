@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: conversant
+Version: 0.1.0
+Summary: Conversational pacing and concern handling node for Pete.
+Maintainer: Psyched Maintainers
+Maintainer-email: pete@psyched.local
+License: Apache-2.0
+Requires-Dist: setuptools
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: requires-dist
+Dynamic: summary
