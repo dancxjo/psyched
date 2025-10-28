@@ -524,6 +524,76 @@ def _ros_time_to_datetime(time_msg) -> datetime:
     return datetime.fromtimestamp(float(sec) + float(nanosec) / 1e9, tz=timezone.utc)
 
 
+def _expand_positional_arguments(
+    arguments: Mapping[str, Any], schema: Mapping[str, Any] | None
+) -> Dict[str, Any]:
+    """Return ``arguments`` with positional entries mapped to named fields.
+
+    The pilot records positional arguments under the ``"_args"`` key so scripts
+    written with positional calls (``voice.say("hi")``) can still be analysed.
+    When the cockpit JSON schema for an action is available we translate those
+    positional values into keyword arguments using the property order declared
+    in the schema. This keeps command execution deterministic even when the
+    optional :mod:`jsonschema` dependency is missing on the host running the
+    pilot.
+
+    Parameters
+    ----------
+    arguments:
+        Raw argument payload captured by the command interpreter.
+    schema:
+        JSON schema fragment describing the action parameters. When ``None``
+        positional arguments cannot be mapped safely.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A copy of ``arguments`` with any positional entries expanded.
+
+    Raises
+    ------
+    ValueError
+        When positional arguments are present but no schema is available or
+        when more positional arguments were supplied than named parameters are
+        defined.
+    """
+
+    if not isinstance(arguments, Mapping):
+        return {}
+
+    normalised: Dict[str, Any] = dict(arguments)
+    raw_args = normalised.pop("_args", None)
+    if raw_args is None:
+        return normalised
+
+    if not isinstance(raw_args, Sequence) or isinstance(raw_args, (str, bytes, bytearray)):
+        raise ValueError("Positional arguments must be expressed as a JSON array")
+
+    values = list(raw_args)
+    if not values:
+        return normalised
+
+    if schema is None:
+        raise ValueError("Positional arguments require action parameter metadata")
+
+    props = schema.get("properties") if isinstance(schema, Mapping) else None
+    if not isinstance(props, Mapping) or not props:
+        raise ValueError("Action parameters do not define positional ordering")
+
+    # Respect the order declared in the JSON schema so positional arguments map
+    # to predictable parameter names.
+    candidate_names = [str(name) for name in props.keys()]
+    available = [name for name in candidate_names if name not in normalised]
+
+    if len(values) > len(available):
+        raise ValueError("Too many positional arguments supplied for action")
+
+    for value, name in zip(values, available):
+        normalised[name] = value
+
+    return normalised
+
+
 class PilotNode(Node):
     """ROS node orchestrating the feeling + will integration pipeline."""
 
@@ -972,16 +1042,24 @@ class PilotNode(Node):
             return False, "not_available"
 
         cockpit = os.environ.get("COCKPIT_URL", "http://127.0.0.1:8088").rstrip("/")
-        payload = {"arguments": invocation.arguments}
+        schema = self._action_schemas.get(fq)
         try:
-            schema = self._action_schemas.get(fq)
+            arguments = _expand_positional_arguments(invocation.arguments, schema)
+        except ValueError as exc:
+            self.get_logger().warning(
+                f"Action invocation failed ({module}.{action}): {exc}"
+            )
+            return False, str(exc)
+
+        payload = {"arguments": arguments}
+        try:
             if schema is not None:
                 try:
                     from jsonschema import validate
                     from jsonschema.exceptions import ValidationError as _ValidationError
 
                     try:
-                        validate(instance=invocation.arguments, schema=schema)
+                        validate(instance=arguments, schema=schema)
                     except _ValidationError as verr:
                         self.get_logger().warning(
                             f"Action {module}.{action} failed validation: {verr}"
