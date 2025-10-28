@@ -10,6 +10,25 @@ const SILENCE_TOPIC = '/ear/silence';
 const TRANSCRIPT_TOPIC = '/ear/hole';
 const MAX_TRANSCRIPTS = 40;
 
+function resolveStreamAction(topic) {
+  if (typeof topic !== 'string') {
+    return null;
+  }
+  const trimmed = topic.trim();
+  switch (trimmed) {
+    case AUDIO_TOPIC:
+      return 'audio_stream';
+    case SPEECH_TOPIC:
+      return 'speech_activity_stream';
+    case SILENCE_TOPIC:
+      return 'silence_stream';
+    case TRANSCRIPT_TOPIC:
+      return 'transcript_stream';
+    default:
+      return null;
+  }
+}
+
 function uniqueId(prefix = 'ear') {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -392,7 +411,24 @@ class EarDashboard extends LitElement {
   _openSocket(key, options, handleMessage) {
     this._closeSocket(key);
     try {
-      const socket = createTopicSocket({ module: 'ear', ...options });
+      const action = options?.action || resolveStreamAction(options?.topic);
+      const actionArguments = {};
+      if (typeof options?.topic === 'string' && options.topic.trim()) {
+        actionArguments.topic = options.topic.trim();
+      }
+      if (Number.isFinite(options?.queueLength) && options.queueLength > 0) {
+        actionArguments.queue_length = Math.floor(options.queueLength);
+      }
+      const socket = createTopicSocket({
+        module: 'ear',
+        ...options,
+        ...(action
+          ? {
+              action,
+              arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+            }
+          : {}),
+      });
       socket.addEventListener('open', () => {
         if (key === 'audio' && this.audioMonitoringEnabled) {
           this.audioStatus = 'Live';

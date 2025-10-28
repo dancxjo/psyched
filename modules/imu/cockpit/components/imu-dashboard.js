@@ -2,8 +2,21 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?modu
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 
-function createImuSocket(options) {
-    return createTopicSocket({ module: 'imu', ...options });
+function createImuSocket(options = {}) {
+    const action = options.action || 'imu_stream';
+    const actionArguments = {};
+    if (typeof options.topic === 'string' && options.topic.trim()) {
+        actionArguments.topic = options.topic.trim();
+    }
+    if (Number.isFinite(options.queueLength) && options.queueLength > 0) {
+        actionArguments.queue_length = Math.floor(options.queueLength);
+    }
+    return createTopicSocket({
+        module: 'imu',
+        ...options,
+        action,
+        arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+    });
 }
 
 class ImuDashboard extends LitElement {

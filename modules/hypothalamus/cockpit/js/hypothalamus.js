@@ -15,7 +15,24 @@ export function dashboard() {
     lastUpdate: 'Never',
     createSocket(options) {
       // Cockpit routes sockets by module; omitting the module key causes runtime failures.
-      return createTopicSocket({ module: 'hypothalamus', ...options });
+      const action = options?.action || resolveStreamAction(options?.topic);
+      const actionArguments = {};
+      if (typeof options?.topic === 'string' && options.topic.trim()) {
+        actionArguments.topic = options.topic.trim();
+      }
+      if (Number.isFinite(options?.queueLength) && options.queueLength > 0) {
+        actionArguments.queue_length = Math.floor(options.queueLength);
+      }
+      return createTopicSocket({
+        module: 'hypothalamus',
+        ...options,
+        ...(action
+          ? {
+              action,
+              arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+            }
+          : {}),
+      });
     },
     init() {
       this.connectTemperature();
@@ -107,3 +124,21 @@ export function dashboard() {
 }
 
 window.Hypothalamus = { dashboard };
+function resolveStreamAction(topic) {
+  if (typeof topic !== 'string') {
+    return null;
+  }
+  const trimmed = topic.trim();
+  switch (trimmed) {
+    case '/environment/temperature':
+      return 'temperature_stream';
+    case '/environment/temperature_fahrenheit':
+      return 'temperature_fahrenheit_stream';
+    case '/environment/humidity_percent':
+      return 'humidity_stream';
+    case '/environment/thermostat_status':
+      return 'thermostat_status_stream';
+    default:
+      return null;
+  }
+}

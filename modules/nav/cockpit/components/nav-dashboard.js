@@ -16,6 +16,23 @@ const GOAL_TOPIC = {
   type: 'geometry_msgs/msg/PoseStamped',
 };
 
+function createNavSocket(options = {}) {
+  const action = options.action || 'localization_stream';
+  const actionArguments = {};
+  if (typeof options.topic === 'string' && options.topic.trim()) {
+    actionArguments.topic = options.topic.trim();
+  }
+  if (Number.isFinite(options.queueLength) && options.queueLength > 0) {
+    actionArguments.queue_length = Math.floor(options.queueLength);
+  }
+  return createTopicSocket({
+    module: 'nav',
+    ...options,
+    action,
+    arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+  });
+}
+
 function toNumber(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
@@ -362,7 +379,7 @@ class NavDashboard extends LitElement {
   }
 
   _subscribeToPose() {
-    const socket = createTopicSocket({
+    const socket = createNavSocket({
       topic: POSE_TOPIC.topic,
       type: POSE_TOPIC.type,
       role: 'subscribe',
@@ -514,7 +531,7 @@ class NavDashboard extends LitElement {
     if (this._publishers.has(key)) {
       return this._publishers.get(key);
     }
-    const socket = createTopicSocket({ topic, type, role: 'publish' });
+    const socket = createTopicSocket({ module: 'nav', topic, type, role: 'publish' });
     this._publishers.set(key, socket);
     this._sockets.push(socket);
     return socket;
