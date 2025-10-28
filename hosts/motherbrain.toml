@@ -1,7 +1,7 @@
 [host]
 name = "motherbrain"
 installers = ["ros2", "docker"]
-services = ["llm"]
+# The llm module currently doesn't work on the motherbrain due to lack of GPU support; we install ollama manually instead for now. todo: fix this in the future.
 modules = [
     "cockpit",
     "foot",
