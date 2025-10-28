@@ -18,6 +18,7 @@ const MODULE_COMPONENTS = {
   cockpit: 'cockpit-dashboard',
   viscera: 'viscera-dashboard',
   voice: 'voice-dashboard',
+  conversant: 'conversant-dashboard',
 };
 
 /**
@@ -198,6 +199,7 @@ class CockpitApp extends LitElement {
       'cockpit-dashboard': html`<cockpit-dashboard></cockpit-dashboard>`,
       'viscera-dashboard': html`<viscera-dashboard></viscera-dashboard>`,
       'voice-dashboard': html`<voice-dashboard></voice-dashboard>`,
+      'conversant-dashboard': html`<conversant-dashboard></conversant-dashboard>`,
     };
     return tagMap[tagName] || html`<p>Component ${tagName} not found</p>`;
   }
