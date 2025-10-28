@@ -20,9 +20,9 @@ fi
 echo "[INFO] Preparing Ollama model directory at ${OLLAMA_DATA_DIR}."
 
 if docker run --rm \
-	-v "${OLLAMA_DATA_DIR}:/root/.ollama" \
-	"${OLLAMA_IMAGE}" \
-	ollama show "${MODEL_NAME}" >/dev/null 2>&1;
+    -v "${OLLAMA_DATA_DIR}:/root/.ollama" \
+    "${OLLAMA_IMAGE}" \
+    show "${MODEL_NAME}" >/dev/null 2>&1;
 then
 	echo "[INFO] Model ${MODEL_NAME} already available in Ollama cache."
 else
@@ -30,7 +30,7 @@ else
 	docker run --rm \
 		-v "${OLLAMA_DATA_DIR}:/root/.ollama" \
 		"${OLLAMA_IMAGE}" \
-		ollama pull "${MODEL_NAME}"
+		pull "${MODEL_NAME}"
 fi
 
 echo "[SUCCESS] Ollama model ${MODEL_NAME} ready under ${OLLAMA_DATA_DIR}"
