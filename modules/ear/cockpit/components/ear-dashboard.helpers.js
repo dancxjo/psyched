@@ -114,3 +114,193 @@ export function buildEarConfigPayload(draft) {
  * @property {number} channels Number of audio channels to stream.
  * @property {Record<string, unknown>} backend_options Backend-specific options.
  */
+
+/**
+ * Attempt to coerce a value into a finite integer.
+ *
+ * @param {unknown} value Candidate numeric input.
+ * @returns {number | null} Normalised integer or ``null`` when coercion fails.
+ */
+export function coerceTranscriptInt(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.trunc(value) : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+  return null;
+}
+
+function normaliseWord(word) {
+  if (!word || typeof word !== 'object') {
+    return null;
+  }
+  const text = typeof word.text === 'string' ? word.text.trim() : '';
+  const startMs = coerceTranscriptInt(word.startMs ?? word.start_ms);
+  const endMs = coerceTranscriptInt(word.endMs ?? word.end_ms);
+  if (!text && startMs == null && endMs == null) {
+    return null;
+  }
+  return {
+    text,
+    startMs,
+    endMs,
+  };
+}
+
+function normaliseSegment(segment) {
+  if (!segment || typeof segment !== 'object') {
+    return null;
+  }
+  const text = typeof segment.text === 'string' ? segment.text.trim() : '';
+  const startMs = coerceTranscriptInt(segment.startMs ?? segment.start_ms);
+  const endMs = coerceTranscriptInt(segment.endMs ?? segment.end_ms);
+  const words = Array.isArray(segment.words)
+    ? segment.words.map(normaliseWord).filter((word) => word !== null)
+    : [];
+  if (!text && startMs == null && endMs == null && words.length === 0) {
+    return null;
+  }
+  return {
+    text,
+    startMs,
+    endMs,
+    words,
+  };
+}
+
+function coerceTimestamp(value) {
+  if (value instanceof Date) {
+    return value.toLocaleTimeString();
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toLocaleTimeString();
+  }
+  return '';
+}
+
+function resolveAudioAttachment(entry) {
+  const primary = typeof entry.audioBase64 === 'string' ? entry.audioBase64.trim() : '';
+  if (primary) {
+    return primary;
+  }
+  const alt = typeof entry.audio_base64 === 'string' ? entry.audio_base64.trim() : '';
+  return alt || null;
+}
+
+function safeText(value) {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return '';
+}
+
+/**
+ * Normalise a transcript entry so it can be rendered consistently.
+ *
+ * @param {object} entry Raw transcript payload captured from the websocket.
+ * @returns {{
+ *   id?: string,
+ *   text: string,
+ *   timestamp: string,
+ *   startMs: number | null,
+ *   endMs: number | null,
+ *   segments: Array<{ text: string, startMs: number | null, endMs: number | null, words: Array<{ text: string, startMs: number | null, endMs: number | null }> }>,
+ *   source: string,
+ *   audioBase64: string | null,
+ * }} Clean transcript entry.
+ */
+export function normalizeTranscriptEntry(entry) {
+  const payload = entry && typeof entry === 'object' ? entry : {};
+  const text = safeText(payload.text ?? payload.data);
+  const segments = Array.isArray(payload.segments)
+    ? payload.segments.map(normaliseSegment).filter((segment) => segment !== null)
+    : [];
+  const source = typeof payload.source === 'string' ? payload.source.trim() : '';
+
+  return {
+    id: typeof payload.id === 'string' ? payload.id : undefined,
+    text,
+    timestamp: coerceTimestamp(payload.timestamp ?? payload.time ?? ''),
+    startMs: coerceTranscriptInt(payload.startMs ?? payload.start_ms),
+    endMs: coerceTranscriptInt(payload.endMs ?? payload.end_ms),
+    segments,
+    source,
+    audioBase64: resolveAudioAttachment(payload),
+  };
+}
+
+/**
+ * Create a stable signature representing a transcript entry.
+ *
+ * @param {object} entry Transcript entry compatible with {@link normalizeTranscriptEntry}.
+ * @returns {string} Signature string suitable for deduplication.
+ */
+export function transcriptSignature(entry) {
+  const normalised = normalizeTranscriptEntry(entry);
+  const signaturePayload = {
+    text: normalised.text,
+    startMs: normalised.startMs,
+    endMs: normalised.endMs,
+    source: normalised.source,
+    segments: normalised.segments.map((segment) => ({
+      text: segment.text,
+      startMs: segment.startMs,
+      endMs: segment.endMs,
+      words: segment.words.map((word) => ({
+        text: word.text,
+        startMs: word.startMs,
+        endMs: word.endMs,
+      })),
+    })),
+  };
+  return JSON.stringify(signaturePayload);
+}
+
+/**
+ * Track previously seen transcript signatures with bounded capacity.
+ *
+ * @param {number} [capacity=120] Maximum number of signatures to retain.
+ */
+export function createTranscriptDeduplicator(capacity = 120) {
+  const limit = Number.isFinite(capacity) && capacity > 0 ? Math.trunc(capacity) : 120;
+  const queue = [];
+  const seen = new Set();
+
+  return {
+    has(signature) {
+      return typeof signature === 'string' && seen.has(signature);
+    },
+    remember(signature) {
+      if (typeof signature !== 'string' || !signature) {
+        return;
+      }
+      if (seen.has(signature)) {
+        return;
+      }
+      queue.push(signature);
+      seen.add(signature);
+      while (queue.length > limit) {
+        const oldest = queue.shift();
+        if (oldest) {
+          seen.delete(oldest);
+        }
+      }
+    },
+    clear() {
+      queue.length = 0;
+      seen.clear();
+    },
+  };
+}

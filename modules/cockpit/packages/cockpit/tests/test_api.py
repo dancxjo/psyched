@@ -170,6 +170,10 @@ def test_static_overlay_serves_module_assets(config_file: Path) -> None:
     asyncio.run(_exercise_static_overlay(config_file))
 
 
+def test_static_overlay_repo_fallback(config_file: Path, tmp_path: Path) -> None:
+    asyncio.run(_exercise_static_overlay_repo_fallback(config_file, tmp_path))
+
+
 def test_module_config_endpoint_reports_and_updates_settings(
     config_with_settings: Path, tmp_path: Path
 ) -> None:
@@ -362,6 +366,30 @@ async def _exercise_static_overlay(config_file: Path) -> None:
 
         missing = await client.get("/modules/unknown/widget.html")
         assert missing.status == 404
+
+
+async def _exercise_static_overlay_repo_fallback(config_file: Path, tmp_path: Path) -> None:
+    frontend_root = REPO_ROOT / "modules" / "cockpit" / "packages" / "cockpit" / "cockpit" / "frontend"
+    modules_root = tmp_path / "overlay"
+    (modules_root / "ear" / "cockpit" / "components").mkdir(parents=True)
+    helper_path = modules_root / "ear" / "cockpit" / "components" / "ear-dashboard.helpers.js"
+    assert not helper_path.exists(), "overlay should not contain the helper asset"
+
+    settings = CockpitSettings(
+        host_config_path=config_file,
+        frontend_root=frontend_root,
+        modules_root=modules_root,
+        repo_root=REPO_ROOT,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.get("/modules/ear/components/ear-dashboard.helpers.js")
+        assert response.status == 200
+        body = await response.text()
+        assert "coerceTranscriptInt" in body
 
 
 async def _exercise_module_config_endpoint(config_file: Path, tmp_path: Path) -> None:
