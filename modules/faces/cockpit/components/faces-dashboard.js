@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
-import { buildFacesSettingsPayload } from './faces-dashboard.helpers.js';
+import { buildFacesSettingsPayload, parseFaceTriggerPayload } from './faces-dashboard.helpers.js';
 
 function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -93,6 +94,33 @@ class FacesDashboard extends LitElement {
         font-size: 0.75rem;
         color: var(--lcars-muted);
       }
+
+      .detection-entry__note {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--lcars-text);
+      }
+
+      .detection-entry__value {
+        font-family: var(--metric-value-font);
+        word-break: break-all;
+      }
+
+      .detection-entry__note--muted {
+        color: var(--lcars-muted);
+      }
+
+      .detection-entry__raw {
+        margin: 0;
+        font-size: 0.7rem;
+        color: var(--lcars-muted);
+      }
+
+      .detection-entry__raw code {
+        font-family: var(--metric-value-font);
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
     `,
   ];
 
@@ -102,12 +130,32 @@ class FacesDashboard extends LitElement {
     this.window = 15;
     this.publishCrops = true;
     this.publishEmbeddings = true;
-    this.statusMessage = 'Awaiting detector telemetry…';
+    this.statusMessage = 'Connecting to recognition stream…';
     this.statusTone = 'info';
     this.tagFaceId = '';
     this.tagLabel = '';
     this.tagFeedback = '';
     this.detectionLog = [];
+    this.sockets = [];
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    if (!this.sockets.length) {
+      this.connectTriggerStream();
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    for (const socket of this.sockets) {
+      try {
+        socket.close();
+      } catch (_error) {
+        // ignore teardown issues
+      }
+    }
+    this.sockets.length = 0;
   }
 
   render() {
@@ -174,24 +222,37 @@ class FacesDashboard extends LitElement {
         </article>
 
         <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Latest detections</h3>
+          <h3 class="surface-card__title">Recognition events</h3>
           ${this.detectionLog.length
             ? html`<ol class="detection-log">
                 ${this.detectionLog.map(
                   (entry) => html`<li class="detection-entry">
                     <div class="detection-entry__meta">
                       <span>${entry.timestamp}</span>
-                      <span>${entry.label}</span>
-                      <span>${(entry.confidence * 100).toFixed(1)}%</span>
+                      <span>${entry.name}</span>
+                      ${entry.collection ? html`<span>${entry.collection}</span>` : ''}
                     </div>
-                    <p class="detection-entry__note">ROI: ${entry.roi}</p>
+                    <p class="detection-entry__note">
+                      Memory:
+                      <span class="detection-entry__value">${entry.memoryId || '—'}</span>
+                    </p>
+                    <p class="detection-entry__note">
+                      Vector:
+                      <span class="detection-entry__value">${entry.vectorId || '—'}</span>
+                    </p>
+                    ${entry.note
+                      ? html`<p class="detection-entry__note detection-entry__note--muted">${entry.note}</p>`
+                      : ''}
+                    ${entry.raw
+                      ? html`<p class="detection-entry__raw"><code>${entry.raw}</code></p>`
+                      : ''}
                   </li>`
                 )}
               </ol>`
-            : html`<p class="surface-empty">No detections recorded yet.</p>`}
+            : html`<p class="surface-empty">No recognition events recorded yet.</p>`}
           <div class="surface-actions">
             <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateDetection}>
-              Simulate detection
+              Simulate recognition
             </button>
           </div>
         </article>
@@ -230,6 +291,102 @@ class FacesDashboard extends LitElement {
         </article>
       </div>
     `;
+  }
+
+  connectTriggerStream() {
+    const socket = createTopicSocket({
+      module: 'faces',
+      action: 'face_trigger_stream',
+      type: 'std_msgs/msg/String',
+      role: 'subscribe',
+    });
+    socket.addEventListener('open', () => {
+      this.statusMessage = 'Recognition stream connected.';
+      this.statusTone = 'success';
+    });
+    socket.addEventListener('message', (event) => {
+      const payload = this.parseStreamEnvelope(event);
+      if (!payload) {
+        return;
+      }
+      if (payload.event === 'status') {
+        const state = payload?.data?.state;
+        if (state === 'ready') {
+          this.statusMessage = 'Recognition stream ready.';
+          this.statusTone = 'success';
+        } else if (state === 'closed') {
+          this.statusMessage = 'Recognition stream closed.';
+          this.statusTone = 'warning';
+        }
+        return;
+      }
+      if (payload.event !== 'message') {
+        return;
+      }
+      const result = parseFaceTriggerPayload(payload.data);
+      if (!result.ok) {
+        this.statusMessage = result.error;
+        this.statusTone = 'error';
+        this.recordRecognitionEvent({
+          name: 'Unparsed trigger',
+          note: result.error,
+          raw: this.formatRawPayload(payload.data),
+          collection: '',
+          memoryId: '',
+          vectorId: '',
+        });
+        return;
+      }
+      const eventData = result.value;
+      this.statusMessage = `Recognition event: ${eventData.name}`;
+      this.statusTone = 'success';
+      this.recordRecognitionEvent(eventData);
+    });
+    socket.addEventListener('error', () => {
+      this.statusMessage = 'Recognition stream error.';
+      this.statusTone = 'error';
+    });
+    socket.addEventListener('close', () => {
+      this.statusMessage = 'Recognition stream disconnected.';
+      this.statusTone = 'warning';
+    });
+    this.sockets.push(socket);
+  }
+
+  parseStreamEnvelope(event) {
+    if (!event || typeof event.data !== 'string') {
+      return null;
+    }
+    try {
+      return JSON.parse(event.data);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  recordRecognitionEvent(details) {
+    const entry = {
+      id: makeId('face'),
+      timestamp: new Date().toLocaleTimeString(),
+      name: details?.name ?? 'Unknown',
+      memoryId: details?.memoryId ?? '',
+      vectorId: details?.vectorId ?? '',
+      collection: details?.collection ?? '',
+      note: details?.note ?? '',
+      raw: details?.raw ?? '',
+    };
+    this.detectionLog = [entry, ...this.detectionLog].slice(0, 40);
+  }
+
+  formatRawPayload(data) {
+    if (typeof data === 'string') {
+      return data;
+    }
+    try {
+      return JSON.stringify(data);
+    } catch (_error) {
+      return '';
+    }
   }
 
   handleSettingsSubmit(event) {

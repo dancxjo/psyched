@@ -384,10 +384,12 @@ class RosClient:
         overrides: Optional[Mapping[str, Any]],
     ) -> QoSProfile:
         depth = max(int(queue_length), 1)
+        # Default to best-effort reliability so we can subscribe to sensor topics
+        # that publish with SensorDataQoS without requiring per-stream overrides.
         profile = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=depth,
-            reliability=QoSReliabilityPolicy.RELIABLE,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
         )
         if overrides and isinstance(overrides, Mapping):
