@@ -1,6 +1,10 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
+import {
+  extractThreadIdFromStream,
+  parseConversationSnapshot,
+} from './conversation-helpers.mjs';
 
 /**
  * Dashboard for monitoring and nudging Pete's Conversant module.
@@ -10,6 +14,9 @@ class ConversantDashboard extends LitElement {
     topic: { state: true },
     topicStatus: { state: true },
     topicFeedback: { state: true },
+    conversations: { state: true },
+    conversationFeedback: { state: true },
+    selectedThreadId: { state: true },
     directMessage: { state: true },
     directFeedback: { state: true },
     threadHint: { state: true },
@@ -47,12 +54,17 @@ class ConversantDashboard extends LitElement {
     this.topic = '';
     this.topicStatus = 'Connecting…';
     this.topicFeedback = '';
+    this.conversations = [];
+    this.conversationFeedback = '';
+    this.selectedThreadId = '';
     this.directMessage = '';
     this.directFeedback = '';
     this.threadHint = '';
     this._topicSocket = null;
     this._concernPublisher = null;
     this._sockets = [];
+    this._conversationSockets = new Map();
+    this._conversationsByThread = new Map();
   }
 
   connectedCallback() {
@@ -72,6 +84,8 @@ class ConversantDashboard extends LitElement {
     this._sockets = [];
     this._topicSocket = null;
     this._concernPublisher = null;
+    this._conversationSockets.clear();
+    this._conversationsByThread.clear();
   }
 
   _openTopicFeed() {
@@ -97,8 +111,13 @@ class ConversantDashboard extends LitElement {
       if (!payload || payload.event !== 'message') {
         return;
       }
-      const data = payload.data && typeof payload.data.data !== 'undefined' ? payload.data.data : '';
+      const data = this._extractDataField(payload);
       this.topic = String(data || '');
+      const threadId = extractThreadIdFromStream(this.topic, this.selectedThreadId);
+      if (threadId) {
+        this._selectThread(threadId);
+      }
+      this._subscribeToConversationStream(this.topic);
     });
     this._topicSocket = socket;
     this._sockets.push(socket);
@@ -113,6 +132,122 @@ class ConversantDashboard extends LitElement {
     } catch (_error) {
       return null;
     }
+  }
+
+  _extractDataField(payload) {
+    if (!payload || typeof payload !== 'object') {
+      return '';
+    }
+    const data = payload.data;
+    if (data && typeof data === 'object' && 'data' in data) {
+      return typeof data.data === 'string' ? data.data : String(data.data ?? '');
+    }
+    if (typeof data === 'string') {
+      return data;
+    }
+    return '';
+  }
+
+  _formatTimestamp(raw) {
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      return raw;
+    }
+    return date.toLocaleString();
+  }
+
+  _subscribeToConversationStream(streamName) {
+    const topicName = typeof streamName === 'string' ? streamName.trim() : '';
+    if (!topicName) {
+      return null;
+    }
+    if (this._conversationSockets.has(topicName)) {
+      return this._conversationSockets.get(topicName);
+    }
+    const socket = createTopicSocket({
+      module: 'conversant',
+      topic: topicName,
+      type: 'std_msgs/msg/String',
+      role: 'subscribe',
+    });
+    socket.addEventListener('error', () => {
+      this.conversationFeedback = `Unable to subscribe to ${topicName}.`;
+    });
+    socket.addEventListener('close', () => {
+      this._conversationSockets.delete(topicName);
+    });
+    socket.addEventListener('message', (event) => {
+      const payload = this._safeParse(event);
+      if (!payload || payload.event !== 'message') {
+        return;
+      }
+      const data = this._extractDataField(payload);
+      const snapshot = parseConversationSnapshot(data);
+      if (!snapshot) {
+        return;
+      }
+      this._updateConversation(topicName, snapshot);
+      if (this.conversationFeedback) {
+        this.conversationFeedback = '';
+      }
+    });
+    this._conversationSockets.set(topicName, socket);
+    this._sockets.push(socket);
+    return socket;
+  }
+
+  _updateConversation(topicName, snapshot) {
+    const { threadId, userId, messages } = snapshot;
+    const lastMessage = messages[messages.length - 1];
+    this._conversationsByThread.set(threadId, {
+      threadId,
+      userId,
+      topic: topicName,
+      messages,
+      lastTimestamp: lastMessage ? lastMessage.timestamp : '',
+    });
+    const ordered = Array.from(this._conversationsByThread.values()).sort((a, b) => {
+      if (!a.lastTimestamp && !b.lastTimestamp) {
+        return a.threadId.localeCompare(b.threadId);
+      }
+      if (!a.lastTimestamp) {
+        return 1;
+      }
+      if (!b.lastTimestamp) {
+        return -1;
+      }
+      return b.lastTimestamp.localeCompare(a.lastTimestamp);
+    });
+    this.conversations = ordered;
+    const activeThreadFromTopic = extractThreadIdFromStream(this.topic, threadId);
+    if (
+      !this.selectedThreadId ||
+      this.selectedThreadId === threadId ||
+      activeThreadFromTopic === threadId
+    ) {
+      this._selectThread(threadId);
+    }
+  }
+
+  _selectThread(threadId) {
+    const cleaned = typeof threadId === 'string' ? threadId.trim() : '';
+    if (cleaned === this.selectedThreadId) {
+      if (cleaned && this.threadHint !== cleaned) {
+        this.threadHint = cleaned;
+      }
+      return;
+    }
+    this.selectedThreadId = cleaned;
+    if (cleaned) {
+      this.threadHint = cleaned;
+    }
+  }
+
+  _handleThreadSelect(event) {
+    const value = event && event.target && typeof event.target.value === 'string'
+      ? event.target.value
+      : '';
+    this._selectThread(value);
   }
 
   _ensureConcernPublisher() {
@@ -140,7 +275,7 @@ class ConversantDashboard extends LitElement {
       this.directFeedback = 'Message text is required.';
       return;
     }
-    const threadId = this.threadHint.trim();
+    const threadId = this.threadHint.trim() || this.selectedThreadId;
     const payload = threadId
       ? JSON.stringify({ concern: text, thread_id: threadId })
       : text;
@@ -156,12 +291,30 @@ class ConversantDashboard extends LitElement {
 
   _clearDirectForm() {
     this.directMessage = '';
-    this.threadHint = '';
+    this.threadHint = this.selectedThreadId;
     this.directFeedback = '';
   }
 
   render() {
     const topicVariant = this.topicStatus === 'Live' ? 'success' : this.topicStatus === 'Error' ? 'error' : '';
+    const activeConversation = this.conversations.find((entry) => entry.threadId === this.selectedThreadId)
+      || this.conversations[0]
+      || null;
+    const messages = activeConversation ? activeConversation.messages : [];
+    const threadSelection = this.conversations.length
+      ? html`
+          <label class="surface-field">
+            <span class="surface-label">Conversation thread</span>
+            <select class="surface-input" @change=${(event) => this._handleThreadSelect(event)}>
+              ${this.conversations.map(
+                (entry) => html`<option value=${entry.threadId} ?selected=${entry.threadId === this.selectedThreadId}>
+                  ${entry.threadId} · ${entry.userId}
+                </option>`,
+              )}
+            </select>
+          </label>
+        `
+      : html`<p class="surface-status">Waiting for conversation snapshots…</p>`;
     return html`
       <div class="surface-grid surface-grid--wide surface-grid--dense">
         <article class="surface-card surface-card--compact">
@@ -174,6 +327,46 @@ class ConversantDashboard extends LitElement {
           ${this.topicFeedback
             ? html`<p class="surface-status" data-variant="error">${this.topicFeedback}</p>`
             : ''}
+        </article>
+
+        <article class="surface-card surface-card--wide">
+          <h3 class="surface-card__title">Conversation log</h3>
+          ${threadSelection}
+          ${this.conversationFeedback
+            ? html`<p class="surface-status" data-variant="error">${this.conversationFeedback}</p>`
+            : ''}
+          ${activeConversation
+            ? html`
+                <p class="surface-status">
+                  Active thread: ${activeConversation.threadId} • User: ${activeConversation.userId}
+                </p>
+              `
+            : ''}
+          <div class="conversation-console">
+            <div class="conversation-log">
+              <h5>Messages</h5>
+              ${messages.length
+                ? html`
+                    <ul>
+                      ${messages.map(
+                        (message) => html`
+                          <li class="conversation-entry ${message.role === 'assistant' ? 'assistant' : 'user'}">
+                            <header>
+                              <span class="badge role">${message.role}</span>
+                              <span class="badge">${this._formatTimestamp(message.timestamp)}</span>
+                              ${message.intent
+                                ? html`<span class="badge">Intent</span>`
+                                : ''}
+                            </header>
+                            <pre>${message.content}</pre>
+                          </li>
+                        `,
+                      )}
+                    </ul>
+                  `
+                : html`<p class="surface-status">No messages recorded yet.</p>`}
+            </div>
+          </div>
         </article>
 
         <article class="surface-card surface-card--wide">
