@@ -6,3 +6,4 @@
 - Run `PYTHONPATH=modules/conversant/packages/conversant:$PYTHONPATH pytest modules/conversant/packages/conversant/tests` after changing Python code in this module.
 - Use `ros2 launch conversant conversant.launch.py` (via `launch_unit.sh`) to start the full turn-taking loop during development.
 - When adding new cockpit actions, update `modules/conversant/cockpit/api/actions.json` and document expected parameters.
+- Frontend helpers now ship with Node-based tests—run `node --test modules/conversant/cockpit/components/conversation-helpers.test.mjs` after editing conversation dashboard logic.
