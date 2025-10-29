@@ -450,16 +450,24 @@ class FacesDashboard extends LitElement {
   }
 
   simulateDetection() {
-    const entry = {
-      id: makeId('face'),
-      timestamp: new Date().toLocaleTimeString(),
-      label: 'unknown',
-      confidence: Math.random() * 0.4 + this.threshold,
-      roi: `${Math.floor(Math.random() * 640)},${Math.floor(Math.random() * 480)} ${
-        128 + Math.floor(Math.random() * 64)
-      }×${128 + Math.floor(Math.random() * 64)}`,
+    const memoryId = `mem-${Math.random().toString(16).slice(2, 10)}`;
+    const vectorId = `vec-${Math.random().toString(16).slice(2, 10)}`;
+    const payload = {
+      name: 'Simulated face',
+      memoryId,
+      vectorId,
+      collection: 'faces',
+      note: 'Simulated recognition event.',
+      raw: JSON.stringify({
+        name: 'Simulated face',
+        memory_id: memoryId,
+        vector_id: vectorId,
+        collection: 'faces',
+      }),
     };
-    this.detectionLog = [entry, ...this.detectionLog].slice(0, 40);
+    this.recordRecognitionEvent(payload);
+    this.statusMessage = 'Simulated recognition event recorded.';
+    this.statusTone = 'info';
   }
 }
 
