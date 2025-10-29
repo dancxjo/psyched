@@ -15,6 +15,15 @@ if str(MODULE_ROOT) not in sys.path:
 import pytest
 import rclpy
 from std_msgs.msg import UInt8MultiArray
+import importlib.util
+
+transcriber_spec = importlib.util.spec_from_file_location(
+    "ear.transcriber_node", MODULE_ROOT / "ear" / "transcriber_node.py"
+)
+assert transcriber_spec is not None and transcriber_spec.loader is not None
+transcriber_module = importlib.util.module_from_spec(transcriber_spec)
+transcriber_spec.loader.exec_module(transcriber_module)
+sys.modules["ear.transcriber_node"] = transcriber_module
 
 pytest.importorskip("webrtcvad")
 
@@ -72,11 +81,15 @@ def test_thread_from_topic_helper() -> None:
 
 
 def test_transcriber_normalises_pcm_sample_width(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ear.transcriber_node.EarWorker.start", lambda self: None)
-    monkeypatch.setattr("ear.transcriber_node.EarWorker.stop", lambda self: None)
+    monkeypatch.setattr(transcriber_module.EarWorker, "start", lambda self: None)
+    monkeypatch.setattr(transcriber_module.EarWorker, "stop", lambda self: None)
     rclpy.init()
     node = TranscriberNode()
+    import inspect
+    source_path = inspect.getsourcefile(TranscriberNode)
+    assert source_path and "modules/ear" in source_path
     node._audio_sample_width = 1
+    assert node._audio_sample_width == 1
     calls: list[tuple[bytes, int, int]] = []
 
     class _StubWorker:
@@ -110,8 +123,8 @@ def test_transcriber_normalises_pcm_sample_width(monkeypatch: pytest.MonkeyPatch
 
 
 def test_transcriber_forwards_final_transcript(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ear.transcriber_node.EarWorker.start", lambda self: None)
-    monkeypatch.setattr("ear.transcriber_node.EarWorker.stop", lambda self: None)
+    monkeypatch.setattr(transcriber_module.EarWorker, "start", lambda self: None)
+    monkeypatch.setattr(transcriber_module.EarWorker, "stop", lambda self: None)
     rclpy.init()
     node = TranscriberNode()
     published_conversant: list[str] = []

@@ -39,6 +39,7 @@ const HOST_HEALTH_MSG_TYPE = 'psyched_msgs/msg/HostHealth';
  */
 class VisceraDashboard extends LitElement {
   #socket;
+  #connectAttempt = 0;
 
   static properties = {
     status: { state: true },
@@ -89,17 +90,18 @@ class VisceraDashboard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.#connect();
+    void this.#connect();
   }
 
   disconnectedCallback() {
+    this.#connectAttempt += 1;
     super.disconnectedCallback();
     this.#teardown();
   }
 
   updated(changed) {
     if (changed.has('topic')) {
-      this.#connect();
+      void this.#connect();
     }
   }
 
@@ -122,9 +124,22 @@ class VisceraDashboard extends LitElement {
     };
   }
 
-  #connect() {
+  async #connect() {
     this.#teardown();
-    const topic = this.topic && this.topic.trim() ? this.topic.trim() : resolveHostHealthTopic();
+    this.status = 'Connecting…';
+    const attempt = ++this.#connectAttempt;
+    let topic = typeof this.topic === 'string' && this.topic.trim() ? this.topic.trim() : '';
+    if (!topic) {
+      try {
+        await ensureHostMetadata();
+      } catch (error) {
+        console.warn('Viscera dashboard could not load host metadata, falling back to derived topic', error);
+      }
+      if (attempt !== this.#connectAttempt) {
+        return;
+      }
+      topic = resolveHostHealthTopic();
+    }
     try {
       const socket = createVisceraSocket({
         topic,
@@ -141,6 +156,14 @@ class VisceraDashboard extends LitElement {
         this.status = 'Error';
       });
       socket.addEventListener('message', (event) => this.#handleMessage(event));
+      if (attempt !== this.#connectAttempt) {
+        try {
+          socket.close();
+        } catch (_error) {
+          // ignored
+        }
+        return;
+      }
       this.#socket = socket;
     } catch (error) {
       console.warn('Failed to open HostHealth socket', error);
@@ -393,6 +416,48 @@ function deriveHostShortname(hostname) {
   }
   const short = cleaned.split('.')[0];
   return short || cleaned;
+}
+
+let hostMetadataPromise;
+
+async function ensureHostMetadata() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const hostGlobals = window.Cockpit && window.Cockpit.host;
+  if (hostGlobals && typeof hostGlobals.shortname === 'string' && hostGlobals.shortname.trim()) {
+    return;
+  }
+  if (!hostMetadataPromise) {
+    hostMetadataPromise = loadHostMetadata().catch((error) => {
+      hostMetadataPromise = null;
+      throw error;
+    });
+  }
+  await hostMetadataPromise;
+}
+
+async function loadHostMetadata() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const response = await fetch('/api/modules');
+  if (!response.ok) {
+    throw new Error(`Host metadata request failed with status ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+  if (!payload.host || typeof payload.host !== 'object') {
+    return;
+  }
+  const cockpitGlobals = window.Cockpit ? { ...window.Cockpit } : {};
+  cockpitGlobals.host = {
+    ...(cockpitGlobals.host || {}),
+    ...payload.host,
+  };
+  window.Cockpit = cockpitGlobals;
 }
 
 customElements.define('viscera-dashboard', VisceraDashboard);
