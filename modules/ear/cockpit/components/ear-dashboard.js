@@ -2,6 +2,12 @@ import { LitElement, html, css, nothing } from 'https://unpkg.com/lit@3.1.4/inde
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import { sampleRateFromMessage } from '../utils/audio.js';
+import {
+  coerceTranscriptInt,
+  createTranscriptDeduplicator,
+  normalizeTranscriptEntry,
+  transcriptSignature,
+} from './ear-dashboard.helpers.js';
 import '/components/audio-oscilloscope.js';
 
 const AUDIO_TOPIC = '/audio/raw';
@@ -301,6 +307,7 @@ class EarDashboard extends LitElement {
     this._audioRenderScheduled = false;
     this._fakeTranscriptFeedbackResetHandle = 0;
     this._lastPartialSignature = '';
+    this._deduplicator = createTranscriptDeduplicator(MAX_TRANSCRIPTS * 3);
   }
 
   connectedCallback() {
@@ -308,6 +315,7 @@ class EarDashboard extends LitElement {
     this._subscribeSpeech();
     this._subscribeSilence();
     this._subscribeTranscriptEvents();
+    this._subscribeTranscripts();
     if (this.audioMonitoringEnabled) {
       this._subscribeAudio();
     } else {
@@ -321,6 +329,7 @@ class EarDashboard extends LitElement {
     this._clearFakeTranscriptFeedbackTimer();
     this.partialTranscript = null;
     this._lastPartialSignature = '';
+    this._deduplicator.clear();
   }
 
   toggleAudioMonitoring() {
@@ -341,6 +350,7 @@ class EarDashboard extends LitElement {
     this.transcripts = [];
     this.partialTranscript = null;
     this._lastPartialSignature = '';
+    this._deduplicator.clear();
   }
 
   async injectFakeTranscript(event) {
@@ -359,15 +369,18 @@ class EarDashboard extends LitElement {
       publisher.send(JSON.stringify({ data: text }));
       this.fakeTranscriptText = '';
       this._setFakeTranscriptFeedback('Fake transcript injected.', 'success', true);
-      this._appendTranscriptEntry({
-        id: uniqueId('transcript'),
-        text,
-        timestamp: new Date().toLocaleTimeString(),
-        startMs: null,
-        endMs: null,
-        segments: [],
-        source: 'manual',
-      });
+      this._appendTranscriptEntry(
+        {
+          id: uniqueId('transcript'),
+          text,
+          timestamp: new Date().toLocaleTimeString(),
+          startMs: null,
+          endMs: null,
+          segments: [],
+          source: 'manual',
+        },
+        this._buildDedupeTokens('manual', text),
+      );
       this.partialTranscript = null;
       this._lastPartialSignature = '';
     } catch (error) {
@@ -467,6 +480,20 @@ class EarDashboard extends LitElement {
     );
   }
 
+  _subscribeTranscripts() {
+    this._openSocket(
+      'transcripts',
+      {
+        topic: TRANSCRIPT_TOPIC,
+        type: 'std_msgs/msg/String',
+        role: 'subscribe',
+      },
+      (message) => {
+        this._handleTranscriptMessage(message);
+      },
+    );
+  }
+
   _handleTranscriptEvent(message) {
     const payload = this._parseTranscriptEventMessage(message);
     if (!payload) {
@@ -514,8 +541,9 @@ class EarDashboard extends LitElement {
             : typeof payload.audioBase64 === 'string'
             ? payload.audioBase64
             : null,
+        source: typeof payload.source === 'string' ? payload.source : 'event',
       };
-      this._appendTranscriptEntry(entry);
+      this._appendTranscriptEntry(entry, this._buildDedupeTokens('event', text));
       return;
     }
 
@@ -533,8 +561,30 @@ class EarDashboard extends LitElement {
             : typeof payload.audioBase64 === 'string'
             ? payload.audioBase64
             : null,
-      });
+        source: typeof payload.source === 'string' ? payload.source : 'event',
+      }, this._buildDedupeTokens('event', text));
     }
+  }
+
+  _handleTranscriptMessage(message) {
+    const text = safeToString(message?.data ?? message);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    const tokens = this._buildDedupeTokens('raw', trimmed);
+    this._appendTranscriptEntry(
+      {
+        id: uniqueId('transcript'),
+        text: trimmed,
+        timestamp: new Date().toLocaleTimeString(),
+        startMs: null,
+        endMs: null,
+        segments: [],
+        source: 'ros',
+      },
+      tokens,
+    );
   }
 
   _parseTranscriptEventMessage(message) {
@@ -605,23 +655,71 @@ class EarDashboard extends LitElement {
     return '';
   }
 
-  _appendTranscriptEntry(entry) {
-    this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+  _appendTranscriptEntry(entry, dedupeTokens = []) {
+    const normalised = normalizeTranscriptEntry(entry);
+    const finalEntry = {
+      ...normalised,
+      id: normalised.id || entry.id || uniqueId('transcript'),
+      timestamp: normalised.timestamp || entry.timestamp || new Date().toLocaleTimeString(),
+      startMs: normalised.startMs ?? entry.startMs ?? null,
+      endMs: normalised.endMs ?? entry.endMs ?? null,
+      segments: Array.isArray(normalised.segments) ? normalised.segments : [],
+      source: normalised.source || entry.source || '',
+      audioBase64:
+        typeof normalised.audioBase64 === 'string'
+          ? normalised.audioBase64
+          : typeof entry.audioBase64 === 'string'
+          ? entry.audioBase64
+          : null,
+    };
+    const tokens = new Set();
+    const primarySignature = transcriptSignature(finalEntry);
+    if (primarySignature) {
+      tokens.add(primarySignature);
+    }
+    for (const token of dedupeTokens) {
+      if (typeof token === 'string' && token.trim()) {
+        tokens.add(token.trim());
+      }
+    }
+    for (const token of tokens) {
+      if (this._deduplicator.has(token)) {
+        return;
+      }
+    }
+    this.transcripts = [finalEntry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+    for (const token of tokens) {
+      this._deduplicator.remember(token);
+    }
+  }
+
+  _canonicalText(value) {
+    const text = safeToString(value);
+    if (!text) {
+      return '';
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  _buildDedupeTokens(kind, value) {
+    const canonical = this._canonicalText(value);
+    if (!canonical) {
+      return [];
+    }
+    if (kind === 'event') {
+      return [`event:${canonical}`, `text:${canonical}`];
+    }
+    if (kind === 'raw') {
+      return [`raw:${canonical}`, `text:${canonical}`, `event:${canonical}`];
+    }
+    if (kind === 'manual') {
+      return [`manual:${canonical}`];
+    }
+    return [`text:${canonical}`];
   }
 
   _coerceInt(value) {
-    if (typeof value === 'number') {
-      return Number.isFinite(value) ? Math.trunc(value) : null;
-    }
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return null;
-      }
-      const parsed = Number(trimmed);
-      return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-    }
-    return null;
+    return coerceTranscriptInt(value);
   }
 
   _formatMilliseconds(value) {
@@ -919,13 +1017,14 @@ class EarDashboard extends LitElement {
             <form class="transcript-form" @submit=${(event) => this.injectFakeTranscript(event)}>
               <label>
                 Inject fake ASR transcript (bleep)
-                <input type="text"
+                <textarea
+                  rows="2"
                   placeholder="Type a transcript line to append to the log"
                   .value=${this.fakeTranscriptText}
                   @input=${(event) => {
-        this.fakeTranscriptText = event.target.value;
-      }}
-                >
+                    this.fakeTranscriptText = event.target.value;
+                  }}
+                ></textarea>
               </label>
               <div class="surface-actions">
                 <button type="submit" class="surface-button">Inject transcript</button>
@@ -963,6 +1062,7 @@ class EarDashboard extends LitElement {
                       ${segmentCount
                         ? html`<span>${segmentCount} segment${segmentCount === 1 ? '' : 's'}</span>`
                         : nothing}
+                      ${entry.source ? html`<span>${entry.source}</span>` : nothing}
                     </div>
                     <p class="transcript-entry__text">${entry.text}</p>
                   </li>`;
