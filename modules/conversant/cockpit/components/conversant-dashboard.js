@@ -46,6 +46,68 @@ class ConversantDashboard extends LitElement {
       .surface-field + .surface-field {
         margin-top: 0.75rem;
       }
+
+      .conversation-stream {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .conversation-stream__heading {
+        margin: 0;
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lcars-muted);
+      }
+
+      .conversation-stream__log {
+        background: var(--control-surface-bg);
+        border: 1px solid var(--control-surface-border);
+        border-radius: var(--control-surface-radius);
+        box-shadow: var(--control-surface-shadow);
+        padding: 0.75rem;
+        max-height: 320px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+
+      .conversation-stream__empty {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--lcars-muted);
+      }
+
+      .conversation-stream__entry {
+        border-left: 3px solid rgba(92, 209, 132, 0.5);
+        padding: 0 0 0 0.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .conversation-stream__entry[data-role='user'] {
+        border-left-color: rgba(248, 128, 60, 0.5);
+      }
+
+      .conversation-stream__entry header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .conversation-stream__entry pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: 'Source Code Pro', monospace;
+        font-size: 0.85rem;
+        color: var(--lcars-text);
+      }
     `,
   ];
 
@@ -65,6 +127,15 @@ class ConversantDashboard extends LitElement {
     this._sockets = [];
     this._conversationSockets = new Map();
     this._conversationsByThread = new Map();
+  }
+
+  updated(changedProperties) {
+    if (changedProperties.has('conversations') || changedProperties.has('selectedThreadId')) {
+      const streamLog = this.renderRoot?.querySelector('.conversation-stream__log');
+      if (streamLog) {
+        streamLog.scrollTop = streamLog.scrollHeight;
+      }
+    }
   }
 
   connectedCallback() {
@@ -324,6 +395,27 @@ class ConversantDashboard extends LitElement {
             <span class="surface-label">Current stream</span>
             <input class="surface-input" type="text" .value=${this.topic} readonly />
           </label>
+          <div class="conversation-stream">
+            <p class="conversation-stream__heading">Live transcript</p>
+            ${messages.length
+              ? html`
+                  <div class="conversation-stream__log">
+                    ${messages.map(
+                      (message) => html`
+                        <article class="conversation-stream__entry" data-role=${message.role}>
+                          <header>
+                            <span>${message.role}</span>
+                            <span>${this._formatTimestamp(message.timestamp)}</span>
+                            ${message.intent ? html`<span>Intent</span>` : ''}
+                          </header>
+                          <pre>${message.content}</pre>
+                        </article>
+                      `,
+                    )}
+                  </div>
+                `
+              : html`<p class="conversation-stream__empty">Waiting for messages…</p>`}
+          </div>
           ${this.topicFeedback
             ? html`<p class="surface-status" data-variant="error">${this.topicFeedback}</p>`
             : ''}
@@ -378,13 +470,14 @@ class ConversantDashboard extends LitElement {
           <form class="surface-form" @submit=${(event) => this._handleDirectMessageSubmit(event)}>
             <label class="surface-field">
               <span class="surface-label">Message</span>
-              <textarea
-                class="surface-textarea"
+              <input
+                class="surface-input"
                 name="message"
+                type="text"
                 .value=${this.directMessage}
                 placeholder="e.g. Please acknowledge the battery check"
                 @input=${(event) => (this.directMessage = event.target.value)}
-              ></textarea>
+              />
             </label>
             <label class="surface-field">
               <span class="surface-label">Thread (optional)</span>

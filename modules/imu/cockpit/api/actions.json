@@ -9,7 +9,10 @@
         "topic": "/imu/data",
         "message_type": "sensor_msgs/msg/Imu",
         "role": "subscribe",
-        "queue_length": 20
+        "queue_length": 20,
+        "qos": {
+          "reliability": "best_effort"
+        }
       },
       "parameters": {
         "type": "object",
