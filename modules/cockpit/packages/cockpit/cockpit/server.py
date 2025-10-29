@@ -681,8 +681,21 @@ def _resolve_frontend_asset(frontend_root: Path, tail: str) -> Optional[Path]:
     return None
 
 
-def _resolve_overlay_asset(modules_root: Path, tail: str) -> Optional[Path]:
-    """Resolve *tail* inside a module's cockpit overlay directory, if present."""
+def _resolve_overlay_asset(
+    modules_root: Path,
+    tail: str,
+    *,
+    repo_root: Optional[Path] = None,
+) -> Optional[Path]:
+    """Resolve *tail* inside a module's cockpit overlay directory, if present.
+
+    The cockpit normally serves static assets from the synchronised module
+    overlays under ``modules_root``. When new dashboard files land in the repo
+    but the operator has not re-run ``psh mod setup`` yet, those files only
+    exist under ``repo_root/modules``. In that case we fall back to the repo so
+    fresh assets are available immediately while still preferring the deployed
+    overlay tree when it contains the requested file.
+    """
 
     parts = _normalize_parts(tail)
     if len(parts) < 2 or parts[0] != "modules":
@@ -690,15 +703,28 @@ def _resolve_overlay_asset(modules_root: Path, tail: str) -> Optional[Path]:
 
     module_name = parts[1]
     remainder = parts[2:]
-    base = modules_root / module_name / "cockpit"
-    if not base.exists():
-        return None
 
-    candidate = base.joinpath(*remainder) if remainder else base
-    if candidate.is_dir():
-        candidate = candidate / "index.html"
-    if candidate.exists() and candidate.is_file():
-        return candidate
+    search_roots: List[Path] = []
+
+    overlay_base = modules_root / module_name / "cockpit"
+    if overlay_base.exists():
+        search_roots.append(overlay_base)
+
+    if repo_root is not None:
+        repo_base = repo_root / "modules" / module_name / "cockpit"
+        # Avoid double entries when repo and overlay share the same root.
+        if repo_base.exists():
+            resolved_roots = {root.resolve() for root in search_roots}
+            if repo_base.resolve() not in resolved_roots:
+                search_roots.append(repo_base)
+
+    for base in search_roots:
+        candidate = base.joinpath(*remainder) if remainder else base
+        if candidate.is_dir():
+            candidate = candidate / "index.html"
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
     return None
 
 
@@ -720,7 +746,11 @@ async def _static_handler(request: web.Request) -> web.StreamResponse:
     if frontend_target:
         return web.FileResponse(frontend_target)
 
-    overlay_target = _resolve_overlay_asset(settings.modules_root, tail)
+    overlay_target = _resolve_overlay_asset(
+        settings.modules_root,
+        tail,
+        repo_root=settings.repo_root,
+    )
     if overlay_target:
         return web.FileResponse(overlay_target)
 
