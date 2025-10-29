@@ -165,6 +165,7 @@ class ConversantDashboard extends LitElement {
       topic: '/conversant/topic',
       type: 'std_msgs/msg/String',
       role: 'subscribe',
+      qos: { durability: 'transient_local' },
     });
     socket.addEventListener('open', () => {
       this.topicStatus = 'Live';
@@ -240,6 +241,7 @@ class ConversantDashboard extends LitElement {
       topic: topicName,
       type: 'std_msgs/msg/String',
       role: 'subscribe',
+      qos: { durability: 'transient_local' },
     });
     socket.addEventListener('error', () => {
       this.conversationFeedback = `Unable to subscribe to ${topicName}.`;

@@ -14,6 +14,7 @@ from urllib.parse import urlparse, urlunparse
 try:  # pragma: no cover - exercised when ROS 2 dependencies are present
     import rclpy
     from rclpy.node import Node
+    from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
     from std_msgs.msg import Bool, Empty, String
 except ImportError:  # pragma: no cover - fallback for test environments without ROS
     rclpy = None  # type: ignore[assignment]
@@ -25,6 +26,7 @@ except ImportError:  # pragma: no cover - fallback for test environments without
             raise RuntimeError("rclpy is required to instantiate ConversantNode")
 
     Bool = Empty = String = object  # type: ignore[assignment]
+    QoSDurabilityPolicy = QoSProfile = QoSReliabilityPolicy = object  # type: ignore[assignment]
 
 from .threads import (
     ConversationThread,
@@ -420,7 +422,12 @@ class ConversantNode(Node):
         }
 
         self._topic_topic = self._declare_str("topic_topic", "/conversant/topic")
-        self._topic_pub = self.create_publisher(String, self._topic_topic, 10)
+        self._topic_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._topic_pub = self.create_publisher(String, self._topic_topic, self._topic_qos)
 
         self._conversation_topic_prefix = self._declare_str(
             "conversation_topic_prefix",
@@ -428,6 +435,11 @@ class ConversantNode(Node):
         )
         self._default_thread_id = self._declare_str("default_thread_id", "default")
         self._default_user_id = self._declare_str("default_user_id", "operator")
+        self._conversation_qos = QoSProfile(
+            depth=10,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self._conversation_publishers: Dict[str, "Publisher"] = {}
         self._thread_users: Dict[str, str] = {}
         self._pending_conversant_turns: List[
@@ -565,7 +577,7 @@ class ConversantNode(Node):
         if publisher is not None:
             return publisher
         topic_name = self._conversation_topic_name(thread_id)
-        publisher = self.create_publisher(String, topic_name, 10)
+        publisher = self.create_publisher(String, topic_name, self._conversation_qos)
         self._conversation_publishers[thread_id] = publisher
         return publisher
 
