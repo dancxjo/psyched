@@ -308,6 +308,7 @@ class EarDashboard extends LitElement {
     this._fakeTranscriptFeedbackResetHandle = 0;
     this._lastPartialSignature = '';
     this._deduplicator = createTranscriptDeduplicator(MAX_TRANSCRIPTS * 3);
+    this._pendingManualTranscripts = [];
   }
 
   connectedCallback() {
@@ -330,6 +331,7 @@ class EarDashboard extends LitElement {
     this.partialTranscript = null;
     this._lastPartialSignature = '';
     this._deduplicator.clear();
+    this._pendingManualTranscripts = [];
   }
 
   toggleAudioMonitoring() {
@@ -367,6 +369,7 @@ class EarDashboard extends LitElement {
     }
     try {
       publisher.send(JSON.stringify({ data: text }));
+      this._rememberPendingManualTranscript(text);
       this.fakeTranscriptText = '';
       this._setFakeTranscriptFeedback('Fake transcript injected.', 'success', true);
       this._appendTranscriptEntry(
@@ -377,7 +380,7 @@ class EarDashboard extends LitElement {
           startMs: null,
           endMs: null,
           segments: [],
-          source: 'manual',
+          source: 'user',
         },
         this._buildDedupeTokens('manual', text),
       );
@@ -572,6 +575,7 @@ class EarDashboard extends LitElement {
     if (!trimmed) {
       return;
     }
+    const manual = this._consumePendingManualTranscript(trimmed);
     const tokens = this._buildDedupeTokens('raw', trimmed);
     this._appendTranscriptEntry(
       {
@@ -581,7 +585,7 @@ class EarDashboard extends LitElement {
         startMs: null,
         endMs: null,
         segments: [],
-        source: 'ros',
+        source: manual ? 'user' : 'ros',
       },
       tokens,
     );
@@ -716,6 +720,38 @@ class EarDashboard extends LitElement {
       return [`manual:${canonical}`];
     }
     return [`text:${canonical}`];
+  }
+
+  _rememberPendingManualTranscript(value) {
+    const canonical = this._canonicalText(value);
+    if (!canonical) {
+      return;
+    }
+    const now = Date.now();
+    this._pendingManualTranscripts = this._pendingManualTranscripts.filter(
+      (entry) => entry && entry.expires > now,
+    );
+    this._pendingManualTranscripts.push({ text: canonical, expires: now + 5000 });
+    if (this._pendingManualTranscripts.length > 12) {
+      this._pendingManualTranscripts.shift();
+    }
+  }
+
+  _consumePendingManualTranscript(value) {
+    const canonical = this._canonicalText(value);
+    if (!canonical) {
+      return false;
+    }
+    const now = Date.now();
+    this._pendingManualTranscripts = this._pendingManualTranscripts.filter(
+      (entry) => entry && entry.expires > now,
+    );
+    const index = this._pendingManualTranscripts.findIndex((entry) => entry.text === canonical);
+    if (index === -1) {
+      return false;
+    }
+    this._pendingManualTranscripts.splice(index, 1);
+    return true;
   }
 
   _coerceInt(value) {
@@ -1017,14 +1053,14 @@ class EarDashboard extends LitElement {
             <form class="transcript-form" @submit=${(event) => this.injectFakeTranscript(event)}>
               <label>
                 Inject fake ASR transcript (bleep)
-                <textarea
-                  rows="2"
+                <input
+                  type="text"
                   placeholder="Type a transcript line to append to the log"
                   .value=${this.fakeTranscriptText}
                   @input=${(event) => {
                     this.fakeTranscriptText = event.target.value;
                   }}
-                ></textarea>
+                />
               </label>
               <div class="surface-actions">
                 <button type="submit" class="surface-button">Inject transcript</button>
