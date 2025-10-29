@@ -1139,6 +1139,28 @@ class PilotNode(Node):
                         f"jsonschema not available or validation skipped for {fq}"
                     )
 
+            if module == "voice" and action == "say":
+                if "text" not in arguments:
+                    self.get_logger().warning(
+                        "voice.say invocation missing required 'text' argument"
+                    )
+                    return False, "missing_text"
+
+                speech = str(arguments["text"])
+                cleaned = speech.strip()
+                if not cleaned:
+                    self.get_logger().warning("voice.say received blank text payload")
+                    return False, "empty_text"
+
+                self._queue_spoken_sentence(speech)
+                response_payload = {
+                    "status": "queued",
+                    "topic": getattr(self, "_voice_topic_name", "/voice"),
+                    "text": cleaned,
+                    "source": "pilot.voice.say",
+                }
+                return True, json.dumps(response_payload)
+
             body = json.dumps(payload).encode("utf-8")
             req = request.Request(
                 cockpit + f"/api/actions/{module}/{action}",

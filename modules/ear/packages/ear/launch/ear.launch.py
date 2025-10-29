@@ -116,6 +116,7 @@ def generate_launch_description() -> LaunchDescription:
                 "audio_topic": audio_topic,
                 "audio_sample_rate": ParameterValue(sample_rate, value_type=int),
                 "audio_channels": ParameterValue(channels, value_type=int),
+                "audio_sample_width": ParameterValue(LaunchConfiguration("sample_width"), value_type=int),
                 "audio_reliability": reliability,
                 "service_uri": service_uri,
                 "faster_whisper_model": whisper_model,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import audioop
 import importlib
 import json
 from typing import Sequence
@@ -71,6 +72,25 @@ class TranscriberNode(Node):
         self._audio_subscription = None
         self._audio_sample_rate = int(self.declare_parameter("audio_sample_rate", 16000).value)
         self._audio_channels = int(self.declare_parameter("audio_channels", 1).value)
+        sample_width_param = self.declare_parameter("audio_sample_width", 2).value
+        try:
+            sample_width = int(sample_width_param)
+        except (TypeError, ValueError):
+            sample_width = 2
+        if sample_width <= 0:
+            self.get_logger().warning(
+                "audio_sample_width must be positive; defaulting to 2 bytes per sample"
+            )
+            sample_width = 2
+        elif sample_width not in (1, 2, 3, 4):
+            self.get_logger().warning(
+                "Unsupported audio_sample_width=%s; defaulting to 2 bytes per sample",
+                sample_width_param,
+            )
+            sample_width = 2
+        self._audio_sample_width = sample_width
+        self._sample_width_error_reported = False
+        self._sample_width_trim_logged = False
         reliability_param = str(self.declare_parameter("audio_reliability", "best_effort").value).strip().lower()
         audio_qos = QoSProfile(depth=10)
         if reliability_param == "reliable":
@@ -191,6 +211,31 @@ class TranscriberNode(Node):
         if not msg.data:
             return
         pcm = bytes(msg.data)
+        sample_width = self._audio_sample_width
+        if sample_width != 2:
+            remainder = len(pcm) % sample_width
+            if remainder:
+                pcm = pcm[: len(pcm) - remainder]
+                if not pcm:
+                    return
+                if not self._sample_width_trim_logged:
+                    self.get_logger().warning(
+                        "Dropped %d trailing byte(s) while aligning %d-byte samples before conversion",
+                        remainder,
+                        sample_width,
+                    )
+                    self._sample_width_trim_logged = True
+            try:
+                pcm = audioop.lin2lin(pcm, sample_width, 2)
+            except audioop.error as exc:
+                if not self._sample_width_error_reported:
+                    self.get_logger().error(
+                        "Failed to convert audio chunk from %d-byte samples to 16-bit PCM: %s",
+                        sample_width,
+                        exc,
+                    )
+                    self._sample_width_error_reported = True
+                return
         self._worker.submit_audio(pcm, self._audio_sample_rate, self._audio_channels)
 
     def _handle_event(self, event: TranscriptionEvent) -> None:

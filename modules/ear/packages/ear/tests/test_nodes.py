@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import audioop
 import json
 import struct
+import sys
+from pathlib import Path
+
+MODULE_ROOT = Path(__file__).resolve().parents[1]
+if str(MODULE_ROOT) not in sys.path:
+    sys.path.insert(0, str(MODULE_ROOT))
 
 import pytest
 import rclpy
@@ -62,6 +69,44 @@ def test_thread_from_topic_helper() -> None:
     assert _thread_from_topic("/conversation/custom/thread", prefix="/conversation", default="fallback") == "custom"
     assert _thread_from_topic("solo-thread", prefix="/conversation", default="fallback") == "solo-thread"
     assert _thread_from_topic("", prefix="/conversation", default="fallback") == "fallback"
+
+
+def test_transcriber_normalises_pcm_sample_width(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ear.transcriber_node.EarWorker.start", lambda self: None)
+    monkeypatch.setattr("ear.transcriber_node.EarWorker.stop", lambda self: None)
+    rclpy.init()
+    node = TranscriberNode()
+    node._audio_sample_width = 1
+    calls: list[tuple[bytes, int, int]] = []
+
+    class _StubWorker:
+        def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
+            calls.append((pcm, sample_rate, channels))
+
+        def close(self) -> None:  # pragma: no cover - not exercised in test
+            pass
+
+        def stop(self) -> None:  # pragma: no cover - interface parity
+            pass
+
+    node._worker = _StubWorker()  # type: ignore[assignment]
+    node._sample_width_error_reported = False
+    node._sample_width_trim_logged = False
+    try:
+        chunk = struct.pack("<bbb", -128, 0, 127)
+        message = UInt8MultiArray()
+        message.data = list(chunk)
+        node._handle_audio(message)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+    assert calls, "transcriber did not forward audio to the worker"
+    forwarded_pcm, forwarded_rate, forwarded_channels = calls[-1]
+    assert forwarded_rate == node._audio_sample_rate
+    assert forwarded_channels == node._audio_channels
+    expected_pcm = audioop.lin2lin(chunk, 1, 2)
+    assert forwarded_pcm == expected_pcm
 
 
 def test_transcriber_forwards_final_transcript(monkeypatch: pytest.MonkeyPatch) -> None:

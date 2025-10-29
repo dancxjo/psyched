@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import List
 
 import pytest
 
 from pilot.node import PilotNode
+from pilot.command_script import CommandInvocation
 
 
 @dataclass
@@ -76,3 +78,29 @@ def test_queue_spoken_sentence_ignores_empty_payloads(pilot_stub: PilotNode) -> 
     pilot_stub._queue_spoken_sentence("")  # type: ignore[attr-defined]
 
     assert publisher.messages == []
+
+
+def test_dispatch_voice_say_enqueues_via_voice_queue(monkeypatch) -> None:
+    """voice.say command should enqueue speech using the same voice topic queue."""
+
+    node = object.__new__(PilotNode)
+    node._action_schemas = {}
+    node._voice_publisher = _DummyPublisher()
+    node._voice_topic_name = "/voice"
+    node._last_spoken_sentence = None
+    node.get_logger = lambda: _DummyLogger()  # type: ignore[attr-defined]
+
+    def _forbid_urlopen(*args, **kwargs):
+        raise AssertionError("urlopen should not be used for voice.say dispatch")
+
+    monkeypatch.setattr("pilot.node.request.urlopen", _forbid_urlopen)
+
+    invocation = CommandInvocation(module="voice", action="say", arguments={"text": "Hello there"})
+    success, response = node._dispatch_action(invocation, ["voice.say"])  # type: ignore[attr-defined]
+
+    assert success
+    payload = json.loads(response)
+    assert payload["status"] == "queued"
+    assert payload["topic"] == "/voice"
+    publisher: _DummyPublisher = node._voice_publisher  # type: ignore[attr-defined]
+    assert [entry.data for entry in publisher.messages] == ["Hello there"]

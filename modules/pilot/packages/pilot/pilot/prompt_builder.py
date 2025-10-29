@@ -31,7 +31,7 @@ RULES
 - The spoken_sentence is read aloud immediately from the voice queue and must never be repeated inside command_script actions.
 - Use voice.say sparingly. Do not repeat the same text in the spoken_sentence and command_script.
 - Ground every field strictly in supplied inputs; infer cautiously and never fabricate.
-- Keep fields single-sentence and concise; keep the full JSON well under 512 tokens.
+- Keep fields single-sentence and concise; keep the full JSON well under 1024 tokens.
 - Do not emit commentary outside the JSON output."""
 
 @dataclass(slots=True)
