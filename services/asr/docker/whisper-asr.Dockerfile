@@ -22,6 +22,7 @@ RUN rm -rf src
 
 # Build the actual application
 COPY services/asr/app/src src
+COPY services/asr/app/static static
 RUN cargo build --release
 
 FROM debian:bookworm-slim
