@@ -1,6 +1,11 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
-import { buildGpsResetPayload, normalizeResetMode } from './gps-dashboard.helpers.js';
+import {
+  buildGpsResetPayload,
+  describeNavSatFix,
+  normalizeResetMode,
+} from './gps-dashboard.helpers.js';
 
 function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -16,9 +21,9 @@ class GpsDashboard extends LitElement {
   static properties = {
     fixStatus: { state: true },
     fixTone: { state: true },
-    satellites: { state: true },
-    hdop: { state: true },
-    vdop: { state: true },
+    latitude: { state: true },
+    longitude: { state: true },
+    altitude: { state: true },
     lastFix: { state: true },
     resetMode: { state: true },
     resetNote: { state: true },
@@ -102,16 +107,94 @@ class GpsDashboard extends LitElement {
 
   constructor() {
     super();
-    this.fixStatus = 'No fix';
+    this.fixStatus = 'Connecting…';
     this.fixTone = 'warning';
-    this.satellites = 0;
-    this.hdop = 0;
-    this.vdop = 0;
+    this.latitude = '—';
+    this.longitude = '—';
+    this.altitude = '—';
     this.lastFix = '—';
     this.resetMode = 'hot';
     this.resetNote = '';
     this.resetFeedback = '';
     this.eventLog = [];
+    this.sockets = [];
+    this.lastTelemetrySummary = null;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    if (!this.sockets.length) {
+      this.connectTelemetry();
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    for (const socket of this.sockets) {
+      try {
+        socket.close();
+      } catch (_error) {
+        // ignore close failures
+      }
+    }
+    this.sockets.length = 0;
+  }
+
+  connectTelemetry() {
+    const socket = createTopicSocket({
+      module: 'gps',
+      action: 'navsat_fix_stream',
+      type: 'sensor_msgs/msg/NavSatFix',
+      role: 'subscribe',
+    });
+    socket.addEventListener('open', () => {
+      this.recordEvent('Connected to GPS telemetry stream.', 'status');
+      this.fixStatus = 'Awaiting satellite lock';
+      this.fixTone = 'warning';
+    });
+    socket.addEventListener('message', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.event === 'message' && payload.data) {
+          this.applyFixTelemetry(describeNavSatFix(payload.data));
+        }
+      } catch (error) {
+        this.recordEvent(`Telemetry parse error: ${error.message}`, 'error');
+        this.fixTone = 'error';
+      }
+    });
+    socket.addEventListener('close', () => {
+      this.recordEvent('GPS telemetry stream closed.', 'status');
+      this.fixStatus = 'Disconnected';
+      this.fixTone = 'error';
+    });
+    socket.addEventListener('error', () => {
+      this.recordEvent('GPS telemetry stream error.', 'error');
+      this.fixTone = 'error';
+    });
+    this.sockets.push(socket);
+  }
+
+  applyFixTelemetry(telemetry) {
+    if (!telemetry) {
+      return;
+    }
+    this.fixStatus = telemetry.statusText;
+    this.fixTone = telemetry.tone;
+    this.latitude = telemetry.latitude ?? '—';
+    this.longitude = telemetry.longitude ?? '—';
+    this.altitude = telemetry.altitude ?? '—';
+    this.lastFix = telemetry.hasFix && telemetry.timestamp
+      ? telemetry.timestamp.toLocaleTimeString()
+      : '—';
+
+    if (telemetry.eventSummary && telemetry.eventSummary !== this.lastTelemetrySummary) {
+      this.recordEvent(telemetry.eventSummary, 'telemetry');
+      this.lastTelemetrySummary = telemetry.eventSummary;
+    }
+    if (!telemetry.eventSummary) {
+      this.lastTelemetrySummary = null;
+    }
   }
 
   render() {
@@ -121,16 +204,16 @@ class GpsDashboard extends LitElement {
           <h3 class="surface-card__title">Fix status</h3>
           <p class="surface-status" data-variant="${this.fixTone}">${this.fixStatus}</p>
           <div class="surface-metric surface-metric--inline">
-            <span class="surface-metric__label">Satellites</span>
-            <span class="surface-metric__value">${this.satellites}</span>
+            <span class="surface-metric__label">Latitude</span>
+            <span class="surface-metric__value">${this.latitude}</span>
           </div>
           <div class="surface-metric surface-metric--inline">
-            <span class="surface-metric__label">HDOP</span>
-            <span class="surface-metric__value">${this.formatDilution(this.hdop)}</span>
+            <span class="surface-metric__label">Longitude</span>
+            <span class="surface-metric__value">${this.longitude}</span>
           </div>
           <div class="surface-metric surface-metric--inline">
-            <span class="surface-metric__label">VDOP</span>
-            <span class="surface-metric__value">${this.formatDilution(this.vdop)}</span>
+            <span class="surface-metric__label">Altitude</span>
+            <span class="surface-metric__value">${this.altitude}</span>
           </div>
           <p class="surface-card__subtitle">Last fix: ${this.lastFix}</p>
           <div class="surface-actions">
@@ -225,27 +308,25 @@ class GpsDashboard extends LitElement {
   }
 
   simulateFix() {
-    this.fixStatus = '3D fix achieved';
+    this.fixStatus = '3D fix';
     this.fixTone = 'success';
-    this.satellites = 9;
-    this.hdop = 0.9;
-    this.vdop = 1.2;
+    this.latitude = '49.2827°N';
+    this.longitude = '123.1207°W';
+    this.altitude = '70.0 m';
     this.lastFix = new Date().toLocaleTimeString();
     this.recordEvent('Simulated fix update received.', 'telemetry');
+    this.lastTelemetrySummary = 'Simulated fix update received.';
   }
 
   simulateDrop() {
-    this.fixStatus = 'Fix lost';
-    this.fixTone = 'error';
-    this.satellites = 0;
-    this.hdop = 0;
-    this.vdop = 0;
+    this.fixStatus = 'Awaiting satellite lock';
+    this.fixTone = 'warning';
+    this.latitude = '—';
+    this.longitude = '—';
+    this.altitude = '—';
     this.lastFix = '—';
     this.recordEvent('Fix dropped; awaiting satellite lock.', 'telemetry');
-  }
-
-  formatDilution(value) {
-    return value ? value.toFixed(2) : '—';
+    this.lastTelemetrySummary = 'Fix dropped; awaiting satellite lock.';
   }
 
   recordEvent(message, variant) {

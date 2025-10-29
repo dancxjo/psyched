@@ -8,4 +8,9 @@ if [ -f /etc/default/gpsd ]; then
   else
     echo 'DEVICES="/dev/gps0"' | sudo tee -a /etc/default/gpsd >/dev/null
   fi
+  if grep -q '^GPSD_OPTIONS=' /etc/default/gpsd; then
+    sudo sed -i 's#^GPSD_OPTIONS=.*#GPSD_OPTIONS="-n"#' /etc/default/gpsd || true
+  else
+    echo 'GPSD_OPTIONS="-n"' | sudo tee -a /etc/default/gpsd >/dev/null
+  fi
 fi

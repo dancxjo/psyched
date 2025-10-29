@@ -36,9 +36,11 @@ def _describe_status(payload: Mapping[str, Any]) -> str:
         except ValueError:
             code = None
     if code == 0:
-        return "fix"
+        return "3D fix"
     if code == 1:
-        return "sb fix"
+        return "SBAS fix"
+    if code == 2:
+        return "GBAS fix"
     return "no fix"
 
 
@@ -56,7 +58,7 @@ def summarise_nav_fix(payload: Any) -> str:
 
     parts = [f"GPS fix: {_format_latitude(lat)} {_format_longitude(lon)}"]
     if alt is not None:
-        parts.append(f"alt={alt:.1f}m")
+        parts.append(f"alt={alt:.1f} m")
     parts.append(f"({_describe_status(payload)}).")
     return " ".join(parts)
 
@@ -69,7 +71,7 @@ TOPIC_TRANSLATORS = {
 
 STATIC_PROMPT_SECTIONS = [
     (
-        "GPS publishes NavSatFix telemetry over /ublox_gps_node/fix. Summaries "
+        "GPS publishes NavSatFix telemetry over /gps/fix. Summaries "
         "report latitude, longitude, altitude, and lock status so the pilot can "
         "orient Pete outdoors."
     )

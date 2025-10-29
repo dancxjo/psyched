@@ -1,7 +1,7 @@
 {
   "context_topics": [
     {
-      "topic": "/ublox_gps_node/fix",
+      "topic": "/gps/fix",
       "type": "sensor_msgs/msg/NavSatFix",
       "prompt_template": "{{data.prompt_summary}}"
     }
