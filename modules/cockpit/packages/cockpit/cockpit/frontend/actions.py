@@ -1,1 +1,0 @@
-/home/ubuntu/psyched/modules/memory/cockpit/actions.py
