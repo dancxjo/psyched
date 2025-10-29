@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, List, MutableSequence, Optional
 from uuid import uuid4
 
-__all__ = ["ConversationTurn", "ConversationThread", "ThreadStore", "serialise_turn"]
+__all__ = [
+    "ConversationTurn",
+    "ConversationThread",
+    "ThreadStore",
+    "serialise_turn",
+    "build_conversation_export",
+]
 
 
 @dataclass(slots=True)
@@ -178,4 +184,47 @@ def serialise_turn(turn: ConversationTurn) -> Dict[str, object]:
         "intent": turn.intent,
         "timestamp": turn.timestamp.isoformat(),
         "metadata": dict(turn.metadata),
+    }
+
+
+def build_conversation_export(
+    thread: ConversationThread,
+    *,
+    user_id: str,
+    delivered_only: bool = True,
+) -> Dict[str, object]:
+    """Return a transcript-style export for *thread*.
+
+    Parameters
+    ----------
+    thread:
+        The conversation thread to serialise.
+    user_id:
+        Identifier of the human participant associated with the thread.
+    delivered_only:
+        When ``True`` the export omits turns that are still awaiting delivery.
+        Conversant marks those turns with ``{"pending_delivery": "true"}``
+        metadata until the voice module confirms playback.
+    """
+
+    messages: List[Dict[str, object]] = []
+    for turn in thread.turns:
+        if delivered_only and turn.metadata.get("pending_delivery") == "true":
+            continue
+        role = "user" if turn.role == "user" else "assistant"
+        entry: Dict[str, object] = {
+            "role": role,
+            "content": turn.text,
+            "timestamp": turn.timestamp.isoformat(),
+        }
+        if turn.intent:
+            entry["intent"] = turn.intent
+        if turn.metadata:
+            entry["metadata"] = dict(turn.metadata)
+        messages.append(entry)
+
+    return {
+        "thread_id": thread.thread_id,
+        "user_id": user_id,
+        "messages": messages,
     }

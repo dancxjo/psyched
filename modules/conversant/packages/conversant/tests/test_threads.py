@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import time
 
-from conversant.threads import ConversationThread, ThreadStore, serialise_turn
+from conversant.threads import (
+    ConversationThread,
+    ThreadStore,
+    build_conversation_export,
+    serialise_turn,
+)
 
 
 def test_thread_store_reuses_active_thread() -> None:
@@ -40,3 +45,38 @@ def test_serialise_turn_contains_expected_keys() -> None:
     assert payload["text"] == "hello"
     assert payload["metadata"] == {"origin": "test"}
     assert "timestamp" in payload
+
+
+def test_build_conversation_export_filters_pending_turns() -> None:
+    """Only delivered turns should appear in the default transcript export."""
+
+    thread = ConversationThread(thread_id="thread-1", created_at=0.0, updated_at=0.0)
+    thread.append(role="user", text="Hello there", metadata={"origin": "test"})
+    thread.append(
+        role="conversant",
+        text="Queueing response",
+        metadata={"pending_delivery": "true"},
+    )
+    thread.append(role="conversant", text="Response delivered", metadata={"foo": "bar"})
+
+    payload = build_conversation_export(thread, user_id="operator")
+    assert payload["thread_id"] == "thread-1"
+    assert payload["user_id"] == "operator"
+    assert [message["role"] for message in payload["messages"]] == ["user", "assistant"]
+    assert [message["content"] for message in payload["messages"]] == [
+        "Hello there",
+        "Response delivered",
+    ]
+    assert payload["messages"][1]["metadata"] == {"foo": "bar"}
+
+
+def test_build_conversation_export_includes_pending_when_requested() -> None:
+    """Pending turns are surfaced when requested explicitly."""
+
+    thread = ConversationThread(thread_id="thread-2", created_at=0.0, updated_at=0.0)
+    thread.append(role="user", text="Ping")
+    thread.append(role="conversant", text="Processing", metadata={"pending_delivery": "true"})
+
+    payload = build_conversation_export(thread, user_id="operator", delivered_only=False)
+    assert [message["content"] for message in payload["messages"]] == ["Ping", "Processing"]
+    assert payload["messages"][1]["metadata"]["pending_delivery"] == "true"

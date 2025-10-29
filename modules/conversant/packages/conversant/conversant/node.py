@@ -7,7 +7,7 @@ import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 from urllib import request
 from urllib.parse import urlparse, urlunparse
 
@@ -26,7 +26,16 @@ except ImportError:  # pragma: no cover - fallback for test environments without
 
     Bool = Empty = String = object  # type: ignore[assignment]
 
-from .threads import ConversationThread, ConversationTurn, ThreadStore, serialise_turn
+from .threads import (
+    ConversationThread,
+    ConversationTurn,
+    ThreadStore,
+    build_conversation_export,
+    serialise_turn,
+)
+
+if TYPE_CHECKING:  # pragma: no cover - type-only imports
+    from rclpy.publisher import Publisher
 
 __all__ = ["ConversantNode", "main", "_enrich_metadata_with_topic"]
 
@@ -413,7 +422,24 @@ class ConversantNode(Node):
         self._topic_topic = self._declare_str("topic_topic", "/conversant/topic")
         self._topic_pub = self.create_publisher(String, self._topic_topic, 10)
 
-        self._last_thread_id: Optional[str] = None
+        self._conversation_topic_prefix = self._declare_str(
+            "conversation_topic_prefix",
+            "/conversation",
+        )
+        self._default_thread_id = self._declare_str("default_thread_id", "default")
+        self._default_user_id = self._declare_str("default_user_id", "operator")
+        self._conversation_publishers: Dict[str, "Publisher"] = {}
+        self._thread_users: Dict[str, str] = {}
+        self._pending_conversant_turns: List[
+            Tuple[ConversationThread, ConversationTurn]
+        ] = []
+        self._active_thread_id = self._default_thread_id
+
+        default_thread = self._thread_store.get(self._default_thread_id)
+        self._thread_users[self._default_thread_id] = self._default_user_id
+        self._publish_conversation_snapshot(default_thread)
+
+        self._last_thread_id: Optional[str] = self._default_thread_id
         self._voice_paused = False
         self._user_speaking = False
         self._silence_threshold = self._resolve_threshold_seconds(self._mode, self._silence_ms)
@@ -477,10 +503,88 @@ class ConversantNode(Node):
 
     def _cleanup_threads(self) -> None:
         removed = self._thread_store.prune()
-        if removed:
-            self.get_logger().debug(f"Expired threads: {', '.join(removed)}")
-            if self._last_thread_id in removed:
-                self._last_thread_id = None
+        if not removed:
+            return
+
+        self.get_logger().debug("Expired threads: %s", ", ".join(removed))
+        removed_set = set(removed)
+        for thread_id in removed:
+            publisher = self._conversation_publishers.pop(thread_id, None)
+            if publisher is not None:
+                try:
+                    self.destroy_publisher(publisher)
+                except Exception:  # pragma: no cover - ROS tear-down may vary
+                    pass
+            self._thread_users.pop(thread_id, None)
+
+        self._pending_conversant_turns = [
+            entry
+            for entry in self._pending_conversant_turns
+            if entry[0].thread_id not in removed_set
+        ]
+
+        if self._last_thread_id in removed_set:
+            self._last_thread_id = self._default_thread_id
+        if self._active_thread_id in removed_set:
+            self._active_thread_id = self._default_thread_id
+
+        default_thread = self._thread_store.get(self._default_thread_id)
+        self._thread_users.setdefault(self._default_thread_id, self._default_user_id)
+        self._publish_conversation_snapshot(default_thread)
+        self._broadcast_topic()
+
+    def _resolve_thread_id(self, requested: Optional[str]) -> str:
+        candidate = str(requested or "").strip()
+        if candidate:
+            return candidate
+        if self._last_thread_id:
+            return self._last_thread_id
+        return self._default_thread_id
+
+    def _resolve_user_id(self, metadata: Optional[Dict[str, str]]) -> str:
+        if metadata:
+            candidate = metadata.get("user_id")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+
+        participants = self._state.get("participants")
+        if isinstance(participants, Sequence) and not isinstance(participants, str):
+            for entry in participants:
+                text = str(entry).strip()
+                if text:
+                    return text
+        return self._default_user_id
+
+    def _conversation_topic_name(self, thread_id: str) -> str:
+        prefix = self._conversation_topic_prefix.rstrip("/") or "/conversation"
+        thread_component = thread_id.strip() or self._default_thread_id
+        return f"{prefix}/{thread_component}"
+
+    def _publisher_for_thread(self, thread_id: str) -> "Publisher":
+        publisher = self._conversation_publishers.get(thread_id)
+        if publisher is not None:
+            return publisher
+        topic_name = self._conversation_topic_name(thread_id)
+        publisher = self.create_publisher(String, topic_name, 10)
+        self._conversation_publishers[thread_id] = publisher
+        return publisher
+
+    def _publish_conversation_snapshot(
+        self,
+        thread: ConversationThread,
+        *,
+        delivered_only: bool = True,
+    ) -> None:
+        publisher = self._publisher_for_thread(thread.thread_id)
+        user_id = self._thread_users.get(thread.thread_id, self._default_user_id)
+        payload = build_conversation_export(
+            thread,
+            user_id=user_id,
+            delivered_only=delivered_only,
+        )
+        message = String()
+        message.data = json.dumps(payload, ensure_ascii=True)
+        publisher.publish(message)
 
     def _record_turn(
         self,
@@ -491,18 +595,31 @@ class ConversantNode(Node):
         intent: str = "",
         metadata: Optional[Dict[str, str]] = None,
     ) -> tuple[ConversationThread, ConversationTurn]:
+        resolved_thread_id = self._resolve_thread_id(thread_id)
         enriched_metadata = _enrich_metadata_with_topic(
             metadata,
             topic=self._state.get("topic", ""),
         )
         thread, turn = self._thread_store.append(
-            thread_id=thread_id,
+            thread_id=resolved_thread_id,
             role=role,
             text=text,
             intent=intent,
             metadata=enriched_metadata,
         )
         self._last_thread_id = thread.thread_id
+        self._active_thread_id = thread.thread_id
+
+        if role == "user":
+            user_id = self._resolve_user_id(enriched_metadata)
+            self._thread_users[thread.thread_id] = user_id
+            self._publish_conversation_snapshot(thread)
+        else:
+            self._thread_users.setdefault(thread.thread_id, self._default_user_id)
+            turn.metadata.setdefault("pending_delivery", "true")
+            self._pending_conversant_turns.append((thread, turn))
+
+        self._broadcast_topic()
         return thread, turn
 
     def _publish_memory_event(
@@ -579,6 +696,9 @@ class ConversantNode(Node):
         escalate_hint = str(payload.get("escalate", "")).strip().lower()
         escalate_requested = escalate_hint in {"1", "true", "yes", "on"}
         metadata = {"origin": "user", "source": "concern", "escalate": str(escalate_requested)}
+        user_id = str(payload.get("user_id") or "").strip()
+        if user_id:
+            metadata["user_id"] = user_id
         thread, user_turn = self._record_turn(
             thread_id=thread_id,
             role="user",
@@ -656,6 +776,28 @@ class ConversantNode(Node):
 
     def _handle_spoken(self, msg: String) -> None:
         self._last_spoken_text = msg.data.strip() or None
+        if not self._last_spoken_text:
+            return
+
+        for index, (thread, turn) in enumerate(list(self._pending_conversant_turns)):
+            if turn.text.strip() == self._last_spoken_text:
+                turn.metadata.pop("pending_delivery", None)
+                turn.metadata["delivered"] = datetime.now(timezone.utc).isoformat()
+                del self._pending_conversant_turns[index]
+                self._publish_conversation_snapshot(thread)
+                self._last_thread_id = thread.thread_id
+                self._active_thread_id = thread.thread_id
+                self._broadcast_topic()
+                return
+
+        if self._pending_conversant_turns:
+            thread, turn = self._pending_conversant_turns.pop(0)
+            turn.metadata.pop("pending_delivery", None)
+            turn.metadata["delivered"] = datetime.now(timezone.utc).isoformat()
+            self._publish_conversation_snapshot(thread)
+            self._last_thread_id = thread.thread_id
+            self._active_thread_id = thread.thread_id
+            self._broadcast_topic()
 
     def _apply_mode(self, mode: str, silence_override: Optional[int]) -> None:
         cleaned_mode = mode.strip().lower() or self._mode
@@ -698,7 +840,7 @@ class ConversantNode(Node):
         """Publish the current conversation topic for cockpit consumers."""
 
         message = String()
-        message.data = self._state.get("topic", "")
+        message.data = self._conversation_topic_name(self._active_thread_id)
         self._topic_pub.publish(message)
 
     def _parse_concern_payload(self, raw: str) -> Dict[str, str]:
@@ -718,6 +860,9 @@ class ConversantNode(Node):
                 intent = payload.get("intent")
                 if intent is not None:
                     result["intent"] = str(intent)
+                user_id = payload.get("user_id") or payload.get("user")
+                if user_id is not None:
+                    result["user_id"] = str(user_id)
                 escalate = payload.get("escalate") or payload.get("escalate_to_pilot")
                 if escalate is not None:
                     result["escalate"] = str(escalate)

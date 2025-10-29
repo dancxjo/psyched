@@ -22,20 +22,20 @@ def _extract_topic_text(payload: Any) -> str | None:
 
 
 def summarise_conversation_topic(payload: Any) -> str:
-    """Summarise the active Conversant topic for ``/conversant/topic``.
+    """Summarise the active Conversant stream for ``/conversant/topic``.
 
     Examples
     --------
-    >>> summarise_conversation_topic({"data": "Mission planning"})
-    'Conversant topic: "Mission planning".'
+    >>> summarise_conversation_topic({"data": "/conversation/default"})
+    'Conversant conversation stream: /conversation/default.'
     >>> summarise_conversation_topic({"data": "   "})
-    'Conversant is awaiting a topic update.'
+    'Conversant is awaiting a conversation stream update.'
     """
 
     text = _extract_topic_text(payload)
     if text is None:
-        return "Conversant is awaiting a topic update."
-    return f"Conversant topic: \"{text}\"."
+        return "Conversant is awaiting a conversation stream update."
+    return f"Conversant conversation stream: {text}."
 
 
 TOPIC_TRANSLATORS = {
@@ -44,9 +44,9 @@ TOPIC_TRANSLATORS = {
 
 STATIC_PROMPT_SECTIONS = [
     (
-        "Conversant reports the active discussion topic via /conversant/topic. "
-        "Treat each update as the freshest conversational thread so the pilot "
-        "can respond in sync with nearby humans."
+        "Conversant publishes the active transcript stream via /conversant/topic. "
+        "Each update points to a /conversation/<thread> topic carrying the "
+        "assistant and user messages."
     )
 ]
 

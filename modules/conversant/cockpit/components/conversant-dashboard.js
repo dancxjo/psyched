@@ -165,10 +165,10 @@ class ConversantDashboard extends LitElement {
     return html`
       <div class="surface-grid surface-grid--wide surface-grid--dense">
         <article class="surface-card surface-card--compact">
-          <h3 class="surface-card__title">Conversation topic</h3>
-          <p class="surface-status" data-variant=${topicVariant}>Topic feed: ${this.topicStatus}</p>
+          <h3 class="surface-card__title">Conversation stream</h3>
+          <p class="surface-status" data-variant=${topicVariant}>Stream feed: ${this.topicStatus}</p>
           <label class="surface-field">
-            <span class="surface-label">Current topic</span>
+            <span class="surface-label">Current stream</span>
             <input class="surface-input" type="text" .value=${this.topic} readonly />
           </label>
           ${this.topicFeedback
