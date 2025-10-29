@@ -7,7 +7,7 @@ import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Tuple
 from urllib import request
 from urllib.parse import urlparse, urlunparse
 
@@ -38,6 +38,7 @@ from .threads import (
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
     from rclpy.publisher import Publisher
+    from rclpy.subscription import Subscription
 
 __all__ = ["ConversantNode", "main", "_enrich_metadata_with_topic"]
 
@@ -143,13 +144,31 @@ class ConcernResponder:
         concern: str,
         thread: ConversationThread,
         state: Dict[str, Any],
+        conversation: Optional[List[Dict[str, Any]]] = None,
+        system_message: Optional[str] = None,
     ) -> ConcernResponse:
+        conversation_payload = list(conversation or self._build_conversation_messages(thread))
+        if len(conversation_payload) > 12:
+            conversation_payload = conversation_payload[-12:]
+        system_message_payload = system_message or self._default_system_message(state)
         if not self.enabled():
             return self._fallback(concern, thread=thread)
 
         if self._mode == "ollama":
-            return self._generate_with_ollama(concern=concern, thread=thread, state=state)
-        return self._generate_with_http(concern=concern, thread=thread, state=state)
+            return self._generate_with_ollama(
+                concern=concern,
+                thread=thread,
+                state=state,
+                conversation=conversation_payload,
+                system_message=system_message_payload,
+            )
+        return self._generate_with_http(
+            concern=concern,
+            thread=thread,
+            state=state,
+            conversation=conversation_payload,
+            system_message=system_message_payload,
+        )
 
     def _generate_with_http(
         self,
@@ -157,6 +176,8 @@ class ConcernResponder:
         concern: str,
         thread: ConversationThread,
         state: Dict[str, Any],
+        conversation: List[Dict[str, Any]],
+        system_message: str,
     ) -> ConcernResponse:
         if not self._http_endpoint:
             return self._fallback(concern, thread=thread)
@@ -165,6 +186,8 @@ class ConcernResponder:
             "concern": concern,
             "thread_id": thread.thread_id,
             "history": [serialise_turn(turn) for turn in thread.turns[-6:]],
+            "conversation": conversation,
+            "system_message": system_message,
             "state": state,
         }
         body = json.dumps(payload).encode("utf-8")
@@ -199,11 +222,19 @@ class ConcernResponder:
         concern: str,
         thread: ConversationThread,
         state: Dict[str, Any],
+        conversation: List[Dict[str, Any]],
+        system_message: str,
     ) -> ConcernResponse:
         if not self._ollama_endpoint:
             return self._fallback(concern, thread=thread)
 
-        prompt = self._build_ollama_prompt(concern=concern, thread=thread, state=state)
+        prompt = self._build_ollama_prompt(
+            concern=concern,
+            thread=thread,
+            state=state,
+            conversation=conversation,
+            system_message=system_message,
+        )
         payload = {
             "model": self._model or "gemma3:latest",
             "prompt": prompt,
@@ -270,26 +301,57 @@ class ConcernResponder:
 
         return self._normalise_response(data, concern=concern, thread=thread)
 
+    def _build_conversation_messages(
+        self,
+        thread: ConversationThread,
+    ) -> List[Dict[str, Any]]:
+        messages: List[Dict[str, Any]] = []
+        for turn in thread.turns[-12:]:
+            role = "user" if turn.role == "user" else "assistant"
+            entry: Dict[str, Any] = {
+                "role": role,
+                "content": turn.text,
+                "timestamp": turn.timestamp.isoformat(),
+            }
+            if turn.intent:
+                entry["intent"] = turn.intent
+            if turn.metadata:
+                entry["metadata"] = dict(turn.metadata)
+            messages.append(entry)
+        return messages
+
+    def _default_system_message(self, state: Dict[str, Any]) -> str:
+        try:
+            return json.dumps(state, ensure_ascii=True)
+        except TypeError:
+            return str(state)
+
     def _build_ollama_prompt(
         self,
         *,
         concern: str,
         thread: ConversationThread,
         state: Dict[str, Any],
+        conversation: List[Dict[str, Any]],
+        system_message: str,
     ) -> str:
-        turns = []
-        for turn in thread.turns[-6:]:
-            role = "Operator" if turn.role == "user" else "Pete"
-            text = (turn.text or "").strip().replace("\n", " ")
+        turns: List[str] = []
+        source = conversation or self._build_conversation_messages(thread)
+        for entry in source[-8:]:
+            role = str(entry.get("role") or "assistant").strip().lower()
+            speaker = "Operator" if role == "user" else "Pete"
+            text = str(entry.get("content") or "").strip().replace("\n", " ")
             if text:
-                turns.append(f"{role}: {text}")
+                turns.append(f"{speaker}: {text}")
         history = "\n".join(turns) if turns else "none"
         state_json = json.dumps(state, ensure_ascii=True)
+        system_block = (system_message or "").strip() or "None provided."
         concern_text = concern.strip()
 
         prompt_lines = [
             "You are Pete's on-device concern responder.",
-            "Thread history (most recent last):",
+            f"System context: {system_block}",
+            "Recent conversation (chronological):",
             history,
             "",
             f"Current concern: {concern_text}",
@@ -428,6 +490,12 @@ class ConversantNode(Node):
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
         self._topic_pub = self.create_publisher(String, self._topic_topic, self._topic_qos)
+        self._topic_subscription = self.create_subscription(
+            String,
+            self._topic_topic,
+            self._handle_topic_update,
+            self._topic_qos,
+        )
 
         self._conversation_topic_prefix = self._declare_str(
             "conversation_topic_prefix",
@@ -445,11 +513,18 @@ class ConversantNode(Node):
         self._pending_conversant_turns: List[
             Tuple[ConversationThread, ConversationTurn]
         ] = []
+        self._conversation_subscription: Optional["Subscription"] = None
+        self._conversation_stream_name = ""
+        self._seen_conversation_messages: Dict[str, Set[str]] = {}
         self._active_thread_id = self._default_thread_id
 
         default_thread = self._thread_store.get(self._default_thread_id)
         self._thread_users[self._default_thread_id] = self._default_user_id
+        self._seen_conversation_messages.setdefault(self._default_thread_id, set())
         self._publish_conversation_snapshot(default_thread)
+        self._subscribe_to_conversation_stream(
+            self._conversation_topic_name(self._default_thread_id)
+        )
 
         self._last_thread_id: Optional[str] = self._default_thread_id
         self._voice_paused = False
@@ -528,6 +603,7 @@ class ConversantNode(Node):
                 except Exception:  # pragma: no cover - ROS tear-down may vary
                     pass
             self._thread_users.pop(thread_id, None)
+            self._seen_conversation_messages.pop(thread_id, None)
 
         self._pending_conversant_turns = [
             entry
@@ -572,6 +648,113 @@ class ConversantNode(Node):
         thread_component = thread_id.strip() or self._default_thread_id
         return f"{prefix}/{thread_component}"
 
+    def _thread_id_from_topic(self, topic: str) -> str:
+        prefix = self._conversation_topic_prefix.rstrip("/") or "/conversation"
+        cleaned = (topic or "").strip().rstrip("/")
+        if not cleaned:
+            return self._default_thread_id
+        if cleaned.startswith(prefix):
+            remainder = cleaned[len(prefix) :].lstrip("/")
+            if remainder:
+                return remainder.split("/", 1)[0]
+            return self._default_thread_id
+        tail = cleaned.split("/", 1)[-1]
+        return tail or self._default_thread_id
+
+    def _subscribe_to_conversation_stream(self, topic_name: str) -> None:
+        cleaned = (topic_name or "").strip()
+        if not cleaned:
+            return
+        if cleaned == self._conversation_stream_name and self._conversation_subscription is not None:
+            return
+        if self._conversation_subscription is not None:
+            try:
+                self.destroy_subscription(self._conversation_subscription)
+            except Exception:  # pragma: no cover - ROS tear-down may vary
+                pass
+            self._conversation_subscription = None
+        self._conversation_stream_name = cleaned
+        try:
+            self._conversation_subscription = self.create_subscription(
+                String,
+                cleaned,
+                self._handle_conversation_snapshot,
+                self._conversation_qos,
+            )
+            self.get_logger().debug(f"Subscribed to conversation stream {cleaned}")
+        except Exception as exc:  # pragma: no cover - ROS subscription failures
+            self.get_logger().warning(f"Unable to subscribe to {cleaned}: {exc}")
+            self._conversation_subscription = None
+
+    def _handle_topic_update(self, msg: String) -> None:
+        topic_name = str(getattr(msg, "data", "") or "").strip()
+        if not topic_name:
+            return
+        thread_id = self._thread_id_from_topic(topic_name)
+        if thread_id and thread_id != self._active_thread_id:
+            self._active_thread_id = thread_id
+        self._subscribe_to_conversation_stream(topic_name)
+
+    def _handle_conversation_snapshot(self, msg: String) -> None:
+        raw = str(getattr(msg, "data", "") or "")
+        if not raw:
+            return
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            self.get_logger().debug("Ignoring malformed conversation snapshot: %s", raw)
+            return
+        if not isinstance(payload, dict):
+            return
+        thread_id = str(payload.get("thread_id") or "").strip() or self._default_thread_id
+        messages = payload.get("messages")
+        if not isinstance(messages, Sequence):
+            return
+        user_id = str(payload.get("user_id") or "").strip()
+        if user_id:
+            self._thread_users[thread_id] = user_id
+        seen = self._seen_conversation_messages.setdefault(thread_id, set())
+        to_process: List[Tuple[str, str, Dict[str, str], Optional[str], Optional[str]]] = []
+        for entry in messages:
+            if not isinstance(entry, dict):
+                continue
+            role = str(entry.get("role") or "").strip().lower()
+            content = str(entry.get("content") or "").strip()
+            if not content:
+                continue
+            timestamp_text = str(entry.get("timestamp") or "").strip()
+            intent_text = str(entry.get("intent") or "").strip()
+            metadata_raw = entry.get("metadata")
+            metadata: Dict[str, str] = {}
+            if isinstance(metadata_raw, dict):
+                for key, value in metadata_raw.items():
+                    metadata[str(key)] = str(value)
+            digest = self._turn_digest(
+                role=role,
+                text=content,
+                timestamp=timestamp_text,
+                intent=intent_text,
+            )
+            if digest in seen:
+                continue
+            seen.add(digest)
+            if role != "user":
+                continue
+            escalate_hint = metadata.get("escalate")
+            if escalate_hint is None:
+                escalate_hint = str(entry.get("escalate") or "")
+            to_process.append((content, intent_text, metadata, timestamp_text or None, escalate_hint))
+
+        for text, intent_text, metadata, timestamp_text, escalate_hint in to_process:
+            self._ingest_conversation_user_message(
+                thread_id=thread_id,
+                text=text,
+                intent=intent_text,
+                metadata=metadata,
+                timestamp_text=timestamp_text,
+                escalate_hint=escalate_hint,
+            )
+
     def _publisher_for_thread(self, thread_id: str) -> "Publisher":
         publisher = self._conversation_publishers.get(thread_id)
         if publisher is not None:
@@ -606,6 +789,7 @@ class ConversantNode(Node):
         text: str,
         intent: str = "",
         metadata: Optional[Dict[str, str]] = None,
+        timestamp: Optional[datetime] = None,
     ) -> tuple[ConversationThread, ConversationTurn]:
         resolved_thread_id = self._resolve_thread_id(thread_id)
         enriched_metadata = _enrich_metadata_with_topic(
@@ -618,6 +802,7 @@ class ConversantNode(Node):
             text=text,
             intent=intent,
             metadata=enriched_metadata,
+            timestamp=timestamp,
         )
         self._last_thread_id = thread.thread_id
         self._active_thread_id = thread.thread_id
@@ -631,6 +816,7 @@ class ConversantNode(Node):
             turn.metadata.setdefault("pending_delivery", "true")
             self._pending_conversant_turns.append((thread, turn))
 
+        self._register_turn_digest(thread.thread_id, turn)
         self._broadcast_topic()
         return thread, turn
 
@@ -657,6 +843,170 @@ class ConversantNode(Node):
         message = String()
         message.data = json.dumps(payload, ensure_ascii=True)
         self._memory_pub.publish(message)
+
+    def _turn_digest(
+        self,
+        *,
+        role: str,
+        text: str,
+        timestamp: str,
+        intent: str,
+    ) -> str:
+        role_key = str(role or "").strip().lower()
+        text_key = str(text or "").strip()
+        timestamp_key = str(timestamp or "").strip()
+        intent_key = str(intent or "").strip()
+        return "|".join([role_key, timestamp_key, text_key, intent_key])
+
+    def _register_turn_digest(self, thread_id: str, turn: ConversationTurn) -> None:
+        digest = self._turn_digest(
+            role=turn.role,
+            text=turn.text,
+            timestamp=turn.timestamp.isoformat(),
+            intent=turn.intent,
+        )
+        bucket = self._seen_conversation_messages.setdefault(thread_id, set())
+        bucket.add(digest)
+
+    def _conversation_messages_for_thread(self, thread: ConversationThread) -> List[Dict[str, Any]]:
+        user_id = self._thread_users.get(thread.thread_id, self._default_user_id)
+        export = build_conversation_export(
+            thread,
+            user_id=user_id,
+            delivered_only=False,
+        )
+        messages = export.get("messages")
+        if not isinstance(messages, list):
+            return []
+        result: List[Dict[str, Any]] = []
+        for entry in messages:
+            if isinstance(entry, dict):
+                result.append(dict(entry))
+        return result
+
+    def _build_system_message(self) -> str:
+        mood = str(self._state.get("mood") or "neutral").strip()
+        situation = str(self._state.get("situation") or "").strip()
+        topic = str(self._state.get("topic") or "").strip()
+        participants = self._state.get("participants")
+        participant_names: List[str] = []
+        if isinstance(participants, Sequence) and not isinstance(participants, str):
+            for item in participants:
+                name = str(item or "").strip()
+                if name:
+                    participant_names.append(name)
+
+        parts = [f"Mood: {mood}."]
+        if situation:
+            parts.append(f"Situation: {situation}.")
+        else:
+            parts.append("Situation: unspecified.")
+        if participant_names:
+            parts.append(f"Participants: {', '.join(participant_names)}.")
+        else:
+            parts.append("Participants: none reported.")
+        if topic:
+            parts.append(f"Conversation topic: {topic}.")
+        return " ".join(parts).strip()
+
+    @staticmethod
+    def _parse_timestamp(text: Optional[str]) -> Optional[datetime]:
+        if not text:
+            return None
+        cleaned = str(text).strip()
+        if not cleaned:
+            return None
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(cleaned)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_escalate_flag(value: Optional[str]) -> bool:
+        if value is None:
+            return False
+        text = str(value).strip().lower()
+        return text in {"1", "true", "yes", "on"}
+
+    def _respond_to_user_turn(
+        self,
+        *,
+        thread: ConversationThread,
+        user_turn: ConversationTurn,
+        escalate_requested: bool,
+        response_source: str,
+    ) -> None:
+        conversation = self._conversation_messages_for_thread(thread)
+        system_message = self._build_system_message()
+        response = self._responder.generate(
+            concern=user_turn.text,
+            thread=thread,
+            state=self._state,
+            conversation=conversation,
+            system_message=system_message,
+        )
+        intent_text = response.intent
+        escalate = response.escalate or escalate_requested
+        if escalate and not intent_text:
+            snippet = user_turn.text.strip()[:96]
+            intent_text = f"<intend>follow up on concern: {snippet}</intend>"
+        if escalate:
+            self._clear_pub.publish(Empty())
+        metadata = {
+            "origin": "conversant",
+            "source": response_source,
+            "escalate": str(escalate),
+        }
+        thread, turn = self._record_turn(
+            thread_id=thread.thread_id,
+            role="conversant",
+            text=response.speak,
+            intent=intent_text,
+            metadata=metadata,
+        )
+        self._publish_memory_event(thread=thread, turn=turn, origin="conversant")
+        self._speak(response.speak)
+
+    def _ingest_conversation_user_message(
+        self,
+        *,
+        thread_id: str,
+        text: str,
+        intent: str,
+        metadata: Dict[str, str],
+        timestamp_text: Optional[str],
+        escalate_hint: Optional[str],
+    ) -> None:
+        cleaned_metadata: Dict[str, str] = {}
+        for key, value in metadata.items():
+            cleaned_metadata[str(key)] = str(value)
+        cleaned_metadata.setdefault("origin", "conversation_topic")
+        cleaned_metadata.setdefault("source", "conversation")
+        timestamp = self._parse_timestamp(timestamp_text)
+        escalate_requested = self._parse_escalate_flag(
+            escalate_hint if escalate_hint is not None else cleaned_metadata.get("escalate")
+        )
+        thread, user_turn = self._record_turn(
+            thread_id=thread_id,
+            role="user",
+            text=text,
+            intent=intent,
+            metadata=cleaned_metadata,
+            timestamp=timestamp,
+        )
+        self._publish_memory_event(
+            thread=thread,
+            turn=user_turn,
+            origin=cleaned_metadata.get("origin", "conversation"),
+        )
+        self._respond_to_user_turn(
+            thread=thread,
+            user_turn=user_turn,
+            escalate_requested=escalate_requested,
+            response_source=cleaned_metadata.get("source", "conversation"),
+        )
 
     def _speak(self, text: str) -> None:
         cleaned = text.strip()
@@ -705,8 +1055,7 @@ class ConversantNode(Node):
             return
         thread_id = payload.get("thread_id") or self._last_thread_id
         user_intent = payload.get("intent", "")
-        escalate_hint = str(payload.get("escalate", "")).strip().lower()
-        escalate_requested = escalate_hint in {"1", "true", "yes", "on"}
+        escalate_requested = self._parse_escalate_flag(payload.get("escalate"))
         metadata = {"origin": "user", "source": "concern", "escalate": str(escalate_requested)}
         user_id = str(payload.get("user_id") or "").strip()
         if user_id:
@@ -719,26 +1068,12 @@ class ConversantNode(Node):
             metadata=metadata,
         )
         self._publish_memory_event(thread=thread, turn=user_turn, origin="user")
-
-        response = self._responder.generate(concern=concern_text, thread=thread, state=self._state)
-        intent_text = response.intent
-        escalate = response.escalate or escalate_requested
-        if escalate and not intent_text:
-            snippet = concern_text[:96]
-            intent_text = f"<intend>follow up on concern: {snippet}</intend>"
-        if escalate:
-            # Drop any stale queued speech so urgent directives bubble up.
-            self._clear_pub.publish(Empty())
-        metadata = {"origin": "conversant", "source": "concern", "escalate": str(escalate)}
-        thread, turn = self._record_turn(
-            thread_id=thread.thread_id,
-            role="conversant",
-            text=response.speak,
-            intent=intent_text,
-            metadata=metadata,
+        self._respond_to_user_turn(
+            thread=thread,
+            user_turn=user_turn,
+            escalate_requested=escalate_requested,
+            response_source="concern",
         )
-        self._publish_memory_event(thread=thread, turn=turn, origin="conversant")
-        self._speak(response.speak)
 
     def _handle_turn_control(self, msg: String) -> None:
         raw = (msg.data or "").strip()

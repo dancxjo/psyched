@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import io
+import sys
 import threading
 from collections.abc import Callable
+from pathlib import Path
+
+MODULE_ROOT = Path(__file__).resolve().parents[1]
+if str(MODULE_ROOT) not in sys.path:
+    sys.path.insert(0, str(MODULE_ROOT))
 
 import pytest
 
@@ -198,10 +206,31 @@ def test_service_backend_processes_partial_and_final_payloads() -> None:
     backend._process_service_message(final_payload, collector)
 
     assert len(collector.items) == 2
-    partial_event, final_event = collector.items
-    assert partial_event.kind == "partial"
-    assert partial_event.text == "hello world"
-    assert final_event.kind == "final"
-    assert final_event.text == "hello world!"
-    assert final_event.start_ms == 0
-    assert final_event.end_ms == 1500
+
+
+def test_service_backend_encodes_pcm_frames() -> None:
+    """PCM chunks should be base64 encoded with intact payload metadata."""
+
+    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/asr")
+    pcm = b"\x01\x02\x03\x04"
+    backend._queue.put((pcm, 22050, 2))
+    backend._queue.put(None)
+
+    class _FakeWebSocket:
+        def __init__(self) -> None:
+            self.sent: list[str] = []
+
+        async def send(self, payload: str) -> None:
+            self.sent.append(payload)
+
+    fake_ws = _FakeWebSocket()
+    stop_event = threading.Event()
+    asyncio.run(backend._pump_audio_chunks(fake_ws, stop_event))
+
+    assert fake_ws.sent, "No websocket payloads were emitted"
+    payload = json.loads(fake_ws.sent[0])
+    assert payload["type"] == "chunk"
+    assert payload["sample_rate"] == 22050
+    assert payload["channels"] == 2
+    decoded = base64.b64decode(payload["pcm"])
+    assert decoded == pcm

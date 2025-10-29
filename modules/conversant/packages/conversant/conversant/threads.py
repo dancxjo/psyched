@@ -150,6 +150,7 @@ class ThreadStore:
         text: str,
         intent: str = "",
         metadata: Optional[Dict[str, str]] = None,
+        timestamp: Optional[datetime] = None,
     ) -> tuple[ConversationThread, ConversationTurn]:
         """Append a turn to a thread, creating the thread when necessary."""
 
@@ -159,6 +160,7 @@ class ThreadStore:
             text=text,
             intent=intent,
             metadata=metadata,
+            timestamp=timestamp,
             max_turns=self._max_turns,
         )
         return thread, turn
