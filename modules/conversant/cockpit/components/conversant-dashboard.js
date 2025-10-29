@@ -535,13 +535,13 @@ class ConversantDashboard extends LitElement {
           <pre>${log.systemMessage}</pre>
         </section>
         ${log.hint
-          ? html`<p class="surface-status">Hint: ${log.hint}</p>`
-          : ''}
+        ? html`<p class="surface-status">Hint: ${log.hint}</p>`
+        : ''}
         <section class="llm-log__section">
           <span class="surface-label">Chat prompt</span>
           <div class="llm-log__messages">
             ${promptMessages.map(
-              (message, index) => html`
+          (message, index) => html`
                 <article class="llm-log__message" data-role=${message.role}>
                   <header>
                     <span>${message.role}</span>
@@ -550,7 +550,7 @@ class ConversantDashboard extends LitElement {
                   <pre>${message.content}</pre>
                 </article>
               `,
-            )}
+        )}
           </div>
         </section>
         <section class="llm-log__section">
@@ -558,8 +558,8 @@ class ConversantDashboard extends LitElement {
           <pre>${log.response}</pre>
           <div class="llm-log__meta">
             ${log.responseIntent
-              ? html`<span>Intent: <code>${log.responseIntent}</code></span>`
-              : ''}
+        ? html`<span>Intent: <code>${log.responseIntent}</code></span>`
+        : ''}
             <span>Escalate: ${log.responseEscalate ? 'Yes' : 'No'}</span>
           </div>
         </section>
@@ -580,10 +580,10 @@ class ConversantDashboard extends LitElement {
             <span class="surface-label">Conversation thread</span>
             <select class="surface-input" @change=${(event) => this._handleThreadSelect(event)}>
               ${this.conversations.map(
-                (entry) => html`<option value=${entry.threadId} ?selected=${entry.threadId === this.selectedThreadId}>
+        (entry) => html`<option value=${entry.threadId} ?selected=${entry.threadId === this.selectedThreadId}>
                   ${entry.threadId} · ${entry.userId}
                 </option>`,
-              )}
+      )}
             </select>
           </label>
         `
@@ -600,10 +600,10 @@ class ConversantDashboard extends LitElement {
           <div class="conversation-stream">
             <p class="conversation-stream__heading">Live transcript</p>
             ${messages.length
-              ? html`
+        ? html`
                   <div class="conversation-stream__log">
                     ${messages.map(
-                      (message) => html`
+          (message) => html`
                         <article class="conversation-stream__entry" data-role=${message.role}>
                           <header>
                             <span>${message.role}</span>
@@ -613,52 +613,52 @@ class ConversantDashboard extends LitElement {
                           <pre>${message.content}</pre>
                         </article>
                       `,
-                    )}
+        )}
                   </div>
                 `
-              : html`<p class="conversation-stream__empty">Waiting for messages…</p>`}
+        : html`<p class="conversation-stream__empty">Waiting for messages…</p>`}
           </div>
           ${this.topicFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.topicFeedback}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="error">${this.topicFeedback}</p>`
+        : ''}
         </article>
 
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Conversation log</h3>
           ${threadSelection}
           ${this.conversationFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.conversationFeedback}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="error">${this.conversationFeedback}</p>`
+        : ''}
           ${activeConversation
-            ? html`
+        ? html`
                 <p class="surface-status">
                   Active thread: ${activeConversation.threadId} • User: ${activeConversation.userId}
                 </p>
               `
-            : ''}
+        : ''}
           <div class="conversation-console">
             <div class="conversation-log">
               <h5>Messages</h5>
               ${messages.length
-                ? html`
+        ? html`
                     <ul>
                       ${messages.map(
-                        (message) => html`
+          (message) => html`
                           <li class="conversation-entry ${message.role === 'assistant' ? 'assistant' : 'user'}">
                             <header>
                               <span class="badge role">${message.role}</span>
                               <span class="badge">${this._formatTimestamp(message.timestamp)}</span>
                               ${message.intent
-                                ? html`<span class="badge">Intent</span>`
-                                : ''}
+              ? html`<span class="badge">Intent</span>`
+              : ''}
                             </header>
                             <pre>${message.content}</pre>
                           </li>
                         `,
-                      )}
+        )}
                     </ul>
                   `
-                : html`<p class="surface-status">No messages recorded yet.</p>`}
+        : html`<p class="surface-status">No messages recorded yet.</p>`}
             </div>
           </div>
         </article>
@@ -714,20 +714,20 @@ class ConversantDashboard extends LitElement {
             </div>
           </form>
           ${this.directFeedback
-            ? html`<p class="surface-status" data-variant="info">${this.directFeedback}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="info">${this.directFeedback}</p>`
+        : ''}
         </article>
 
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">LLM debug</h3>
           <p class="surface-status" data-variant=${llmVariant}>LLM log: ${this.llmStatus}</p>
           ${this.llmLogs.length
-            ? html`
+        ? html`
                 <div class="llm-log">
                   ${this.llmLogs.map((log) => this._renderLlmLogEntry(log))}
                 </div>
               `
-            : html`<p class="surface-status">Waiting for LLM activity…</p>`}
+        : html`<p class="surface-status">Waiting for LLM activity…</p>`}
         </article>
       </div>
     `;
