@@ -1,6 +1,4 @@
-import json
 import threading
-import time
 from typing import Optional
 
 import rclpy
@@ -23,9 +21,9 @@ except Exception:
     GPS3_AVAILABLE = False
 
 
-class UbloxGpsNode(Node):
+class PsychedGpsNode(Node):
     def __init__(self):
-        super().__init__('ublox_gps_node')
+        super().__init__('psyched_gps_node')
         self.declare_parameter('frame_id', 'gps_link')
         self.declare_parameter('publish_rate', 5.0)  # Hz
         self.declare_parameter('device', '/dev/gps0')  # informational; gpsd handles it
@@ -111,7 +109,7 @@ class UbloxGpsNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = UbloxGpsNode()
+    node = PsychedGpsNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

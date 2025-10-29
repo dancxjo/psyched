@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>ublox_gps</name>
+  <name>psyched_gps</name>
   <version>0.1.0</version>
   <description>u-blox GPS node using gpsd, publishing NavSatFix and related topics</description>
   <maintainer email="tdreed@gmail.com">Psyched</maintainer>

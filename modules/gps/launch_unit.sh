@@ -8,7 +8,7 @@ HOST_SHORT="${HOST:-$(hostname -s)}"
 PARAM_FILE="${GPS_PARAMS_FILE:-}"
 
 if [[ -n "${PARAM_FILE}" ]]; then
-  exec ros2 launch ublox_gps ublox_gps.launch.py --ros-args --params-file "${PARAM_FILE}"
+  exec ros2 launch psyched_gps psyched_gps.launch.py --ros-args --params-file "${PARAM_FILE}"
 fi
 
 ARGS=()
@@ -31,4 +31,4 @@ if [[ -n "${GPS_BAUD_RATE:-}" ]]; then
   ARGS+=("baudrate:=${GPS_BAUD_RATE}")
 fi
 
-exec ros2 launch ublox_gps ublox_gps.launch.py "${ARGS[@]}"
+exec ros2 launch psyched_gps psyched_gps.launch.py "${ARGS[@]}"

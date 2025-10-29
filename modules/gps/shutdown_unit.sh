@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PATTERN="ros2 launch ublox_gps ublox_gps.launch.py"
+PATTERN="ros2 launch psyched_gps psyched_gps.launch.py"
 TIMEOUT=${TIMEOUT:-10}
 
 if ! pgrep -f "${PATTERN}" >/dev/null 2>&1; then

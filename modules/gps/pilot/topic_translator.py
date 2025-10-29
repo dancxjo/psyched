@@ -65,6 +65,7 @@ def summarise_nav_fix(payload: Any) -> str:
 
 TOPIC_TRANSLATORS = {
     "/ublox_gps_node/fix": summarise_nav_fix,
+    "/psyched_gps_node/fix": summarise_nav_fix,
     "/gps/fix": summarise_nav_fix,
     "fix": summarise_nav_fix,
 }

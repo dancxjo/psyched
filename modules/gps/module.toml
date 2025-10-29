@@ -16,7 +16,7 @@ cockpit_control = "modules/gps/cockpit/index.html"
 
 [unit.gps.ros]
 workspace = "."
-packages = ["ublox_gps", "psyched_msgs"]
+packages = ["psyched_gps", "psyched_msgs"]
 
 [cockpit]
 display_name = "GPS"

@@ -24,6 +24,25 @@ from .backends import (
 from .worker import EarWorker
 
 
+def _thread_from_topic(topic: str, *, prefix: str, default: str) -> str:
+    """Return the conversation thread identifier encoded in *topic*."""
+
+    cleaned_topic = (topic or "").strip()
+    if not cleaned_topic:
+        return default
+
+    candidate = cleaned_topic.rstrip("/").split("/")[-1]
+    cleaned_prefix = (prefix or "").strip()
+    if cleaned_prefix:
+        trimmed_prefix = cleaned_prefix.rstrip("/")
+        if trimmed_prefix and cleaned_topic.startswith(trimmed_prefix):
+            remainder = cleaned_topic[len(trimmed_prefix) :].lstrip("/")
+            if remainder:
+                candidate = remainder.split("/", 1)[0]
+
+    return candidate or default
+
+
 class TranscriberNode(Node):
     """Publish transcripts derived from audio topics using configured backends."""
 
@@ -67,11 +86,29 @@ class TranscriberNode(Node):
                 audio_qos,
             )
 
+        self._conversation_topic_prefix = str(
+            self.declare_parameter("conversant_conversation_prefix", "/conversation").value
+        ).strip() or "/conversation"
+        self._default_conversation_thread = str(
+            self.declare_parameter("conversant_default_thread", "default").value
+        ).strip() or "default"
+        self._conversant_user_id = str(self.declare_parameter("conversant_user_id", "").value).strip()
+        self._active_conversation_thread = self._default_conversation_thread
+
+        self._conversant_concern_topic = self._declare_topic("conversant_concern_topic", "/conversant/concern")
+        self._conversant_topic_topic = self._declare_topic("conversant_topic_topic", "/conversant/topic")
+        self._conversant_publisher = self.create_publisher(String, self._conversant_concern_topic, 10)
+        self._conversation_topic_subscription = self.create_subscription(
+            String,
+            self._conversant_topic_topic,
+            self._handle_conversation_topic,
+            10,
+        )
+
+        backend_name = backend.__class__.__name__
         self.get_logger().info(
-            "Transcriber ready (backend=%s, transcript_topic=%s, event_topic=%s)",
-            backend.__class__.__name__,
-            self._transcript_topic,
-            self._event_topic,
+            f"Transcriber ready (backend={backend_name}, transcript_topic={self._transcript_topic}, "
+            f"event_topic={self._event_topic})"
         )
 
     def _declare_topic(self, name: str, default: str) -> str:
@@ -162,7 +199,7 @@ class TranscriberNode(Node):
         try:
             payload = json.dumps(event.to_dict(), ensure_ascii=False)
         except (TypeError, ValueError) as error:
-            self.get_logger().warning("Failed to encode transcription event: %s", error)
+            self.get_logger().warning(f"Failed to encode transcription event: {error}")
             return
 
         event_msg = String()
@@ -170,7 +207,7 @@ class TranscriberNode(Node):
         self._event_publisher.publish(event_msg)
 
         if event.is_partial:
-            self.get_logger().debug("Partial transcription: %s", event.text)
+            self.get_logger().debug(f"Partial transcription: {event.text}")
             return
 
         text = event.text.strip()
@@ -185,11 +222,43 @@ class TranscriberNode(Node):
         ros_msg.data = text
         self._publisher.publish(ros_msg)
         self.get_logger().info(f"Heard: {text}")
+        self._forward_transcript_to_conversant(text)
 
     @staticmethod
     def _segments_to_text(segments: Sequence[TranscriptionSegment]) -> str:
         parts = [segment.text.strip() for segment in segments if getattr(segment, "text", "").strip()]
         return " ".join(parts)
+
+    def _handle_conversation_topic(self, msg: String) -> None:
+        topic = str(getattr(msg, "data", "") or "")
+        thread_id = _thread_from_topic(
+            topic,
+            prefix=self._conversation_topic_prefix,
+            default=self._default_conversation_thread,
+        )
+        if thread_id != self._active_conversation_thread:
+            topic_display = topic or "<empty>"
+            self.get_logger().debug(f"Active conversation thread -> {thread_id} (topic={topic_display})")
+        self._active_conversation_thread = thread_id or self._default_conversation_thread
+
+    def _forward_transcript_to_conversant(self, text: str) -> None:
+        publisher = getattr(self, "_conversant_publisher", None)
+        if publisher is None:
+            return
+
+        cleaned = text.strip()
+        if not cleaned:
+            return
+
+        thread_id = self._active_conversation_thread or self._default_conversation_thread
+        payload: dict[str, str] = {"concern": cleaned, "thread_id": thread_id}
+        if self._conversant_user_id:
+            payload["user_id"] = self._conversant_user_id
+
+        message = String()
+        message.data = json.dumps(payload, ensure_ascii=False)
+        publisher.publish(message)
+        self.get_logger().debug(f"Forwarded transcript to Conversant thread {thread_id}")
 
     def destroy_node(self) -> bool:
         self._worker.stop()
