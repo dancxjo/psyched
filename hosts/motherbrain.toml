@@ -3,12 +3,12 @@ name = "motherbrain"
 installers = ["ros2", "docker"]
 # Conversant connects to the forebrain LLM since the motherbrain lacks the GPU capacity to host it locally.
 modules = [
+    "conversant",
+    "pilot",
     "cockpit",
     "foot",
     "viscera",
     "voice",
-    "conversant",
-    "pilot",
     "ear",
     "memory",
     "eye",

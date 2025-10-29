@@ -29,7 +29,12 @@ export function buildNavigationSections(modules) {
     return sections;
   }
 
-  let index = 1;
+  const collator = typeof Intl !== 'undefined' && typeof Intl.Collator === 'function'
+    ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+    : null;
+
+  const prepared = [];
+
   for (const module of modules) {
     if (!module || typeof module !== 'object') {
       continue;
@@ -48,7 +53,6 @@ export function buildNavigationSections(modules) {
     const entry = {
       id: `module-${slug}`,
       label: displayName,
-      index: index++,
     };
 
     const dashboardUrl = typeof module.dashboard_url === 'string' && module.dashboard_url.trim()
@@ -58,11 +62,26 @@ export function buildNavigationSections(modules) {
 
     if (dashboardUrl) {
       entry.url = dashboardUrl;
-    } else if (hasCockpit && name) {
-      entry.url = `/modules/${name}/`;
+    } else if (hasCockpit) {
+      entry.url = `/modules/${name || slug}/`;
     }
 
-    sections.push(entry);
+    prepared.push(entry);
+  }
+
+  prepared.sort((a, b) => {
+    if (collator) {
+      return collator.compare(a.label, b.label);
+    }
+    return a.label.localeCompare(b.label);
+  });
+
+  let index = 1;
+  for (const entry of prepared) {
+    sections.push({
+      ...entry,
+      index: index++,
+    });
   }
 
   return sections;
@@ -80,7 +99,8 @@ export function normaliseModuleSlug(module) {
   }
   const rawSlug = typeof module.slug === 'string' ? module.slug : '';
   const rawName = typeof module.name === 'string' ? module.name : '';
-  const source = rawSlug.trim() || rawName.trim();
+  const rawDisplay = typeof module.display_name === 'string' ? module.display_name : '';
+  const source = rawSlug.trim() || rawName.trim() || rawDisplay.trim();
   if (!source) {
     return '';
   }

@@ -14,10 +14,10 @@ test('includes the configuration section first', () => {
   });
 });
 
-test('appends dashboard sections for known modules in order', () => {
+test('appends dashboard sections for known modules alphabetically', () => {
   const sections = buildNavigationSections([
-    { name: 'imu', display_name: 'IMU', slug: 'imu', has_cockpit: true },
     { name: 'voice', display_name: 'Voice', slug: 'voice', dashboard_url: '/modules/voice/' },
+    { name: 'imu', display_name: 'IMU', slug: 'imu', has_cockpit: true },
   ]);
 
   assert.equal(sections.length, 3);
@@ -47,6 +47,20 @@ test('skips entries without slugs or names and preserves numbering', () => {
     label: 'GPS Dashboard',
     index: 1,
     url: '/modules/gps/',
+  });
+});
+
+test('uses display names when slugs and names are missing', () => {
+  const sections = buildNavigationSections([
+    { display_name: 'IMU Dashboard', has_cockpit: true },
+  ]);
+
+  assert.equal(sections.length, 2);
+  assert.deepEqual(sections[1], {
+    id: 'module-imu-dashboard',
+    label: 'IMU Dashboard',
+    index: 1,
+    url: '/modules/imu-dashboard/',
   });
 });
 
