@@ -87,6 +87,7 @@ class ConcernResponder:
         self._http_endpoint: Optional[str] = None
         self._ollama_endpoint: Optional[str] = None
         self._ollama_timeout = max(timeout, 12.0)
+    self._ollama_use_chat = False
         self._configure_endpoint()
 
     def _configure_endpoint(self) -> None:
@@ -125,6 +126,7 @@ class ConcernResponder:
             endpoint = f"{endpoint}/api/generate"
         self._mode = "ollama"
         self._ollama_endpoint = endpoint
+        self._ollama_use_chat = endpoint.endswith("/api/chat")
         if not self._model:
             self._model = "gemma3:latest"
 
@@ -146,11 +148,13 @@ class ConcernResponder:
         state: Dict[str, Any],
         conversation: Optional[List[Dict[str, Any]]] = None,
         system_message: Optional[str] = None,
+        chat_messages: Optional[List[Dict[str, Any]]] = None,
     ) -> ConcernResponse:
         conversation_payload = list(conversation or self._build_conversation_messages(thread))
         if len(conversation_payload) > 12:
             conversation_payload = conversation_payload[-12:]
         system_message_payload = system_message or self._default_system_message(state)
+        chat_messages_payload = list(chat_messages) if chat_messages else None
         if not self.enabled():
             return self._fallback(concern, thread=thread)
 
@@ -161,6 +165,7 @@ class ConcernResponder:
                 state=state,
                 conversation=conversation_payload,
                 system_message=system_message_payload,
+                chat_messages=chat_messages_payload,
             )
         return self._generate_with_http(
             concern=concern,
@@ -168,6 +173,7 @@ class ConcernResponder:
             state=state,
             conversation=conversation_payload,
             system_message=system_message_payload,
+            chat_messages=chat_messages_payload,
         )
 
     def _generate_with_http(
@@ -178,6 +184,7 @@ class ConcernResponder:
         state: Dict[str, Any],
         conversation: List[Dict[str, Any]],
         system_message: str,
+        chat_messages: Optional[List[Dict[str, Any]]],
     ) -> ConcernResponse:
         if not self._http_endpoint:
             return self._fallback(concern, thread=thread)
@@ -190,6 +197,8 @@ class ConcernResponder:
             "system_message": system_message,
             "state": state,
         }
+        if chat_messages is not None:
+            payload["chat_messages"] = chat_messages
         body = json.dumps(payload).encode("utf-8")
         req = request.Request(
             self._http_endpoint,
@@ -224,9 +233,18 @@ class ConcernResponder:
         state: Dict[str, Any],
         conversation: List[Dict[str, Any]],
         system_message: str,
+        chat_messages: Optional[List[Dict[str, Any]]],
     ) -> ConcernResponse:
         if not self._ollama_endpoint:
             return self._fallback(concern, thread=thread)
+
+        if self._ollama_use_chat and chat_messages:
+            return self._generate_with_ollama_chat(
+                concern=concern,
+                thread=thread,
+                state=state,
+                chat_messages=chat_messages,
+            )
 
         prompt = self._build_ollama_prompt(
             concern=concern,
@@ -296,6 +314,83 @@ class ConcernResponder:
         except json.JSONDecodeError:
             self._node.get_logger().warning(
                 f"Ollama concern responder produced non-JSON payload: {response_text}"
+            )
+            return self._fallback(concern, thread=thread)
+
+        return self._normalise_response(data, concern=concern, thread=thread)
+
+    def _generate_with_ollama_chat(
+        self,
+        *,
+        concern: str,
+        thread: ConversationThread,
+        state: Dict[str, Any],
+        chat_messages: List[Dict[str, Any]],
+    ) -> ConcernResponse:
+        payload = {
+            "model": self._model or "gemma3:latest",
+            "messages": chat_messages,
+            "stream": False,
+            "format": "json",
+            "options": {
+                "temperature": 0.2,
+                "top_p": 0.9,
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            self._ollama_endpoint,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with request.urlopen(req, timeout=self._ollama_timeout) as resp:
+                outer_text = resp.read().decode("utf-8")
+        except Exception as exc:  # pragma: no cover - network failure path
+            self._node.get_logger().warning(
+                f"Ollama concern responder failed: {exc}"
+            )
+            return self._fallback(concern, thread=thread)
+
+        try:
+            outer = json.loads(outer_text)
+        except json.JSONDecodeError:
+            self._node.get_logger().warning(
+                f"Ollama concern responder returned invalid JSON: {outer_text}"
+            )
+            return self._fallback(concern, thread=thread)
+
+        error_message = outer.get("error")
+        if error_message:
+            self._node.get_logger().warning(
+                f"Ollama concern responder returned an error: {error_message}"
+            )
+            return self._fallback(concern, thread=thread)
+
+        message_entry = outer.get("message") or {}
+        if not isinstance(message_entry, dict) and isinstance(outer.get("messages"), list):
+            messages_list = outer.get("messages")
+            if messages_list:
+                candidate = messages_list[-1]
+                if isinstance(candidate, dict):
+                    message_entry = candidate
+
+        if not isinstance(message_entry, dict):
+            self._node.get_logger().warning("Ollama chat response missing message field")
+            return self._fallback(concern, thread=thread)
+
+        response_text = str(message_entry.get("content") or "").strip()
+        if not response_text:
+            self._node.get_logger().warning("Ollama chat responder returned empty response")
+            return self._fallback(concern, thread=thread)
+
+        try:
+            data = json.loads(response_text)
+        except json.JSONDecodeError:
+            self._node.get_logger().warning(
+                f"Ollama chat responder produced non-JSON payload: {response_text}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -459,12 +554,14 @@ class ConversantNode(Node):
 
         self._speech_pub = self.create_publisher(String, self._speech_topic, 10)
         self._pause_pub = self.create_publisher(Empty, self._pause_topic, 10)
-        self._resume_pub = self.create_publisher(Empty, self._resume_topic, 10)
-        self._clear_pub = self.create_publisher(Empty, self._clear_topic, 10)
-        self._memory_pub = self.create_publisher(String, self._memory_topic, 10)
+    self._resume_pub = self.create_publisher(Empty, self._resume_topic, 10)
+    self._clear_pub = self.create_publisher(Empty, self._clear_topic, 10)
+    self._memory_pub = self.create_publisher(String, self._memory_topic, 10)
+    self._llm_log_topic = self._declare_str("llm_log_topic", "/conversant/llm_log")
+    self._llm_log_pub = self.create_publisher(String, self._llm_log_topic, 10)
 
-        self.create_subscription(Empty, self._hesitate_topic, self._handle_hesitate, 10)
-        self.create_subscription(String, self._concern_topic, self._handle_concern, 20)
+    self.create_subscription(Empty, self._hesitate_topic, self._handle_hesitate, 10)
+    self.create_subscription(String, self._concern_topic, self._handle_take_turn, 20)
         self.create_subscription(String, self._turn_control_topic, self._handle_turn_control, 10)
         self.create_subscription(Bool, self._vad_topic, self._handle_voice_activity, 20)
         self.create_subscription(Bool, self._silence_topic, self._handle_silence, 20)
@@ -884,7 +981,7 @@ class ConversantNode(Node):
                 result.append(dict(entry))
         return result
 
-    def _build_system_message(self) -> str:
+    def _build_system_message(self, *, hint: Optional[str] = None) -> str:
         mood = str(self._state.get("mood") or "neutral").strip()
         situation = str(self._state.get("situation") or "").strip()
         topic = str(self._state.get("topic") or "").strip()
@@ -907,7 +1004,39 @@ class ConversantNode(Node):
             parts.append("Participants: none reported.")
         if topic:
             parts.append(f"Conversation topic: {topic}.")
+        parts.append("Respond in a single, complete sentence no longer than 25 words.")
+        parts.append(
+            "Return your answer as JSON with keys 'speak', 'intent', and 'escalate'."
+        )
+        parts.append(
+            "Use 'speak' for the sentence you will say, leave 'intent' empty when no follow-up is needed, and set 'escalate' true only for urgent issues."
+        )
+        if hint:
+            hint_text = hint.strip()
+            if hint_text:
+                parts.append(f"Operator hint: {hint_text}")
         return " ".join(parts).strip()
+
+    def _build_chat_messages(
+        self,
+        *,
+        system_message: str,
+        conversation: List[Dict[str, Any]],
+        limit: int = 8,
+    ) -> List[Dict[str, str]]:
+        messages: List[Dict[str, str]] = []
+        system_text = system_message.strip()
+        if system_text:
+            messages.append({"role": "system", "content": system_text})
+        tail = conversation[-limit:]
+        for entry in tail:
+            role = str(entry.get("role") or "assistant").strip().lower()
+            content = str(entry.get("content") or "").strip()
+            if not content:
+                continue
+            role_key = "assistant" if role != "user" else "user"
+            messages.append({"role": role_key, "content": content})
+        return messages
 
     @staticmethod
     def _parse_timestamp(text: Optional[str]) -> Optional[datetime]:
@@ -937,15 +1066,21 @@ class ConversantNode(Node):
         user_turn: ConversationTurn,
         escalate_requested: bool,
         response_source: str,
+        hint: Optional[str] = None,
     ) -> None:
         conversation = self._conversation_messages_for_thread(thread)
-        system_message = self._build_system_message()
+        system_message = self._build_system_message(hint=hint)
+        chat_messages = self._build_chat_messages(
+            system_message=system_message,
+            conversation=conversation,
+        )
         response = self._responder.generate(
             concern=user_turn.text,
             thread=thread,
             state=self._state,
             conversation=conversation,
             system_message=system_message,
+            chat_messages=chat_messages,
         )
         intent_text = response.intent
         escalate = response.escalate or escalate_requested
@@ -968,6 +1103,16 @@ class ConversantNode(Node):
         )
         self._publish_memory_event(thread=thread, turn=turn, origin="conversant")
         self._speak(response.speak)
+        self._publish_llm_log(
+            thread_id=thread.thread_id,
+            hint=hint,
+            system_message=system_message,
+            chat_messages=chat_messages,
+            response_text=response.speak,
+            source=response_source,
+            response_intent=intent_text,
+            response_escalate=escalate,
+        )
 
     def _ingest_conversation_user_message(
         self,
@@ -988,6 +1133,7 @@ class ConversantNode(Node):
         escalate_requested = self._parse_escalate_flag(
             escalate_hint if escalate_hint is not None else cleaned_metadata.get("escalate")
         )
+        hint = cleaned_metadata.get("hint")
         thread, user_turn = self._record_turn(
             thread_id=thread_id,
             role="user",
@@ -1006,7 +1152,35 @@ class ConversantNode(Node):
             user_turn=user_turn,
             escalate_requested=escalate_requested,
             response_source=cleaned_metadata.get("source", "conversation"),
+            hint=hint,
         )
+
+    def _publish_llm_log(
+        self,
+        *,
+        thread_id: str,
+        hint: Optional[str],
+        system_message: str,
+        chat_messages: List[Dict[str, str]],
+        response_text: str,
+        source: str,
+        response_intent: str,
+        response_escalate: bool,
+    ) -> None:
+        payload = {
+            "thread_id": thread_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "system_message": system_message,
+            "hint": (hint or "").strip(),
+            "chat_messages": chat_messages,
+            "response": response_text,
+            "source": source,
+            "response_intent": response_intent,
+            "response_escalate": bool(response_escalate),
+        }
+        message = String()
+        message.data = json.dumps(payload, ensure_ascii=True)
+        self._llm_log_pub.publish(message)
 
     def _speak(self, text: str) -> None:
         cleaned = text.strip()
@@ -1047,16 +1221,23 @@ class ConversantNode(Node):
         self._publish_memory_event(thread=thread, turn=turn, origin="hesitation")
         self._speak(phrase)
 
-    def _handle_concern(self, msg: String) -> None:
-        payload = self._parse_concern_payload(msg.data)
-        concern_text = payload.get("concern", "").strip()
+    def _handle_take_turn(self, msg: String) -> None:
+        payload = self._parse_turn_payload(msg.data)
+        concern_text = payload.get("message", "").strip()
         if not concern_text:
-            self.get_logger().debug("Ignoring empty concern payload")
+            self.get_logger().debug("Ignoring empty take_turn payload")
             return
         thread_id = payload.get("thread_id") or self._last_thread_id
         user_intent = payload.get("intent", "")
         escalate_requested = self._parse_escalate_flag(payload.get("escalate"))
-        metadata = {"origin": "user", "source": "concern", "escalate": str(escalate_requested)}
+        hint_text = payload.get("hint", "").strip()
+        metadata = {
+            "origin": "user",
+            "source": "take_turn",
+            "escalate": str(escalate_requested),
+        }
+        if hint_text:
+            metadata["hint"] = hint_text
         user_id = str(payload.get("user_id") or "").strip()
         if user_id:
             metadata["user_id"] = user_id
@@ -1072,7 +1253,8 @@ class ConversantNode(Node):
             thread=thread,
             user_turn=user_turn,
             escalate_requested=escalate_requested,
-            response_source="concern",
+            response_source="take_turn",
+            hint=hint_text,
         )
 
     def _handle_turn_control(self, msg: String) -> None:
@@ -1190,7 +1372,7 @@ class ConversantNode(Node):
         message.data = self._conversation_topic_name(self._active_thread_id)
         self._topic_pub.publish(message)
 
-    def _parse_concern_payload(self, raw: str) -> Dict[str, str]:
+    def _parse_turn_payload(self, raw: str) -> Dict[str, str]:
         if not raw:
             return {}
         text = raw.strip()
@@ -1198,9 +1380,15 @@ class ConversantNode(Node):
             try:
                 payload = json.loads(text)
             except json.JSONDecodeError:
-                return {"concern": text}
+                return {"message": text}
             if isinstance(payload, dict):
-                result = {"concern": str(payload.get("concern") or "").strip()}
+                result = {
+                    "message": str(
+                        payload.get("message")
+                        or payload.get("concern")
+                        or ""
+                    ).strip()
+                }
                 thread_id = payload.get("thread_id")
                 if thread_id is not None:
                     result["thread_id"] = str(thread_id)
@@ -1213,10 +1401,13 @@ class ConversantNode(Node):
                 escalate = payload.get("escalate") or payload.get("escalate_to_pilot")
                 if escalate is not None:
                     result["escalate"] = str(escalate)
+                hint = payload.get("hint") or payload.get("instruction")
+                if hint is not None:
+                    result["hint"] = str(hint)
                 return result
             if isinstance(payload, str):
-                return {"concern": payload}
-        return {"concern": text}
+                return {"message": payload}
+        return {"message": text}
 
     # ---------------------------------------------------------------- lifecycle
     def destroy_node(self) -> bool:

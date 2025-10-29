@@ -91,3 +91,67 @@ export function parseConversationSnapshot(payload) {
     messages,
   };
 }
+
+/**
+ * Parse and normalise the LLM debug log payload published by Conversant.
+ *
+ * @param {string} payload - JSON payload emitted on the llm_log topic.
+ * @returns {{ threadId: string, timestamp: string, systemMessage: string, hint: string, source: string, response: string, responseIntent: string, responseEscalate: boolean, chatMessages: Array<{ role: string, content: string }> } | null}
+ */
+export function parseLlmLog(payload) {
+  if (typeof payload !== 'string' || !payload.trim()) {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(payload);
+  } catch (_error) {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const threadId = typeof parsed.thread_id === 'string' && parsed.thread_id.trim()
+    ? parsed.thread_id.trim()
+    : '';
+  const timestamp = typeof parsed.timestamp === 'string' ? parsed.timestamp : '';
+  const systemMessage = typeof parsed.system_message === 'string' ? parsed.system_message : '';
+  const hint = typeof parsed.hint === 'string' ? parsed.hint : '';
+  const source = typeof parsed.source === 'string' ? parsed.source : '';
+  const response = typeof parsed.response === 'string' ? parsed.response : '';
+  const responseIntent = typeof parsed.response_intent === 'string' ? parsed.response_intent : '';
+  const responseEscalate = typeof parsed.response_escalate === 'boolean'
+    ? parsed.response_escalate
+    : Boolean(parsed.response_escalate);
+
+  if (!threadId || !systemMessage) {
+    return null;
+  }
+
+  const chatMessagesRaw = Array.isArray(parsed.chat_messages) ? parsed.chat_messages : [];
+  const chatMessages = [];
+  for (const entry of chatMessagesRaw) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const role = typeof entry.role === 'string' && entry.role.trim() ? entry.role.trim() : '';
+    const content = typeof entry.content === 'string' ? entry.content : '';
+    if (!role || !content) {
+      continue;
+    }
+    chatMessages.push({ role, content });
+  }
+
+  return {
+    threadId,
+    timestamp,
+    systemMessage,
+    hint,
+    source,
+    response,
+    responseIntent,
+    responseEscalate,
+    chatMessages,
+  };
+}

@@ -17,29 +17,35 @@
             }
         },
         {
-            "name": "handle_concern",
-            "signature": "handle_concern(text: str)",
-            "description": "Queue a concern for Conversant to acknowledge. Accepts raw text or JSON payload.",
+            "name": "take_turn",
+            "signature": "take_turn(message: str, hint?: string)",
+            "description": "Ask Conversant to respond to the current thread with optional guidance.",
             "kind": "publish-topic",
             "defaults": {
                 "topic": "/conversant/concern",
                 "message_type": "std_msgs/msg/String",
                 "payload_map": {
-                    "text": "data"
+                    "message": "data"
                 }
             },
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "text": {
+                    "message": {
                         "type": "string",
-                        "description": "Concern text or JSON payload with keys like concern, thread_id, escalate.",
+                        "description": "Message text or JSON payload including fields like message, thread_id, hint, escalate.",
+                        "minLength": 1,
+                        "maxLength": 400
+                    },
+                    "hint": {
+                        "type": "string",
+                        "description": "Optional operator hint to append to the system message.",
                         "minLength": 1,
                         "maxLength": 400
                     }
                 },
                 "required": [
-                    "text"
+                    "message"
                 ],
                 "additionalProperties": false
             }

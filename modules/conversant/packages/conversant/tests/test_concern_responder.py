@@ -53,14 +53,18 @@ def test_concern_responder_prompt_includes_history() -> None:
         "http://motherbrain.local:11434/api/generate",
         model="gemma3:latest",
     )
+    conversation = responder._build_conversation_messages(thread)  # type: ignore[attr-defined]
     prompt = responder._build_ollama_prompt(  # type: ignore[attr-defined]
         concern="Check the battery",
         thread=thread,
         state={"battery": "low"},
+        conversation=conversation,
+        system_message="Mood: focused.",
     )
     assert "Operator: Hi Pete" in prompt
     assert "Current concern: Check the battery" in prompt
     assert "battery" in prompt
+    assert "System context: Mood: focused." in prompt
 
 
 def test_concern_responder_normalises_response() -> None:

@@ -4,6 +4,7 @@ import {
   extractThreadIdFromStream,
   parseConversationSnapshot,
   normaliseMessages,
+  parseLlmLog,
 } from './conversation-helpers.mjs';
 
 const SAMPLE_MESSAGES = [
@@ -22,6 +23,45 @@ describe('extractThreadIdFromStream', () => {
     assert.equal(extractThreadIdFromStream('', 'fallback'), 'fallback');
     assert.equal(extractThreadIdFromStream('/', 'fallback'), 'fallback');
     assert.equal(extractThreadIdFromStream('   ', 'fallback'), 'fallback');
+  });
+});
+
+describe('parseLlmLog', () => {
+  it('parses a valid log payload', () => {
+    const payload = JSON.stringify({
+      thread_id: 'alpha',
+      timestamp: '2024-07-01T12:00:00Z',
+      system_message: 'Context',
+      hint: 'Keep it upbeat',
+      source: 'take_turn',
+      response: 'Sure, one sentence.',
+      response_intent: '<intend/>',
+      response_escalate: false,
+      chat_messages: [
+        { role: 'system', content: 'Context' },
+        { role: 'user', content: 'Hello' },
+      ],
+    });
+    const log = parseLlmLog(payload);
+    assert.deepEqual(log, {
+      threadId: 'alpha',
+      timestamp: '2024-07-01T12:00:00Z',
+      systemMessage: 'Context',
+      hint: 'Keep it upbeat',
+      source: 'take_turn',
+      response: 'Sure, one sentence.',
+      responseIntent: '<intend/>',
+      responseEscalate: false,
+      chatMessages: [
+        { role: 'system', content: 'Context' },
+        { role: 'user', content: 'Hello' },
+      ],
+    });
+  });
+
+  it('returns null when required fields are missing', () => {
+    const payload = JSON.stringify({ system_message: '', thread_id: 'alpha' });
+    assert.equal(parseLlmLog(payload), null);
   });
 });
 
