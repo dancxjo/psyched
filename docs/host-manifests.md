@@ -107,8 +107,26 @@ object so deeply nested structures remain unnecessary:
       "launch": {
         "arguments": {
           "kinect_rgb_topic": "/camera/color/image_raw",
-          "kinect_depth_topic": "/camera/depth/image_rect_raw",
+          "kinect_depth_topic": "/camera/depth/image_raw",
           "camera_frame": "camera_link"
+        }
+      }
+    }
+  }
+}
+```
+
+Expose related topics to cockpit surfaces so UI previews stay in sync with
+module launch arguments:
+
+```json
+{
+  "modules": {
+    "eye": {
+      "launch": {
+        "arguments": {
+          "rgb_topic": "/camera/color/image_raw",
+          "depth_topic": "/camera/depth/image_raw"
         }
       }
     }

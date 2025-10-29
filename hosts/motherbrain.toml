@@ -1,7 +1,7 @@
 [host]
 name = "motherbrain"
 installers = ["ros2", "docker"]
-# The llm module currently doesn't work on the motherbrain due to lack of GPU support; we install ollama manually instead for now. todo: fix this in the future.
+# Conversant connects to the forebrain LLM since the motherbrain lacks the GPU capacity to host it locally.
 modules = [
     "cockpit",
     "foot",
@@ -54,12 +54,16 @@ camera_topic = "/camera/color/image_raw"
 faces_topic = "/vision/faces"
 face_detected_topic = "/vision/face_detected"
 
+[config.mod.eye.launch.arguments]
+rgb_topic = "/camera/color/image_raw"
+depth_topic = "/camera/depth/image_raw"
+
 [config.mod.gps.launch.arguments]
 frame_id = "gps_link"
 
 [config.mod.nav.launch.arguments]
 kinect_rgb_topic = "/camera/color/image_raw"
-kinect_depth_topic = "/camera/depth/image_rect_raw"
+kinect_depth_topic = "/camera/depth/image_raw"
 camera_frame = "camera_link"
 
 [config.mod.voice.env]
@@ -79,15 +83,15 @@ CONVERSANT_SILENCE_MS = "900"
 CONVERSANT_THREAD_TTL_SECONDS = "240"
 CONVERSANT_VAD_TOPIC = "/ear/speech_active"
 CONVERSANT_SILENCE_TOPIC = "/ear/silence"
-CONVERSANT_LOCAL_LLM_URL = "http://motherbrain.local:11434/api/generate"
+CONVERSANT_LOCAL_LLM_URL = "http://forebrain.local:11434/api/generate"
 CONVERSANT_LOCAL_LLM_MODEL = "gemma3:latest"
 
 [[config.mod.conversant.dependencies]]
-service = "motherbrain.llm"
+service = "forebrain.llm"
 port = "http"
-via = "http://motherbrain.local:11434/api/generate"
+via = "http://forebrain.local:11434/api/generate"
 bind_env = "CONVERSANT_LOCAL_LLM_URL"
-summary = "Generates short concern responses via the Ollama runtime"
+summary = "Generates conversational responses via the forebrain Ollama runtime"
 
 [config.mod.hypothalamus]
 display_name = "Hypothalamus"

@@ -1,10 +1,10 @@
 [unit.conversant]
 apt = []
 pip = []
-patches = [
-    "modules/conversant/scripts/install_ollama.sh",
-    "modules/conversant/scripts/ensure_ollama_model.sh",
-]
+# patches = [
+#     "modules/conversant/scripts/install_ollama.sh",
+#     "modules/conversant/scripts/ensure_ollama_model.sh",
+# ]
 launch = "modules/conversant/launch_unit.sh"
 shutdown = "modules/conversant/shutdown_unit.sh"
 cockpit_control = "modules/conversant/cockpit/index.html"
@@ -15,5 +15,5 @@ packages = ["conversant"]
 
 [cockpit]
 display_name = "Conversant"
-description = "Turn-taking and conversation handler"
+description = "Fluent conversation handler; improves speed of natural language interactions and offloads processing from the pilot"
 regimes = ["conversation"]
