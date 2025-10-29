@@ -15,6 +15,7 @@ modules = [
     "nav",
     "faces",
     "imu",
+    "gps",
 ]
 
 [config.mod.ear.env]
