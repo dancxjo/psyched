@@ -4,6 +4,7 @@ import { surfaceStyles } from '/components/cockpit-style.js';
 import {
   extractThreadIdFromStream,
   parseConversationSnapshot,
+  parseLlmLog,
 } from './conversation-helpers.mjs';
 
 /**
@@ -18,8 +19,11 @@ class ConversantDashboard extends LitElement {
     conversationFeedback: { state: true },
     selectedThreadId: { state: true },
     directMessage: { state: true },
+    directHint: { state: true },
     directFeedback: { state: true },
     threadHint: { state: true },
+    llmLogs: { state: true },
+    llmStatus: { state: true },
   };
 
   static styles = [
@@ -108,6 +112,96 @@ class ConversantDashboard extends LitElement {
         font-size: 0.85rem;
         color: var(--lcars-text);
       }
+
+      .llm-log {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .llm-log__entry {
+        background: var(--control-surface-bg);
+        border: 1px solid var(--control-surface-border);
+        border-radius: var(--control-surface-radius);
+        box-shadow: var(--control-surface-shadow);
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+
+      .llm-log__header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .llm-log__section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .llm-log__messages {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .llm-log__message {
+        border-left: 3px solid rgba(255, 255, 255, 0.1);
+        padding-left: 0.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .llm-log__message[data-role='system'] {
+        border-left-color: rgba(92, 209, 132, 0.4);
+      }
+
+      .llm-log__message[data-role='user'] {
+        border-left-color: rgba(248, 128, 60, 0.5);
+      }
+
+      .llm-log__message[data-role='assistant'] {
+        border-left-color: rgba(102, 153, 255, 0.5);
+      }
+
+      .llm-log__message header {
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+      }
+
+      .llm-log__message pre,
+      .llm-log__section pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: 'Source Code Pro', monospace;
+        font-size: 0.85rem;
+        color: var(--lcars-text);
+      }
+
+      .llm-log__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .llm-log__meta code {
+        font-family: 'Source Code Pro', monospace;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.1rem 0.3rem;
+        border-radius: var(--control-surface-radius);
+      }
     `,
   ];
 
@@ -120,10 +214,14 @@ class ConversantDashboard extends LitElement {
     this.conversationFeedback = '';
     this.selectedThreadId = '';
     this.directMessage = '';
+    this.directHint = '';
     this.directFeedback = '';
     this.threadHint = '';
+    this.llmLogs = [];
+    this.llmStatus = 'Connecting…';
     this._topicSocket = null;
-    this._concernPublisher = null;
+    this._turnPublisher = null;
+    this._llmLogSocket = null;
     this._sockets = [];
     this._conversationSockets = new Map();
     this._conversationsByThread = new Map();
@@ -141,6 +239,7 @@ class ConversantDashboard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._openTopicFeed();
+    this._subscribeToLlmLog();
   }
 
   disconnectedCallback() {
@@ -154,7 +253,8 @@ class ConversantDashboard extends LitElement {
     }
     this._sockets = [];
     this._topicSocket = null;
-    this._concernPublisher = null;
+    this._turnPublisher = null;
+    this._llmLogSocket = null;
     this._conversationSockets.clear();
     this._conversationsByThread.clear();
   }
@@ -193,6 +293,45 @@ class ConversantDashboard extends LitElement {
     });
     this._topicSocket = socket;
     this._sockets.push(socket);
+  }
+
+  _subscribeToLlmLog() {
+    if (this._llmLogSocket) {
+      return this._llmLogSocket;
+    }
+    const socket = createTopicSocket({
+      module: 'conversant',
+      topic: '/conversant/llm_log',
+      type: 'std_msgs/msg/String',
+      role: 'subscribe',
+    });
+    socket.addEventListener('open', () => {
+      this.llmStatus = 'Live';
+    });
+    socket.addEventListener('close', () => {
+      if (this._llmLogSocket === socket) {
+        this._llmLogSocket = null;
+      }
+      this.llmStatus = 'Disconnected';
+    });
+    socket.addEventListener('error', () => {
+      this.llmStatus = 'Error';
+    });
+    socket.addEventListener('message', (event) => {
+      const payload = this._safeParse(event);
+      if (!payload || payload.event !== 'message') {
+        return;
+      }
+      const data = this._extractDataField(payload);
+      const log = parseLlmLog(data);
+      if (!log) {
+        return;
+      }
+      this._ingestLlmLog(log);
+    });
+    this._llmLogSocket = socket;
+    this._sockets.push(socket);
+    return socket;
   }
 
   _safeParse(event) {
@@ -323,9 +462,9 @@ class ConversantDashboard extends LitElement {
     this._selectThread(value);
   }
 
-  _ensureConcernPublisher() {
-    if (this._concernPublisher) {
-      return this._concernPublisher;
+  _ensureTurnPublisher() {
+    if (this._turnPublisher) {
+      return this._turnPublisher;
     }
     const socket = createTopicSocket({
       module: 'conversant',
@@ -336,7 +475,7 @@ class ConversantDashboard extends LitElement {
     socket.addEventListener('error', () => {
       this.directFeedback = 'Unable to publish to /conversant/concern.';
     });
-    this._concernPublisher = socket;
+    this._turnPublisher = socket;
     this._sockets.push(socket);
     return socket;
   }
@@ -348,15 +487,23 @@ class ConversantDashboard extends LitElement {
       this.directFeedback = 'Message text is required.';
       return;
     }
+    const hint = this.directHint.trim();
     const threadId = this.threadHint.trim() || this.selectedThreadId;
-    const payload = threadId
-      ? JSON.stringify({ concern: text, thread_id: threadId })
-      : text;
+    const payload = {
+      message: text,
+    };
+    if (threadId) {
+      payload.thread_id = threadId;
+    }
+    if (hint) {
+      payload.hint = hint;
+    }
     try {
-      const publisher = this._ensureConcernPublisher();
-      publisher.send(JSON.stringify({ data: payload }));
-      this.directFeedback = 'Direct message queued for Conversant.';
+      const publisher = this._ensureTurnPublisher();
+      publisher.send(JSON.stringify({ data: JSON.stringify(payload) }));
+      this.directFeedback = 'Turn request queued for Conversant.';
       this.directMessage = '';
+      this.directHint = '';
     } catch (error) {
       this.directFeedback = error instanceof Error ? error.message : String(error);
     }
@@ -364,12 +511,65 @@ class ConversantDashboard extends LitElement {
 
   _clearDirectForm() {
     this.directMessage = '';
+    this.directHint = '';
     this.threadHint = this.selectedThreadId;
     this.directFeedback = '';
   }
 
+  _ingestLlmLog(log) {
+    const next = [log, ...this.llmLogs];
+    this.llmLogs = next.slice(0, 10);
+  }
+
+  _renderLlmLogEntry(log) {
+    const promptMessages = Array.isArray(log.chatMessages) ? log.chatMessages : [];
+    return html`
+      <article class="llm-log__entry">
+        <header class="llm-log__header">
+          <span>Thread: ${log.threadId}</span>
+          ${log.source ? html`<span>Source: ${log.source}</span>` : ''}
+          ${log.timestamp ? html`<span>${this._formatTimestamp(log.timestamp)}</span>` : ''}
+        </header>
+        <section class="llm-log__section">
+          <span class="surface-label">System message</span>
+          <pre>${log.systemMessage}</pre>
+        </section>
+        ${log.hint
+          ? html`<p class="surface-status">Hint: ${log.hint}</p>`
+          : ''}
+        <section class="llm-log__section">
+          <span class="surface-label">Chat prompt</span>
+          <div class="llm-log__messages">
+            ${promptMessages.map(
+              (message, index) => html`
+                <article class="llm-log__message" data-role=${message.role}>
+                  <header>
+                    <span>${message.role}</span>
+                    ${index === 0 ? html`<span>system</span>` : ''}
+                  </header>
+                  <pre>${message.content}</pre>
+                </article>
+              `,
+            )}
+          </div>
+        </section>
+        <section class="llm-log__section">
+          <span class="surface-label">Response</span>
+          <pre>${log.response}</pre>
+          <div class="llm-log__meta">
+            ${log.responseIntent
+              ? html`<span>Intent: <code>${log.responseIntent}</code></span>`
+              : ''}
+            <span>Escalate: ${log.responseEscalate ? 'Yes' : 'No'}</span>
+          </div>
+        </section>
+      </article>
+    `;
+  }
+
   render() {
     const topicVariant = this.topicStatus === 'Live' ? 'success' : this.topicStatus === 'Error' ? 'error' : '';
+    const llmVariant = this.llmStatus === 'Live' ? 'success' : this.llmStatus === 'Error' ? 'error' : '';
     const activeConversation = this.conversations.find((entry) => entry.threadId === this.selectedThreadId)
       || this.conversations[0]
       || null;
@@ -464,10 +664,9 @@ class ConversantDashboard extends LitElement {
         </article>
 
         <article class="surface-card surface-card--wide">
-          <h3 class="surface-card__title">Direct message</h3>
+          <h3 class="surface-card__title">Take turn</h3>
           <p class="surface-status">
-            Send a note straight to the active conversation thread. JSON payloads are accepted when
-            advanced routing is needed.
+            Ask Conversant to take the next turn using your message and an optional hint that augments the system prompt.
           </p>
           <form class="surface-form" @submit=${(event) => this._handleDirectMessageSubmit(event)}>
             <label class="surface-field">
@@ -482,7 +681,18 @@ class ConversantDashboard extends LitElement {
               />
             </label>
             <label class="surface-field">
-              <span class="surface-label">Thread (optional)</span>
+              <span class="surface-label">Hint (optional)</span>
+              <input
+                class="surface-input"
+                name="hint"
+                type="text"
+                .value=${this.directHint}
+                placeholder="e.g. Keep it cheerful"
+                @input=${(event) => (this.directHint = event.target.value)}
+              />
+            </label>
+            <label class="surface-field">
+              <span class="surface-label">Thread override (optional)</span>
               <input
                 class="surface-input"
                 type="text"
@@ -493,7 +703,7 @@ class ConversantDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Send message</button>
+              <button type="submit" class="surface-button">Send turn</button>
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
@@ -506,6 +716,18 @@ class ConversantDashboard extends LitElement {
           ${this.directFeedback
             ? html`<p class="surface-status" data-variant="info">${this.directFeedback}</p>`
             : ''}
+        </article>
+
+        <article class="surface-card surface-card--wide">
+          <h3 class="surface-card__title">LLM debug</h3>
+          <p class="surface-status" data-variant=${llmVariant}>LLM log: ${this.llmStatus}</p>
+          ${this.llmLogs.length
+            ? html`
+                <div class="llm-log">
+                  ${this.llmLogs.map((log) => this._renderLlmLogEntry(log))}
+                </div>
+              `
+            : html`<p class="surface-status">Waiting for LLM activity…</p>`}
         </article>
       </div>
     `;

@@ -87,7 +87,7 @@ class ConcernResponder:
         self._http_endpoint: Optional[str] = None
         self._ollama_endpoint: Optional[str] = None
         self._ollama_timeout = max(timeout, 12.0)
-    self._ollama_use_chat = False
+        self._ollama_use_chat = False
         self._configure_endpoint()
 
     def _configure_endpoint(self) -> None:
@@ -554,14 +554,14 @@ class ConversantNode(Node):
 
         self._speech_pub = self.create_publisher(String, self._speech_topic, 10)
         self._pause_pub = self.create_publisher(Empty, self._pause_topic, 10)
-    self._resume_pub = self.create_publisher(Empty, self._resume_topic, 10)
-    self._clear_pub = self.create_publisher(Empty, self._clear_topic, 10)
-    self._memory_pub = self.create_publisher(String, self._memory_topic, 10)
-    self._llm_log_topic = self._declare_str("llm_log_topic", "/conversant/llm_log")
-    self._llm_log_pub = self.create_publisher(String, self._llm_log_topic, 10)
+        self._resume_pub = self.create_publisher(Empty, self._resume_topic, 10)
+        self._clear_pub = self.create_publisher(Empty, self._clear_topic, 10)
+        self._memory_pub = self.create_publisher(String, self._memory_topic, 10)
+        self._llm_log_topic = self._declare_str("llm_log_topic", "/conversant/llm_log")
+        self._llm_log_pub = self.create_publisher(String, self._llm_log_topic, 10)
 
-    self.create_subscription(Empty, self._hesitate_topic, self._handle_hesitate, 10)
-    self.create_subscription(String, self._concern_topic, self._handle_take_turn, 20)
+        self.create_subscription(Empty, self._hesitate_topic, self._handle_hesitate, 10)
+        self.create_subscription(String, self._concern_topic, self._handle_take_turn, 20)
         self.create_subscription(String, self._turn_control_topic, self._handle_turn_control, 10)
         self.create_subscription(Bool, self._vad_topic, self._handle_voice_activity, 20)
         self.create_subscription(Bool, self._silence_topic, self._handle_silence, 20)
