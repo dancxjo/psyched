@@ -92,6 +92,29 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "transcript_event_stream",
+      "description": "Subscribe to structured ASR events published on /ear/asr_event.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/ear/asr_event",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 40
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 400,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ]
 }

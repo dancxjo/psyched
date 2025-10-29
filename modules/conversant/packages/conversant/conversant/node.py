@@ -168,7 +168,7 @@ class ConcernResponder:
                 response_text = resp.read().decode("utf-8")
         except Exception as exc:  # pragma: no cover - network failure path
             self._node.get_logger().warning(
-                "Local concern responder failed: %s", exc
+                f"Local concern responder failed: {exc}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -176,7 +176,7 @@ class ConcernResponder:
             data = json.loads(response_text)
         except json.JSONDecodeError:
             self._node.get_logger().warning(
-                "Concern responder returned invalid JSON: %s", response_text
+                f"Concern responder returned invalid JSON: {response_text}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -216,7 +216,7 @@ class ConcernResponder:
                 outer_text = resp.read().decode("utf-8")
         except Exception as exc:  # pragma: no cover - network failure path
             self._node.get_logger().warning(
-                "Ollama concern responder failed: %s", exc
+                f"Ollama concern responder failed: {exc}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -224,14 +224,14 @@ class ConcernResponder:
             outer = json.loads(outer_text)
         except json.JSONDecodeError:
             self._node.get_logger().warning(
-                "Ollama concern responder returned invalid JSON: %s", outer_text
+                f"Ollama concern responder returned invalid JSON: {outer_text}"
             )
             return self._fallback(concern, thread=thread)
 
         error_message = outer.get("error")
         if error_message:
             self._node.get_logger().warning(
-                "Ollama concern responder returned an error: %s", error_message
+                f"Ollama concern responder returned an error: {error_message}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -253,8 +253,7 @@ class ConcernResponder:
             data = json.loads(response_text)
         except json.JSONDecodeError:
             self._node.get_logger().warning(
-                "Ollama concern responder produced non-JSON payload: %s",
-                response_text,
+                f"Ollama concern responder produced non-JSON payload: {response_text}"
             )
             return self._fallback(concern, thread=thread)
 
@@ -425,12 +424,11 @@ class ConversantNode(Node):
 
         self._cleanup_timer = self.create_timer(30.0, self._cleanup_threads)
 
+        filler_summary = ", ".join(self._filler_phrases)
+        responder_desc = self._responder.describe()
         self.get_logger().info(
-            "Conversant ready (mode=%s, silence_ms=%d, filler_phrases=%s, llm=%s)",
-            self._mode,
-            self._silence_ms,
-            ", ".join(self._filler_phrases),
-            self._responder.describe(),
+            f"Conversant ready (mode={self._mode}, silence_ms={self._silence_ms}, "
+            f"filler_phrases={filler_summary}, llm={responder_desc})"
         )
         self._broadcast_topic()
 
@@ -441,7 +439,7 @@ class ConversantNode(Node):
         try:
             return int(value)
         except (TypeError, ValueError):
-            self.get_logger().warning("Invalid integer for %s: %r", name, value)
+            self.get_logger().warning(f"Invalid integer for {name}: {value!r}")
             return int(default)
 
     def _declare_str(self, name: str, default: str) -> str:
@@ -480,7 +478,7 @@ class ConversantNode(Node):
     def _cleanup_threads(self) -> None:
         removed = self._thread_store.prune()
         if removed:
-            self.get_logger().debug("Expired threads: %s", ", ".join(removed))
+            self.get_logger().debug(f"Expired threads: {', '.join(removed)}")
             if self._last_thread_id in removed:
                 self._last_thread_id = None
 
@@ -553,7 +551,9 @@ class ConversantNode(Node):
         if elapsed >= self._silence_threshold:
             self._resume_pub.publish(Empty())
             self._voice_paused = False
-            self.get_logger().debug("Resuming voice queue after %.3f s of silence", elapsed)
+            self.get_logger().debug(
+                f"Resuming voice queue after {elapsed:.3f} s of silence"
+            )
 
     def _handle_hesitate(self, _: Empty) -> None:
         phrase = self._choose_filler()
@@ -616,7 +616,7 @@ class ConversantNode(Node):
             try:
                 payload = json.loads(raw)
             except json.JSONDecodeError:
-                self.get_logger().warning("Invalid JSON turn control payload: %s", raw)
+                self.get_logger().warning(f"Invalid JSON turn control payload: {raw}")
                 return
             if not isinstance(payload, dict):
                 self.get_logger().warning("Turn control payload must be an object")
@@ -660,7 +660,9 @@ class ConversantNode(Node):
     def _apply_mode(self, mode: str, silence_override: Optional[int]) -> None:
         cleaned_mode = mode.strip().lower() or self._mode
         if cleaned_mode not in _MODE_THRESHOLDS:
-            self.get_logger().warning("Unknown turn-taking mode '%s'", cleaned_mode)
+            self.get_logger().warning(
+                f"Unknown turn-taking mode '{cleaned_mode}'"
+            )
             cleaned_mode = self._mode
         self._mode = cleaned_mode
         if silence_override is not None and silence_override >= 0:
@@ -670,10 +672,9 @@ class ConversantNode(Node):
             if self._silence_ms <= 0:
                 self._silence_ms = preset_ms
         self._silence_threshold = self._resolve_threshold_seconds(self._mode, self._silence_ms)
+        silence_ms = self._silence_threshold * 1000.0
         self.get_logger().info(
-            "Turn-taking mode -> %s (silence %.0f ms)",
-            self._mode,
-            self._silence_threshold * 1000.0,
+            f"Turn-taking mode -> {self._mode} (silence {silence_ms:.0f} ms)"
         )
 
     def _update_state(self, payload: Dict[str, Any]) -> None:

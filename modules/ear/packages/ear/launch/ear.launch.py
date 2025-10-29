@@ -16,6 +16,7 @@ def generate_launch_description() -> LaunchDescription:
     sample_rate = LaunchConfiguration("sample_rate")
     channels = LaunchConfiguration("channels")
     transcript_topic = LaunchConfiguration("transcript_topic")
+    event_topic = LaunchConfiguration("event_topic")
     text_input_topic = LaunchConfiguration("text_input_topic")
     service_uri = LaunchConfiguration("service_uri")
     whisper_model = LaunchConfiguration("faster_whisper_model")
@@ -110,6 +111,7 @@ def generate_launch_description() -> LaunchDescription:
             {
                 "backend": backend,
                 "transcript_topic": transcript_topic,
+                "event_topic": event_topic,
                 "text_input_topic": text_input_topic,
                 "audio_topic": audio_topic,
                 "audio_sample_rate": ParameterValue(sample_rate, value_type=int),
@@ -132,8 +134,9 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("sample_rate", default_value="16000"),
             DeclareLaunchArgument("channels", default_value="1"),
             DeclareLaunchArgument("transcript_topic", default_value="/ear/hole"),
+            DeclareLaunchArgument("event_topic", default_value="/ear/asr_event"),
             DeclareLaunchArgument("text_input_topic", default_value=""),
-            DeclareLaunchArgument("service_uri", default_value="ws://127.0.0.1:8089/ws"),
+            DeclareLaunchArgument("service_uri", default_value="ws://127.0.0.1:5003/asr"),
             DeclareLaunchArgument("faster_whisper_model", default_value="base"),
             DeclareLaunchArgument("faster_whisper_device", default_value="cpu"),
             DeclareLaunchArgument("faster_whisper_compute_type", default_value="int8"),

@@ -7,9 +7,9 @@ import threading
 import traceback
 from collections.abc import Callable
 
-from .backends import AudioAwareBackend, EarBackend
+from .backends import AudioAwareBackend, EarBackend, TranscriptionEvent
 
-PublishCallback = Callable[[str], None]
+PublishCallback = Callable[[TranscriptionEvent], None]
 
 
 class EarWorker:

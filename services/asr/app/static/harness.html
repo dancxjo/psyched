@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ASR Service Harness</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #05060a;
+        color: #f5f7ff;
+      }
+
+      body {
+        margin: 0;
+        padding: 1.5rem;
+        max-width: 960px;
+        margin-inline: auto;
+      }
+
+      h1 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        font-size: 1.75rem;
+      }
+
+      section {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(15, 18, 26, 0.8);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        padding: 0.45rem 0.9rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(80, 120, 250, 0.15);
+        color: inherit;
+        cursor: pointer;
+      }
+
+      button[disabled] {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+
+      input[type="number"],
+      input[type="file"] {
+        padding: 0.35rem 0.5rem;
+        border-radius: 0.4rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.04);
+        color: inherit;
+      }
+
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      #status {
+        display: grid;
+        gap: 0.4rem;
+        font-size: 0.95rem;
+      }
+
+      #partial-text {
+        font-weight: 600;
+      }
+
+      #event-log {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 0.4rem;
+        max-height: 320px;
+        overflow-y: auto;
+        font-size: 0.85rem;
+      }
+
+      #event-log li {
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.65rem;
+        background: rgba(255, 255, 255, 0.05);
+        word-break: break-word;
+      }
+
+      .event-partial {
+        border-left: 3px solid #7bd6ff;
+      }
+
+      .event-final {
+        border-left: 3px solid #8aff9c;
+      }
+
+      .event-error {
+        border-left: 3px solid #ff7b7b;
+      }
+
+      .event-meta {
+        display: block;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ASR Service Harness</h1>
+      <p>This lightweight harness streams microphone audio or WAV uploads to the ASR websocket endpoint so you can verify partial and final transcripts without the ROS stack.</p>
+
+      <section id="connection">
+        <h2>Connection</h2>
+        <div id="controls">
+          <button id="connect">Connect</button>
+          <button id="disconnect" disabled>Disconnect</button>
+          <label>
+            Target sample rate (Hz)
+            <input id="sample-rate" type="number" min="8000" max="48000" step="1000" value="16000" />
+          </label>
+        </div>
+      </section>
+
+      <section id="microphone">
+        <h2>Microphone streaming</h2>
+        <p>Capture live audio from this browser and stream it directly to the ASR service.</p>
+        <div id="mic-controls" class="controls">
+          <button id="start-record" disabled>Start recording</button>
+          <button id="stop-record" disabled>Stop recording</button>
+        </div>
+      </section>
+
+      <section id="upload">
+        <h2>Upload WAV for transcription</h2>
+        <p>Select a mono or stereo WAV file; the harness will downmix and resample it before streaming.</p>
+        <div class="controls">
+          <input id="file-input" type="file" accept="audio/wav,audio/x-wav" />
+          <button id="send-file" disabled>Stream file</button>
+        </div>
+      </section>
+
+      <section id="status">
+        <div>Connection: <strong id="connection-status">Disconnected</strong></div>
+        <div>Partial transcript: <span id="partial-text">—</span></div>
+        <div>Last final transcript: <span id="final-text">—</span></div>
+      </section>
+
+      <section>
+        <h2>Event log</h2>
+        <ul id="event-log"></ul>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const elements = {
+          connect: document.getElementById('connect'),
+          disconnect: document.getElementById('disconnect'),
+          startRecord: document.getElementById('start-record'),
+          stopRecord: document.getElementById('stop-record'),
+          fileInput: document.getElementById('file-input'),
+          sendFile: document.getElementById('send-file'),
+          sampleRate: document.getElementById('sample-rate'),
+          connectionStatus: document.getElementById('connection-status'),
+          partialText: document.getElementById('partial-text'),
+          finalText: document.getElementById('final-text'),
+          eventLog: document.getElementById('event-log'),
+        };
+
+        const state = {
+          ws: null,
+          audioContext: null,
+          processor: null,
+          mediaStream: null,
+          targetSampleRate: 16000,
+          sendingFile: false,
+        };
+
+        function websocketUrl() {
+          const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+          return `${protocol}://${window.location.host}/asr`;
+        }
+
+        function setConnectionState(connected) {
+          elements.connectionStatus.textContent = connected ? 'Connected' : 'Disconnected';
+          elements.connect.disabled = connected;
+          elements.disconnect.disabled = !connected;
+          elements.startRecord.disabled = !connected;
+          elements.stopRecord.disabled = !connected;
+          elements.sendFile.disabled = !connected;
+        }
+
+        function logEvent(kind, text, extra = '') {
+          const entry = document.createElement('li');
+          entry.classList.add(`event-${kind}`);
+          const meta = document.createElement('span');
+          meta.className = 'event-meta';
+          meta.textContent = `${new Date().toLocaleTimeString()} · ${kind.toUpperCase()}`;
+          entry.appendChild(meta);
+          const body = document.createElement('div');
+          body.textContent = text || '—';
+          entry.appendChild(body);
+          if (extra) {
+            const details = document.createElement('div');
+            details.textContent = extra;
+            details.style.opacity = '0.7';
+            details.style.fontSize = '0.75rem';
+            entry.appendChild(details);
+          }
+          elements.eventLog.prepend(entry);
+          while (elements.eventLog.children.length > 60) {
+            elements.eventLog.removeChild(elements.eventLog.lastChild);
+          }
+        }
+
+        function closeAudioResources() {
+          if (state.processor) {
+            state.processor.disconnect();
+            state.processor.onaudioprocess = null;
+            state.processor = null;
+          }
+          if (state.mediaStream) {
+            state.mediaStream.getTracks().forEach((track) => track.stop());
+            state.mediaStream = null;
+          }
+          if (state.audioContext) {
+            state.audioContext.close().catch(() => {});
+            state.audioContext = null;
+          }
+          elements.startRecord.disabled = !state.ws;
+          elements.stopRecord.disabled = true;
+        }
+
+        function connect() {
+          if (state.ws) {
+            return;
+          }
+          try {
+            state.targetSampleRate = Math.max(8000, Math.min(48000, Number(elements.sampleRate.value) || 16000));
+          } catch (_) {
+            state.targetSampleRate = 16000;
+          }
+          const ws = new WebSocket(websocketUrl());
+          ws.addEventListener('open', () => {
+            state.ws = ws;
+            setConnectionState(true);
+            logEvent('info', 'WebSocket connected');
+          });
+          ws.addEventListener('close', () => {
+            if (state.ws === ws) {
+              state.ws = null;
+              closeAudioResources();
+              setConnectionState(false);
+              elements.partialText.textContent = '—';
+              logEvent('info', 'WebSocket disconnected');
+            }
+          });
+          ws.addEventListener('error', (event) => {
+            console.error('WebSocket error', event);
+            logEvent('error', 'WebSocket error occurred');
+          });
+          ws.addEventListener('message', (event) => {
+            handleServiceMessage(event.data);
+          });
+        }
+
+        function disconnect() {
+          if (!state.ws) {
+            return;
+          }
+          state.ws.close(1000, 'Client requested close');
+          state.ws = null;
+          closeAudioResources();
+          setConnectionState(false);
+        }
+
+        function startRecording() {
+          if (!state.ws || state.mediaStream) {
+            return;
+          }
+          navigator.mediaDevices
+            .getUserMedia({ audio: true })
+            .then((stream) => {
+              state.mediaStream = stream;
+              state.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+              const input = state.audioContext.createMediaStreamSource(stream);
+              const processor = state.audioContext.createScriptProcessor(4096, input.channelCount, 1);
+              processor.onaudioprocess = (event) => {
+                if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                  return;
+                }
+                const channelData = event.inputBuffer.getChannelData(0);
+                const downsampled = downsample(channelData, state.audioContext.sampleRate, state.targetSampleRate);
+                const pcm = floatTo16BitPCM(downsampled);
+                sendPcmChunk(pcm, state.targetSampleRate, 1);
+              };
+              input.connect(processor);
+              processor.connect(state.audioContext.destination);
+              state.processor = processor;
+              elements.startRecord.disabled = true;
+              elements.stopRecord.disabled = false;
+              logEvent('info', 'Microphone capture started');
+            })
+            .catch((error) => {
+              console.error('Failed to access microphone', error);
+              logEvent('error', 'Microphone access denied', String(error));
+            });
+        }
+
+        function stopRecording() {
+          closeAudioResources();
+          logEvent('info', 'Microphone capture stopped');
+        }
+
+        function handleServiceMessage(raw) {
+          let payload;
+          try {
+            payload = JSON.parse(raw);
+          } catch (error) {
+            logEvent('info', raw);
+            return;
+          }
+          const eventName = typeof payload.event === 'string' ? payload.event.toLowerCase() : '';
+          const text = resolveText(payload);
+          if (eventName === 'partial') {
+            elements.partialText.textContent = text || '…';
+            logEvent('partial', text);
+            return;
+          }
+          if (eventName === 'final') {
+            elements.partialText.textContent = '—';
+            elements.finalText.textContent = text || '—';
+            const timing = timingSummary(payload.start_ms, payload.end_ms);
+            logEvent('final', text, timing);
+            return;
+          }
+          if (eventName === 'ready') {
+            const sampleRate = payload.sample_rate || payload.sampleRate || 'unknown';
+            logEvent('info', `Service ready (sample rate ${sampleRate})`);
+            return;
+          }
+          if (eventName === 'error') {
+            logEvent('error', payload.message || 'Service reported an error');
+            return;
+          }
+          logEvent('info', JSON.stringify(payload));
+        }
+
+        function resolveText(payload) {
+          if (typeof payload.text === 'string' && payload.text.trim()) {
+            return payload.text.trim();
+          }
+          if (Array.isArray(payload.segments)) {
+            const pieces = payload.segments
+              .map((segment) => (segment && typeof segment.text === 'string' ? segment.text.trim() : ''))
+              .filter((part) => part.length > 0);
+            if (pieces.length) {
+              return pieces.join(' ');
+            }
+          }
+          return '';
+        }
+
+        function timingSummary(start, end) {
+          const startMs = coerceInt(start);
+          const endMs = coerceInt(end);
+          if (startMs == null && endMs == null) {
+            return '';
+          }
+          const startLabel = formatMilliseconds(startMs);
+          const endLabel = formatMilliseconds(endMs);
+          if (startLabel && endLabel) {
+            return `${startLabel} → ${endLabel}`;
+          }
+          return startLabel || endLabel || '';
+        }
+
+        function coerceInt(value) {
+          if (typeof value === 'number') {
+            return Number.isFinite(value) ? Math.trunc(value) : null;
+          }
+          if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+              return null;
+            }
+            const parsed = Number(trimmed);
+            return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+          }
+          return null;
+        }
+
+        function formatMilliseconds(ms) {
+          const value = coerceInt(ms);
+          if (value == null) {
+            return '';
+          }
+          const seconds = value / 1000;
+          if (!Number.isFinite(seconds)) {
+            return '';
+          }
+          if (seconds < 60) {
+            return `${seconds.toFixed(2)} s`;
+          }
+          const minutes = Math.floor(seconds / 60);
+          const remainder = seconds - minutes * 60;
+          return `${minutes}m ${remainder.toFixed(2)} s`;
+        }
+
+        function downsample(buffer, inputRate, outputRate) {
+          if (!buffer || outputRate === inputRate) {
+            return buffer;
+          }
+          const ratio = inputRate / outputRate;
+          const newLength = Math.max(1, Math.round(buffer.length / ratio));
+          const result = new Float32Array(newLength);
+          let offset = 0;
+          for (let i = 0; i < newLength; i += 1) {
+            const start = Math.floor(i * ratio);
+            const end = Math.min(buffer.length, Math.floor((i + 1) * ratio));
+            let sum = 0;
+            let count = 0;
+            for (let j = start; j < end; j += 1) {
+              sum += buffer[j];
+              count += 1;
+            }
+            result[i] = count > 0 ? sum / count : buffer[offset++];
+          }
+          return result;
+        }
+
+        function floatTo16BitPCM(float32Array) {
+          const length = float32Array.length;
+          const buffer = new ArrayBuffer(length * 2);
+          const view = new DataView(buffer);
+          for (let i = 0; i < length; i += 1) {
+            const sample = Math.max(-1, Math.min(1, float32Array[i] || 0));
+            view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+          }
+          return new Int16Array(buffer);
+        }
+
+        function sendPcmChunk(int16Array, sampleRate, channels) {
+          if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          const base64 = int16ToBase64(int16Array);
+          const payload = {
+            type: 'chunk',
+            sample_rate: sampleRate,
+            channels,
+            pcm: base64,
+          };
+          state.ws.send(JSON.stringify(payload));
+        }
+
+        function int16ToBase64(int16Array) {
+          const bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i += 1) {
+            binary += String.fromCharCode(bytes[i] & 0xff);
+          }
+          return btoa(binary);
+        }
+
+        function handleFileSend() {
+          const file = elements.fileInput.files?.[0];
+          if (!file || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          elements.sendFile.disabled = true;
+          state.sendingFile = true;
+          logEvent('info', `Loading ${file.name}`);
+          const reader = new FileReader();
+          reader.onload = () => {
+            const arrayBuffer = reader.result;
+            if (!(arrayBuffer instanceof ArrayBuffer)) {
+              logEvent('error', 'Unable to read file');
+              elements.sendFile.disabled = false;
+              state.sendingFile = false;
+              return;
+            }
+            const context = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+            context.decodeAudioData(
+              arrayBuffer.slice(0),
+              (audioBuffer) => {
+                const channelData = audioBuffer.getChannelData(0);
+                const downsampled = downsample(channelData, audioBuffer.sampleRate, state.targetSampleRate);
+                const chunkSize = Math.max(1, Math.round(state.targetSampleRate * 0.5));
+                for (let index = 0; index < downsampled.length; index += chunkSize) {
+                  const slice = downsampled.subarray(index, index + chunkSize);
+                  const pcm = floatTo16BitPCM(slice);
+                  sendPcmChunk(pcm, state.targetSampleRate, 1);
+                }
+                logEvent('info', `Finished streaming ${file.name}`);
+                elements.sendFile.disabled = false;
+                state.sendingFile = false;
+              },
+              (error) => {
+                console.error('Failed to decode audio file', error);
+                logEvent('error', 'Failed to decode audio file', String(error));
+                elements.sendFile.disabled = false;
+                state.sendingFile = false;
+              },
+            );
+          };
+          reader.onerror = (error) => {
+            console.error('File read error', error);
+            logEvent('error', 'File read error', String(error));
+            elements.sendFile.disabled = false;
+            state.sendingFile = false;
+          };
+          reader.readAsArrayBuffer(file);
+        }
+
+        elements.connect.addEventListener('click', () => connect());
+        elements.disconnect.addEventListener('click', () => disconnect());
+        elements.startRecord.addEventListener('click', () => startRecording());
+        elements.stopRecord.addEventListener('click', () => stopRecording());
+        elements.sendFile.addEventListener('click', () => handleFileSend());
+        elements.sampleRate.addEventListener('change', () => {
+          const next = Number(elements.sampleRate.value);
+          if (Number.isFinite(next) && next >= 8000 && next <= 48000) {
+            state.targetSampleRate = Math.trunc(next);
+          }
+        });
+
+        window.addEventListener('beforeunload', () => {
+          disconnect();
+        });
+      })();
+    </script>
+  </body>
+</html>

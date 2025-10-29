@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
+import { LitElement, html, css, nothing } from 'https://unpkg.com/lit@3.1.4/index.js?module';
 import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import { sampleRateFromMessage } from '../utils/audio.js';
@@ -8,6 +8,7 @@ const AUDIO_TOPIC = '/audio/raw';
 const SPEECH_TOPIC = '/ear/speech_active';
 const SILENCE_TOPIC = '/ear/silence';
 const TRANSCRIPT_TOPIC = '/ear/hole';
+const TRANSCRIPT_EVENT_TOPIC = '/ear/asr_event';
 const MAX_TRANSCRIPTS = 40;
 
 function resolveStreamAction(topic) {
@@ -80,6 +81,7 @@ class EarDashboard extends LitElement {
     speechActive: { state: true },
     silenceDetected: { state: true },
     transcripts: { state: true },
+    partialTranscript: { state: true },
     fakeTranscriptText: { state: true },
     fakeTranscriptFeedback: { state: true },
     fakeTranscriptFeedbackVariant: { state: true },
@@ -141,6 +143,54 @@ class EarDashboard extends LitElement {
         overflow-y: auto;
       }
 
+      .partial-transcript {
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.75rem;
+        background: rgba(255, 255, 255, 0.04);
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .partial-transcript-region {
+        margin-bottom: 0.75rem;
+      }
+
+      .partial-transcript header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .partial-transcript__label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--lcars-accent);
+      }
+
+      .partial-transcript__timestamp {
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .partial-transcript__text {
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.45;
+      }
+
+      .partial-transcript__segments {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.8rem;
+        color: var(--lcars-muted);
+      }
+
       .transcript-entry {
         background: rgba(0, 0, 0, 0.35);
         border: 1px solid var(--control-surface-border);
@@ -154,6 +204,7 @@ class EarDashboard extends LitElement {
         display: flex;
         gap: 0.5rem;
         font-size: 0.75rem;
+        flex-wrap: wrap;
         color: var(--lcars-muted);
       }
 
@@ -240,6 +291,7 @@ class EarDashboard extends LitElement {
     this.speechActive = false;
     this.silenceDetected = true;
     this.transcripts = [];
+    this.partialTranscript = null;
     this.fakeTranscriptText = '';
     this.fakeTranscriptFeedback = '';
     this.fakeTranscriptFeedbackVariant = '';
@@ -248,13 +300,14 @@ class EarDashboard extends LitElement {
     this._latestAudio = null;
     this._audioRenderScheduled = false;
     this._fakeTranscriptFeedbackResetHandle = 0;
+    this._lastPartialSignature = '';
   }
 
   connectedCallback() {
     super.connectedCallback();
     this._subscribeSpeech();
     this._subscribeSilence();
-    this._subscribeTranscripts();
+    this._subscribeTranscriptEvents();
     if (this.audioMonitoringEnabled) {
       this._subscribeAudio();
     } else {
@@ -266,6 +319,8 @@ class EarDashboard extends LitElement {
     super.disconnectedCallback();
     this._teardownAll();
     this._clearFakeTranscriptFeedbackTimer();
+    this.partialTranscript = null;
+    this._lastPartialSignature = '';
   }
 
   toggleAudioMonitoring() {
@@ -284,6 +339,8 @@ class EarDashboard extends LitElement {
 
   clearTranscripts() {
     this.transcripts = [];
+    this.partialTranscript = null;
+    this._lastPartialSignature = '';
   }
 
   async injectFakeTranscript(event) {
@@ -302,6 +359,17 @@ class EarDashboard extends LitElement {
       publisher.send(JSON.stringify({ data: text }));
       this.fakeTranscriptText = '';
       this._setFakeTranscriptFeedback('Fake transcript injected.', 'success', true);
+      this._appendTranscriptEntry({
+        id: uniqueId('transcript'),
+        text,
+        timestamp: new Date().toLocaleTimeString(),
+        startMs: null,
+        endMs: null,
+        segments: [],
+        source: 'manual',
+      });
+      this.partialTranscript = null;
+      this._lastPartialSignature = '';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this._setFakeTranscriptFeedback(`Failed to inject transcript: ${message}`, 'error');
@@ -385,27 +453,230 @@ class EarDashboard extends LitElement {
     );
   }
 
-  _subscribeTranscripts() {
+  _subscribeTranscriptEvents() {
     this._openSocket(
-      'transcripts',
+      'transcriptEvents',
       {
-        topic: TRANSCRIPT_TOPIC,
+        topic: TRANSCRIPT_EVENT_TOPIC,
         type: 'std_msgs/msg/String',
         role: 'subscribe',
       },
       (message) => {
-        const text = safeToString(message?.data).trim();
-        if (!text) {
-          return;
-        }
-        const entry = {
-          id: uniqueId('transcript'),
-          text,
-          timestamp: new Date().toLocaleTimeString(),
-        };
-        this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+        this._handleTranscriptEvent(message);
       },
     );
+  }
+
+  _handleTranscriptEvent(message) {
+    const payload = this._parseTranscriptEventMessage(message);
+    if (!payload) {
+      return;
+    }
+    const segments = this._cloneSegments(payload.segments);
+    const text = this._normaliseEventText(payload, segments);
+    const signature = JSON.stringify({ text, segments });
+    const eventName = typeof payload.event === 'string' ? payload.event.trim().toLowerCase() : '';
+
+    if (eventName === 'partial') {
+      if (!text && !segments.length) {
+        return;
+      }
+      if (signature === this._lastPartialSignature) {
+        return;
+      }
+      this._lastPartialSignature = signature;
+      this.partialTranscript = {
+        text,
+        segments,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      return;
+    }
+
+    if (eventName === 'final') {
+      this._lastPartialSignature = '';
+      this.partialTranscript = null;
+      if (!text && !segments.length) {
+        return;
+      }
+      const startMs = this._coerceInt(payload.start_ms ?? payload.startMs);
+      const endMs = this._coerceInt(payload.end_ms ?? payload.endMs);
+      const entry = {
+        id: uniqueId('transcript'),
+        text,
+        timestamp: new Date().toLocaleTimeString(),
+        startMs,
+        endMs,
+        segments,
+        audioBase64:
+          typeof payload.audio_base64 === 'string'
+            ? payload.audio_base64
+            : typeof payload.audioBase64 === 'string'
+            ? payload.audioBase64
+            : null,
+      };
+      this._appendTranscriptEntry(entry);
+      return;
+    }
+
+    if (text) {
+      this._appendTranscriptEntry({
+        id: uniqueId('transcript'),
+        text,
+        timestamp: new Date().toLocaleTimeString(),
+        startMs: this._coerceInt(payload.start_ms ?? payload.startMs),
+        endMs: this._coerceInt(payload.end_ms ?? payload.endMs),
+        segments,
+        audioBase64:
+          typeof payload.audio_base64 === 'string'
+            ? payload.audio_base64
+            : typeof payload.audioBase64 === 'string'
+            ? payload.audioBase64
+            : null,
+      });
+    }
+  }
+
+  _parseTranscriptEventMessage(message) {
+    const raw = typeof message?.data === 'string' ? message.data.trim() : '';
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn('Ear dashboard failed to parse transcript event payload', error, raw);
+      return null;
+    }
+  }
+
+  _cloneSegments(rawSegments) {
+    if (!Array.isArray(rawSegments)) {
+      return [];
+    }
+    const segments = [];
+    for (const segment of rawSegments) {
+      if (!segment || typeof segment !== 'object') {
+        continue;
+      }
+      const text = typeof segment.text === 'string' ? segment.text.trim() : '';
+      if (!text) {
+        continue;
+      }
+      const words = [];
+      if (Array.isArray(segment.words)) {
+        for (const word of segment.words) {
+          if (!word || typeof word !== 'object') {
+            continue;
+          }
+          const wordText = typeof word.text === 'string' ? word.text.trim() : '';
+          if (!wordText) {
+            continue;
+          }
+          words.push({
+            text: wordText,
+            startMs: this._coerceInt(word.start_ms ?? word.startMs),
+            endMs: this._coerceInt(word.end_ms ?? word.endMs),
+          });
+        }
+      }
+      segments.push({
+        text,
+        startMs: this._coerceInt(segment.start_ms ?? segment.startMs),
+        endMs: this._coerceInt(segment.end_ms ?? segment.endMs),
+        words,
+      });
+    }
+    return segments;
+  }
+
+  _normaliseEventText(payload, segments) {
+    if (typeof payload?.text === 'string' && payload.text.trim()) {
+      return payload.text.trim();
+    }
+    if (Array.isArray(segments) && segments.length) {
+      const pieces = segments
+        .map((segment) => (typeof segment.text === 'string' ? segment.text.trim() : ''))
+        .filter((piece) => piece.length > 0);
+      if (pieces.length) {
+        return pieces.join(' ');
+      }
+    }
+    return '';
+  }
+
+  _appendTranscriptEntry(entry) {
+    this.transcripts = [entry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
+  }
+
+  _coerceInt(value) {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? Math.trunc(value) : null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
+      }
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+    }
+    return null;
+  }
+
+  _formatMilliseconds(value) {
+    const number = this._coerceInt(value);
+    if (number == null) {
+      return null;
+    }
+    const seconds = number / 1000;
+    if (!Number.isFinite(seconds)) {
+      return null;
+    }
+    if (seconds < 60) {
+      return `${seconds.toFixed(2)} s`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds - minutes * 60;
+    return `${minutes}m ${remainder.toFixed(2)} s`;
+  }
+
+  _formatRange(start, end) {
+    const startLabel = this._formatMilliseconds(start);
+    const endLabel = this._formatMilliseconds(end);
+    if (startLabel && endLabel) {
+      return `${startLabel} → ${endLabel}`;
+    }
+    return startLabel || endLabel || null;
+  }
+
+  renderPartialTranscript() {
+    if (!this.partialTranscript) {
+      return html`<p class="surface-note">No active partial transcript.</p>`;
+    }
+    const { text, timestamp, segments } = this.partialTranscript;
+    const resolvedText = text && text.trim() ? text.trim() : '…';
+    return html`
+      <div class="partial-transcript" data-state="active">
+        <header>
+          <span class="partial-transcript__label">Live partial</span>
+          <span class="partial-transcript__timestamp">${timestamp || ''}</span>
+        </header>
+        <p class="partial-transcript__text">${resolvedText}</p>
+        ${Array.isArray(segments) && segments.length
+          ? html`<ul class="partial-transcript__segments">
+              ${segments.map((segment, index) => {
+                const rangeLabel = this._formatRange(segment.startMs, segment.endMs);
+                return html`<li>
+                  <strong>Segment ${index + 1}:</strong>
+                  <span>${segment.text || ''}</span>
+                  ${rangeLabel ? html`<span>(${rangeLabel})</span>` : nothing}
+                </li>`;
+              })}
+            </ul>`
+          : nothing}
+      </div>
+    `;
   }
 
   _openSocket(key, options, handleMessage) {
@@ -676,17 +947,26 @@ class EarDashboard extends LitElement {
                   </p>`
         : ''}
             </form>
+            <div class="partial-transcript-region">
+              ${this.renderPartialTranscript()}
+            </div>
             ${this.transcripts.length === 0
         ? html`<p class="surface-empty">Awaiting transcripts…</p>`
         : html`<ol class="transcript-log">
-                ${this.transcripts.map(
-          (entry) => html`<li class="transcript-entry" key=${entry.id}>
+                ${this.transcripts.map((entry) => {
+          const rangeLabel = this._formatRange(entry.startMs, entry.endMs);
+          const segmentCount = Array.isArray(entry.segments) ? entry.segments.length : 0;
+          return html`<li class="transcript-entry" key=${entry.id}>
                     <div class="transcript-entry__meta">
                       <span>${entry.timestamp}</span>
+                      ${rangeLabel ? html`<span>${rangeLabel}</span>` : nothing}
+                      ${segmentCount
+                        ? html`<span>${segmentCount} segment${segmentCount === 1 ? '' : 's'}</span>`
+                        : nothing}
                     </div>
                     <p class="transcript-entry__text">${entry.text}</p>
-                  </li>`,
-        )}
+                  </li>`;
+        })}
               </ol>`}
           </article>
         </div>

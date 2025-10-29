@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
-from .backends import ConsoleEarBackend, EarBackend
+from .backends import (
+    ConsoleEarBackend,
+    EarBackend,
+    TranscriptSegment,
+    TranscriptWord,
+    TranscriptionEvent,
+)
 from .worker import EarWorker
 
-__all__ = ["ConsoleEarBackend", "EarBackend", "EarWorker"]
+__all__ = [
+    "ConsoleEarBackend",
+    "EarBackend",
+    "TranscriptionEvent",
+    "TranscriptSegment",
+    "TranscriptWord",
+    "EarWorker",
+]

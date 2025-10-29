@@ -9,23 +9,28 @@ from collections.abc import Callable
 
 import pytest
 
-from ear.backends import BackendUnavailableError, ConsoleEarBackend, ServiceASREarBackend
+from ear.backends import (
+    BackendUnavailableError,
+    ConsoleEarBackend,
+    ServiceASREarBackend,
+    TranscriptionEvent,
+)
 from ear.worker import EarWorker
 
 
 class _PublishCollector:
-    """Helper that records published transcripts for assertions."""
+    """Helper that records published transcript events for assertions."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._items: list[str] = []
+        self._items: list[TranscriptionEvent] = []
 
-    def __call__(self, text: str) -> None:
+    def __call__(self, event: TranscriptionEvent) -> None:
         with self._lock:
-            self._items.append(text)
+            self._items.append(event)
 
     @property
-    def items(self) -> list[str]:
+    def items(self) -> list[TranscriptionEvent]:
         with self._lock:
             return list(self._items)
 
@@ -37,11 +42,11 @@ def test_console_backend_emits_non_empty_lines() -> None:
     output_stream = io.StringIO()
     backend = ConsoleEarBackend(input_stream=input_stream, output_stream=output_stream)
     stop_event = threading.Event()
-    published: list[str] = []
+    published: list[TranscriptionEvent] = []
 
     backend.run(published.append, stop_event)
 
-    assert published == ["Hello", "world", "BYE"]
+    assert [event.text for event in published] == ["Hello", "world", "BYE"]
     prompt_text = output_stream.getvalue()
     assert "\u001b[" in prompt_text  # ANSI color prefix
     assert prompt_text.endswith("\u001b[0m")
@@ -53,14 +58,18 @@ class _BlockingBackend:
     def __init__(self) -> None:
         self.stop_event: threading.Event | None = None
         self.started = threading.Event()
-        self._publish: Callable[[str], None] | None = None
+        self._publish: Callable[[TranscriptionEvent], None] | None = None
 
-    def run(self, publish: Callable[[str], None], stop_event: threading.Event) -> None:  # pragma: no cover - interface
+    def run(
+        self,
+        publish: Callable[[TranscriptionEvent], None],
+        stop_event: threading.Event,
+    ) -> None:  # pragma: no cover - interface
         self._publish = publish
         self.stop_event = stop_event
         self.started.set()
         stop_event.wait()
-        publish("done")
+        publish(TranscriptionEvent.final("done"))
 
 
 def test_worker_stops_backend_on_shutdown() -> None:
@@ -76,7 +85,7 @@ def test_worker_stops_backend_on_shutdown() -> None:
 
     worker.stop()
 
-    assert collector.items == ["done"]
+    assert collector.items and collector.items[0].text == "done"
     assert backend.stop_event is not None and backend.stop_event.is_set()
 
 
@@ -94,7 +103,11 @@ class _StubFallbackBackend:
     def close(self) -> None:  # pragma: no cover - trivial setter
         self.closed.set()
 
-    def run(self, publish: Callable[[str], None], stop_event: threading.Event) -> None:
+    def run(
+        self,
+        publish: Callable[[TranscriptionEvent], None],
+        stop_event: threading.Event,
+    ) -> None:
         self.run_started.set()
         while not stop_event.is_set():
             stop_event.wait(0.01)
@@ -105,7 +118,7 @@ def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest
 
     async def _raise_backend_unavailable(
         self: ServiceASREarBackend,
-        publish: Callable[[str], None],
+        publish: Callable[[TranscriptionEvent], None],
         stop_event: threading.Event,
     ) -> None:
         raise BackendUnavailableError("simulated outage")
@@ -119,7 +132,7 @@ def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest
 
     fallback_backend = _StubFallbackBackend()
     backend = ServiceASREarBackend(
-        uri="ws://127.0.0.1:65535/ws",
+        uri="ws://127.0.0.1:65535/asr",
         connect_timeout=0.01,
         fallback_factory=lambda: fallback_backend,
     )
@@ -154,7 +167,7 @@ def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest
 def test_service_backend_processes_partial_and_final_payloads() -> None:
     """Service backend should publish deduplicated partial and final transcripts."""
 
-    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/ws")
+    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/asr")
     collector = _PublishCollector()
 
     partial_payload = json.dumps(
@@ -178,8 +191,17 @@ def test_service_backend_processes_partial_and_final_payloads() -> None:
                 {"text": "hello"},
                 {"text": "world!"},
             ],
+            "start_ms": 0,
+            "end_ms": 1500,
         },
     )
     backend._process_service_message(final_payload, collector)
 
-    assert collector.items == ["hello world", "hello world!"]
+    assert len(collector.items) == 2
+    partial_event, final_event = collector.items
+    assert partial_event.kind == "partial"
+    assert partial_event.text == "hello world"
+    assert final_event.kind == "final"
+    assert final_event.text == "hello world!"
+    assert final_event.start_ms == 0
+    assert final_event.end_ms == 1500

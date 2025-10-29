@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from typing import Sequence
 
 import rclpy
@@ -16,6 +17,8 @@ from .backends import (
     ConsoleEarBackend,
     EarBackend,
     FasterWhisperEarBackend,
+    TranscriptSegment,
+    TranscriptionEvent,
     ServiceASREarBackend,
 )
 from .worker import EarWorker
@@ -33,8 +36,10 @@ class TranscriberNode(Node):
         else:
             self._transcript_topic = self._declare_topic("hole_topic", "/ear/hole")
         self._publisher = self.create_publisher(String, self._transcript_topic, 10)
+        self._event_topic = self._declare_topic("event_topic", "/ear/asr_event")
+        self._event_publisher = self.create_publisher(String, self._event_topic, 10)
         backend = self._create_backend()
-        self._worker = EarWorker(backend=backend, publisher=self._publish_text, logger=self.get_logger())
+        self._worker = EarWorker(backend=backend, publisher=self._handle_event, logger=self.get_logger())
         self._worker.start()
 
         self._text_subscription = None
@@ -63,7 +68,10 @@ class TranscriberNode(Node):
             )
 
         self.get_logger().info(
-            f"Transcriber ready (backend={backend.__class__.__name__}, transcript_topic={self._transcript_topic})",
+            "Transcriber ready (backend=%s, transcript_topic=%s, event_topic=%s)",
+            backend.__class__.__name__,
+            self._transcript_topic,
+            self._event_topic,
         )
 
     def _declare_topic(self, name: str, default: str) -> str:
@@ -97,7 +105,10 @@ class TranscriberNode(Node):
             options = self._read_faster_whisper_options()
             return FasterWhisperEarBackend(**options)
         if backend_name in {"service", "asr", "websocket"}:
-            uri = str(self.declare_parameter("service_uri", "ws://127.0.0.1:8089/ws").value).strip() or "ws://127.0.0.1:8089/ws"
+            uri = (
+                str(self.declare_parameter("service_uri", "ws://127.0.0.1:5003/asr").value).strip()
+                or "ws://127.0.0.1:5003/asr"
+            )
             options = self._read_faster_whisper_options()
             fallback_factory = (
                 (lambda: FasterWhisperEarBackend(**options))
@@ -137,7 +148,7 @@ class TranscriberNode(Node):
         text = msg.data.strip()
         if not text:
             return
-        self._publish_text(text)
+        self._publish_final_text(text)
 
     def _handle_audio(self, msg: UInt8MultiArray) -> None:
         if not msg.data:
@@ -145,11 +156,40 @@ class TranscriberNode(Node):
         pcm = bytes(msg.data)
         self._worker.submit_audio(pcm, self._audio_sample_rate, self._audio_channels)
 
-    def _publish_text(self, text: str) -> None:
+    def _handle_event(self, event: TranscriptionEvent) -> None:
+        """Serialise transcription events and forward final text to ROS topics."""
+
+        try:
+            payload = json.dumps(event.to_dict(), ensure_ascii=False)
+        except (TypeError, ValueError) as error:
+            self.get_logger().warning("Failed to encode transcription event: %s", error)
+            return
+
+        event_msg = String()
+        event_msg.data = payload
+        self._event_publisher.publish(event_msg)
+
+        if event.is_partial:
+            self.get_logger().debug("Partial transcription: %s", event.text)
+            return
+
+        text = event.text.strip()
+        if not text:
+            text = self._segments_to_text(event.segments)
+        if not text:
+            return
+        self._publish_final_text(text)
+
+    def _publish_final_text(self, text: str) -> None:
         ros_msg = String()
         ros_msg.data = text
         self._publisher.publish(ros_msg)
         self.get_logger().info(f"Heard: {text}")
+
+    @staticmethod
+    def _segments_to_text(segments: Sequence[TranscriptionSegment]) -> str:
+        parts = [segment.text.strip() for segment in segments if getattr(segment, "text", "").strip()]
+        return " ".join(parts)
 
     def destroy_node(self) -> bool:
         self._worker.stop()

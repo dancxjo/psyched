@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::State;
-use axum::response::IntoResponse;
+use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -20,6 +20,8 @@ use tokio::sync::mpsc;
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{error, info, warn};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+
+const HARNESS_HTML: &str = include_str!("../static/harness.html");
 
 #[derive(Clone)]
 struct WhisperService {
@@ -132,6 +134,8 @@ async fn main() -> Result<()> {
     });
 
     let app = Router::new()
+        .route("/", get(harness_page))
+        .route("/harness", get(harness_page))
         .route("/asr", get(ws_handler))
         .with_state(service.clone())
         .route(
@@ -156,6 +160,22 @@ async fn main() -> Result<()> {
         .context("axum server error")?;
 
     Ok(())
+}
+
+async fn harness_page() -> Html<&'static str> {
+    Html(HARNESS_HTML)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HARNESS_HTML;
+
+    #[test]
+    fn harness_contains_basic_controls() {
+        assert!(HARNESS_HTML.contains("ASR Service Harness"));
+        assert!(HARNESS_HTML.contains("start-record"));
+        assert!(HARNESS_HTML.contains("event-log"));
+    }
 }
 
 fn init_logging() {
