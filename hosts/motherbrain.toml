@@ -6,14 +6,14 @@ modules = [
     "pilot",
     "eye",
     "faces",
-    "viscera",
-    "voice",
-    "ear",
-    "memory",
-    "nav",
-    "imu",
-    "gps",
-    "foot",
+    # "voice",
+    # "ear",
+    # "memory",
+    # "nav",
+    # "imu",
+    # "gps",
+    # "foot",
+    # "viscera",
     "cockpit",
 ]
 
@@ -52,6 +52,11 @@ summary = "Persists memory relationships via Neo4j Bolt endpoint"
 camera_topic = "/camera/color/image_raw"
 faces_topic = "/vision/faces"
 face_detected_topic = "/vision/face_detected"
+
+[config.mod.faces.env]
+FACES_CAMERA_TOPIC = "/camera/color/image_raw"
+FACES_FACES_TOPIC = "/vision/faces"
+FACES_FACE_DETECTED_TOPIC = "/vision/face_detected"
 
 [config.mod.eye.launch.arguments]
 rgb_topic = "/camera/color/image_raw"
