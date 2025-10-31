@@ -48,7 +48,7 @@ body {
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
   border-right: 4px solid var(--lcars-accent);
   position: sticky;
   top: 0;
@@ -59,7 +59,8 @@ body {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  padding: 0.1rem 0;
 }
 
 .nav-title {
@@ -73,77 +74,81 @@ body {
 }
 
 .nav-button {
-  display: flex;
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  border: none;
-  background: var(--lcars-panel-alt);
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(88, 178, 220, 0.25);
+  background: rgba(17, 19, 29, 0.62);
   color: inherit;
-  border-radius: 999px;
+  text-decoration: none;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .nav-button:hover,
+.nav-button:focus {
+  background: rgba(88, 178, 220, 0.28);
+  border-color: rgba(88, 178, 220, 0.5);
+  transform: translateY(-1px);
+}
+
 .nav-button.active {
-  background: rgba(248, 128, 60, 0.25);
+  background: rgba(88, 178, 220, 0.4);
+  border-color: rgba(88, 178, 220, 0.65);
 }
 
 .nav-button .nav-index {
   font-weight: 700;
-  min-width: 2.5rem;
+  min-width: 2.1rem;
   text-align: center;
-  background: rgba(248, 128, 60, 0.2);
-  border-radius: 999px;
-  padding: 0.25rem 0.5rem;
-}
-
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
+  background: rgba(88, 178, 220, 0.18);
   color: var(--lcars-accent-secondary);
-  text-decoration: none;
-  border: 1px solid rgba(88, 178, 220, 0.35);
-  background: rgba(88, 178, 220, 0.08);
-  transition: background 0.2s ease, color 0.2s ease;
-  font-size: 0.9rem;
+  border-radius: 0.6rem;
+  padding: 0.2rem 0.5rem;
+  flex-shrink: 0;
 }
 
+.nav-button .nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-link,
 .nav-shortcut {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  border: 1px solid rgba(248, 128, 60, 0.45);
-  background: rgba(248, 128, 60, 0.12);
-  color: var(--lcars-accent);
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.nav-shortcut:hover,
-.nav-shortcut:focus {
-  background: rgba(248, 128, 60, 0.25);
-  color: #fff;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(88, 178, 220, 0.25);
+  background: rgba(17, 19, 29, 0.62);
+  color: var(--lcars-accent-secondary);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .nav-link:hover,
-.nav-link:focus {
-  background: rgba(88, 178, 220, 0.2);
-  color: var(--lcars-accent);
+.nav-link:focus,
+.nav-shortcut:hover,
+.nav-shortcut:focus {
+  background: rgba(88, 178, 220, 0.28);
+  border-color: rgba(88, 178, 220, 0.5);
+  color: var(--lcars-text);
+  transform: translateY(-1px);
 }
 
-.nav-button.logs {
-  margin-top: auto;
-  background: rgba(88, 178, 220, 0.15);
+.nav-shortcut {
+  border-color: rgba(248, 128, 60, 0.35);
+  color: var(--lcars-accent);
 }
 
 .lcars-main {
@@ -1455,6 +1460,7 @@ h5.audio-oscilloscope {
   .lcars-nav {
     flex-direction: row;
     align-items: center;
+    gap: 0.75rem;
     width: 100%;
     height: auto;
     position: static;
@@ -1462,9 +1468,11 @@ h5.audio-oscilloscope {
     border-bottom: 4px solid var(--lcars-accent);
     overflow-x: auto;
   }
+  .nav-item {
+    flex: 1 1 220px;
+  }
   .nav-button {
-    flex-direction: column;
-    align-items: flex-start;
+    width: 100%;
   }
   .lcars-main {
     padding: 1.5rem;

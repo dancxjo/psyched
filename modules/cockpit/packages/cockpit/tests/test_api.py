@@ -228,6 +228,25 @@ def test_psh_endpoint_runs_permitted_operation(
     asyncio.run(_exercise_psh_operation_endpoint(config_file, tmp_path, calls))
 
 
+def test_host_power_endpoint_runs_shutdown(
+    monkeypatch: pytest.MonkeyPatch, config_file: Path, tmp_path: Path
+) -> None:
+    calls: list[tuple[tuple[str, ...], Path]] = []
+
+    async def fake_run_command(*, command: list[str], cwd: Path) -> CommandResult:
+        calls.append((tuple(command), cwd))
+        return CommandResult(command=list(command), returncode=0, stdout="poweroff scheduled", stderr="")
+
+    monkeypatch.setattr("cockpit.server._run_command", fake_run_command)
+    asyncio.run(_exercise_host_power_endpoint(config_file, tmp_path, calls))
+
+
+def test_host_power_endpoint_rejects_unknown_operation(
+    config_file: Path, tmp_path: Path
+) -> None:
+    asyncio.run(_exercise_host_power_rejection(config_file, tmp_path))
+
+
 def test_psh_endpoint_rejects_unknown_operation(
     config_file: Path, tmp_path: Path
 ) -> None:
@@ -594,6 +613,54 @@ async def _exercise_psh_operation_endpoint(
     assert payload["success"] is True
     assert payload["stdout"] == "modules launched"
     assert calls == [(("psh", "mod", "up"), tmp_path)]
+
+
+async def _exercise_host_power_endpoint(
+    config_file: Path,
+    tmp_path: Path,
+    calls: list[tuple[tuple[str, ...], Path]],
+) -> None:
+    settings = CockpitSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.post(
+            "/api/ops/host-power",
+            json={"operation": "shutdown"},
+        )
+        assert response.status == 200
+        payload = await response.json()
+
+    assert payload["success"] is True
+    assert payload["operation"] == "shutdown"
+    assert payload["requested_operation"] == "shutdown"
+    assert calls == [(("systemctl", "poweroff"), tmp_path)]
+
+
+async def _exercise_host_power_rejection(config_file: Path, tmp_path: Path) -> None:
+    settings = CockpitSettings(
+        host_config_path=config_file,
+        frontend_root=tmp_path,
+        modules_root=MODULES_ROOT,
+        repo_root=tmp_path,
+        listen_host="127.0.0.1",
+        listen_port=0,
+    )
+    app = create_app(settings=settings)
+
+    async with _run_app(app) as client:
+        response = await client.post(
+            "/api/ops/host-power",
+            json={"operation": "sleep"},
+        )
+        assert response.status == 400
 
 
 async def _exercise_psh_rejection(config_file: Path, tmp_path: Path) -> None:

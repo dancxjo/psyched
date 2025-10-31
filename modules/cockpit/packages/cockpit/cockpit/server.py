@@ -99,6 +99,19 @@ _PSH_MODULE_SYSTEMD_ACTIONS: Dict[str, Sequence[str]] = {
     "debug": ("sys", "debug", "--module"),
 }
 
+_HOST_POWER_COMMANDS: Dict[str, Sequence[str]] = {
+    "shutdown": ("systemctl", "poweroff"),
+    "restart": ("systemctl", "reboot"),
+}
+
+_HOST_POWER_ALIASES: Dict[str, str] = {
+    "shutdown": "shutdown",
+    "poweroff": "shutdown",
+    "halt": "shutdown",
+    "restart": "restart",
+    "reboot": "restart",
+}
+
 
 @dataclass(slots=True)
 class CockpitSettings:
@@ -225,6 +238,7 @@ def create_app(*, settings: CockpitSettings) -> web.Application:
     app.router.add_get("/api/module-config", _module_config_handler)
     app.router.add_put("/api/module-config/{module_name}", _module_config_update_handler)
     app.router.add_post("/api/ops/git-pull", _git_pull_handler)
+    app.router.add_post("/api/ops/host-power", _host_power_handler)
     app.router.add_post("/api/ops/psh", _psh_operation_handler)
     app.router.add_get("/api/actions", _actions_handler)
     app.router.add_post("/api/actions/{module_name}/{action_name}", _action_execute_handler)
@@ -439,6 +453,49 @@ async def _git_pull_handler(request: web.Request) -> web.Response:
     return web.json_response(payload)
 
 
+async def _host_power_handler(request: web.Request) -> web.Response:
+    """Invoke a whitelisted host power management command."""
+
+    settings: CockpitSettings = request.app[COCKPIT_SETTINGS_KEY]
+
+    try:
+        payload = await request.json()
+    except Exception as exc:  # pragma: no cover - aiohttp raises for bad JSON
+        raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
+
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, Mapping):
+        raise web.HTTPBadRequest(text="Request payload must be a JSON object")
+
+    raw_operation = payload.get("operation")
+    if not isinstance(raw_operation, str) or not raw_operation.strip():
+        raise web.HTTPBadRequest(text="operation must be a non-empty string")
+
+    operation = _resolve_host_power_operation(raw_operation.strip())
+    if operation is None:
+        raise web.HTTPBadRequest(text=f"Unsupported host power operation: {raw_operation}")
+
+    command = _resolve_host_power_command(operation)
+    if command is None:  # pragma: no cover - defensive guard for misconfiguration
+        raise web.HTTPInternalServerError(text=f"No command configured for host operation: {operation}")
+
+    cwd = settings.repo_root or settings.modules_root
+
+    try:
+        result = await _run_command(command=command, cwd=cwd)
+    except FileNotFoundError as exc:
+        raise web.HTTPInternalServerError(text="systemctl binary is not available on this host") from exc
+    except OSError as exc:  # pragma: no cover - defensive guard for unexpected OS errors
+        _LOGGER.error("Host power operation %s failed to spawn", operation, exc_info=True)
+        raise web.HTTPInternalServerError(text="Failed to execute host power operation") from exc
+
+    response_payload = result.to_payload()
+    response_payload["operation"] = operation
+    response_payload["requested_operation"] = raw_operation.strip()
+    return web.json_response(response_payload)
+
+
 async def _psh_operation_handler(request: web.Request) -> web.Response:
     """Execute approved bulk ``psh`` operations requested by the cockpit."""
 
@@ -633,6 +690,23 @@ async def _receive_stream_messages(ws: web.WebSocketResponse, stream: TopicStrea
         pass
     except Exception:  # pragma: no cover - defensive guard
         _LOGGER.exception("Error while handling inbound websocket messages for stream %s", stream.metadata.id)
+
+
+def _resolve_host_power_operation(operation: str) -> Optional[str]:
+    """Return the canonical host power operation for *operation*, if allowed."""
+
+    key = operation.lower()
+    return _HOST_POWER_ALIASES.get(key)
+
+
+def _resolve_host_power_command(operation: str) -> Optional[List[str]]:
+    """Return the command sequence for a canonical host power operation."""
+
+    command = _HOST_POWER_COMMANDS.get(operation)
+    if command is None:
+        return None
+    return list(command)
+
 
 def _resolve_psh_command(operation: str) -> Optional[List[str]]:
     """Return the command tuple for a whitelisted ``psh`` operation."""
