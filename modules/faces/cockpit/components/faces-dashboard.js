@@ -1,11 +1,21 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { createTopicSocket } from '/js/cockpit.js';
+import { createTopicSocket, callRosService } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import { buildFacesSettingsPayload, parseFaceTriggerPayload } from './faces-dashboard.helpers.js';
 
 function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+const ROUTER_SOURCE_OPTIONS = [
+  ['kinect', 'Kinect'],
+  ['usb', 'USB camera'],
+  ['auto', 'Auto'],
+  ['off', 'Disabled'],
+];
+
+const PARAMETER_TYPE_BOOL = 1;
+const PARAMETER_TYPE_STRING = 4;
 
 /**
  * Dashboard for the Faces module giving cockpits quick tuning controls.
@@ -23,6 +33,15 @@ class FacesDashboard extends LitElement {
     publishEmbeddings: { state: true },
     statusMessage: { state: true },
     statusTone: { state: true },
+    routerStatus: { state: true },
+    routerTone: { state: true },
+    routerSource: { state: true },
+    routerFallback: { state: true },
+    kinectEnabled: { state: true },
+    usbEnabled: { state: true },
+    routerTopics: { state: true },
+    routerBusy: { state: true },
+    routerAvailable: { state: true },
     tagFaceId: { state: true },
     tagLabel: { state: true },
     tagFeedback: { state: true },
@@ -121,6 +140,31 @@ class FacesDashboard extends LitElement {
         word-break: break-word;
         white-space: pre-wrap;
       }
+
+      .router-topics {
+        margin: 0;
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        color: var(--lcars-muted);
+      }
+
+      .router-topics__entry {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+      }
+
+      .router-topics__label {
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .router-topics__value {
+        font-family: var(--metric-value-font);
+        color: var(--lcars-text);
+        word-break: break-word;
+      }
     `,
   ];
 
@@ -132,6 +176,22 @@ class FacesDashboard extends LitElement {
     this.publishEmbeddings = true;
     this.statusMessage = 'Connecting to recognition stream…';
     this.statusTone = 'info';
+    this.routerStatus = 'Querying faces router state…';
+    this.routerTone = 'info';
+    this.routerSource = 'kinect';
+    this.routerFallback = 'auto';
+    this.kinectEnabled = true;
+    this.usbEnabled = false;
+    this.routerTopics = {
+      kinectImage: '/camera/color/image_raw',
+      kinectInfo: '/camera/color/camera_info',
+      usbImage: '/eye/usb/image_raw',
+      usbInfo: '/eye/usb/camera_info',
+      outputImage: '/faces/camera/image_raw',
+      outputInfo: '/faces/camera/camera_info',
+    };
+    this.routerBusy = false;
+    this.routerAvailable = false;
     this.tagFaceId = '';
     this.tagLabel = '';
     this.tagFeedback = '';
@@ -144,6 +204,7 @@ class FacesDashboard extends LitElement {
     if (!this.sockets.length) {
       this.connectTriggerStream();
     }
+    void this.refreshRouterState();
   }
 
   disconnectedCallback() {
@@ -159,6 +220,7 @@ class FacesDashboard extends LitElement {
   }
 
   render() {
+    const routerControlsDisabled = this.routerBusy || !this.routerAvailable;
     return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
@@ -216,6 +278,102 @@ class FacesDashboard extends LitElement {
               <button type="submit" class="surface-button">Apply tuning</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.resetEmbeddings}>
                 Reset embedding cache
+              </button>
+            </div>
+          </form>
+        </article>
+
+        <article class="surface-card">
+          <h3 class="surface-card__title">Faces routing</h3>
+          <p class="surface-status" data-variant="${this.routerTone}">${this.routerStatus}</p>
+          <form @submit=${this.applyRouterSettings}>
+            <div class="form-row form-row--split">
+              <label>
+                Active source
+                <select
+                  .value=${this.routerSource}
+                  @change=${(event) => (this.routerSource = event.target.value)}
+                  ?disabled=${routerControlsDisabled}
+                >
+                  ${ROUTER_SOURCE_OPTIONS.map(
+                    ([value, label]) => html`<option value=${value}>${label}</option>`,
+                  )}
+                </select>
+              </label>
+              <label>
+                Fallback source
+                <select
+                  .value=${this.routerFallback}
+                  @change=${(event) => (this.routerFallback = event.target.value)}
+                  ?disabled=${routerControlsDisabled}
+                >
+                  ${ROUTER_SOURCE_OPTIONS.map(
+                    ([value, label]) => html`<option value=${value}>${label}</option>`,
+                  )}
+                </select>
+              </label>
+            </div>
+            <div class="form-row form-row--split">
+              <label>
+                Kinect feed enabled
+                <select
+                  .value=${this.kinectEnabled ? 'true' : 'false'}
+                  @change=${(event) => (this.kinectEnabled = event.target.value === 'true')}
+                  ?disabled=${routerControlsDisabled}
+                >
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+              </label>
+              <label>
+                USB feed enabled
+                <select
+                  .value=${this.usbEnabled ? 'true' : 'false'}
+                  @change=${(event) => (this.usbEnabled = event.target.value === 'true')}
+                  ?disabled=${routerControlsDisabled}
+                >
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+              </label>
+            </div>
+            <div class="router-topics">
+              <div class="router-topics__entry">
+                <span class="router-topics__label">Kinect image</span>
+                <span class="router-topics__value">${this.routerTopics.kinectImage || '—'}</span>
+              </div>
+              <div class="router-topics__entry">
+                <span class="router-topics__label">Kinect info</span>
+                <span class="router-topics__value">${this.routerTopics.kinectInfo || '—'}</span>
+              </div>
+              <div class="router-topics__entry">
+                <span class="router-topics__label">USB image</span>
+                <span class="router-topics__value">${this.routerTopics.usbImage || '—'}</span>
+              </div>
+              <div class="router-topics__entry">
+                <span class="router-topics__label">USB info</span>
+                <span class="router-topics__value">${this.routerTopics.usbInfo || '—'}</span>
+              </div>
+              <div class="router-topics__entry">
+                <span class="router-topics__label">Faces output image</span>
+                <span class="router-topics__value">${this.routerTopics.outputImage || '—'}</span>
+              </div>
+              <div class="router-topics__entry">
+                <span class="router-topics__label">Faces output info</span>
+                <span class="router-topics__value">${this.routerTopics.outputInfo || '—'}</span>
+              </div>
+            </div>
+            <div class="surface-actions">
+              <button type="submit" class="surface-button" ?disabled=${routerControlsDisabled}>
+                ${this.routerBusy && this.routerAvailable ? 'Applying…' : 'Apply routing'}
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${() => this.refreshRouterState()}
+                ?disabled=${this.routerBusy}
+              >
+                Refresh state
               </button>
             </div>
           </form>
@@ -291,6 +449,173 @@ class FacesDashboard extends LitElement {
         </article>
       </div>
     `;
+  }
+
+  async refreshRouterState() {
+    const previousBusy = this.routerBusy;
+    this.routerBusy = true;
+    this.routerStatus = 'Querying faces router state…';
+    this.routerTone = 'info';
+
+    const parameterNames = [
+      'faces_source',
+      'fallback_source',
+      'kinect_enabled',
+      'usb_enabled',
+      'kinect_image_topic',
+      'kinect_camera_info_topic',
+      'usb_image_topic',
+      'usb_camera_info_topic',
+      'output_image_topic',
+      'output_camera_info_topic',
+    ];
+
+    try {
+      const response = await callRosService({
+        module: 'eye',
+        service: '/psyched_faces_router/get_parameters',
+        type: 'rcl_interfaces/srv/GetParameters',
+        args: { names: parameterNames },
+        timeoutMs: 4000,
+      });
+
+      const values = Array.isArray(response?.values) ? response.values : [];
+      const lookup = new Map();
+      for (let index = 0; index < parameterNames.length; index += 1) {
+        lookup.set(parameterNames[index], values[index] ?? null);
+      }
+
+      this.routerSource = this._extractString(lookup.get('faces_source'), this.routerSource);
+      this.routerFallback = this._extractString(lookup.get('fallback_source'), this.routerFallback);
+      this.kinectEnabled = this._extractBool(lookup.get('kinect_enabled'), this.kinectEnabled);
+      this.usbEnabled = this._extractBool(lookup.get('usb_enabled'), this.usbEnabled);
+      this.routerTopics = {
+        kinectImage: this._extractString(lookup.get('kinect_image_topic'), this.routerTopics.kinectImage),
+        kinectInfo: this._extractString(lookup.get('kinect_camera_info_topic'), this.routerTopics.kinectInfo),
+        usbImage: this._extractString(lookup.get('usb_image_topic'), this.routerTopics.usbImage),
+        usbInfo: this._extractString(lookup.get('usb_camera_info_topic'), this.routerTopics.usbInfo),
+        outputImage: this._extractString(lookup.get('output_image_topic'), this.routerTopics.outputImage),
+        outputInfo: this._extractString(lookup.get('output_camera_info_topic'), this.routerTopics.outputInfo),
+      };
+
+      this.routerStatus = 'Faces router state synchronised.';
+      this.routerTone = 'success';
+      this.routerAvailable = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.routerStatus = `Failed to query faces router: ${message}`;
+      this.routerTone = 'error';
+      this.routerAvailable = false;
+    } finally {
+      this.routerBusy = previousBusy;
+    }
+  }
+
+  async applyRouterSettings(event) {
+    event.preventDefault();
+    if (this.routerBusy) {
+      return;
+    }
+    if (!this.routerAvailable) {
+      this.routerStatus = 'Faces router service is unavailable.';
+      this.routerTone = 'error';
+      return;
+    }
+
+    this.routerBusy = true;
+    this.routerStatus = 'Applying routing updates…';
+    this.routerTone = 'info';
+
+    const parameters = [
+      this._buildStringParameter('faces_source', this.routerSource),
+      this._buildStringParameter('fallback_source', this.routerFallback),
+      this._buildBoolParameter('kinect_enabled', this.kinectEnabled),
+      this._buildBoolParameter('usb_enabled', this.usbEnabled),
+    ].filter(Boolean);
+
+    if (!parameters.length) {
+      this.routerBusy = false;
+      this.routerStatus = 'No routing changes detected.';
+      this.routerTone = 'warning';
+      return;
+    }
+
+    try {
+      await callRosService({
+        module: 'eye',
+        service: '/psyched_faces_router/set_parameters',
+        type: 'rcl_interfaces/srv/SetParameters',
+        args: { parameters },
+        timeoutMs: 5000,
+      });
+      await this.refreshRouterState();
+      if (this.routerAvailable) {
+        this.routerStatus = 'Faces routing updated.';
+        this.routerTone = 'success';
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.routerStatus = `Failed to update faces routing: ${message}`;
+      this.routerTone = 'error';
+    } finally {
+      this.routerBusy = false;
+    }
+  }
+
+  _extractString(parameterValue, fallback = '') {
+    if (!parameterValue || typeof parameterValue !== 'object') {
+      return fallback;
+    }
+    const text = typeof parameterValue.string_value === 'string' ? parameterValue.string_value.trim() : '';
+    if (text) {
+      return text;
+    }
+    if (Array.isArray(parameterValue.string_array_value) && parameterValue.string_array_value.length > 0) {
+      const first = parameterValue.string_array_value[0];
+      if (typeof first === 'string' && first.trim()) {
+        return first.trim();
+      }
+    }
+    return fallback;
+  }
+
+  _extractBool(parameterValue, fallback = false) {
+    if (!parameterValue || typeof parameterValue !== 'object') {
+      return fallback;
+    }
+    if (typeof parameterValue.bool_value === 'boolean') {
+      return parameterValue.bool_value;
+    }
+    if (typeof parameterValue.integer_value === 'number') {
+      return parameterValue.integer_value !== 0;
+    }
+    return fallback;
+  }
+
+  _buildStringParameter(name, value) {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+    return {
+      name,
+      value: {
+        type: PARAMETER_TYPE_STRING,
+        string_value: value.trim(),
+      },
+    };
+  }
+
+  _buildBoolParameter(name, value) {
+    if (typeof value !== 'boolean') {
+      return null;
+    }
+    return {
+      name,
+      value: {
+        type: PARAMETER_TYPE_BOOL,
+        bool_value: value,
+      },
+    };
   }
 
   connectTriggerStream() {
