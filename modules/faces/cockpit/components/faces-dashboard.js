@@ -297,7 +297,7 @@ class FacesDashboard extends LitElement {
     const socket = createTopicSocket({
       module: 'faces',
       action: 'face_trigger_stream',
-      type: 'std_msgs/msg/String',
+      type: 'psyched_msgs/msg/SensationStamped',
       role: 'subscribe',
     });
     socket.addEventListener('open', () => {
@@ -325,6 +325,9 @@ class FacesDashboard extends LitElement {
       }
       const result = parseFaceTriggerPayload(payload.data);
       if (!result.ok) {
+        if (result.reason === 'ignored' || result.reason === 'empty') {
+          return;
+        }
         this.statusMessage = result.error;
         this.statusTone = 'error';
         this.recordRecognitionEvent({

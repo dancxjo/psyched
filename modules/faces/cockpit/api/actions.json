@@ -14,11 +14,11 @@
     },
     {
       "name": "face_trigger_stream",
-      "description": "Stream JSON payloads signalling face recognition triggers on /vision/face_detected.",
+      "description": "Stream face sensation events emitted on /sensations.",
       "kind": "stream-topic",
       "defaults": {
-        "topic": "/vision/face_detected",
-        "message_type": "std_msgs/msg/String",
+        "topic": "/sensations",
+        "message_type": "psyched_msgs/msg/SensationStamped",
         "role": "subscribe",
         "queue_length": 10
       }

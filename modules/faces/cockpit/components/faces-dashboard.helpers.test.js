@@ -62,13 +62,59 @@ Deno.test('parseFaceTriggerPayload handles std_msgs/String envelopes', () => {
   }
 });
 
+Deno.test('parseFaceTriggerPayload handles face sensations', () => {
+  const result = parseFaceTriggerPayload({
+    kind: 'face',
+    collection_hint: 'faces',
+    json_payload: JSON.stringify({
+      memory_id: 'mem-900',
+      vector_id: 'vec-321',
+      confidence: 0.82,
+      embedding_dim: 512,
+    }),
+    vector: [0.1, 0.2],
+  });
+  if (!result.ok) {
+    throw new Error(`Expected success but received error: ${result.error}`);
+  }
+  if (result.value.memoryId !== 'mem-900' || result.value.vectorId !== 'vec-321') {
+    throw new Error('Identifiers should be normalised from sensations');
+  }
+  if (result.value.collection !== 'faces') {
+    throw new Error('Collection should fall back to collection_hint when missing');
+  }
+  if (!result.value.note || !result.value.note.includes('confidence')) {
+    throw new Error('Sensation notes should include confidence details when available');
+  }
+});
+
+Deno.test('parseFaceTriggerPayload ignores non-face sensations', () => {
+  const result = parseFaceTriggerPayload({
+    kind: 'audio',
+    collection_hint: 'audio',
+    json_payload: JSON.stringify({ memory_id: 'mem-x' }),
+  });
+  if (result.ok) {
+    throw new Error('Non-face sensations should be ignored');
+  }
+  if (result.reason !== 'ignored') {
+    throw new Error('Non-face sensations should be flagged as ignored');
+  }
+});
+
 Deno.test('parseFaceTriggerPayload rejects malformed payloads', () => {
   const empty = parseFaceTriggerPayload({ data: ' ' });
   if (empty.ok) {
     throw new Error('Empty payload should be rejected');
   }
+  if (empty.reason !== 'empty') {
+    throw new Error('Empty payloads should be flagged with the empty reason');
+  }
   const invalid = parseFaceTriggerPayload({ data: '{' });
   if (invalid.ok) {
     throw new Error('Malformed JSON should be rejected');
+  }
+  if (invalid.reason !== 'invalid-json') {
+    throw new Error('Malformed payloads should surface the invalid-json reason');
   }
 });

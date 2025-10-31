@@ -46,40 +46,24 @@ export function buildFacesSettingsPayload(draft) {
 }
 
 /**
- * Normalise a payload emitted on /vision/face_detected into a cockpit-friendly shape.
+ * Normalise a payload emitted on the face sensation stream (/sensations) or the
+ * legacy /vision/face_detected topic into a cockpit-friendly shape.
  *
  * @param {unknown} raw Payload returned from the websocket bridge.
  * @returns {{ ok: true, value: FaceTriggerEvent } | { ok: false, error: string }}
  */
 export function parseFaceTriggerPayload(raw) {
-  const envelope = unwrapDataField(raw);
-  const text = typeof envelope === 'string' ? envelope.trim() : '';
+  const sensation = extractSensationPayload(raw);
+  if (sensation) {
+    return parseSensation(sensation);
+  }
+
+  const legacy = unwrapDataField(raw);
+  const text = typeof legacy === 'string' ? legacy.trim() : '';
   if (!text) {
-    return { ok: false, error: 'Trigger payload was empty.' };
+    return { ok: false, error: 'Trigger payload was empty.', reason: 'empty' };
   }
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch (_error) {
-    return { ok: false, error: 'Trigger payload was not valid JSON.' };
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    return { ok: false, error: 'Trigger payload was not a JSON object.' };
-  }
-  const name = normaliseString(parsed.name, 'Unknown');
-  const memoryId = normaliseString(parsed.memory_id);
-  const vectorId = normaliseString(parsed.vector_id);
-  const collection = normaliseString(parsed.collection);
-  return {
-    ok: true,
-    value: {
-      name,
-      memoryId,
-      vectorId,
-      collection,
-      raw: text,
-    },
-  };
+  return parseLegacyTrigger(text);
 }
 
 function unwrapDataField(raw) {
@@ -104,7 +88,104 @@ function normaliseString(value, fallback = '') {
       return trimmed;
     }
   }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
   return fallback;
+}
+
+function extractSensationPayload(raw) {
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.json_payload === 'string') {
+      return raw;
+    }
+    if (raw.data && typeof raw.data === 'object') {
+      const inner = raw.data;
+      if (typeof inner.json_payload === 'string') {
+        return inner;
+      }
+    }
+  }
+  return null;
+}
+
+function parseSensation(message) {
+  const kind = normaliseString(message.kind);
+  if (kind && kind.toLowerCase() !== 'face') {
+    return { ok: false, error: 'Sensation did not describe a face event.', reason: 'ignored' };
+  }
+
+  const payloadText = normaliseString(message.json_payload);
+  if (!payloadText) {
+    return { ok: false, error: 'Sensation payload was empty.', reason: 'empty' };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(payloadText);
+  } catch (_error) {
+    return { ok: false, error: 'Sensation payload was not valid JSON.', reason: 'invalid-json' };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'Sensation payload was not a JSON object.', reason: 'invalid-json' };
+  }
+
+  const name =
+    normaliseString(parsed.name) ||
+    normaliseString(parsed.label) ||
+    'Unknown face';
+  const memoryId = normaliseString(parsed.memory_id);
+  const vectorId = normaliseString(parsed.vector_id);
+  const collection = normaliseString(parsed.collection, normaliseString(message.collection_hint));
+
+  const noteParts = [];
+  const confidence = Number(parsed.confidence);
+  if (Number.isFinite(confidence)) {
+    noteParts.push(`confidence ${(confidence * 100).toFixed(1)}%`);
+  }
+  const embeddingDim = Number(parsed.embedding_dim);
+  if (Number.isInteger(embeddingDim) && embeddingDim > 0) {
+    noteParts.push(`${embeddingDim}-dim vector`);
+  }
+  const note = noteParts.join(' · ');
+
+  return {
+    ok: true,
+    value: {
+      name,
+      memoryId,
+      vectorId,
+      collection,
+      note,
+      raw: payloadText,
+    },
+  };
+}
+
+function parseLegacyTrigger(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_error) {
+    return { ok: false, error: 'Trigger payload was not valid JSON.', reason: 'invalid-json' };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'Trigger payload was not a JSON object.', reason: 'invalid-json' };
+  }
+  const name = normaliseString(parsed.name, 'Unknown');
+  const memoryId = normaliseString(parsed.memory_id);
+  const vectorId = normaliseString(parsed.vector_id);
+  const collection = normaliseString(parsed.collection);
+  return {
+    ok: true,
+    value: {
+      name,
+      memoryId,
+      vectorId,
+      collection,
+      raw: text,
+    },
+  };
 }
 
 /**
@@ -122,4 +203,5 @@ function normaliseString(value, fallback = '') {
  * @property {string} vectorId Embedding vector identifier.
  * @property {string} collection Backing collection name.
  * @property {string} raw Raw JSON payload string.
+ * @property {string=} note Contextual note about the event (confidence, embedding dims, etc).
  */
