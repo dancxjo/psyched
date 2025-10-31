@@ -1,1 +1,0 @@
-/home/ubuntu/psyched/modules/foot/cockpit/utils/streams.test.js
