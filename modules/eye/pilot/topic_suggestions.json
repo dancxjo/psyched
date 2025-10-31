@@ -1,13 +1,13 @@
 {
   "context_topics": [
     {
-      "topic": "/camera/color/image_raw/compressed",
-      "type": "sensor_msgs/msg/CompressedImage",
+      "topic": "/camera/color/image_raw",
+      "type": "sensor_msgs/msg/Image",
       "prompt_template": "{{data.prompt_summary}}"
     },
     {
-      "topic": "/kinect_ros2/image_raw/compressed",
-      "type": "sensor_msgs/msg/CompressedImage",
+      "topic": "/kinect_ros2/image_raw",
+      "type": "sensor_msgs/msg/Image",
       "prompt_template": "{{data.prompt_summary}}"
     }
   ],

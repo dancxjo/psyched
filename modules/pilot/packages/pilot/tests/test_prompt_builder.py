@@ -104,7 +104,7 @@ def test_build_prompt_mentions_vision_images_when_available() -> None:
         snapshot_timestamp=_SNAPSHOT_TS,
         vision_images=[
             PromptImage(
-                topic="/camera/color/image_raw/compressed",
+                topic="/camera/color/image_raw",
                 description="current frame jpeg (9216 bytes)",
                 base64_data="AAECAw==",
             )
@@ -114,7 +114,7 @@ def test_build_prompt_mentions_vision_images_when_available() -> None:
     prompt = build_prompt(context)
     _, payload_text = prompt.split("INPUT CONTEXT (filtered)\n", 1)
     payload = json.loads(payload_text)
-    assert "/camera/color/image_raw/compressed" in payload.get("vision_hints", [])[0]
+    assert "/camera/color/image_raw" in payload.get("vision_hints", [])[0]
     assert "AAECAw==" not in prompt
 
 

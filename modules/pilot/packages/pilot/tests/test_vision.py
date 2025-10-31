@@ -19,13 +19,13 @@ def test_summarise_image_message_extracts_prompt_image() -> None:
     msg = DummyCompressedImage(data=[1, 2, 3])
 
     sanitised, prompt_image = summarise_image_message(
-        "/camera/color/image_raw/compressed",
+        "/camera/color/image_raw",
         msg,
         metadata,
     )
 
     assert isinstance(prompt_image, PromptImage)
-    assert prompt_image.topic == "/camera/color/image_raw/compressed"
+    assert prompt_image.topic == "/camera/color/image_raw"
     expected_b64 = base64.b64encode(bytes([1, 2, 3])).decode("ascii")
     assert prompt_image.base64_data == expected_b64
     assert "bytes" in prompt_image.description

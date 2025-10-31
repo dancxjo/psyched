@@ -41,11 +41,11 @@ class PromptImage:
     Example
     -------
     >>> PromptImage(
-    ...     topic="/camera/color/image_raw/compressed",
+    ...     topic="/camera/color/image_raw",
     ...     description="current frame jpeg (9216 bytes)",
     ...     base64_data="AAECAw==",
     ... )
-    PromptImage(topic='/camera/color/image_raw/compressed', description='current frame jpeg (9216 bytes)', base64_data='AAECAw==')
+    PromptImage(topic='/camera/color/image_raw', description='current frame jpeg (9216 bytes)', base64_data='AAECAw==')
     """
 
     topic: str
