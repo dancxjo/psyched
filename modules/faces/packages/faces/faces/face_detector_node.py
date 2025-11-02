@@ -26,9 +26,12 @@ from .message_builder import build_face_detections_msg
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .processing import (  # type: ignore[attr-defined]
         BasicEmbeddingExtractor,
+        EmbeddingBackendUnavailableError,
+        EmbeddingExtractor,
         FaceProcessor,
         ProcessedFace,
         HaarCascadeDetector,
+        FaceRecognitionEmbeddingExtractor,
     )
 
 try:  # pragma: no cover - requires ROS 2 runtime
@@ -202,10 +205,12 @@ class FaceDetectorNode(Node):
 
         super().__init__("psyched_faces")
         self._bridge = CvBridge()
+        embedder = self._build_embedder(processing)
         self._processor = processing.FaceProcessor(
             detector=processing.HaarCascadeDetector(),
-            embedder=processing.BasicEmbeddingExtractor(),
+            embedder=embedder,
         )
+        self._embedding_dim = embedder.size
 
         # default to the Kinect RGB stream published by the eye module
         self.declare_parameter("camera_topic", DEFAULT_CAMERA_TOPIC)
@@ -250,6 +255,7 @@ class FaceDetectorNode(Node):
         )
         # Extra visibility: node is watching for frames
         self.get_logger().info("Keeping an eye out for faces...")
+        self.get_logger().info(f"Embedding backend dimension={self._embedding_dim}")
         if self._memory_client is None or not self._memory_client.enabled:
             self.get_logger().info("Face memory bridge disabled; embeddings will not be persisted")
         else:
@@ -363,6 +369,20 @@ class FaceDetectorNode(Node):
             f"Published {len(faces)} face embedding sensations to {self._sensation_topic}"
         )
         return payloads
+
+    def _build_embedder(self, processing: ModuleType) -> EmbeddingExtractor:
+        try:
+            embedder = processing.FaceRecognitionEmbeddingExtractor()
+            self.get_logger().info("Using face_recognition embeddings (128D)")
+            return embedder
+        except (AttributeError, NameError):  # pragma: no cover - attribute missing
+            pass
+        except EmbeddingBackendUnavailableError as exc:
+            self.get_logger().warning(f"face_recognition embeddings unavailable: {exc}")
+        except Exception as exc:  # pragma: no cover - defensive
+            self.get_logger().warning(f"Failed to initialise face_recognition embeddings: {exc}")
+        self.get_logger().info("Falling back to basic downsampled embeddings (256D)")
+        return processing.BasicEmbeddingExtractor()
 
     def _build_memory_metadata(
         self,

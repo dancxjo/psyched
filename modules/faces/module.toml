@@ -1,12 +1,18 @@
 [unit.faces]
 apt = [
-    "python3-opencv",
+    "build-essential",
+    "cmake",
+    "liblapack-dev",
+    "libopenblas-dev",
     "python3-numpy",
+    "python3-opencv",
 ]
 pip = [
-    "opencv-python",
-    "opencv-contrib-python",
+    "face-recognition",
+    "face-recognition-models",
     "numpy",
+    "opencv-contrib-python",
+    "opencv-python",
 ]
 patches = []
 launch = "modules/faces/launch_unit.sh"

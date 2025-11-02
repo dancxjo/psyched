@@ -9,6 +9,11 @@ import cv2
 import os
 import numpy as np
 
+try:  # pragma: no cover - optional dependency
+    import face_recognition  # type: ignore[import]
+except ModuleNotFoundError:  # pragma: no cover - dependency resolved at runtime
+    face_recognition = None  # type: ignore[assignment]
+
 
 def _default_haarcascade_path() -> str:
     """Return a reasonable default path to OpenCV's haarcascade xml.
@@ -97,6 +102,10 @@ class DetectorBackend(Protocol):
         """Return detections for the provided image."""
 
 
+class EmbeddingBackendUnavailableError(RuntimeError):
+    """Raised when an embedding backend cannot be constructed."""
+
+
 class HaarCascadeDetector:
     """Detect faces using OpenCV's Haar cascades."""
 
@@ -152,6 +161,17 @@ class HaarCascadeDetector:
         return faces
 
 
+class EmbeddingExtractor(Protocol):
+    """Protocol implemented by face embedding extractors."""
+
+    def embed(self, crop: np.ndarray) -> np.ndarray:
+        """Return an embedding vector for the provided face crop."""
+
+    @property
+    def size(self) -> int:
+        """Return the dimensionality of the embedding vector."""
+
+
 class BasicEmbeddingExtractor:
     """Generate deterministic embeddings by downsampling to a compact vector."""
 
@@ -191,10 +211,53 @@ class BasicEmbeddingExtractor:
         return self._size
 
 
+class FaceRecognitionEmbeddingExtractor:
+    """Generate 128-D embeddings using the ``face_recognition`` library."""
+
+    def __init__(self, *, model: str = "small", num_jitters: int = 1) -> None:
+        if face_recognition is None:
+            raise EmbeddingBackendUnavailableError("face_recognition package is not available")
+        if model not in ("small", "large"):
+            raise ValueError("model must be 'small' or 'large'")
+        self._model = model
+        self._num_jitters = int(max(1, num_jitters))
+
+    def embed(self, crop: np.ndarray) -> np.ndarray:
+        if face_recognition is None:  # pragma: no cover - defensive
+            raise EmbeddingBackendUnavailableError("face_recognition package is not available")
+
+        if crop.ndim == 2:
+            rgb_crop = cv2.cvtColor(crop, cv2.COLOR_GRAY2RGB)
+        else:
+            rgb_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+
+        height, width = rgb_crop.shape[:2]
+        if height == 0 or width == 0:
+            return np.zeros(128, dtype=np.float32)
+
+        try:
+            encodings = face_recognition.face_encodings(  # type: ignore[operator]
+                rgb_crop,
+                known_face_locations=[(0, width, height, 0)],
+                num_jitters=self._num_jitters,
+                model=self._model,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging handled by caller
+            raise EmbeddingBackendUnavailableError(f"face_recognition failed to encode face: {exc}") from exc
+
+        if not encodings:
+            return np.zeros(128, dtype=np.float32)
+        return np.asarray(encodings[0], dtype=np.float32)
+
+    @property
+    def size(self) -> int:
+        return 128
+
+
 class FaceProcessor:
     """High-level pipeline to crop faces and derive embeddings."""
 
-    def __init__(self, *, detector: DetectorBackend, embedder: BasicEmbeddingExtractor) -> None:
+    def __init__(self, *, detector: DetectorBackend, embedder: EmbeddingExtractor) -> None:
         self._detector = detector
         self._embedder = embedder
 

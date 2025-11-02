@@ -6,7 +6,7 @@ setup(
     name=package_name,
     version="0.1.0",
     packages=find_packages(include=[package_name, f"{package_name}.*"]),
-    install_requires=["setuptools", "opencv-python", "numpy"],
+    install_requires=["setuptools", "opencv-python", "numpy", "face-recognition"],
     zip_safe=True,
     maintainer="Psyched Dev",
     maintainer_email="devnull@example.com",
