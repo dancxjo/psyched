@@ -303,16 +303,16 @@ export function toAsciiPayload(text) {
 }
 
 /**
- * Build a power LED payload from colour and intensity sliders.
+ * Build a power LED payload from color and intensity sliders.
  *
  * @param {number} color between 0 (green) and 255 (red)
  * @param {number} intensity between 0 and 255
  * @returns {{ data: number[] }}
  */
 export function buildPowerLedPayload(color, intensity) {
-  const colourValue = clampByte(color);
+  const colorValue = clampByte(color);
   const intensityValue = clampByte(intensity);
-  return { data: [colourValue, intensityValue] };
+  return { data: [colorValue, intensityValue] };
 }
 
 function clampByte(value) {

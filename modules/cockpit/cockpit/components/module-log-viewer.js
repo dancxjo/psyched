@@ -1,9 +1,13 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { unsafeHTML } from 'https://unpkg.com/lit@3.1.4/directives/unsafe-html.js?module';
-import { AnsiUp } from 'https://esm.sh/ansi_up@6.0.2';
-import { surfaceStyles } from './cockpit-style.js';
-import { normaliseSystemdStatus } from './cockpit-dashboard.helpers.js';
-import { copyTextToClipboard, formatModuleLogForCopy } from './log-copy.js';
+import {
+  css,
+  html,
+  LitElement,
+} from "https://unpkg.com/lit@3.1.4/index.js?module";
+import { unsafeHTML } from "https://unpkg.com/lit@3.1.4/directives/unsafe-html.js?module";
+import { AnsiUp } from "https://esm.sh/ansi_up@6.0.2";
+import { surfaceStyles } from "./cockpit-style.js";
+import { normaliseSystemdStatus } from "./cockpit-dashboard.helpers.js";
+import { copyTextToClipboard, formatModuleLogForCopy } from "./log-copy.js";
 
 /**
  * Compact module log viewer that surfaces the tail of a module's log file.
@@ -83,7 +87,7 @@ class CockpitModuleLogs extends LitElement {
         gap: 0.35rem;
       }
 
-      .module-log-panel {
+      .module-log-panel .surface-card__content {
         display: grid;
         gap: 0.75rem;
       }
@@ -92,7 +96,7 @@ class CockpitModuleLogs extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
+        gap: 0.5rem;
         flex-wrap: wrap;
       }
 
@@ -114,6 +118,7 @@ class CockpitModuleLogs extends LitElement {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+        justify-content: flex-start;
       }
 
       .module-log-panel__actions .surface-action {
@@ -182,19 +187,19 @@ class CockpitModuleLogs extends LitElement {
 
   constructor() {
     super();
-    this.module = '';
+    this.module = "";
     this.moduleInfo = null;
     this.lines = [];
     this.truncated = false;
     this.loading = false;
     this.clearing = false;
-    this.errorMessage = '';
+    this.errorMessage = "";
     this.updatedAt = null;
     this.moduleDetails = this._normaliseModule(null);
-    this.systemdBusy = '';
-    this.systemdError = '';
-    this.copyState = 'idle';
-    this.copyMessage = '';
+    this.systemdBusy = "";
+    this.systemdError = "";
+    this.copyState = "idle";
+    this.copyMessage = "";
     this._connected = false;
     this._abortController = null;
     this._lastFetchedModule = null;
@@ -221,23 +226,23 @@ class CockpitModuleLogs extends LitElement {
     if (!this._connected) {
       return;
     }
-    if (changedProperties.has('moduleInfo')) {
+    if (changedProperties.has("moduleInfo")) {
       this.moduleDetails = this._normaliseModule(this.moduleInfo);
-      this.systemdError = '';
+      this.systemdError = "";
     }
-    if (changedProperties.has('module')) {
+    if (changedProperties.has("module")) {
       if (!this.module) {
         this.lines = [];
         this.truncated = false;
         this.updatedAt = null;
-        this.errorMessage = '';
+        this.errorMessage = "";
         this._lastFetchedModule = null;
-      this.moduleDetails = this._normaliseModule(null);
-      this.systemdBusy = '';
-      this.systemdError = '';
-      this._setCopyState('idle');
-      return;
-    }
+        this.moduleDetails = this._normaliseModule(null);
+        this.systemdBusy = "";
+        this.systemdError = "";
+        this._setCopyState("idle");
+        return;
+      }
       if (this.module && this.module !== this._lastFetchedModule) {
         this.refresh();
       }
@@ -250,29 +255,46 @@ class CockpitModuleLogs extends LitElement {
 
   _renderStatus() {
     if (!this.module) {
-      return html`<p class="surface-status" data-variant="warning">Module not specified.</p>`;
+      return html`
+        <p class="surface-status" data-variant="warning">Module not specified.</p>
+      `;
     }
     if (this.errorMessage) {
-      return html`<p class="surface-status" data-variant="error">${this.errorMessage}</p>`;
+      return html`
+        <p class="surface-status" data-variant="error">${this.errorMessage}</p>
+      `;
     }
     if (this.loading && !this.lines.length) {
-      return html`<p class="surface-status">Loading log…</p>`;
+      return html`
+        <p class="surface-status">Loading log…</p>
+      `;
     }
     if (!this.lines.length) {
-      return html`<p class="surface-log__empty">No log entries captured yet.</p>`;
+      return html`
+        <p class="surface-log__empty">No log entries captured yet.</p>
+      `;
     }
-    const ansiText = this.lines.join('\n');
+    const ansiText = this.lines.join("\n");
     // Convert ANSI codes to HTML, then remove <br/> tags since we're using <pre>
-    const htmlContent = ansiText ? this._ansi.ansi_to_html(ansiText).replace(/<br\s*\/?>/gi, '\n') : '';
+    const htmlContent = ansiText
+      ? this._ansi.ansi_to_html(ansiText).replace(/<br\s*\/?>/gi, "\n")
+      : "";
     return html`
       <div class="surface-log__meta">
-        <span>Showing ${this.lines.length} line${this.lines.length === 1 ? '' : 's'}.</span>
+        <span>Showing ${this.lines.length} line${this.lines.length === 1
+          ? ""
+          : "s"}.</span>
         ${this.truncated
-        ? html`<span>Older entries truncated.</span>`
-        : ''}
-        ${this.updatedAt
-        ? html`<span>Updated ${this._formatTimestamp(this.updatedAt)}</span>`
-        : html`<span>Awaiting first log write.</span>`}
+          ? html`
+            <span>Older entries truncated.</span>
+          `
+          : ""} ${this.updatedAt
+          ? html`
+            <span>Updated ${this._formatTimestamp(this.updatedAt)}</span>
+          `
+          : html`
+            <span>Awaiting first log write.</span>
+          `}
       </div>
       <details class="surface-log__details">
         <summary class="surface-log__summary">View module log</summary>
@@ -284,166 +306,246 @@ class CockpitModuleLogs extends LitElement {
   _renderModuleCommands() {
     const details = this.moduleDetails;
     const moduleKey = details.name || this.module;
+    const slug = details.slug || moduleKey || "module";
+    const scopeId = `module-${slug}`;
+    const cardId = `module-commands-${slug}`;
     const systemd = details.systemd || normaliseSystemdStatus(null);
     const busyAction = this.systemdBusy;
     const errorMessage = this.systemdError;
     const canControl = Boolean(moduleKey) && systemd.supported;
-    const activeVariant = systemd.active ? 'success' : systemd.exists ? 'warning' : 'muted';
-    const activeLabel = systemd.active ? 'Active' : systemd.exists ? 'Inactive' : 'Missing';
-    const enabledVariant = systemd.enabled ? 'info' : 'muted';
-    const enabledLabel = systemd.enabled ? 'Enabled' : 'Disabled';
+    const activeVariant = systemd.active
+      ? "success"
+      : systemd.exists
+      ? "warning"
+      : "muted";
+    const activeLabel = systemd.active
+      ? "Active"
+      : systemd.exists
+      ? "Inactive"
+      : "Missing";
+    const enabledVariant = systemd.enabled ? "info" : "muted";
+    const enabledLabel = systemd.enabled ? "Enabled" : "Disabled";
 
     if (!this.module) {
-      return html`<section class="surface-panel module-log-panel">
-        <header class="module-log-panel__header">
-          <div class="module-log-panel__title">
-            <h3 class="module-log-panel__heading">Module commands</h3>
+      return html`
+        <article
+          class="surface-card surface-card--collapsed module-log-panel"
+          data-card-id="${cardId}"
+          data-dashboard-scope="${scopeId}"
+        >
+          <header class="surface-card__header module-log-panel__header">
+            <div class="module-log-panel__title">
+              <h3 class="surface-card__title module-log-panel__heading">
+                Module commands
+              </h3>
+            </div>
+          </header>
+          <div class="surface-card__content">
+            <p class="module-log-panel__note">
+              Set a module to manage lifecycle commands.
+            </p>
+            <div class="module-log-panel__log">
+              <h4 class="module-log-panel__subheading">Module log</h4>
+              ${this._renderStatus()}
+            </div>
           </div>
-          <div class="module-log-panel__actions">
-            <button type="button" class="surface-action" disabled>Clear log</button>
-            <button type="button" class="surface-action" disabled>Refresh log</button>
-          </div>
-        </header>
-        <p class="module-log-panel__note">Set a module to manage lifecycle commands.</p>
-        <div class="module-log-panel__log">
-          <h4 class="module-log-panel__subheading">Module log</h4>
-          ${this._renderStatus()}
-        </div>
-      </section>`;
+        </article>
+      `;
     }
 
-    return html`<section class="surface-panel module-log-panel">
-      <header class="module-log-panel__header">
-        <div class="module-log-panel__title">
-          <h3 class="module-log-panel__heading">Module commands</h3>
-          <span class="surface-chip" data-variant=${details.hasCockpit ? 'success' : 'warning'}>
-            ${details.hasCockpit ? 'Dashboard ready' : 'No dashboard'}
-          </span>
-        </div>
-        <div class="module-log-panel__actions">
-          <button
-            type="button"
-            class="surface-action"
-            ?disabled=${this.loading || this.clearing || !this.module}
-            @click=${() => this._clearLogs()}
-          >
-            ${this.clearing ? 'Clearing…' : 'Clear log'}
-          </button>
-          <button
-            type="button"
-            class="surface-action"
-            ?disabled=${this.loading || this.clearing || this.copyState === 'copying' || !this.module}
-            @click=${() => this._copyLogs()}
-          >
-            ${this.copyState === 'copying'
-              ? 'Copying…'
-              : this.copyState === 'copied'
-                ? 'Copied!'
-                : 'Copy log'}
-          </button>
-          <button
-            type="button"
-            class="surface-action"
-            ?disabled=${this.loading || this.clearing || !this.module}
-            @click=${() => this.refresh()}
-          >
-            ${this.loading ? 'Refreshing…' : 'Refresh log'}
-          </button>
-        </div>
-      </header>
-      <div class="module-log-panel__meta">
-        <div class="module-log-panel__metaRow">
-          <span>Module: ${details.displayName}</span>
-          <span>Slug: ${details.slug || 'n/a'}</span>
-          ${details.dashboardUrl
-            ? html`<a class="module-log-panel__metaLink" href="${details.dashboardUrl}" target="_blank" rel="noreferrer">
-                Open dashboard
-              </a>`
-            : ''}
-          ${details.systemd.unit ? html`<span>Unit: ${details.systemd.unit}</span>` : ''}
-        </div>
-        <div class="module-log-panel__metaRow">
-          <span class="surface-chip" data-variant=${activeVariant}>${activeLabel}</span>
-          <span class="surface-chip" data-variant=${enabledVariant}>${enabledLabel}</span>
-        </div>
-      </div>
-      ${canControl
-        ? html`<div class="module-log-panel__controls">
+    return html`
+      <article
+        class="surface-card surface-card--collapsed module-log-panel"
+        data-card-id="${cardId}"
+        data-dashboard-scope="${scopeId}"
+      >
+        <header class="surface-card__header module-log-panel__header">
+          <div class="module-log-panel__title">
+            <h3 class="surface-card__title module-log-panel__heading">
+              Module commands
+            </h3>
+            <span class="surface-chip" data-variant="${details.hasCockpit
+              ? "success"
+              : "warning"}">
+              ${details.hasCockpit ? "Dashboard ready" : "No dashboard"}
+            </span>
+          </div>
+        </header>
+        <div class="surface-card__content">
+          <div class="module-log-panel__actions">
             <button
               type="button"
               class="surface-action"
-              @click=${() => this._runSystemdAction(systemd.active ? 'down' : 'up')}
-              ?disabled=${Boolean(busyAction)}
+              ?disabled="${this.loading || this.clearing || !this.module}"
+              @click="${() => this._clearLogs()}"
             >
-              ${busyAction === 'up' || busyAction === 'down'
-            ? 'Working…'
-            : systemd.active ? 'Stop' : 'Start'}
+              ${this.clearing ? "Clearing…" : "Clear log"}
             </button>
             <button
               type="button"
               class="surface-action"
-              @click=${() => this._runSystemdAction(systemd.enabled ? 'disable' : 'enable')}
-              ?disabled=${Boolean(busyAction)}
+              ?disabled="${this.loading || this.clearing ||
+                this.copyState === "copying" || !this.module}"
+              @click="${() => this._copyLogs()}"
             >
-              ${busyAction === 'enable' || busyAction === 'disable'
-            ? 'Working…'
-            : systemd.enabled ? 'Disable' : 'Enable'}
+              ${this.copyState === "copying"
+                ? "Copying…"
+                : this.copyState === "copied"
+                ? "Copied!"
+                : "Copy log"}
             </button>
-            ${systemd.exists
-            ? html`<button
-                    type="button"
-                    class="surface-action"
-                    @click=${() => this._runSystemdAction('teardown')}
-                    ?disabled=${Boolean(busyAction)}
-                  >${busyAction === 'teardown' ? 'Working…' : 'Remove unit'}</button>`
-            : html`<button
-                    type="button"
-                    class="surface-action"
-                    @click=${() => this._runSystemdAction('setup')}
-                    ?disabled=${Boolean(busyAction)}
-                  >${busyAction === 'setup' ? 'Working…' : 'Create unit'}</button>`}
             <button
               type="button"
               class="surface-action"
-              @click=${() => this._runSystemdAction('debug')}
-              ?disabled=${Boolean(busyAction)}
+              ?disabled="${this.loading || this.clearing || !this.module}"
+              @click="${() => this.refresh()}"
             >
-              ${busyAction === 'debug' ? 'Collecting…' : 'Debug'}
+              ${this.loading ? "Refreshing…" : "Refresh log"}
             </button>
-        </div>`
-        : html`<p class="module-log-panel__note">Systemd integration unavailable on this host.</p>`}
-      ${systemd.message ? html`<p class="module-log-panel__note">${systemd.message}</p>` : ''}
-      ${errorMessage ? html`<p class="module-log-panel__error">${errorMessage}</p>` : ''}
-      ${this.copyState === 'failed' && this.copyMessage
-        ? html`<p class="module-log-panel__error">${this.copyMessage}</p>`
-        : ''}
-      <div class="module-log-panel__log">
-        <h4 class="module-log-panel__subheading">Module log</h4>
-        ${this._renderStatus()}
-      </div>
-    </section>`;
+          </div>
+          <div class="module-log-panel__meta">
+            <div class="module-log-panel__metaRow">
+              <span>Module: ${details.displayName}</span>
+              <span>Slug: ${details.slug || "n/a"}</span>
+              ${details.dashboardUrl
+                ? html`
+                  <a
+                    class="module-log-panel__metaLink"
+                    href="${details.dashboardUrl}"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open dashboard
+                  </a>
+                `
+                : ""} ${details.systemd.unit
+                ? html`
+                  <span>Unit: ${details.systemd.unit}</span>
+                `
+                : ""}
+            </div>
+            <div class="module-log-panel__metaRow">
+              <span class="surface-chip" data-variant="${activeVariant}">${activeLabel}</span>
+              <span class="surface-chip" data-variant="${enabledVariant}">${enabledLabel}</span>
+            </div>
+          </div>
+          ${canControl
+            ? html`
+              <div class="module-log-panel__controls">
+                <button
+                  type="button"
+                  class="surface-action"
+                  @click="${() =>
+                    this._runSystemdAction(systemd.active ? "down" : "up")}"
+                  ?disabled="${Boolean(busyAction)}"
+                >
+                  ${busyAction === "up" || busyAction === "down"
+                    ? "Working…"
+                    : systemd.active
+                    ? "Stop"
+                    : "Start"}
+                </button>
+                <button
+                  type="button"
+                  class="surface-action"
+                  @click="${() =>
+                    this._runSystemdAction(
+                      systemd.enabled ? "disable" : "enable",
+                    )}"
+                  ?disabled="${Boolean(busyAction)}"
+                >
+                  ${busyAction === "enable" || busyAction === "disable"
+                    ? "Working…"
+                    : systemd.enabled
+                    ? "Disable"
+                    : "Enable"}
+                </button>
+                ${systemd.exists
+                  ? html`
+                    <button
+                      type="button"
+                      class="surface-action"
+                      @click="${() => this._runSystemdAction("teardown")}"
+                      ?disabled="${Boolean(busyAction)}"
+                    >
+                      ${busyAction === "teardown" ? "Working…" : "Remove unit"}
+                    </button>
+                  `
+                  : html`
+                    <button
+                      type="button"
+                      class="surface-action"
+                      @click="${() => this._runSystemdAction("setup")}"
+                      ?disabled="${Boolean(busyAction)}"
+                    >
+                      ${busyAction === "setup" ? "Working…" : "Create unit"}
+                    </button>
+                  `}
+                <button
+                  type="button"
+                  class="surface-action"
+                  @click="${() => this._runSystemdAction("debug")}"
+                  ?disabled="${Boolean(busyAction)}"
+                >
+                  ${busyAction === "debug" ? "Collecting…" : "Debug"}
+                </button>
+              </div>
+            `
+            : html`
+              <p class="module-log-panel__note">
+                Systemd integration unavailable on this host.
+              </p>
+            `} ${systemd.message
+            ? html`
+              <p class="module-log-panel__note">${systemd.message}</p>
+            `
+            : ""} ${errorMessage
+            ? html`
+              <p class="module-log-panel__error">${errorMessage}</p>
+            `
+            : ""} ${this.copyState === "failed" && this.copyMessage
+            ? html`
+              <p class="module-log-panel__error">${this.copyMessage}</p>
+            `
+            : ""}
+          <div class="module-log-panel__log">
+            <h4 class="module-log-panel__subheading">Module log</h4>
+            ${this._renderStatus()}
+          </div>
+        </div>
+      </article>
+    `;
   }
 
   _normaliseModule(entry) {
-    const module = entry && typeof entry === 'object' ? entry : {};
-    const rawName = typeof module.name === 'string' && module.name.trim() ? module.name.trim() : '';
-    const rawSlug = typeof module.slug === 'string' && module.slug.trim() ? module.slug.trim() : '';
+    const module = entry && typeof entry === "object" ? entry : {};
+    const rawName = typeof module.name === "string" && module.name.trim()
+      ? module.name.trim()
+      : "";
+    const rawSlug = typeof module.slug === "string" && module.slug.trim()
+      ? module.slug.trim()
+      : "";
     const slug = rawSlug || rawName;
-    const displayName = typeof module.display_name === 'string' && module.display_name.trim()
-      ? module.display_name.trim()
-      : rawName || slug || 'module';
+    const displayName =
+      typeof module.display_name === "string" && module.display_name.trim()
+        ? module.display_name.trim()
+        : rawName || slug || "module";
     const hasCockpit = Boolean(module.has_cockpit);
-    const rawDashboardUrl = typeof module.dashboard_url === 'string' && module.dashboard_url.trim()
-      ? module.dashboard_url.trim()
-      : '';
-    const dashboardUrl = rawDashboardUrl || (hasCockpit && rawName ? `/modules/${rawName}/` : '');
+    const rawDashboardUrl =
+      typeof module.dashboard_url === "string" && module.dashboard_url.trim()
+        ? module.dashboard_url.trim()
+        : "";
+    const dashboardUrl = rawDashboardUrl ||
+      (hasCockpit && rawName ? `/modules/${rawName}/` : "");
     const systemd = normaliseSystemdStatus(module.systemd);
 
     return {
       name: rawName,
       slug,
       displayName,
-      description: typeof module.description === 'string' ? module.description.trim() : '',
+      description: typeof module.description === "string"
+        ? module.description.trim()
+        : "",
       hasCockpit,
       dashboardUrl,
       systemd,
@@ -451,10 +553,10 @@ class CockpitModuleLogs extends LitElement {
   }
 
   async _copyLogs() {
-    if (!this.module || this.copyState === 'copying') {
+    if (!this.module || this.copyState === "copying") {
       return;
     }
-    this._setCopyState('copying');
+    this._setCopyState("copying");
     try {
       const payload = formatModuleLogForCopy(this.lines, {
         truncated: this.truncated,
@@ -462,24 +564,27 @@ class CockpitModuleLogs extends LitElement {
       });
       const success = await copyTextToClipboard(payload);
       if (success) {
-        this._setCopyState('copied');
+        this._setCopyState("copied");
       } else {
-        this._setCopyState('failed', 'Unable to access the clipboard. Copy the log manually.');
+        this._setCopyState(
+          "failed",
+          "Unable to access the clipboard. Copy the log manually.",
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this._setCopyState('failed', `Failed to copy module log: ${message}`);
+      this._setCopyState("failed", `Failed to copy module log: ${message}`);
     }
   }
 
-  _setCopyState(state, message = '') {
+  _setCopyState(state, message = "") {
     this.copyState = state;
     this.copyMessage = message;
     this._clearCopyResetTimer();
-    if (state === 'copied' || state === 'failed') {
+    if (state === "copied" || state === "failed") {
       this._copyResetHandle = globalThis.setTimeout(() => {
-        this.copyState = 'idle';
-        this.copyMessage = '';
+        this.copyState = "idle";
+        this.copyMessage = "";
       }, 3000);
     }
   }
@@ -495,15 +600,17 @@ class CockpitModuleLogs extends LitElement {
     if (!this.module || !action) {
       return;
     }
-    this.systemdError = '';
+    this.systemdError = "";
     this.systemdBusy = action;
 
     try {
       const response = await fetch(
-        `/api/modules/${encodeURIComponent(this.module)}/systemd/${encodeURIComponent(action)}`,
+        `/api/modules/${encodeURIComponent(this.module)}/systemd/${
+          encodeURIComponent(action)
+        }`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         },
       );
 
@@ -515,60 +622,69 @@ class CockpitModuleLogs extends LitElement {
       }
 
       if (!response.ok) {
-        const message = payload && typeof payload.error === 'string'
+        const message = payload && typeof payload.error === "string"
           ? payload.error
           : `Request failed with status ${response.status}`;
         throw new Error(message);
       }
 
       if (!payload.success) {
-        const details = typeof payload.stderr === 'string' && payload.stderr.trim()
-          ? payload.stderr.trim()
-          : typeof payload.stdout === 'string' && payload.stdout.trim()
+        const details =
+          typeof payload.stderr === "string" && payload.stderr.trim()
+            ? payload.stderr.trim()
+            : typeof payload.stdout === "string" && payload.stdout.trim()
             ? payload.stdout.trim()
-            : 'Command did not complete successfully';
+            : "Command did not complete successfully";
         throw new Error(details);
       }
 
-      if (payload.status && typeof payload.status === 'object') {
+      if (payload.status && typeof payload.status === "object") {
         const systemd = normaliseSystemdStatus(payload.status);
         this.moduleDetails = { ...this.moduleDetails, systemd };
-        this.dispatchEvent(new CustomEvent('module-systemd-updated', {
-          detail: { module: this.module, status: payload.status },
-          bubbles: true,
-          composed: true,
-        }));
+        this.dispatchEvent(
+          new CustomEvent("module-systemd-updated", {
+            detail: { module: this.module, status: payload.status },
+            bubbles: true,
+            composed: true,
+          }),
+        );
       }
 
-      if (action === 'debug') {
+      if (action === "debug") {
         this._appendCommandOutput(action, payload);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.systemdError = message;
     } finally {
-      this.systemdBusy = '';
+      this.systemdBusy = "";
     }
   }
 
   _appendCommandOutput(action, payload) {
     const timestamp = new Date();
-    const header = `[module:${this.module}] command:${action} @ ${timestamp.toISOString()}`;
+    const header =
+      `[module:${this.module}] command:${action} @ ${timestamp.toISOString()}`;
     const messages = [];
-    if (payload && typeof payload.stdout === 'string' && payload.stdout.trim()) {
+    if (
+      payload && typeof payload.stdout === "string" && payload.stdout.trim()
+    ) {
       messages.push(payload.stdout.trim());
     }
-    if (payload && typeof payload.stderr === 'string' && payload.stderr.trim()) {
+    if (
+      payload && typeof payload.stderr === "string" && payload.stderr.trim()
+    ) {
       messages.push(payload.stderr.trim());
     }
-    const body = messages.length ? messages.join('\n') : 'Command completed without output.';
+    const body = messages.length
+      ? messages.join("\n")
+      : "Command completed without output.";
     const block = `${header}\n${body}`;
     const newLines = block.split(/\r?\n/);
     this.lines = [...newLines, ...this.lines];
     this.truncated = false;
     this.updatedAt = timestamp.toISOString();
   }
-
 
   async refresh() {
     if (!this.module) {
@@ -579,19 +695,24 @@ class CockpitModuleLogs extends LitElement {
     this._abortController = controller;
     this._lastFetchedModule = this.module;
     this.loading = true;
-    this.errorMessage = '';
+    this.errorMessage = "";
 
     try {
-      const response = await fetch(`/api/modules/${encodeURIComponent(this.module)}/logs`, {
-        signal: controller.signal,
-      });
+      const response = await fetch(
+        `/api/modules/${encodeURIComponent(this.module)}/logs`,
+        {
+          signal: controller.signal,
+        },
+      );
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
       const payload = await response.json();
       this.lines = Array.isArray(payload.lines) ? payload.lines : [];
       this.truncated = Boolean(payload.truncated);
-      this.updatedAt = typeof payload.updated_at === 'string' ? payload.updated_at : null;
+      this.updatedAt = typeof payload.updated_at === "string"
+        ? payload.updated_at
+        : null;
     } catch (error) {
       if (controller.signal.aborted) {
         return;
@@ -615,12 +736,15 @@ class CockpitModuleLogs extends LitElement {
     }
     this._abortFetch();
     this.clearing = true;
-    this.errorMessage = '';
+    this.errorMessage = "";
 
     try {
-      const response = await fetch(`/api/modules/${encodeURIComponent(this.module)}/logs`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(
+        `/api/modules/${encodeURIComponent(this.module)}/logs`,
+        {
+          method: "DELETE",
+        },
+      );
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
@@ -656,4 +780,4 @@ class CockpitModuleLogs extends LitElement {
   }
 }
 
-customElements.define('cockpit-module-logs', CockpitModuleLogs);
+customElements.define("cockpit-module-logs", CockpitModuleLogs);

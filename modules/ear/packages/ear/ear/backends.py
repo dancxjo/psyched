@@ -161,11 +161,11 @@ class ConsoleEarBackend:
     input_stream:
         Stream from which user input is read. Defaults to :data:`sys.stdin`.
     output_stream:
-        Optional stream used to render a coloured prompt. Defaults to
+        Optional stream used to render a colored prompt. Defaults to
         :data:`sys.stdout`.
     prompt:
         Prompt rendered before waiting for user input. Defaults to ``"🦻  "``.
-    colour:
+    color:
         ANSI escape sequence applied to the prompt. Defaults to cyan.
 
     Example
@@ -178,7 +178,7 @@ class ConsoleEarBackend:
     input_stream: TextIO = sys.stdin
     output_stream: TextIO | None = sys.stdout
     prompt: str = "🦻  "
-    colour: str = "\x1b[36m"
+    color: str = "\x1b[36m"
     _reset: str = field(default="\x1b[0m", init=False, repr=False)
 
     def run(self, publish: PublishCallback, stop_event: threading.Event) -> None:
@@ -186,7 +186,7 @@ class ConsoleEarBackend:
 
         while not stop_event.is_set():
             if self.output_stream is not None:
-                self.output_stream.write(f"{self.colour}{self.prompt}{self._reset}")
+                self.output_stream.write(f"{self.color}{self.prompt}{self._reset}")
                 self.output_stream.flush()
             try:
                 line = self.input_stream.readline()

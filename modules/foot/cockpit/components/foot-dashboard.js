@@ -1066,7 +1066,7 @@ class FootDashboard extends LitElement {
           </form>
           <form @submit="${(event) => this.sendPowerLed(event)}">
             <label>
-              LED colour (0→green · 255→red)
+              LED color (0→green · 255→red)
               <input
                 type="range"
                 min="0"

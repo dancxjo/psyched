@@ -109,7 +109,7 @@ class StubDetector:
 
 @pytest.fixture()
 def sample_image() -> np.ndarray:
-    """Create a colourful test image with deterministic pixel values."""
+    """Create a colorful test image with deterministic pixel values."""
 
     rng = np.random.default_rng(seed=42)
     # Height 32, width 32, 3 channels

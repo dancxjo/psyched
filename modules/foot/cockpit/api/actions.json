@@ -306,8 +306,16 @@
         "topic": "cmd_vel",
         "message_type": "geometry_msgs/msg/Twist",
         "payload": {
-          "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
-          "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+          "linear": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
         },
         "text_parser": "twist/v1",
         "text_argument": "command",
@@ -359,11 +367,20 @@
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -375,19 +392,39 @@
         "topic": "cmd_vel",
         "message_type": "geometry_msgs/msg/Twist",
         "payload": {
-          "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
-          "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+          "linear": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
         }
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -400,15 +437,27 @@
         "message_type": "std_msgs/msg/Empty",
         "payload": {}
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -421,15 +470,27 @@
         "message_type": "std_msgs/msg/Empty",
         "payload": {}
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -442,15 +503,27 @@
         "message_type": "std_msgs/msg/Empty",
         "payload": {}
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -463,15 +536,27 @@
         "message_type": "std_msgs/msg/Empty",
         "payload": {}
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -484,15 +569,27 @@
         "message_type": "std_msgs/msg/Empty",
         "payload": {}
       },
-      "parameters": {"type": "object", "additionalProperties": false},
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -503,10 +600,14 @@
       "defaults": {
         "topic": "set_ascii",
         "message_type": "std_msgs/msg/UInt8MultiArray",
-        "payload": {"data": []},
+        "payload": {
+          "data": []
+        },
         "text_parser": "ascii/v1",
         "text_argument": "text",
-        "payload_map": {"text": null}
+        "payload_map": {
+          "text": null
+        }
       },
       "parameters": {
         "type": "object",
@@ -517,28 +618,44 @@
             "description": "Display text to render (characters beyond the first four are ignored)."
           }
         },
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "additionalProperties": false
       },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
     {
       "name": "set_power_led",
-      "description": "Set the Create base power LED colour (0=green..255=red) and intensity.",
+      "description": "Set the Create base power LED color (0=green..255=red) and intensity.",
       "kind": "publish-topic",
       "defaults": {
         "topic": "power_led",
         "message_type": "std_msgs/msg/UInt8MultiArray",
-        "payload": {"data": [0, 128]},
+        "payload": {
+          "data": [
+            0,
+            128
+          ]
+        },
         "payload_map": {
           "color": "data[0]",
           "intensity": "data[1]"
@@ -551,7 +668,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 255,
-            "description": "Colour value where 0 is green and 255 is red."
+            "description": "color value where 0 is green and 255 is red."
           },
           "intensity": {
             "type": "integer",
@@ -560,17 +677,29 @@
             "description": "Brightness value (0-255)."
           }
         },
-        "required": ["color", "intensity"],
+        "required": [
+          "color",
+          "intensity"
+        ],
         "additionalProperties": false
       },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -626,17 +755,31 @@
             "description": "Durations in seconds for each note. Maximum value is 255/64 (~3.98s)."
           }
         },
-        "required": ["song", "length", "notes", "durations"],
+        "required": [
+          "song",
+          "length",
+          "notes",
+          "durations"
+        ],
         "additionalProperties": false
       },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     },
@@ -661,17 +804,28 @@
             "description": "Song slot to play on the Create base. Use the same ID supplied to define_song."
           }
         },
-        "required": ["song"],
+        "required": [
+          "song"
+        ],
         "additionalProperties": false
       },
       "returns": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "topic": {"type": "string"},
-          "message_type": {"type": "string"}
+          "status": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string"
+          }
         },
-        "required": ["status", "topic"],
+        "required": [
+          "status",
+          "topic"
+        ],
         "additionalProperties": true
       }
     }

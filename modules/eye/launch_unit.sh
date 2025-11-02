@@ -115,8 +115,18 @@ USB_IMAGE_TOPIC="${EYE_USB_IMAGE_TOPIC:-${CFG_USB_IMAGE_TOPIC:-${USB_IMAGE_DEFAU
 USB_INFO_TOPIC_DEFAULT="$(derive_camera_info "${USB_IMAGE_TOPIC}")"
 USB_INFO_TOPIC="${EYE_USB_INFO_TOPIC:-${CFG_USB_INFO_TOPIC:-${USB_INFO_TOPIC_DEFAULT}}}"
 
-USE_USB="$(normalize_bool "${EYE_USB_ENABLED:-${CFG_USB_ENABLED:-false}}" "false")"
-USB_DEVICE="${EYE_USB_DEVICE:-${CFG_USB_DEVICE:-/dev/video0}}"
+AUTO_USB_ENABLED="false"
+AUTO_USB_DEVICE=""
+if [[ -z "${EYE_USB_ENABLED:-}" && -z "${CFG_USB_ENABLED:-}" ]]; then
+  if compgen -G "/dev/video*" >/dev/null 2>&1; then
+    AUTO_USB_ENABLED="true"
+    AUTO_USB_DEVICE="$(ls -1 /dev/video* 2>/dev/null | head -n1 || true)"
+  fi
+fi
+
+USE_USB="$(normalize_bool "${EYE_USB_ENABLED:-${CFG_USB_ENABLED:-${AUTO_USB_ENABLED}}}" "${AUTO_USB_ENABLED}")"
+USB_DEVICE_DEFAULT="${AUTO_USB_DEVICE:-/dev/video0}"
+USB_DEVICE="${EYE_USB_DEVICE:-${CFG_USB_DEVICE:-${USB_DEVICE_DEFAULT}}}"
 USB_FRAME_ID="${EYE_USB_FRAME_ID:-${CFG_USB_FRAME_ID:-usb_camera}}"
 USB_WIDTH="${EYE_USB_WIDTH:-${CFG_USB_WIDTH:-640}}"
 USB_HEIGHT="${EYE_USB_HEIGHT:-${CFG_USB_HEIGHT:-480}}"
@@ -154,6 +164,10 @@ ARGS=(
 
 if [[ -n "${KINECT_PARAMS}" ]]; then
   ARGS+=("kinect_params_file:=${KINECT_PARAMS}")
+fi
+
+if [[ "${AUTO_USB_ENABLED}" == "true" && "${USE_USB}" == "true" ]]; then
+  printf 'Auto-detected USB camera at %s; enabling USB stream.\n' "${USB_DEVICE}"
 fi
 
 exec "${CMD[@]}" "${ARGS[@]}"
