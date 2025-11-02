@@ -197,6 +197,10 @@ class FacesDashboard extends LitElement {
     this.tagFeedback = '';
     this.detectionLog = [];
     this.sockets = [];
+    this._routerRetryHandle = null;
+    this._routerRetryAttempt = 0;
+    this._routerRetryLimit = 5;
+    this._routerRetryDelayMs = 3000;
   }
 
   connectedCallback() {
@@ -217,6 +221,10 @@ class FacesDashboard extends LitElement {
       }
     }
     this.sockets.length = 0;
+    if (this._routerRetryHandle) {
+      clearTimeout(this._routerRetryHandle);
+      this._routerRetryHandle = null;
+    }
   }
 
   render() {
@@ -370,7 +378,7 @@ class FacesDashboard extends LitElement {
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
-                @click=${() => this.refreshRouterState()}
+                @click=${() => this.refreshRouterState({ manual: true })}
                 ?disabled=${this.routerBusy}
               >
                 Refresh state
@@ -451,7 +459,15 @@ class FacesDashboard extends LitElement {
     `;
   }
 
-  async refreshRouterState() {
+  async refreshRouterState(options = {}) {
+    const manual = Boolean(options.manual);
+    if (manual) {
+      this._routerRetryAttempt = 0;
+    }
+    if (this._routerRetryHandle) {
+      clearTimeout(this._routerRetryHandle);
+      this._routerRetryHandle = null;
+    }
     const previousBusy = this.routerBusy;
     this.routerBusy = true;
     this.routerStatus = 'Querying faces router state…';
@@ -501,11 +517,25 @@ class FacesDashboard extends LitElement {
       this.routerStatus = 'Faces router state synchronised.';
       this.routerTone = 'success';
       this.routerAvailable = true;
+      this._routerRetryAttempt = 0;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.routerStatus = `Failed to query faces router: ${message}`;
-      this.routerTone = 'error';
-      this.routerAvailable = false;
+      const unavailable = typeof message === 'string' && message.toLowerCase().includes('not available');
+      if (unavailable && this._routerRetryAttempt < this._routerRetryLimit) {
+        this._routerRetryAttempt += 1;
+        const delaySeconds = Math.max(this._routerRetryDelayMs / 1000, 0.1);
+        this.routerStatus = `Faces router is starting up (waiting for eye module); retrying in ${delaySeconds.toFixed(1)}s…`;
+        this.routerTone = 'warning';
+        this.routerAvailable = false;
+        this._routerRetryHandle = setTimeout(() => {
+          this._routerRetryHandle = null;
+          void this.refreshRouterState();
+        }, this._routerRetryDelayMs);
+      } else {
+        this.routerStatus = `Faces router unavailable: ${message}. Ensure the eye module is running.`;
+        this.routerTone = 'error';
+        this.routerAvailable = false;
+      }
     } finally {
       this.routerBusy = previousBusy;
     }
@@ -548,7 +578,7 @@ class FacesDashboard extends LitElement {
         args: { parameters },
         timeoutMs: 5000,
       });
-      await this.refreshRouterState();
+      await this.refreshRouterState({ manual: true });
       if (this.routerAvailable) {
         this.routerStatus = 'Faces routing updated.';
         this.routerTone = 'success';

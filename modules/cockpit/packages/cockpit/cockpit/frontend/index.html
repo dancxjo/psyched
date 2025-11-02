@@ -1,160 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Psyched Cockpit</title>
-    <link rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230055ff'/%3E%3Ctext x='8' y='12' font-size='9' text-anchor='middle' fill='%23ffffff'%3E%CE%A8%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/styles.css" />
-    <script>
-      (function setupAlpineBootstrap() {
-        const startIfReady = () => {
-          if (!window.Alpine || window.Alpine.__psychedStarted) {
-            return;
-          }
-          window.Alpine.__psychedStarted = true;
-          queueMicrotask(() => window.Alpine.start());
-        };
-        window.__startAlpineIfReady = startIfReady;
-        window.deferLoadingAlpine = (alpine) => {
-          window.Alpine = alpine;
-          startIfReady();
-        };
-      }());
-    </script>
-    <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
-    <script type="module" src="/js/cockpit.js"></script>
-    <script type="module" src="/js/collapsible-cards.js"></script>
-    <script type="module" src="/app.js"></script>
-  </head>
 
-  <body class="lcars-body">
-    <nav x-data="cockpitNav()" x-init="init()" class="lcars-nav" aria-label="Cockpit navigation">
-      <div class="nav-title">PSYCHED COCKPIT</div>
-      <template x-for="section in sections" :key="section.id">
-        <div class="nav-item">
-          <a
-            class="nav-button"
-            :class="{ active: section.id === activeId }"
-            :href="`#${section.id}`"
-            @click.prevent="scrollTo(section.id, true)"
-          >
-            <span class="nav-index" x-text="padIndex(section.index)"></span>
-            <span class="nav-label" x-text="section.label"></span>
-          </a>
-          <template x-if="section.id === activeId && topSectionId && section.id !== topSectionId">
-            <button
-              type="button"
-              class="nav-shortcut"
-              title="Back to top"
-              :aria-label="`Back to ${sections[0] ? sections[0].label : 'top'}`"
-              @click.stop="scrollToTop()"
-            >
-              ↑
-            </button>
-          </template>
-          <template x-if="section.url">
-            <a class="nav-link" :href="section.url" target="_blank" rel="noopener" @click.stop>↗</a>
-          </template>
-        </div>
-      </template>
-    </nav>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Psyched Cockpit</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230055ff'/%3E%3Ctext x='8' y='12' font-size='9' text-anchor='middle' fill='%23ffffff'%3E%CE%A8%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script>
+    (function setupAlpineBootstrap() {
+      const startIfReady = () => {
+        if (!window.Alpine || window.Alpine.__psychedStarted) {
+          return;
+        }
+        window.Alpine.__psychedStarted = true;
+        queueMicrotask(() => window.Alpine.start());
+      };
+      window.__startAlpineIfReady = startIfReady;
+      window.deferLoadingAlpine = (alpine) => {
+        window.Alpine = alpine;
+        startIfReady();
+      };
+    }());
+  </script>
+  <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
+  <script type="module" src="/js/cockpit.js"></script>
+  <script type="module" src="/js/collapsible-cards.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
 
-    <main class="lcars-main">
-      <header class="lcars-hero" id="cockpit-config">
-        <div>
-          <h1>Module Dashboards</h1>
-          <p>Explore the curated control panels authored by each module team. Every panel can combine ROS data and controls into the experience that makes the most sense for that system.</p>
-          <div class="lcars-hero__actions">
-            <a class="lcars-hero__link" href="/config/">Open module configuration console</a>
-          </div>
-        </div>
-      </header>
-      <div id="cockpit-app" class="app-root"></div>
-    </main>
+<body class="lcars-body">
+  <nav x-data="cockpitNav()" x-init="init()" class="lcars-nav" aria-label="Cockpit navigation">
+    <div class="nav-title">PSYCHED COCKPIT</div>
+    <template x-for="section in sections" :key="section.id">
+      <div class="nav-item">
+        <a class="nav-button" :class="{ active: section.id === activeId }" :href="`#${section.id}`"
+          @click.prevent="scrollTo(section.id, true)">
+          <span class="nav-index" x-text="padIndex(section.index)"></span>
+          <span class="nav-label" x-text="section.label"></span>
+        </a>
+        <template x-if="section.id === activeId && topSectionId && section.id !== topSectionId">
+          <button type="button" class="nav-shortcut" title="Back to top"
+            :aria-label="`Back to ${sections[0] ? sections[0].label : 'top'}`" @click.stop="scrollToTop()">
+            ↑
+          </button>
+        </template>
+        <template x-if="section.url">
+          <a class="nav-link" :href="section.url" target="_blank" rel="noopener" @click.stop>↗</a>
+        </template>
+      </div>
+    </template>
+  </nav>
 
-    <script>
-      function cockpitNav() {
-        return {
-          sections: [],
-          activeId: null,
-          topSectionId: null,
-          init() {
-            const updateActive = () => {
-              for (const section of this.sections) {
-                const node = document.getElementById(section.id);
-                if (!node) continue;
-                const rect = node.getBoundingClientRect();
-                if (rect.top < window.innerHeight * 0.45 && rect.bottom > window.innerHeight * 0.25) {
-                  this.activeId = section.id;
-                  return;
-                }
-              }
-            };
-            const applySections = (sections) => {
-              if (!Array.isArray(sections)) {
+  <main class="lcars-main">
+    <div id="cockpit-app" class="app-root"></div>
+  </main>
+
+  <script>
+    function cockpitNav() {
+      return {
+        sections: [],
+        activeId: null,
+        topSectionId: null,
+        init() {
+          const updateActive = () => {
+            for (const section of this.sections) {
+              const node = document.getElementById(section.id);
+              if (!node) continue;
+              const rect = node.getBoundingClientRect();
+              if (rect.top < window.innerHeight * 0.45 && rect.bottom > window.innerHeight * 0.25) {
+                this.activeId = section.id;
                 return;
               }
-              this.sections = sections.map((section) => ({ ...section }));
-              this.topSectionId = this.sections.length ? this.sections[0].id : null;
-              if (this.sections.length && !this.activeId) {
-                this.activeId = this.sections[0].id;
-              }
-              const hashId = window.location && typeof window.location.hash === 'string'
-                ? window.location.hash.replace(/^#/, '')
-                : '';
-              if (hashId) {
-                const match = this.sections.find((section) => section.id === hashId);
-                if (match) {
-                  requestAnimationFrame(() => {
-                    this.scrollTo(hashId, false);
-                    this.activeId = hashId;
-                  });
-                }
-              }
-              updateActive();
-            };
-            this.scrollTo = (id, updateHash = false) => {
-              const node = document.getElementById(id);
-              if (node) {
-                node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                this.activeId = id;
-                if (updateHash && typeof history !== 'undefined' && history.replaceState) {
-                  history.replaceState(null, '', `#${id}`);
-                }
-              }
-            };
-            this.scrollToTop = () => {
-              if (!this.topSectionId) return;
-              this.scrollTo(this.topSectionId, true);
-            };
-            this.padIndex = (value) => String(value + 1).padStart(2, '0');
-            window.addEventListener('cockpit-sections', (event) => {
-              applySections(event.detail);
-            });
-            window.addEventListener('scroll', updateActive, { passive: true });
-            const cachedSections = window.Cockpit && window.Cockpit.navigation && Array.isArray(window.Cockpit.navigation.sections)
-              ? window.Cockpit.navigation.sections
-              : null;
-            if (cachedSections && cachedSections.length) {
-              applySections(cachedSections);
             }
-            const initialSections = [
-              {
-                id: 'cockpit-config',
-                label: 'Module Configuration',
-                index: 0,
-                url: '/config/',
-              },
-            ];
-            if (!this.sections.length) {
-              applySections(initialSections);
+          };
+          const applySections = (sections) => {
+            if (!Array.isArray(sections)) {
+              return;
             }
-          },
-        };
-      }
-      window.cockpitNav = cockpitNav;
-    </script>
-  </body>
+            this.sections = sections.map((section) => ({ ...section }));
+            this.topSectionId = this.sections.length ? this.sections[0].id : null;
+            if (this.sections.length && !this.activeId) {
+              this.activeId = this.sections[0].id;
+            }
+            const hashId = window.location && typeof window.location.hash === 'string'
+              ? window.location.hash.replace(/^#/, '')
+              : '';
+            if (hashId) {
+              const match = this.sections.find((section) => section.id === hashId);
+              if (match) {
+                requestAnimationFrame(() => {
+                  this.scrollTo(hashId, false);
+                  this.activeId = hashId;
+                });
+              }
+            }
+            updateActive();
+          };
+          this.scrollTo = (id, updateHash = false) => {
+            const node = document.getElementById(id);
+            if (node) {
+              node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              this.activeId = id;
+              if (updateHash && typeof history !== 'undefined' && history.replaceState) {
+                history.replaceState(null, '', `#${id}`);
+              }
+            }
+          };
+          this.scrollToTop = () => {
+            if (!this.topSectionId) return;
+            this.scrollTo(this.topSectionId, true);
+          };
+          this.padIndex = (value) => String(value + 1).padStart(2, '0');
+          window.addEventListener('cockpit-sections', (event) => {
+            applySections(event.detail);
+          });
+          window.addEventListener('scroll', updateActive, { passive: true });
+          const cachedSections = window.Cockpit && window.Cockpit.navigation && Array.isArray(window.Cockpit.navigation.sections)
+            ? window.Cockpit.navigation.sections
+            : null;
+          if (cachedSections && cachedSections.length) {
+            applySections(cachedSections);
+          }
+          const initialSections = [
+            {
+              id: 'cockpit-config',
+              label: 'config',
+              index: 0,
+              url: '/config/',
+            },
+          ];
+          if (!this.sections.length) {
+            applySections(initialSections);
+          }
+        },
+      };
+    }
+    window.cockpitNav = cockpitNav;
+  </script>
+</body>
+
 </html>

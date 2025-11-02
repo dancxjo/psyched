@@ -1,4 +1,10 @@
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '', '0.0.0.0']);
+const LOOPBACK_HOSTS = new Set([
+  "127.0.0.1",
+  "localhost",
+  "::1",
+  "",
+  "0.0.0.0",
+]);
 
 /**
  * Normalise host metadata returned by the cockpit backend.
@@ -7,12 +13,16 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '', '0.0.0.0'])
  * @returns {{ name: string, shortname: string }} Display-friendly metadata.
  */
 export function normaliseHostMetadata(hostRaw) {
-  const host = typeof hostRaw === 'object' && hostRaw !== null ? hostRaw : {};
-  const rawName = typeof host.name === 'string' && host.name.trim() ? host.name.trim() : '';
-  const rawShortname = typeof host.shortname === 'string' && host.shortname.trim()
-    ? host.shortname.trim()
-    : '';
-  const shortname = rawShortname || (rawName ? rawName.split('.')[0] : '') || 'host';
+  const host = typeof hostRaw === "object" && hostRaw !== null ? hostRaw : {};
+  const rawName = typeof host.name === "string" && host.name.trim()
+    ? host.name.trim()
+    : "";
+  const rawShortname =
+    typeof host.shortname === "string" && host.shortname.trim()
+      ? host.shortname.trim()
+      : "";
+  const shortname = rawShortname || (rawName ? rawName.split(".")[0] : "") ||
+    "host";
   const name = rawName || shortname;
   return { name, shortname };
 }
@@ -29,11 +39,13 @@ export function summariseModules(modulesRaw) {
   const seen = new Set();
 
   for (const entry of modules) {
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== "object") {
       continue;
     }
-    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
-    const slugCandidate = typeof entry.slug === 'string' ? entry.slug.trim() : '';
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    const slugCandidate = typeof entry.slug === "string"
+      ? entry.slug.trim()
+      : "";
     const slug = slugCandidate || name;
     if (!slug) {
       continue;
@@ -43,20 +55,38 @@ export function summariseModules(modulesRaw) {
     }
     seen.add(slug);
 
-    const displayName = typeof entry.display_name === 'string' && entry.display_name.trim()
-      ? entry.display_name.trim()
-      : name || slug;
-    const description = typeof entry.description === 'string' ? entry.description.trim() : '';
+    const displayName =
+      typeof entry.display_name === "string" && entry.display_name.trim()
+        ? entry.display_name.trim()
+        : name || slug;
+    const description = typeof entry.description === "string"
+      ? entry.description.trim()
+      : "";
     const hasCockpit = Boolean(entry.has_cockpit);
-    const dashboardUrlRaw = typeof entry.dashboard_url === 'string' ? entry.dashboard_url.trim() : '';
-    const dashboardUrl = dashboardUrlRaw || (hasCockpit && name ? `/modules/${name}/` : '');
+    const dashboardUrlRaw = typeof entry.dashboard_url === "string"
+      ? entry.dashboard_url.trim()
+      : "";
+    const dashboardUrl = dashboardUrlRaw ||
+      (hasCockpit && name ? `/modules/${name}/` : "");
 
     const systemd = normaliseSystemdStatus(entry.systemd);
 
-    normalised.push({ name, slug, displayName, description, hasCockpit, dashboardUrl, systemd });
+    normalised.push({
+      name,
+      slug,
+      displayName,
+      description,
+      hasCockpit,
+      dashboardUrl,
+      systemd,
+    });
   }
 
-  normalised.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+  normalised.sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, {
+      sensitivity: "base",
+    })
+  );
 
   const withCockpit = normalised.filter((module) => module.hasCockpit).length;
   const total = normalised.length;
@@ -77,30 +107,57 @@ export function summariseModules(modulesRaw) {
  *   effectiveRosbridgeUri: string,
  *   videoBase: string,
  *   videoPort: number | null,
+ *   videoUrl: string,
  * }}
  */
-export function normaliseBridgeSettings(bridgeRaw, location = typeof window !== 'undefined' ? window.location : undefined) {
-  const bridge = typeof bridgeRaw === 'object' && bridgeRaw !== null ? bridgeRaw : {};
-  const mode = typeof bridge.mode === 'string' && bridge.mode.trim() ? bridge.mode.trim() : 'rosbridge';
-  const rosbridgeUri = typeof bridge.rosbridge_uri === 'string' && bridge.rosbridge_uri.trim()
-    ? bridge.rosbridge_uri.trim()
-    : 'ws://127.0.0.1:9090';
-  const videoBase = typeof bridge.video_base === 'string' && bridge.video_base.trim() ? bridge.video_base.trim() : '';
-  const videoPort = Number.isFinite(bridge.video_port) ? Number(bridge.video_port) : null;
+export function normaliseBridgeSettings(
+  bridgeRaw,
+  location = typeof window !== "undefined" ? window.location : undefined,
+) {
+  const bridge = typeof bridgeRaw === "object" && bridgeRaw !== null
+    ? bridgeRaw
+    : {};
+  const mode = typeof bridge.mode === "string" && bridge.mode.trim()
+    ? bridge.mode.trim()
+    : "rosbridge";
+  const rosbridgeUri =
+    typeof bridge.rosbridge_uri === "string" && bridge.rosbridge_uri.trim()
+      ? bridge.rosbridge_uri.trim()
+      : "ws://127.0.0.1:9090";
+  const videoBaseRaw =
+    typeof bridge.video_base === "string" && bridge.video_base.trim()
+      ? bridge.video_base.trim()
+      : "";
+  const videoPortRaw = Number.isFinite(bridge.video_port)
+    ? Number(bridge.video_port)
+    : null;
 
   const effectiveRosbridgeUri = resolveRosbridgeUri(rosbridgeUri, location);
+  const { base: videoBase, port: videoPort, url: videoUrl } =
+    normaliseVideoEndpoint(videoBaseRaw, videoPortRaw, location);
 
-  return { mode, rosbridgeUri, effectiveRosbridgeUri, videoBase, videoPort };
+  return {
+    mode,
+    rosbridgeUri,
+    effectiveRosbridgeUri,
+    videoBase,
+    videoPort,
+    videoUrl,
+  };
 }
 
 function resolveRosbridgeUri(rawUri, location) {
-  const fallbackProtocol = location && location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const fallbackHost = location && location.hostname ? location.hostname : '127.0.0.1';
+  const fallbackProtocol = location && location.protocol === "https:"
+    ? "wss:"
+    : "ws:";
+  const fallbackHost = location && location.hostname
+    ? location.hostname
+    : "127.0.0.1";
   const baseHref = location && location.href ? location.href : undefined;
 
   try {
     const url = new URL(rawUri, baseHref);
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
+    if (url.protocol === "http:" || url.protocol === "https:") {
       url.protocol = fallbackProtocol;
     }
     if (LOOPBACK_HOSTS.has(url.hostname)) {
@@ -108,9 +165,9 @@ function resolveRosbridgeUri(rawUri, location) {
     }
     if (!url.port) {
       const parsedPort = extractPort(rawUri, baseHref);
-      url.port = parsedPort || '9090';
+      url.port = parsedPort || "9090";
     }
-    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") {
       url.protocol = fallbackProtocol;
     }
     return url.toString();
@@ -124,23 +181,122 @@ function extractPort(rawUri, baseHref) {
     const url = new URL(rawUri, baseHref);
     return url.port;
   } catch (_error) {
-    return '';
+    return "";
   }
 }
 
+function normaliseVideoEndpoint(videoBaseRaw, videoPort, location) {
+  const locationProtocol = location && typeof location.protocol === "string" &&
+      location.protocol.trim()
+    ? location.protocol.trim()
+    : "";
+  const fallbackProtocol = locationProtocol === "https:" ? "https:" : "http:";
+  const locationHostCandidate =
+    location && typeof location.hostname === "string" &&
+      location.hostname.trim()
+      ? location.hostname.trim()
+      : location && typeof location.host === "string" && location.host.trim()
+      ? location.host.trim().split(":")[0]
+      : "";
+  const fallbackHost = locationHostCandidate || "127.0.0.1";
+  const numericPort = Number.isFinite(videoPort) ? Number(videoPort) : null;
+
+  const url = resolveVideoUrl(videoBaseRaw, fallbackProtocol, fallbackHost);
+  if (LOOPBACK_HOSTS.has(url.hostname)) {
+    url.hostname = fallbackHost;
+  }
+  if (!url.port && numericPort) {
+    url.port = String(numericPort);
+  }
+
+  const resolvedPort = url.port ? Number.parseInt(url.port, 10) : numericPort;
+  const href = url.toString();
+  const base = formatDisplayUrl(url);
+  return { base, port: resolvedPort, url: href };
+}
+
+function resolveVideoUrl(videoBaseRaw, fallbackProtocol, fallbackHost) {
+  const trimmed = typeof videoBaseRaw === "string" ? videoBaseRaw.trim() : "";
+  const candidateHosts = [fallbackHost, "127.0.0.1"];
+  const initialHost = candidateHosts.find((value) => value && value.length) ||
+    "127.0.0.1";
+
+  const parsed = tryParseUrl(trimmed, fallbackProtocol, initialHost);
+  if (parsed) {
+    return parsed;
+  }
+
+  return new URL(`${fallbackProtocol}//${initialHost}`);
+}
+
+function tryParseUrl(raw, fallbackProtocol, fallbackHost) {
+  if (!raw) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  try {
+    return new URL(trimmed);
+  } catch (_error) {
+    // Fall through.
+  }
+  if (trimmed.startsWith("//")) {
+    try {
+      return new URL(`${fallbackProtocol}${trimmed}`);
+    } catch (_error) {
+      // Fall through.
+    }
+  }
+  if (trimmed.startsWith("/")) {
+    try {
+      return new URL(`${fallbackProtocol}//${fallbackHost}${trimmed}`);
+    } catch (_error) {
+      // Fall through.
+    }
+  }
+  if (!/^[a-zA-Z][a-zA-Z0-9+.\-]*:/.test(trimmed)) {
+    try {
+      return new URL(`${fallbackProtocol}//${trimmed}`);
+    } catch (_error) {
+      // Fall through.
+    }
+  }
+  return null;
+}
+
+function formatDisplayUrl(url) {
+  if (
+    (url.pathname === "/" || url.pathname === "") && !url.search && !url.hash
+  ) {
+    return `${url.protocol}//${url.host}`;
+  }
+  return url.toString();
+}
+
 export function normaliseSystemdStatus(rawStatus) {
-  const status = typeof rawStatus === 'object' && rawStatus !== null ? rawStatus : {};
+  const status = typeof rawStatus === "object" && rawStatus !== null
+    ? rawStatus
+    : {};
   const supported = Boolean(status.supported);
   const exists = Boolean(status.exists && supported);
   const active = exists && Boolean(status.active);
   const enabled = exists && Boolean(status.enabled);
 
-  const unit = typeof status.unit === 'string' ? status.unit.trim() : '';
-  const loadState = typeof status.load_state === 'string' ? status.load_state.trim() : '';
-  const activeState = typeof status.active_state === 'string' ? status.active_state.trim() : '';
-  const subState = typeof status.sub_state === 'string' ? status.sub_state.trim() : '';
-  const unitFileState = typeof status.unit_file_state === 'string' ? status.unit_file_state.trim() : '';
-  const message = typeof status.message === 'string' ? status.message.trim() : '';
+  const unit = typeof status.unit === "string" ? status.unit.trim() : "";
+  const loadState = typeof status.load_state === "string"
+    ? status.load_state.trim()
+    : "";
+  const activeState = typeof status.active_state === "string"
+    ? status.active_state.trim()
+    : "";
+  const subState = typeof status.sub_state === "string"
+    ? status.sub_state.trim()
+    : "";
+  const unitFileState = typeof status.unit_file_state === "string"
+    ? status.unit_file_state.trim()
+    : "";
+  const message = typeof status.message === "string"
+    ? status.message.trim()
+    : "";
 
   return {
     supported,
@@ -148,10 +304,10 @@ export function normaliseSystemdStatus(rawStatus) {
     active,
     enabled,
     unit,
-    loadState: loadState || (supported ? 'unknown' : ''),
-    activeState: activeState || (supported ? 'inactive' : ''),
-    subState: subState || (supported ? 'dead' : ''),
-    unitFileState: unitFileState || (supported ? 'disabled' : ''),
+    loadState: loadState || (supported ? "unknown" : ""),
+    activeState: activeState || (supported ? "inactive" : ""),
+    subState: subState || (supported ? "dead" : ""),
+    unitFileState: unitFileState || (supported ? "disabled" : ""),
     message,
   };
 }
