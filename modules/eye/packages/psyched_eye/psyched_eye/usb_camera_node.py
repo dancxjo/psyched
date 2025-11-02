@@ -69,12 +69,11 @@ class UsbCameraNode(Node):
         self.add_on_set_parameters_callback(self._handle_parameter_update)
 
         self.get_logger().info(
-            "USB camera node initialised (device=%s, resolution=%dx%d @ %.1f FPS, encoding=%s)",
-            self._config.device,
-            self._config.width,
-            self._config.height,
-            self._config.fps,
-            self._config.encoding,
+            (
+                f"USB camera node initialised (device={self._config.device}, "
+                f"resolution={self._config.width}x{self._config.height} @ {self._config.fps:.1f} FPS, "
+                f"encoding={self._config.encoding})"
+            )
         )
 
     @property
@@ -87,10 +86,10 @@ class UsbCameraNode(Node):
             if self._capture is not None and self._capture.isOpened():
                 return
 
-            _LOGGER.info("Opening camera device %s", self._config.device)
+            _LOGGER.info(f"Opening camera device {self._config.device}")
             cap = cv2.VideoCapture(self._config.device, cv2.CAP_V4L2)
             if not cap.isOpened():
-                _LOGGER.error("Failed to open camera device %s", self._config.device)
+                _LOGGER.error(f"Failed to open camera device {self._config.device}")
                 self._capture = None
                 self._next_reopen_time = time.monotonic() + self._REOPEN_DELAY
                 return
@@ -106,7 +105,7 @@ class UsbCameraNode(Node):
             self._capture = cap
             self._last_failed_read = 0
             self._next_reopen_time = time.monotonic()
-            _LOGGER.info("Camera device %s ready", self._config.device)
+            _LOGGER.info(f"Camera device {self._config.device} ready")
 
     def _capture_frame(self) -> None:
         if self._capture is None or not self._capture.isOpened():
@@ -120,7 +119,7 @@ class UsbCameraNode(Node):
         if not ret or frame is None:
             self._last_failed_read += 1
             if self._last_failed_read == 1:
-                self.get_logger().warning("Failed to read frame from %s", self._config.device)
+                self.get_logger().warning(f"Failed to read frame from {self._config.device}")
             if self._last_failed_read >= self._MAX_FAILED_FRAMES:
                 self.get_logger().error("Camera read failures exceeded threshold; restarting capture")
                 self._release_capture()
@@ -131,7 +130,7 @@ class UsbCameraNode(Node):
         try:
             image_msg = self._bridge.cv2_to_imgmsg(frame, encoding=self._config.encoding)
         except Exception as exc:  # pragma: no cover - defensive conversion path
-            self.get_logger().error("cv_bridge failed to convert frame: %s", exc)
+            self.get_logger().error(f"cv_bridge failed to convert frame: {exc}")
             return
 
         image_msg.header.stamp = stamp
@@ -206,7 +205,7 @@ class UsbCameraNode(Node):
         return SetParametersResult(successful=True)
 
     def _apply_device_update(self, device: str) -> None:
-        self.get_logger().info("Camera device update requested: %s", device)
+        self.get_logger().info(f"Camera device update requested: {device}")
         with self._lock:
             self._config.device = device
 

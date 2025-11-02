@@ -55,11 +55,11 @@ class FacesRouterNode(Node):
         self.add_on_set_parameters_callback(self._handle_parameter_update)
         self._switch_source(self._resolve_source(self._faces_source))
 
+        sources_state = {name: src.enabled for name, src in self._sources.items()}
+        image_target = image_topic or "<disabled>"
+        info_target = camera_info_topic or "<disabled>"
         self.get_logger().info(
-            "Faces router initialised (sources=%s, output image=%s, camera_info=%s)",
-            {name: src.enabled for name, src in self._sources.items()},
-            image_topic or "<disabled>",
-            camera_info_topic or "<disabled>",
+            f"Faces router initialised (sources={sources_state}, output image={image_target}, camera_info={info_target})"
         )
 
     # Parameter helpers -------------------------------------------------
@@ -113,7 +113,7 @@ class FacesRouterNode(Node):
         if fallback and fallback not in ("none", "off", desired):
             return self._resolve_source(fallback)
 
-        self.get_logger().warning("Requested faces source '%s' is unavailable; routing disabled.", desired)
+        self.get_logger().warning(f"Requested faces source '{desired}' is unavailable; routing disabled.")
         return None
 
     def _switch_source(self, new_source: Optional[str]) -> None:
@@ -129,7 +129,7 @@ class FacesRouterNode(Node):
 
         config = self._sources.get(new_source)
         if config is None or not config.enabled:
-            self.get_logger().warning("Source '%s' is not enabled; routing disabled.", new_source)
+            self.get_logger().warning(f"Source '{new_source}' is not enabled; routing disabled.")
             self._active_source = None
             return
 
@@ -142,11 +142,9 @@ class FacesRouterNode(Node):
                 CameraInfo, config.camera_info_topic, self._make_info_callback(new_source), qos
             )
 
+        camera_info_target = config.camera_info_topic or "<none>"
         self.get_logger().info(
-            "Faces routing source set to '%s' (image=%s, camera_info=%s)",
-            new_source,
-            config.image_topic,
-            config.camera_info_topic or "<none>",
+            f"Faces routing source set to '{new_source}' (image={config.image_topic}, camera_info={camera_info_target})"
         )
 
     def _destroy_subscriptions(self) -> None:

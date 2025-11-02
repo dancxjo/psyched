@@ -283,9 +283,9 @@ class FacesDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Apply tuning</button>
+              <button type="submit" class="surface-button">🎛️ Apply tuning</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.resetEmbeddings}>
-                Reset embedding cache
+                ♻️ Reset embedding cache
               </button>
             </div>
           </form>
@@ -373,7 +373,7 @@ class FacesDashboard extends LitElement {
             </div>
             <div class="surface-actions">
               <button type="submit" class="surface-button" ?disabled=${routerControlsDisabled}>
-                ${this.routerBusy && this.routerAvailable ? 'Applying…' : 'Apply routing'}
+                ${this.routerBusy && this.routerAvailable ? '⚙️ Applying…' : '🧭 Apply routing'}
               </button>
               <button
                 type="button"
@@ -381,7 +381,7 @@ class FacesDashboard extends LitElement {
                 @click=${() => this.refreshRouterState({ manual: true })}
                 ?disabled=${this.routerBusy}
               >
-                Refresh state
+                🔄 Refresh state
               </button>
             </div>
           </form>
@@ -418,7 +418,7 @@ class FacesDashboard extends LitElement {
             : html`<p class="surface-empty">No recognition events recorded yet.</p>`}
           <div class="surface-actions">
             <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateDetection}>
-              Simulate recognition
+              🎭 Simulate recognition
             </button>
           </div>
         </article>
@@ -448,9 +448,9 @@ class FacesDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Submit label</button>
+              <button type="submit" class="surface-button">🏷️ Submit label</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.clearTagForm}>
-                Clear
+                🧹 Clear
               </button>
             </div>
           </form>

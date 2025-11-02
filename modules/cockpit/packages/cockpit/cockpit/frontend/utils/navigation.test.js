@@ -8,7 +8,7 @@ test('includes the configuration section first', () => {
   assert.equal(sections.length, 1);
   assert.deepEqual(sections[0], {
     id: 'cockpit-config',
-    label: 'Module Configuration',
+    label: 'config',
     index: 0,
     url: '/config/',
   });

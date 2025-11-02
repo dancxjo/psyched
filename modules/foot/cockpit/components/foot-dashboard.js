@@ -1007,9 +1007,9 @@ class FootDashboard extends LitElement {
           <h3 class="surface-card__title">Mobility actions</h3>
           <div class="surface-actions surface-actions--grid">
             <button class="surface-action" @click="${() =>
-              this.sendSimple("dock")}">Dock</button>
+              this.sendSimple("dock")}">⚓ Dock</button>
             <button class="surface-action" @click="${() =>
-              this.sendSimple("undock")}">Undock</button>
+              this.sendSimple("undock")}">🛫 Undock</button>
           </div>
           ${this.actionStatus
             ? html`
@@ -1061,7 +1061,7 @@ class FootDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button class="surface-action" type="submit">Update ASCII</button>
+              <button class="surface-action" type="submit">🔤 Update ASCII</button>
             </div>
           </form>
           <form @submit="${(event) => this.sendPowerLed(event)}">
@@ -1094,7 +1094,7 @@ class FootDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button class="surface-action" type="submit">Update power LED</button>
+              <button class="surface-action" type="submit">💡 Update power LED</button>
             </div>
           </form>
         </article>
@@ -1126,10 +1126,10 @@ class FootDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions surface-actions--grid">
-              <button class="surface-action" type="submit">Define song</button>
+              <button class="surface-action" type="submit">🎼 Define song</button>
               <button class="surface-action" type="button" @click="${(event) =>
                 this.playSong(event)}">
-                Play song
+                🎵 Play song
               </button>
             </div>
           </form>

@@ -273,10 +273,10 @@ class NavDashboard extends LitElement {
               @click=${() => this._copyCommandLog()}
             >
               ${this.logCopyState === 'copying'
-                ? 'Copying…'
+                ? '📋 Copying…'
                 : this.logCopyState === 'copied'
-                  ? 'Copied!'
-                  : 'Copy log'}
+                  ? '✅ Copied!'
+                  : '📋 Copy log'}
             </button>
           </header>
           <p class="surface-status">Recent cockpit interactions</p>
@@ -310,7 +310,7 @@ class NavDashboard extends LitElement {
             <div class="form-row form-row--split">
               ${this._renderPoseFields(this.initialPoseForm, (field, value) => this._updateInitialPoseField(field, value))}
             </div>
-            <button type="submit" class="surface-action">Set initial pose</button>
+            <button type="submit" class="surface-action">📍 Set initial pose</button>
           </form>
         </article>
 
@@ -321,7 +321,7 @@ class NavDashboard extends LitElement {
             <div class="form-row form-row--split">
               ${this._renderPoseFields(this.goalForm, (field, value) => this._updateGoalField(field, value))}
             </div>
-            <button type="submit" class="surface-action">Send navigation goal</button>
+            <button type="submit" class="surface-action">🚩 Send navigation goal</button>
           </form>
         </article>
       </div>

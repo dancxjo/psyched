@@ -703,13 +703,13 @@ class ConversantDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Send turn</button>
+              <button type="submit" class="surface-button">📤 Send turn</button>
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
                 @click=${() => this._clearDirectForm()}
               >
-                Clear
+                🧹 Clear
               </button>
             </div>
           </form>

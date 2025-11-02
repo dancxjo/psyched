@@ -379,7 +379,7 @@ class CockpitModuleLogs extends LitElement {
               ?disabled="${this.loading || this.clearing || !this.module}"
               @click="${() => this._clearLogs()}"
             >
-              ${this.clearing ? "Clearing…" : "Clear log"}
+              ${this.clearing ? "🧹 Clearing…" : "🧹 Clear log"}
             </button>
             <button
               type="button"
@@ -389,10 +389,10 @@ class CockpitModuleLogs extends LitElement {
               @click="${() => this._copyLogs()}"
             >
               ${this.copyState === "copying"
-                ? "Copying…"
+                ? "📋 Copying…"
                 : this.copyState === "copied"
-                ? "Copied!"
-                : "Copy log"}
+                ? "✅ Copied!"
+                : "📋 Copy log"}
             </button>
             <button
               type="button"
@@ -400,7 +400,7 @@ class CockpitModuleLogs extends LitElement {
               ?disabled="${this.loading || this.clearing || !this.module}"
               @click="${() => this.refresh()}"
             >
-              ${this.loading ? "Refreshing…" : "Refresh log"}
+              ${this.loading ? "🔄 Refreshing…" : "🔄 Refresh log"}
             </button>
           </div>
           <div class="module-log-panel__meta">
@@ -440,10 +440,10 @@ class CockpitModuleLogs extends LitElement {
                   ?disabled="${Boolean(busyAction)}"
                 >
                   ${busyAction === "up" || busyAction === "down"
-                    ? "Working…"
+                    ? "⚙️ Working…"
                     : systemd.active
-                    ? "Stop"
-                    : "Start"}
+                    ? "🛑 Stop"
+                    : "🚀 Start"}
                 </button>
                 <button
                   type="button"
@@ -455,10 +455,10 @@ class CockpitModuleLogs extends LitElement {
                   ?disabled="${Boolean(busyAction)}"
                 >
                   ${busyAction === "enable" || busyAction === "disable"
-                    ? "Working…"
+                    ? "⚙️ Working…"
                     : systemd.enabled
-                    ? "Disable"
-                    : "Enable"}
+                    ? "🔒 Disable"
+                    : "🔓 Enable"}
                 </button>
                 ${systemd.exists
                   ? html`
@@ -468,7 +468,7 @@ class CockpitModuleLogs extends LitElement {
                       @click="${() => this._runSystemdAction("teardown")}"
                       ?disabled="${Boolean(busyAction)}"
                     >
-                      ${busyAction === "teardown" ? "Working…" : "Remove unit"}
+                      ${busyAction === "teardown" ? "⚙️ Working…" : "🗑️ Remove unit"}
                     </button>
                   `
                   : html`
@@ -478,7 +478,7 @@ class CockpitModuleLogs extends LitElement {
                       @click="${() => this._runSystemdAction("setup")}"
                       ?disabled="${Boolean(busyAction)}"
                     >
-                      ${busyAction === "setup" ? "Working…" : "Create unit"}
+                      ${busyAction === "setup" ? "⚙️ Working…" : "🛠️ Create unit"}
                     </button>
                   `}
                 <button
@@ -487,7 +487,7 @@ class CockpitModuleLogs extends LitElement {
                   @click="${() => this._runSystemdAction("debug")}"
                   ?disabled="${Boolean(busyAction)}"
                 >
-                  ${busyAction === "debug" ? "Collecting…" : "Debug"}
+                  ${busyAction === "debug" ? "📡 Collecting…" : "🕵️ Debug"}
                 </button>
               </div>
             `

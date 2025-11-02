@@ -652,7 +652,9 @@ class PilotDashboard extends LitElement {
             aria-label=${collapsed ? `Expand ${title}` : `Collapse ${title}`}
             @click=${() => cardId && this.toggleCardCollapsed(cardId)}
           >
-            ${collapsed ? "Expand" : "Collapse"}
+            <span class="surface-card__toggleIcon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span>
+            <span class="surface-card__toggleLabel" aria-hidden="true">${collapsed ? "Expand" : "Collapse"}</span>
+            <span class="surface-card__toggleText">${collapsed ? `Expand ${title}` : `Collapse ${title}`}</span>
           </button>
         </header>
         <div

@@ -217,9 +217,9 @@ class GpsDashboard extends LitElement {
           </div>
           <p class="surface-card__subtitle">Last fix: ${this.lastFix}</p>
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${this.simulateFix}>Mark 3D fix</button>
+            <button type="button" class="surface-button" @click=${this.simulateFix}>📍 Mark 3D fix</button>
             <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateDrop}>
-              Simulate loss
+              ⚠️ Simulate loss
             </button>
           </div>
         </article>
@@ -255,9 +255,9 @@ class GpsDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Queue reset</button>
+              <button type="submit" class="surface-button">🛰️ Queue reset</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.clearResetForm}>
-                Clear form
+                🧼 Clear form
               </button>
             </div>
           </form>

@@ -1008,7 +1008,7 @@ class EarDashboard extends LitElement {
             </div>
             <div class="surface-actions">
               <button type="button" class="surface-button" @click=${() => this.toggleAudioMonitoring()}>
-                ${this.audioMonitoringEnabled ? 'Pause audio monitor' : 'Resume audio monitor'}
+                ${this.audioMonitoringEnabled ? '⏸️ Pause audio monitor' : '▶️ Resume audio monitor'}
               </button>
               <button
                 type="button"
@@ -1016,7 +1016,7 @@ class EarDashboard extends LitElement {
                 @click=${() => this.clearTranscripts()}
                 ?disabled=${this.transcripts.length === 0}
               >
-                Clear transcript log
+                🧹 Clear transcript log
               </button>
             </div>
           </article>
@@ -1063,7 +1063,7 @@ class EarDashboard extends LitElement {
                 />
               </label>
               <div class="surface-actions">
-                <button type="submit" class="surface-button">Inject transcript</button>
+                <button type="submit" class="surface-button">📝 Inject transcript</button>
                 <button
                   type="button"
                   class="surface-button surface-button--ghost"
@@ -1073,7 +1073,7 @@ class EarDashboard extends LitElement {
       }}
                   ?disabled=${this.fakeTranscriptText.trim().length === 0}
                 >
-                  Clear input
+                  🧼 Clear input
                 </button>
               </div>
               ${this.fakeTranscriptFeedback

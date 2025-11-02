@@ -315,7 +315,7 @@ class VoiceDashboard extends LitElement {
               Text to speak
               <input type="text" .value=${this.voiceMessage} @input=${(e) => (this.voiceMessage = e.target.value)} placeholder="Type message">
             </label>
-            <button class="surface-action" type="submit">Send to /voice</button>
+            <button class="surface-action" type="submit">🗣️ Send to /voice</button>
             ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
           </form>
           <div class="surface-panel surface-mono voice-last">${this.lastVoice || '—'}</div>
@@ -324,16 +324,16 @@ class VoiceDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Playback Controls</h3>
           <div class="surface-actions">
-            <button class="surface-action" type="button" @click=${this.sendInterrupt}>Interrupt</button>
-            <button class="surface-action" type="button" @click=${this.sendResume}>Resume</button>
-            <button class="surface-action" type="button" @click=${this.sendClear}>Clear Queue</button>
+            <button class="surface-action" type="button" @click=${this.sendInterrupt}>⏹️ Interrupt</button>
+            <button class="surface-action" type="button" @click=${this.sendResume}>▶️ Resume</button>
+            <button class="surface-action" type="button" @click=${this.sendClear}>🧹 Clear queue</button>
           </div>
           ${this.commandFeedback ? html`<p class="surface-status">${this.commandFeedback}</p>` : ''}
           <label>
             Volume (0-255)
             <div class="volume-control">
               <input type="number" min="0" max="255" .value=${this.volume} @input=${(e) => (this.volume = Number(e.target.value || 0))} />
-              <button class="surface-action" type="button" @click=${this.applyVolume}>Apply</button>
+              <button class="surface-action" type="button" @click=${this.applyVolume}>🎚️ Apply</button>
             </div>
           </label>
           ${this.volumeFeedback ? html`<p class="surface-status">${this.volumeFeedback}</p>` : ''}
@@ -349,10 +349,10 @@ class VoiceDashboard extends LitElement {
               @click=${() => this.copyEventLog()}
             >
               ${this.eventLogCopyState === 'copying'
-                ? 'Copying…'
+                ? '📋 Copying…'
                 : this.eventLogCopyState === 'copied'
-                  ? 'Copied!'
-                  : 'Copy log'}
+                  ? '✅ Copied!'
+                  : '📋 Copy log'}
             </button>
           </header>
           <ul class="surface-log">

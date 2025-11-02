@@ -7,6 +7,7 @@ import { bringModuleUp, setupModule } from "./module.ts";
 import { bringServiceUp, setupService } from "./service.ts";
 import { getInstaller, runInstaller } from "./deps/installers.ts";
 import { buildRosEnv } from "./ros_env.ts";
+import { ensureHostPowerPrivileges } from "./host_power.ts";
 import { ensureEssentialUserGroups } from "./user_groups.ts";
 import { loadHostConfig, pathExists } from "./host_config.ts";
 import type {
@@ -248,6 +249,18 @@ export async function provisionHostProfile(
     },
   }, ["groups", "user-groups"]);
 
+  registerTask(registry, {
+    id: "system:host-power",
+    label: "Ensure host power management permissions",
+    dependencies: ["system:groups"],
+    run: async () => {
+      await ensureHostPowerPrivileges({
+        verbose: provisionOptions.verbose,
+        showLogsOnSuccess: provisionOptions.showLogsOnSuccess,
+      });
+    },
+  }, ["host-power", "host-power-permissions"]);
+
   const installerAliasDefaults = installers.map((id) => id);
 
   for (const id of installers) {
@@ -292,7 +305,7 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Module provisioning skipped during host bootstrap. " +
-        "Open a new shell session before running 'psh mod setup' to configure modules.",
+          "Open a new shell session before running 'psh mod setup' to configure modules.",
       ),
     );
   } else {
@@ -360,7 +373,7 @@ export async function provisionHostProfile(
     console.log(
       colors.yellow(
         "Service provisioning skipped during host bootstrap. " +
-        "Run 'psh svc setup' after refreshing your shell if services require setup.",
+          "Run 'psh svc setup' after refreshing your shell if services require setup.",
       ),
     );
   } else {
@@ -461,7 +474,9 @@ export async function provisionHostProfile(
       );
       console.warn(
         colors.yellow(
-          `${task.label} skipped due to failed dependency (${blockedLabels.join(", ")}).`,
+          `${task.label} skipped due to failed dependency (${
+            blockedLabels.join(", ")
+          }).`,
         ),
       );
       issues.push(
@@ -497,11 +512,11 @@ export async function provisionHostProfile(
 
 export {
   availableHosts,
-  locateHostConfig,
-  loadHostConfig,
-  readHostConfig,
   HostConfigFormatError,
   HostConfigNotFoundError,
+  loadHostConfig,
+  locateHostConfig,
+  readHostConfig,
 } from "./host_config.ts";
 
 export type {

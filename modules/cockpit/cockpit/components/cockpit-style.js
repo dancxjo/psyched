@@ -82,13 +82,18 @@ export const surfaceStyles = css`
     border: 1px solid var(--control-surface-border);
     background: transparent;
     color: var(--lcars-text);
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 0.35rem 0.65rem;
     border-radius: calc(var(--control-surface-radius) / 1.6);
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    position: relative;
   }
 
   .surface-card__toggle:hover,
@@ -108,6 +113,45 @@ export const surfaceStyles = css`
 
   .surface-card--collapsed .surface-card__toggle {
     opacity: 0.85;
+  }
+
+  .surface-card__toggleIcon {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  .surface-card__toggleLabel {
+    display: inline-block;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transform: translateX(-0.25rem);
+    transition:
+      max-width 0.22s ease,
+      opacity 0.22s ease,
+      transform 0.22s ease;
+  }
+
+  .surface-card__toggle:hover .surface-card__toggleLabel,
+  .surface-card__toggle:focus .surface-card__toggleLabel,
+  .surface-card__toggle:focus-visible .surface-card__toggleLabel {
+    max-width: 6rem;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .surface-card__toggleText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    border: 0;
+    white-space: nowrap;
   }
 
   .surface-card__subtitle {

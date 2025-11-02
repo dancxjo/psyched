@@ -8,7 +8,7 @@
  * @example
  * buildNavigationSections([{ name: 'imu', slug: 'imu', has_cockpit: true }])
  * // => [
- * //      { id: 'cockpit-config', label: 'Module Configuration', index: 0, url: '/config/' },
+ * //      { id: 'cockpit-config', label: 'config', index: 0, url: '/config/' },
  * //      { id: 'module-imu', label: 'imu', index: 1, url: '/modules/imu/' }
  * //    ]
  *
@@ -19,7 +19,7 @@ export function buildNavigationSections(modules) {
   const sections = [
     {
       id: 'cockpit-config',
-      label: 'Module Configuration',
+      label: 'config',
       index: 0,
       url: '/config/',
     },

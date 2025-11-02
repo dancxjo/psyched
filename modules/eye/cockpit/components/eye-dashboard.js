@@ -375,9 +375,9 @@ class EyeDashboard extends LitElement {
           </div>
           ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${this.markLive}>Mark feed live</button>
+            <button type="button" class="surface-button" @click=${this.markLive}>📡 Mark feed live</button>
             <button type="button" class="surface-button surface-button--ghost" @click=${this.markIdle}>
-              Mark idle
+              🛑 Mark idle
             </button>
           </div>
         </article>
@@ -464,7 +464,7 @@ class EyeDashboard extends LitElement {
             </div>
             <div class="surface-actions">
               <button type="submit" class="surface-button" ?disabled=${routerControlsDisabled}>
-                ${this.routerBusy && this.routerAvailable ? 'Applying…' : 'Apply routing'}
+                ${this.routerBusy && this.routerAvailable ? '⚙️ Applying…' : '🧭 Apply routing'}
               </button>
               <button
                 type="button"
@@ -472,7 +472,7 @@ class EyeDashboard extends LitElement {
                 @click=${() => this.refreshRouterState({ manual: true })}
                 ?disabled=${this.routerBusy}
               >
-                Refresh state
+                🔄 Refresh state
               </button>
             </div>
           </form>
@@ -500,7 +500,7 @@ class EyeDashboard extends LitElement {
                                 ? `Switch router to ${device.path}`
                                 : 'Device is not readable by the eye module'}
                             >
-                              Use this camera
+                              🎥 Use this camera
                             </button>`}
                       </div>
                     </li>`,
@@ -513,7 +513,7 @@ class EyeDashboard extends LitElement {
                 class="surface-button surface-button--ghost"
                 @click=${() => this.refreshVideoDevices()}
               >
-                Rescan devices
+                🔍 Rescan devices
               </button>
             </div>
           </div>
@@ -620,7 +620,7 @@ class EyeDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Apply settings</button>
+              <button type="submit" class="surface-button">🛠️ Apply settings</button>
             </div>
           </form>
         </article>
@@ -632,10 +632,10 @@ class EyeDashboard extends LitElement {
             : ''}
           <div class="surface-actions">
             <button type="button" class="surface-button" @click=${() => this.handleCapture('color')}>
-              Capture color frame
+              📸 Capture color frame
             </button>
             <button type="button" class="surface-button surface-button--ghost" @click=${() => this.handleCapture('depth')}>
-              Capture depth frame
+              🌊 Capture depth frame
             </button>
           </div>
           ${this.captureHistory.length

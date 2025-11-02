@@ -135,7 +135,7 @@ class CockpitDashboard extends LitElement {
                 ?disabled="${this.loading}"
                 @click="${() => this.refresh()}"
               >
-                ${this.loading ? "Refreshing…" : "Refresh"}
+                ${this.loading ? "🔄 Refreshing…" : "🔄 Refresh"}
               </button>
             </div>
           </header>
@@ -170,11 +170,11 @@ class CockpitDashboard extends LitElement {
   _renderHostCard() {
     const disableActions = this.loading || Boolean(this.hostActionPending);
     const shutdownLabel = this.hostActionPending === "shutdown"
-      ? "Shutting down…"
-      : "Shutdown";
+      ? "⏳ Shutting down…"
+      : "⏻ Shutdown";
     const restartLabel = this.hostActionPending === "restart"
-      ? "Restarting…"
-      : "Restart";
+      ? "🔁 Restarting…"
+      : "🔁 Restart";
     return html`
       <section class="surface-metric">
         <span class="surface-metric__label">Host</span>

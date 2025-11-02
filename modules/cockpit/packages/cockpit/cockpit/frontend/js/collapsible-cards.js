@@ -135,6 +135,42 @@ function ensureToggle(header) {
   return toggle;
 }
 
+function ensureToggleParts(toggle) {
+  if (!toggle) {
+    return { icon: null, srText: null, label: null };
+  }
+
+  if (toggle.dataset.toggleDecorated !== "true") {
+    toggle.textContent = "";
+    toggle.dataset.toggleDecorated = "true";
+  }
+
+  let icon = toggle.querySelector(".surface-card__toggleIcon");
+  if (!icon) {
+    icon = document.createElement("span");
+    icon.className = "surface-card__toggleIcon";
+    icon.setAttribute("aria-hidden", "true");
+    toggle.appendChild(icon);
+  }
+
+  let label = toggle.querySelector(".surface-card__toggleLabel");
+  if (!label) {
+    label = document.createElement("span");
+    label.className = "surface-card__toggleLabel";
+    label.setAttribute("aria-hidden", "true");
+    toggle.appendChild(label);
+  }
+
+  let srText = toggle.querySelector(".surface-card__toggleText");
+  if (!srText) {
+    srText = document.createElement("span");
+    srText.className = "surface-card__toggleText";
+    toggle.appendChild(srText);
+  }
+
+  return { icon, srText, label };
+}
+
 function applyCollapsedState(card, toggle, content, collapsed, titleText) {
   const label = titleText ? titleText.trim() : "section";
   card.classList.toggle("surface-card--collapsible", true);
@@ -142,12 +178,19 @@ function applyCollapsedState(card, toggle, content, collapsed, titleText) {
   if (content) {
     content.hidden = Boolean(collapsed);
   }
-  toggle.textContent = collapsed ? "Expand" : "Collapse";
+  const { icon, srText, label: visibleLabel } = ensureToggleParts(toggle);
+  if (icon) {
+    icon.textContent = collapsed ? "▸" : "▾";
+  }
+  const hiddenLabel = collapsed ? `Expand ${label}` : `Collapse ${label}`;
+  if (visibleLabel) {
+    visibleLabel.textContent = collapsed ? "Expand" : "Collapse";
+  }
+  if (srText) {
+    srText.textContent = hiddenLabel;
+  }
   toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-  toggle.setAttribute(
-    "aria-label",
-    collapsed ? `Expand ${label}` : `Collapse ${label}`,
-  );
+  toggle.setAttribute("aria-label", hiddenLabel);
 }
 
 function monitorShadowRoot(shadowRoot) {

@@ -174,9 +174,9 @@ class MemoryDashboard extends LitElement {
               ? html`<p class="surface-status" data-variant="error">${this.queryFeedback}</p>`
               : ''}
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Run query</button>
+              <button type="submit" class="surface-button">🔍 Run query</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.clearQuery}>
-                Clear
+                🧹 Clear
               </button>
             </div>
           </form>
@@ -236,12 +236,12 @@ class MemoryDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">Persist memory</button>
+              <button type="submit" class="surface-button">💾 Persist memory</button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.clearStoreForm}>
-                Clear form
+                🧼 Clear form
               </button>
               <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateIngest}>
-                Simulate ingest
+                🧪 Simulate ingest
               </button>
             </div>
           </form>
@@ -256,7 +256,7 @@ class MemoryDashboard extends LitElement {
               ?disabled=${!this.memoryLog.length}
               @click=${this.clearMemoryLog}
             >
-              Clear log
+              🧹 Clear log
             </button>
           </header>
           <p class="surface-status" data-variant=${this.memoryLogTone}>${this.memoryLogStatus}</p>

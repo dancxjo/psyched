@@ -107,9 +107,9 @@ class CockpitVoiceConsole extends LitElement {
   renderTransportControls() {
     const actions = this._controls;
     const buttons = [
-      { action: 'interrupt', label: 'Pause', variant: 'ghost' },
-      { action: 'resume', label: 'Resume', variant: 'accent' },
-      { action: 'clear', label: 'Clear', variant: 'critical' },
+      { action: 'interrupt', label: '⏸️ Pause', variant: 'ghost' },
+      { action: 'resume', label: '▶️ Resume', variant: 'accent' },
+      { action: 'clear', label: '🧹 Clear', variant: 'critical' },
     ];
     return html`
       <div class="voice-transport">
@@ -168,7 +168,7 @@ class CockpitVoiceConsole extends LitElement {
             data-variant="accent"
             ?disabled=${disabled || !this._input.trim()}
           >
-            Send
+            🗣️ Send
           </button>
           ${this._lastSent
             ? html`<span class="voice-last">Last sent: ${this._lastSent}</span>`
