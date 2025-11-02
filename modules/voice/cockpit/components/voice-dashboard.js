@@ -305,6 +305,16 @@ class VoiceDashboard extends LitElement {
 
     render() {
         const statusVariant = this.status === 'Live' ? 'success' : this.status === 'Error' ? 'error' : undefined;
+        const sendVoiceAction = { icon: '🗣️', label: 'Send to /voice' };
+        const interruptAction = { icon: '⏹️', label: 'Interrupt' };
+        const resumeAction = { icon: '▶️', label: 'Resume' };
+        const clearQueueAction = { icon: '🧹', label: 'Clear queue' };
+        const volumeApplyAction = { icon: '🎚️', label: 'Apply' };
+        const eventLogAction = this.eventLogCopyState === 'copying'
+            ? { icon: '📋', label: 'Copying…' }
+            : this.eventLogCopyState === 'copied'
+                ? { icon: '✅', label: 'Copied!' }
+                : { icon: '📋', label: 'Copy log' };
         return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
@@ -315,7 +325,15 @@ class VoiceDashboard extends LitElement {
               Text to speak
               <input type="text" .value=${this.voiceMessage} @input=${(e) => (this.voiceMessage = e.target.value)} placeholder="Type message">
             </label>
-            <button class="surface-action" type="submit">🗣️ Send to /voice</button>
+            <button
+              class="surface-action"
+              type="submit"
+              aria-label="${sendVoiceAction.label}"
+              title="${sendVoiceAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${sendVoiceAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${sendVoiceAction.label}</span>
+            </button>
             ${this.voiceFeedback ? html`<p class="surface-status">${this.voiceFeedback}</p>` : ''}
           </form>
           <div class="surface-panel surface-mono voice-last">${this.lastVoice || '—'}</div>
@@ -324,16 +342,52 @@ class VoiceDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Playback Controls</h3>
           <div class="surface-actions">
-            <button class="surface-action" type="button" @click=${this.sendInterrupt}>⏹️ Interrupt</button>
-            <button class="surface-action" type="button" @click=${this.sendResume}>▶️ Resume</button>
-            <button class="surface-action" type="button" @click=${this.sendClear}>🧹 Clear queue</button>
+            <button
+              class="surface-action"
+              type="button"
+              @click=${this.sendInterrupt}
+              aria-label="${interruptAction.label}"
+              title="${interruptAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${interruptAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${interruptAction.label}</span>
+            </button>
+            <button
+              class="surface-action"
+              type="button"
+              @click=${this.sendResume}
+              aria-label="${resumeAction.label}"
+              title="${resumeAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${resumeAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${resumeAction.label}</span>
+            </button>
+            <button
+              class="surface-action"
+              type="button"
+              @click=${this.sendClear}
+              aria-label="${clearQueueAction.label}"
+              title="${clearQueueAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${clearQueueAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${clearQueueAction.label}</span>
+            </button>
           </div>
           ${this.commandFeedback ? html`<p class="surface-status">${this.commandFeedback}</p>` : ''}
           <label>
             Volume (0-255)
             <div class="volume-control">
               <input type="number" min="0" max="255" .value=${this.volume} @input=${(e) => (this.volume = Number(e.target.value || 0))} />
-              <button class="surface-action" type="button" @click=${this.applyVolume}>🎚️ Apply</button>
+              <button
+                class="surface-action"
+                type="button"
+                @click=${this.applyVolume}
+                aria-label="${volumeApplyAction.label}"
+                title="${volumeApplyAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${volumeApplyAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${volumeApplyAction.label}</span>
+              </button>
             </div>
           </label>
           ${this.volumeFeedback ? html`<p class="surface-status">${this.volumeFeedback}</p>` : ''}
@@ -347,12 +401,11 @@ class VoiceDashboard extends LitElement {
               type="button"
               ?disabled=${this.eventLogCopyState === 'copying' || this.eventLog.length === 0}
               @click=${() => this.copyEventLog()}
+              aria-label="${eventLogAction.label}"
+              title="${eventLogAction.label}"
             >
-              ${this.eventLogCopyState === 'copying'
-                ? '📋 Copying…'
-                : this.eventLogCopyState === 'copied'
-                  ? '✅ Copied!'
-                  : '📋 Copy log'}
+              <span class="surface-action__icon" aria-hidden="true">${eventLogAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${eventLogAction.label}</span>
             </button>
           </header>
           <ul class="surface-log">

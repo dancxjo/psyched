@@ -120,6 +120,9 @@ class CockpitDashboard extends LitElement {
   }
 
   render() {
+    const refreshBusy = this.loading;
+    const refreshLabel = refreshBusy ? "Refreshing…" : "Refresh";
+    const refreshIcon = refreshBusy ? "⏳" : "🔄";
     return html`
       <div class="surface-grid surface-grid--stack">
         <article class="surface-card">
@@ -133,9 +136,16 @@ class CockpitDashboard extends LitElement {
                 type="button"
                 class="surface-action"
                 ?disabled="${this.loading}"
+                aria-label="${refreshLabel}"
+                title="${refreshLabel}"
                 @click="${() => this.refresh()}"
               >
-                ${this.loading ? "🔄 Refreshing…" : "🔄 Refresh"}
+                <span class="surface-action__icon" aria-hidden="true"
+                  >${refreshIcon}</span
+                >
+                <span class="surface-action__label" aria-hidden="true"
+                  >${refreshLabel}</span
+                >
               </button>
             </div>
           </header>
@@ -169,12 +179,12 @@ class CockpitDashboard extends LitElement {
 
   _renderHostCard() {
     const disableActions = this.loading || Boolean(this.hostActionPending);
-    const shutdownLabel = this.hostActionPending === "shutdown"
-      ? "⏳ Shutting down…"
-      : "⏻ Shutdown";
-    const restartLabel = this.hostActionPending === "restart"
-      ? "🔁 Restarting…"
-      : "🔁 Restart";
+    const shutdownPending = this.hostActionPending === "shutdown";
+    const shutdownIcon = shutdownPending ? "⏳" : "⏻";
+    const shutdownLabel = shutdownPending ? "Shutting down…" : "Shutdown";
+    const restartPending = this.hostActionPending === "restart";
+    const restartIcon = restartPending ? "⏳" : "🔁";
+    const restartLabel = restartPending ? "Restarting…" : "Restart";
     return html`
       <section class="surface-metric">
         <span class="surface-metric__label">Host</span>
@@ -187,18 +197,32 @@ class CockpitDashboard extends LitElement {
             class="surface-action"
             data-variant="danger"
             ?disabled="${disableActions}"
+            aria-label="${shutdownLabel}"
+            title="${shutdownLabel}"
             @click="${() => this._confirmHostOperation("shutdown")}"
           >
-            ${shutdownLabel}
+            <span class="surface-action__icon" aria-hidden="true"
+              >${shutdownIcon}</span
+            >
+            <span class="surface-action__label" aria-hidden="true"
+              >${shutdownLabel}</span
+            >
           </button>
           <button
             type="button"
             class="surface-action"
             data-variant="warning"
             ?disabled="${disableActions}"
+            aria-label="${restartLabel}"
+            title="${restartLabel}"
             @click="${() => this._confirmHostOperation("restart")}"
           >
-            ${restartLabel}
+            <span class="surface-action__icon" aria-hidden="true"
+              >${restartIcon}</span
+            >
+            <span class="surface-action__label" aria-hidden="true"
+              >${restartLabel}</span
+            >
           </button>
         </div>
         ${this.hostActionStatus

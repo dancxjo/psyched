@@ -141,6 +141,13 @@ class MemoryDashboard extends LitElement {
   }
 
   render() {
+    const runQueryAction = { icon: '🔍', label: 'Run query' };
+    const clearQueryAction = { icon: '🧹', label: 'Clear' };
+    const persistMemoryAction = { icon: '💾', label: 'Persist memory' };
+    const clearStoreAction = { icon: '🧼', label: 'Clear form' };
+    const simulateIngestAction = { icon: '🧪', label: 'Simulate ingest' };
+    const clearLogAction = { icon: '🧹', label: 'Clear log' };
+
     return html`
       <div class="surface-grid surface-grid--wide surface-grid--dense">
         <article class="surface-card surface-card--wide surface-card--compact">
@@ -174,9 +181,24 @@ class MemoryDashboard extends LitElement {
               ? html`<p class="surface-status" data-variant="error">${this.queryFeedback}</p>`
               : ''}
             <div class="surface-actions">
-              <button type="submit" class="surface-button">🔍 Run query</button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.clearQuery}>
-                🧹 Clear
+              <button
+                type="submit"
+                class="surface-button"
+                aria-label="${runQueryAction.label}"
+                title="${runQueryAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${runQueryAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${runQueryAction.label}</span>
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${this.clearQuery}
+                aria-label="${clearQueryAction.label}"
+                title="${clearQueryAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${clearQueryAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${clearQueryAction.label}</span>
               </button>
             </div>
           </form>
@@ -236,12 +258,34 @@ class MemoryDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">💾 Persist memory</button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.clearStoreForm}>
-                🧼 Clear form
+              <button
+                type="submit"
+                class="surface-button"
+                aria-label="${persistMemoryAction.label}"
+                title="${persistMemoryAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${persistMemoryAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${persistMemoryAction.label}</span>
               </button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateIngest}>
-                🧪 Simulate ingest
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${this.clearStoreForm}
+                aria-label="${clearStoreAction.label}"
+                title="${clearStoreAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${clearStoreAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${clearStoreAction.label}</span>
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${this.simulateIngest}
+                aria-label="${simulateIngestAction.label}"
+                title="${simulateIngestAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${simulateIngestAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${simulateIngestAction.label}</span>
               </button>
             </div>
           </form>
@@ -255,8 +299,11 @@ class MemoryDashboard extends LitElement {
               class="surface-action"
               ?disabled=${!this.memoryLog.length}
               @click=${this.clearMemoryLog}
+              aria-label="${clearLogAction.label}"
+              title="${clearLogAction.label}"
             >
-              🧹 Clear log
+              <span class="surface-action__icon" aria-hidden="true">${clearLogAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${clearLogAction.label}</span>
             </button>
           </header>
           <p class="surface-status" data-variant=${this.memoryLogTone}>${this.memoryLogStatus}</p>

@@ -240,6 +240,14 @@ class NavDashboard extends LitElement {
   }
 
   render() {
+    const commandLogAction = this.logCopyState === 'copying'
+      ? { icon: '📋', label: 'Copying…' }
+      : this.logCopyState === 'copied'
+      ? { icon: '✅', label: 'Copied!' }
+      : { icon: '📋', label: 'Copy log' };
+    const initialPoseAction = { icon: '📍', label: 'Set initial pose' };
+    const goalPoseAction = { icon: '🚩', label: 'Send navigation goal' };
+
     return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
@@ -271,12 +279,11 @@ class NavDashboard extends LitElement {
               class="surface-action"
               ?disabled=${this.logCopyState === 'copying' || !this.logEntries.length}
               @click=${() => this._copyCommandLog()}
+              aria-label="${commandLogAction.label}"
+              title="${commandLogAction.label}"
             >
-              ${this.logCopyState === 'copying'
-                ? '📋 Copying…'
-                : this.logCopyState === 'copied'
-                  ? '✅ Copied!'
-                  : '📋 Copy log'}
+              <span class="surface-action__icon" aria-hidden="true">${commandLogAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${commandLogAction.label}</span>
             </button>
           </header>
           <p class="surface-status">Recent cockpit interactions</p>
@@ -310,7 +317,15 @@ class NavDashboard extends LitElement {
             <div class="form-row form-row--split">
               ${this._renderPoseFields(this.initialPoseForm, (field, value) => this._updateInitialPoseField(field, value))}
             </div>
-            <button type="submit" class="surface-action">📍 Set initial pose</button>
+            <button
+              type="submit"
+              class="surface-action"
+              aria-label="${initialPoseAction.label}"
+              title="${initialPoseAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${initialPoseAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${initialPoseAction.label}</span>
+            </button>
           </form>
         </article>
 
@@ -321,7 +336,15 @@ class NavDashboard extends LitElement {
             <div class="form-row form-row--split">
               ${this._renderPoseFields(this.goalForm, (field, value) => this._updateGoalField(field, value))}
             </div>
-            <button type="submit" class="surface-action">🚩 Send navigation goal</button>
+            <button
+              type="submit"
+              class="surface-action"
+              aria-label="${goalPoseAction.label}"
+              title="${goalPoseAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${goalPoseAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${goalPoseAction.label}</span>
+            </button>
           </form>
         </article>
       </div>

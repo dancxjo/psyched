@@ -6,7 +6,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description() -> LaunchDescription:
-    camera_topic = LaunchConfiguration("camera_topic", default="/image_raw")
+    camera_topic = LaunchConfiguration("camera_topic", default="/camera/color/image_raw")
     faces_topic = LaunchConfiguration("faces_topic", default="/vision/faces")
     face_detected_topic = LaunchConfiguration("face_detected_topic", default="/vision/face_detected")
     trigger_cooldown = LaunchConfiguration("trigger_cooldown_sec", default="2.0")

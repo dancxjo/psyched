@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { createTopicSocket, callRosService } from '/js/cockpit.js';
+import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import { buildFacesSettingsPayload, parseFaceTriggerPayload } from './faces-dashboard.helpers.js';
 
@@ -7,15 +7,7 @@ function makeId(prefix) {
   return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-const ROUTER_SOURCE_OPTIONS = [
-  ['kinect', 'Kinect'],
-  ['usb', 'USB camera'],
-  ['auto', 'Auto'],
-  ['off', 'Disabled'],
-];
-
-const PARAMETER_TYPE_BOOL = 1;
-const PARAMETER_TYPE_STRING = 4;
+const MAX_CROP_HISTORY = 12;
 
 /**
  * Dashboard for the Faces module giving cockpits quick tuning controls.
@@ -33,15 +25,9 @@ class FacesDashboard extends LitElement {
     publishEmbeddings: { state: true },
     statusMessage: { state: true },
     statusTone: { state: true },
-    routerStatus: { state: true },
-    routerTone: { state: true },
-    routerSource: { state: true },
-    routerFallback: { state: true },
-    kinectEnabled: { state: true },
-    usbEnabled: { state: true },
-    routerTopics: { state: true },
-    routerBusy: { state: true },
-    routerAvailable: { state: true },
+    cropStatusMessage: { state: true },
+    cropStatusTone: { state: true },
+    faceCrops: { state: true },
     tagFaceId: { state: true },
     tagLabel: { state: true },
     tagFeedback: { state: true },
@@ -141,28 +127,40 @@ class FacesDashboard extends LitElement {
         white-space: pre-wrap;
       }
 
-      .router-topics {
-        margin: 0;
+      .crop-gallery {
         display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      }
+
+      .crop-card {
+        display: grid;
+        gap: 0.5rem;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.6rem;
+      }
+
+      .crop-card__image {
+        width: 100%;
+        border-radius: 0.4rem;
+        display: block;
+        object-fit: cover;
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      .crop-card__meta {
+        display: flex;
+        flex-direction: column;
         gap: 0.25rem;
         font-size: 0.75rem;
         color: var(--lcars-muted);
       }
 
-      .router-topics__entry {
-        display: flex;
-        flex-direction: column;
-        gap: 0.1rem;
-      }
-
-      .router-topics__label {
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .router-topics__value {
-        font-family: var(--metric-value-font);
+      .crop-card__meta span {
         color: var(--lcars-text);
+        font-family: var(--metric-value-font);
         word-break: break-word;
       }
     `,
@@ -173,42 +171,27 @@ class FacesDashboard extends LitElement {
     this.threshold = 0.6;
     this.window = 15;
     this.publishCrops = true;
-    this.publishEmbeddings = true;
-    this.statusMessage = 'Connecting to recognition stream…';
-    this.statusTone = 'info';
-    this.routerStatus = 'Querying faces router state…';
-    this.routerTone = 'info';
-    this.routerSource = 'kinect';
-    this.routerFallback = 'auto';
-    this.kinectEnabled = true;
-    this.usbEnabled = false;
-    this.routerTopics = {
-      kinectImage: '/camera/color/image_raw',
-      kinectInfo: '/camera/color/camera_info',
-      usbImage: '/eye/usb/image_raw',
-      usbInfo: '/eye/usb/camera_info',
-      outputImage: '/faces/camera/image_raw',
-      outputInfo: '/faces/camera/camera_info',
-    };
-    this.routerBusy = false;
-    this.routerAvailable = false;
+   this.publishEmbeddings = true;
+   this.statusMessage = 'Connecting to recognition stream…';
+   this.statusTone = 'info';
+    this.cropStatusMessage = 'Connecting to detections stream…';
+    this.cropStatusTone = 'info';
+    this.faceCrops = [];
     this.tagFaceId = '';
     this.tagLabel = '';
     this.tagFeedback = '';
     this.detectionLog = [];
     this.sockets = [];
-    this._routerRetryHandle = null;
-    this._routerRetryAttempt = 0;
-    this._routerRetryLimit = 5;
-    this._routerRetryDelayMs = 3000;
+    this._cropCanvas = null;
+    this._cropContext = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
     if (!this.sockets.length) {
       this.connectTriggerStream();
+      this.connectDetectionsStream();
     }
-    void this.refreshRouterState();
   }
 
   disconnectedCallback() {
@@ -221,14 +204,15 @@ class FacesDashboard extends LitElement {
       }
     }
     this.sockets.length = 0;
-    if (this._routerRetryHandle) {
-      clearTimeout(this._routerRetryHandle);
-      this._routerRetryHandle = null;
-    }
   }
 
   render() {
-    const routerControlsDisabled = this.routerBusy || !this.routerAvailable;
+    const hasCrops = this.faceCrops.length > 0;
+    const tuningApplyAction = { icon: '🎛️', label: 'Apply tuning' };
+    const resetEmbeddingsAction = { icon: '♻️', label: 'Reset embedding cache' };
+    const simulateRecognitionAction = { icon: '🎭', label: 'Simulate recognition' };
+    const submitLabelAction = { icon: '🏷️', label: 'Submit label' };
+    const clearLabelAction = { icon: '🧹', label: 'Clear' };
     return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
@@ -283,108 +267,53 @@ class FacesDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">🎛️ Apply tuning</button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.resetEmbeddings}>
-                ♻️ Reset embedding cache
+              <button
+                type="submit"
+                class="surface-button"
+                aria-label="${tuningApplyAction.label}"
+                title="${tuningApplyAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${tuningApplyAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${tuningApplyAction.label}</span>
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${this.resetEmbeddings}
+                aria-label="${resetEmbeddingsAction.label}"
+                title="${resetEmbeddingsAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${resetEmbeddingsAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${resetEmbeddingsAction.label}</span>
               </button>
             </div>
           </form>
         </article>
 
         <article class="surface-card">
-          <h3 class="surface-card__title">Faces routing</h3>
-          <p class="surface-status" data-variant="${this.routerTone}">${this.routerStatus}</p>
-          <form @submit=${this.applyRouterSettings}>
-            <div class="form-row form-row--split">
-              <label>
-                Active source
-                <select
-                  .value=${this.routerSource}
-                  @change=${(event) => (this.routerSource = event.target.value)}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  ${ROUTER_SOURCE_OPTIONS.map(
-                    ([value, label]) => html`<option value=${value}>${label}</option>`,
-                  )}
-                </select>
-              </label>
-              <label>
-                Fallback source
-                <select
-                  .value=${this.routerFallback}
-                  @change=${(event) => (this.routerFallback = event.target.value)}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  ${ROUTER_SOURCE_OPTIONS.map(
-                    ([value, label]) => html`<option value=${value}>${label}</option>`,
-                  )}
-                </select>
-              </label>
-            </div>
-            <div class="form-row form-row--split">
-              <label>
-                Kinect feed enabled
-                <select
-                  .value=${this.kinectEnabled ? 'true' : 'false'}
-                  @change=${(event) => (this.kinectEnabled = event.target.value === 'true')}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </label>
-              <label>
-                USB feed enabled
-                <select
-                  .value=${this.usbEnabled ? 'true' : 'false'}
-                  @change=${(event) => (this.usbEnabled = event.target.value === 'true')}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </label>
-            </div>
-            <div class="router-topics">
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Kinect image</span>
-                <span class="router-topics__value">${this.routerTopics.kinectImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Kinect info</span>
-                <span class="router-topics__value">${this.routerTopics.kinectInfo || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">USB image</span>
-                <span class="router-topics__value">${this.routerTopics.usbImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">USB info</span>
-                <span class="router-topics__value">${this.routerTopics.usbInfo || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Faces output image</span>
-                <span class="router-topics__value">${this.routerTopics.outputImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Faces output info</span>
-                <span class="router-topics__value">${this.routerTopics.outputInfo || '—'}</span>
-              </div>
-            </div>
-            <div class="surface-actions">
-              <button type="submit" class="surface-button" ?disabled=${routerControlsDisabled}>
-                ${this.routerBusy && this.routerAvailable ? '⚙️ Applying…' : '🧭 Apply routing'}
-              </button>
-              <button
-                type="button"
-                class="surface-button surface-button--ghost"
-                @click=${() => this.refreshRouterState({ manual: true })}
-                ?disabled=${this.routerBusy}
-              >
-                🔄 Refresh state
-              </button>
-            </div>
-          </form>
+          <h3 class="surface-card__title">Recent face crops</h3>
+          <p class="surface-status" data-variant="${this.cropStatusTone}">${this.cropStatusMessage}</p>
+          ${hasCrops
+            ? html`<div class="crop-gallery">
+                ${this.faceCrops.map(
+                  (crop) => html`<div class="crop-card" data-crop-id=${crop.id}>
+                    <img class="crop-card__image" src="${crop.url}" alt="Face crop preview" />
+                    <div class="crop-card__meta">
+                      <div>
+                        Captured <span>${crop.timestamp}</span>
+                      </div>
+                      <div>
+                        Confidence
+                        <span>${typeof crop.confidence === 'number' ? `${(crop.confidence * 100).toFixed(1)}%` : '—'}</span>
+                      </div>
+                      <div>
+                        Size <span>${crop.width}×${crop.height}</span>
+                      </div>
+                    </div>
+                  </div>`,
+                )}
+              </div>`
+            : html`<p class="surface-empty">No face crops received yet.</p>`}
         </article>
 
         <article class="surface-card surface-card--wide">
@@ -423,8 +352,15 @@ class FacesDashboard extends LitElement {
               </ol>`
             : html`<p class="surface-empty">No recognition events recorded yet.</p>`}
           <div class="surface-actions">
-            <button type="button" class="surface-button surface-button--ghost" @click=${this.simulateDetection}>
-              🎭 Simulate recognition
+            <button
+              type="button"
+              class="surface-button surface-button--ghost"
+              @click=${this.simulateDetection}
+              aria-label="${simulateRecognitionAction.label}"
+              title="${simulateRecognitionAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${simulateRecognitionAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${simulateRecognitionAction.label}</span>
             </button>
           </div>
         </article>
@@ -454,9 +390,24 @@ class FacesDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">🏷️ Submit label</button>
-              <button type="button" class="surface-button surface-button--ghost" @click=${this.clearTagForm}>
-                🧹 Clear
+              <button
+                type="submit"
+                class="surface-button"
+                aria-label="${submitLabelAction.label}"
+                title="${submitLabelAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${submitLabelAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${submitLabelAction.label}</span>
+              </button>
+              <button
+                type="button"
+                class="surface-button surface-button--ghost"
+                @click=${this.clearTagForm}
+                aria-label="${clearLabelAction.label}"
+                title="${clearLabelAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${clearLabelAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${clearLabelAction.label}</span>
               </button>
             </div>
           </form>
@@ -465,193 +416,182 @@ class FacesDashboard extends LitElement {
     `;
   }
 
-  async refreshRouterState(options = {}) {
-    const manual = Boolean(options.manual);
-    if (manual) {
-      this._routerRetryAttempt = 0;
-    }
-    if (this._routerRetryHandle) {
-      clearTimeout(this._routerRetryHandle);
-      this._routerRetryHandle = null;
-    }
-    const previousBusy = this.routerBusy;
-    this.routerBusy = true;
-    this.routerStatus = 'Querying faces router state…';
-    this.routerTone = 'info';
-
-    const parameterNames = [
-      'faces_source',
-      'fallback_source',
-      'kinect_enabled',
-      'usb_enabled',
-      'kinect_image_topic',
-      'kinect_camera_info_topic',
-      'usb_image_topic',
-      'usb_camera_info_topic',
-      'output_image_topic',
-      'output_camera_info_topic',
-    ];
-
-    try {
-      const response = await callRosService({
-        module: 'eye',
-        service: '/psyched_faces_router/get_parameters',
-        type: 'rcl_interfaces/srv/GetParameters',
-        args: { names: parameterNames },
-        timeoutMs: 4000,
-      });
-
-      const values = Array.isArray(response?.values) ? response.values : [];
-      const lookup = new Map();
-      for (let index = 0; index < parameterNames.length; index += 1) {
-        lookup.set(parameterNames[index], values[index] ?? null);
+  connectDetectionsStream() {
+    const socket = createTopicSocket({
+      module: 'faces',
+      action: 'face_detections_stream',
+      type: 'faces_msgs/msg/FaceDetections',
+      role: 'subscribe',
+      queueLength: 2,
+    });
+    socket.addEventListener('open', () => {
+      this.cropStatusMessage = 'Detections stream connected.';
+      this.cropStatusTone = 'success';
+    });
+    socket.addEventListener('message', (event) => {
+      const payload = this.parseStreamEnvelope(event);
+      if (!payload) {
+        return;
       }
+      if (payload.event === 'status') {
+        const state = payload?.data?.state;
+        if (state === 'ready') {
+          this.cropStatusMessage = 'Detections stream ready.';
+          this.cropStatusTone = 'success';
+        } else if (state === 'closed') {
+          this.cropStatusMessage = 'Detections stream closed.';
+          this.cropStatusTone = 'warning';
+        }
+        return;
+      }
+      if (payload.event !== 'message') {
+        return;
+      }
+      this._processDetectionsPayload(payload.data);
+    });
+    socket.addEventListener('error', () => {
+      this.cropStatusMessage = 'Detections stream error.';
+      this.cropStatusTone = 'error';
+    });
+    socket.addEventListener('close', () => {
+      this.cropStatusMessage = 'Detections stream disconnected.';
+      this.cropStatusTone = 'warning';
+    });
+    this.sockets.push(socket);
+  }
 
-      this.routerSource = this._extractString(lookup.get('faces_source'), this.routerSource);
-      this.routerFallback = this._extractString(lookup.get('fallback_source'), this.routerFallback);
-      this.kinectEnabled = this._extractBool(lookup.get('kinect_enabled'), this.kinectEnabled);
-      this.usbEnabled = this._extractBool(lookup.get('usb_enabled'), this.usbEnabled);
-      this.routerTopics = {
-        kinectImage: this._extractString(lookup.get('kinect_image_topic'), this.routerTopics.kinectImage),
-        kinectInfo: this._extractString(lookup.get('kinect_camera_info_topic'), this.routerTopics.kinectInfo),
-        usbImage: this._extractString(lookup.get('usb_image_topic'), this.routerTopics.usbImage),
-        usbInfo: this._extractString(lookup.get('usb_camera_info_topic'), this.routerTopics.usbInfo),
-        outputImage: this._extractString(lookup.get('output_image_topic'), this.routerTopics.outputImage),
-        outputInfo: this._extractString(lookup.get('output_camera_info_topic'), this.routerTopics.outputInfo),
+  _processDetectionsPayload(message) {
+    if (!message || typeof message !== 'object') {
+      return;
+    }
+    const faces = Array.isArray(message.faces) ? message.faces : [];
+    if (!faces.length) {
+      return;
+    }
+    const timestamp = new Date().toLocaleTimeString();
+    const previews = [];
+    for (const face of faces) {
+      const preview = this._renderFaceCrop(face);
+      if (preview) {
+        previews.push({
+          id: makeId('crop'),
+          timestamp,
+          ...preview,
+        });
+      }
+    }
+    if (!previews.length) {
+      return;
+    }
+    this.faceCrops = [...previews, ...this.faceCrops].slice(0, MAX_CROP_HISTORY);
+  }
+
+  _renderFaceCrop(face) {
+    if (!face || typeof face !== 'object') {
+      return null;
+    }
+    const preview = this._imageMessageToDataUrl(face.crop);
+    if (!preview) {
+      return null;
+    }
+    const confidenceValue = Number(face.confidence);
+    return {
+      url: preview.url,
+      width: preview.width,
+      height: preview.height,
+      confidence: Number.isFinite(confidenceValue) ? confidenceValue : null,
+    };
+  }
+
+  _imageMessageToDataUrl(image) {
+    if (!image || typeof image !== 'object') {
+      return null;
+    }
+    const width = Number(image.width) || 0;
+    const height = Number(image.height) || 0;
+    const encoding = typeof image.encoding === 'string' ? image.encoding.toLowerCase() : '';
+    const data = this._toUint8Array(image.data);
+    if (!width || !height || !encoding || !data.length) {
+      return null;
+    }
+
+    const context = this._ensureCropContext(width, height);
+    if (!context || !this._cropCanvas) {
+      return null;
+    }
+
+    let rgba;
+    if (encoding === 'rgb8' || encoding === 'bgr8') {
+      if (data.length < width * height * 3) {
+        return null;
+      }
+      rgba = new Uint8ClampedArray(width * height * 4);
+      for (let source = 0, target = 0; source < width * height * 3; source += 3, target += 4) {
+        const r = encoding === 'bgr8' ? data[source + 2] : data[source];
+        const g = data[source + 1];
+        const b = encoding === 'bgr8' ? data[source] : data[source + 2];
+        rgba[target] = r;
+        rgba[target + 1] = g;
+        rgba[target + 2] = b;
+        rgba[target + 3] = 255;
+      }
+    } else if (encoding === 'rgba8' || encoding === 'bgra8') {
+      if (data.length < width * height * 4) {
+        return null;
+      }
+      rgba = new Uint8ClampedArray(width * height * 4);
+      for (let source = 0; source < width * height * 4; source += 4) {
+        const r = encoding === 'bgra8' ? data[source + 2] : data[source];
+        const g = data[source + 1];
+        const b = encoding === 'bgra8' ? data[source] : data[source + 2];
+        const a = data[source + 3];
+        rgba[source] = r;
+        rgba[source + 1] = g;
+        rgba[source + 2] = b;
+        rgba[source + 3] = a > 0 ? a : 255;
+      }
+    } else if (encoding.startsWith('mono')) {
+      if (data.length < width * height) {
+        return null;
+      }
+      rgba = new Uint8ClampedArray(width * height * 4);
+      for (let index = 0, target = 0; index < width * height; index += 1, target += 4) {
+        const value = data[index];
+        rgba[target] = value;
+        rgba[target + 1] = value;
+        rgba[target + 2] = value;
+        rgba[target + 3] = 255;
+      }
+    } else {
+      return null;
+    }
+
+    const imageData = new ImageData(rgba, width, height);
+    context.putImageData(imageData, 0, 0);
+    try {
+      return {
+        url: this._cropCanvas.toDataURL('image/png'),
+        width,
+        height,
       };
-
-      this.routerStatus = 'Faces router state synchronised.';
-      this.routerTone = 'success';
-      this.routerAvailable = true;
-      this._routerRetryAttempt = 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const unavailable = typeof message === 'string' && message.toLowerCase().includes('not available');
-      if (unavailable && this._routerRetryAttempt < this._routerRetryLimit) {
-        this._routerRetryAttempt += 1;
-        const delaySeconds = Math.max(this._routerRetryDelayMs / 1000, 0.1);
-        this.routerStatus = `Faces router is starting up (waiting for eye module); retrying in ${delaySeconds.toFixed(1)}s…`;
-        this.routerTone = 'warning';
-        this.routerAvailable = false;
-        this._routerRetryHandle = setTimeout(() => {
-          this._routerRetryHandle = null;
-          void this.refreshRouterState();
-        }, this._routerRetryDelayMs);
-      } else {
-        this.routerStatus = `Faces router unavailable: ${message}. Ensure the eye module is running.`;
-        this.routerTone = 'error';
-        this.routerAvailable = false;
-      }
-    } finally {
-      this.routerBusy = previousBusy;
-    }
-  }
-
-  async applyRouterSettings(event) {
-    event.preventDefault();
-    if (this.routerBusy) {
-      return;
-    }
-    if (!this.routerAvailable) {
-      this.routerStatus = 'Faces router service is unavailable.';
-      this.routerTone = 'error';
-      return;
-    }
-
-    this.routerBusy = true;
-    this.routerStatus = 'Applying routing updates…';
-    this.routerTone = 'info';
-
-    const parameters = [
-      this._buildStringParameter('faces_source', this.routerSource),
-      this._buildStringParameter('fallback_source', this.routerFallback),
-      this._buildBoolParameter('kinect_enabled', this.kinectEnabled),
-      this._buildBoolParameter('usb_enabled', this.usbEnabled),
-    ].filter(Boolean);
-
-    if (!parameters.length) {
-      this.routerBusy = false;
-      this.routerStatus = 'No routing changes detected.';
-      this.routerTone = 'warning';
-      return;
-    }
-
-    try {
-      await callRosService({
-        module: 'eye',
-        service: '/psyched_faces_router/set_parameters',
-        type: 'rcl_interfaces/srv/SetParameters',
-        args: { parameters },
-        timeoutMs: 5000,
-      });
-      await this.refreshRouterState({ manual: true });
-      if (this.routerAvailable) {
-        this.routerStatus = 'Faces routing updated.';
-        this.routerTone = 'success';
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.routerStatus = `Failed to update faces routing: ${message}`;
-      this.routerTone = 'error';
-    } finally {
-      this.routerBusy = false;
-    }
-  }
-
-  _extractString(parameterValue, fallback = '') {
-    if (!parameterValue || typeof parameterValue !== 'object') {
-      return fallback;
-    }
-    const text = typeof parameterValue.string_value === 'string' ? parameterValue.string_value.trim() : '';
-    if (text) {
-      return text;
-    }
-    if (Array.isArray(parameterValue.string_array_value) && parameterValue.string_array_value.length > 0) {
-      const first = parameterValue.string_array_value[0];
-      if (typeof first === 'string' && first.trim()) {
-        return first.trim();
-      }
-    }
-    return fallback;
-  }
-
-  _extractBool(parameterValue, fallback = false) {
-    if (!parameterValue || typeof parameterValue !== 'object') {
-      return fallback;
-    }
-    if (typeof parameterValue.bool_value === 'boolean') {
-      return parameterValue.bool_value;
-    }
-    if (typeof parameterValue.integer_value === 'number') {
-      return parameterValue.integer_value !== 0;
-    }
-    return fallback;
-  }
-
-  _buildStringParameter(name, value) {
-    if (typeof value !== 'string' || !value.trim()) {
+    } catch (_error) {
       return null;
     }
-    return {
-      name,
-      value: {
-        type: PARAMETER_TYPE_STRING,
-        string_value: value.trim(),
-      },
-    };
   }
 
-  _buildBoolParameter(name, value) {
-    if (typeof value !== 'boolean') {
+  _ensureCropContext(width, height) {
+    if (!this._cropCanvas) {
+      this._cropCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      this._cropContext = this._cropCanvas ? this._cropCanvas.getContext('2d', { willReadFrequently: true }) : null;
+    }
+    if (!this._cropCanvas || !this._cropContext) {
       return null;
     }
-    return {
-      name,
-      value: {
-        type: PARAMETER_TYPE_BOOL,
-        bool_value: value,
-      },
-    };
+    if (this._cropCanvas.width !== width || this._cropCanvas.height !== height) {
+      this._cropCanvas.width = width;
+      this._cropCanvas.height = height;
+    }
+    return this._cropContext;
   }
 
   connectTriggerStream() {
@@ -812,6 +752,23 @@ class FacesDashboard extends LitElement {
     );
     this.statusMessage = 'Embedding cache reset request queued.';
     this.statusTone = 'warning';
+  }
+
+  _toUint8Array(data) {
+    if (data instanceof Uint8Array) {
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return Uint8Array.from(data);
+    }
+    if (data && typeof data === 'object' && typeof data.length === 'number') {
+      try {
+        return Uint8Array.from(data);
+      } catch (_error) {
+        return new Uint8Array();
+      }
+    }
+    return new Uint8Array();
   }
 
   simulateDetection() {

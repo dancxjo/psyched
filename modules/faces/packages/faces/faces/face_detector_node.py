@@ -71,6 +71,9 @@ class MissingDependencyError(RuntimeError):
     """Raised when the faces module is missing runtime dependencies."""
 
 
+DEFAULT_CAMERA_TOPIC = "/camera/color/image_raw"
+
+
 def _missing_dependency_message(missing: str) -> str:
     human_readable = "OpenCV (cv2)" if missing == "cv2" else missing
     return (
@@ -204,8 +207,8 @@ class FaceDetectorNode(Node):
             embedder=processing.BasicEmbeddingExtractor(),
         )
 
-        # prefer the generic /image_raw topic (and its children) by default
-        self.declare_parameter("camera_topic", "/image_raw")
+        # default to the Kinect RGB stream published by the eye module
+        self.declare_parameter("camera_topic", DEFAULT_CAMERA_TOPIC)
         self.declare_parameter("faces_topic", "/vision/faces")
         self.declare_parameter("face_detected_topic", "/vision/face_detected")
         self.declare_parameter("trigger_cooldown_sec", 2.0)
@@ -214,7 +217,7 @@ class FaceDetectorNode(Node):
         self.declare_parameter("memory.flush", True)
         self.declare_parameter("memory.timeout_sec", 0.75)
 
-        self._camera_topic = self._get_param("camera_topic", "/image_raw")
+        self._camera_topic = self._get_param("camera_topic", DEFAULT_CAMERA_TOPIC)
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
         self._face_detected_topic = self._get_param("face_detected_topic", "/vision/face_detected")
         self._sensation_topic = self._get_param("sensation_topic", "/sensations")

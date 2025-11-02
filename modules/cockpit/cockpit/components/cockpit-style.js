@@ -422,36 +422,43 @@ export const surfaceStyles = css`
     gap: 0.5rem;
   }
 
-  .surface-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    padding: 0.45rem 0.85rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+  .surface-button,
+  .surface-action {
     background: rgba(88, 178, 220, 0.25);
-    color: var(--lcars-text);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 0.45rem 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-size: 0.7rem;
     font-weight: 600;
+    color: var(--lcars-text);
     cursor: pointer;
     transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
   }
 
   .surface-button:hover,
-  .surface-button:focus {
-    outline: none;
+  .surface-button:focus,
+  .surface-button:focus-visible,
+  .surface-action:hover,
+  .surface-action:focus,
+  .surface-action:focus-visible {
     background: rgba(88, 178, 220, 0.4);
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    outline: none;
   }
 
-  .surface-button[disabled] {
+  .surface-button[disabled],
+  .surface-action[disabled] {
     opacity: 0.45;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
   }
 
   .surface-button--ghost {
@@ -469,36 +476,43 @@ export const surfaceStyles = css`
     color: var(--lcars-success);
   }
 
-  .surface-action {
-    background: rgba(88, 178, 220, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 999px;
-    padding: 0.45rem 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--lcars-text);
-    cursor: pointer;
-    transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  .surface-action__icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
+    font-size: 1.05rem;
+    line-height: 1;
   }
 
-  .surface-action:hover,
-  .surface-action:focus {
-    background: rgba(88, 178, 220, 0.4);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  .surface-action__label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    margin-left: 0;
+    transition:
+      max-width 180ms ease,
+      opacity 180ms ease,
+      margin-left 180ms ease;
   }
 
-  .surface-action[disabled] {
-    opacity: 0.45;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+  .surface-button:hover .surface-action__label,
+  .surface-button:focus .surface-action__label,
+  .surface-button:focus-visible .surface-action__label,
+  .surface-action:hover .surface-action__label,
+  .surface-action:focus .surface-action__label,
+  .surface-action:focus-visible .surface-action__label {
+    max-width: 12rem;
+    opacity: 1;
+    margin-left: 0.4rem;
+  }
+
+  .surface-button[disabled] .surface-action__label,
+  .surface-action[disabled] .surface-action__label {
+    transition: none;
   }
 
   .surface-panel {

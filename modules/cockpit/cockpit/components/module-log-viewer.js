@@ -325,6 +325,37 @@ class CockpitModuleLogs extends LitElement {
       : "Missing";
     const enabledVariant = systemd.enabled ? "info" : "muted";
     const enabledLabel = systemd.enabled ? "Enabled" : "Disabled";
+    const clearAction = this.clearing
+      ? { icon: "🧹", label: "Clearing…" }
+      : { icon: "🧹", label: "Clear log" };
+    const copyAction = this.copyState === "copying"
+      ? { icon: "📋", label: "Copying…" }
+      : this.copyState === "copied"
+      ? { icon: "✅", label: "Copied!" }
+      : { icon: "📋", label: "Copy log" };
+    const refreshAction = this.loading
+      ? { icon: "🔄", label: "Refreshing…" }
+      : { icon: "🔄", label: "Refresh log" };
+    const startStopAction = busyAction === "up" || busyAction === "down"
+      ? { icon: "⚙️", label: "Working…" }
+      : systemd.active
+      ? { icon: "🛑", label: "Stop" }
+      : { icon: "🚀", label: "Start" };
+    const enableDisableAction =
+      busyAction === "enable" || busyAction === "disable"
+        ? { icon: "⚙️", label: "Working…" }
+        : systemd.enabled
+        ? { icon: "🔒", label: "Disable" }
+        : { icon: "🔓", label: "Enable" };
+    const teardownAction = busyAction === "teardown"
+      ? { icon: "⚙️", label: "Working…" }
+      : { icon: "🗑️", label: "Remove unit" };
+    const setupAction = busyAction === "setup"
+      ? { icon: "⚙️", label: "Working…" }
+      : { icon: "🛠️", label: "Create unit" };
+    const debugAction = busyAction === "debug"
+      ? { icon: "📡", label: "Collecting…" }
+      : { icon: "🕵️", label: "Debug" };
 
     if (!this.module) {
       return html`
@@ -377,30 +408,47 @@ class CockpitModuleLogs extends LitElement {
               type="button"
               class="surface-action"
               ?disabled="${this.loading || this.clearing || !this.module}"
+              aria-label="${clearAction.label}"
+              title="${clearAction.label}"
               @click="${() => this._clearLogs()}"
             >
-              ${this.clearing ? "🧹 Clearing…" : "🧹 Clear log"}
+              <span class="surface-action__icon" aria-hidden="true"
+                >${clearAction.icon}</span
+              >
+              <span class="surface-action__label" aria-hidden="true"
+                >${clearAction.label}</span
+              >
             </button>
             <button
               type="button"
               class="surface-action"
               ?disabled="${this.loading || this.clearing ||
                 this.copyState === "copying" || !this.module}"
+              aria-label="${copyAction.label}"
+              title="${copyAction.label}"
               @click="${() => this._copyLogs()}"
             >
-              ${this.copyState === "copying"
-                ? "📋 Copying…"
-                : this.copyState === "copied"
-                ? "✅ Copied!"
-                : "📋 Copy log"}
+              <span class="surface-action__icon" aria-hidden="true"
+                >${copyAction.icon}</span
+              >
+              <span class="surface-action__label" aria-hidden="true"
+                >${copyAction.label}</span
+              >
             </button>
             <button
               type="button"
               class="surface-action"
               ?disabled="${this.loading || this.clearing || !this.module}"
+              aria-label="${refreshAction.label}"
+              title="${refreshAction.label}"
               @click="${() => this.refresh()}"
             >
-              ${this.loading ? "🔄 Refreshing…" : "🔄 Refresh log"}
+              <span class="surface-action__icon" aria-hidden="true"
+                >${refreshAction.icon}</span
+              >
+              <span class="surface-action__label" aria-hidden="true"
+                >${refreshAction.label}</span
+              >
             </button>
           </div>
           <div class="module-log-panel__meta">
@@ -438,12 +486,15 @@ class CockpitModuleLogs extends LitElement {
                   @click="${() =>
                     this._runSystemdAction(systemd.active ? "down" : "up")}"
                   ?disabled="${Boolean(busyAction)}"
+                  aria-label="${startStopAction.label}"
+                  title="${startStopAction.label}"
                 >
-                  ${busyAction === "up" || busyAction === "down"
-                    ? "⚙️ Working…"
-                    : systemd.active
-                    ? "🛑 Stop"
-                    : "🚀 Start"}
+                  <span class="surface-action__icon" aria-hidden="true"
+                    >${startStopAction.icon}</span
+                  >
+                  <span class="surface-action__label" aria-hidden="true"
+                    >${startStopAction.label}</span
+                  >
                 </button>
                 <button
                   type="button"
@@ -453,12 +504,15 @@ class CockpitModuleLogs extends LitElement {
                       systemd.enabled ? "disable" : "enable",
                     )}"
                   ?disabled="${Boolean(busyAction)}"
+                  aria-label="${enableDisableAction.label}"
+                  title="${enableDisableAction.label}"
                 >
-                  ${busyAction === "enable" || busyAction === "disable"
-                    ? "⚙️ Working…"
-                    : systemd.enabled
-                    ? "🔒 Disable"
-                    : "🔓 Enable"}
+                  <span class="surface-action__icon" aria-hidden="true"
+                    >${enableDisableAction.icon}</span
+                  >
+                  <span class="surface-action__label" aria-hidden="true"
+                    >${enableDisableAction.label}</span
+                  >
                 </button>
                 ${systemd.exists
                   ? html`
@@ -467,8 +521,15 @@ class CockpitModuleLogs extends LitElement {
                       class="surface-action"
                       @click="${() => this._runSystemdAction("teardown")}"
                       ?disabled="${Boolean(busyAction)}"
+                      aria-label="${teardownAction.label}"
+                      title="${teardownAction.label}"
                     >
-                      ${busyAction === "teardown" ? "⚙️ Working…" : "🗑️ Remove unit"}
+                      <span class="surface-action__icon" aria-hidden="true"
+                        >${teardownAction.icon}</span
+                      >
+                      <span class="surface-action__label" aria-hidden="true"
+                        >${teardownAction.label}</span
+                      >
                     </button>
                   `
                   : html`
@@ -477,8 +538,15 @@ class CockpitModuleLogs extends LitElement {
                       class="surface-action"
                       @click="${() => this._runSystemdAction("setup")}"
                       ?disabled="${Boolean(busyAction)}"
+                      aria-label="${setupAction.label}"
+                      title="${setupAction.label}"
                     >
-                      ${busyAction === "setup" ? "⚙️ Working…" : "🛠️ Create unit"}
+                      <span class="surface-action__icon" aria-hidden="true"
+                        >${setupAction.icon}</span
+                      >
+                      <span class="surface-action__label" aria-hidden="true"
+                        >${setupAction.label}</span
+                      >
                     </button>
                   `}
                 <button
@@ -486,8 +554,15 @@ class CockpitModuleLogs extends LitElement {
                   class="surface-action"
                   @click="${() => this._runSystemdAction("debug")}"
                   ?disabled="${Boolean(busyAction)}"
+                  aria-label="${debugAction.label}"
+                  title="${debugAction.label}"
                 >
-                  ${busyAction === "debug" ? "📡 Collecting…" : "🕵️ Debug"}
+                  <span class="surface-action__icon" aria-hidden="true"
+                    >${debugAction.icon}</span
+                  >
+                  <span class="surface-action__label" aria-hidden="true"
+                    >${debugAction.label}</span
+                  >
                 </button>
               </div>
             `

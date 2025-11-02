@@ -6,8 +6,6 @@ TIMEOUT=${TIMEOUT:-10}
 PATTERNS=(
   "ros2 launch psyched_eye eye.launch.py"
   "psyched_kinect"
-  "psyched_usb_camera"
-  "psyched_faces_router"
   "kinect_ros2_node"
 )
 

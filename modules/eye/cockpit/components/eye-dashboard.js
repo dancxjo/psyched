@@ -349,6 +349,16 @@ class EyeDashboard extends LitElement {
         ].filter(Boolean).join(' • ')
       : '';
     const routerControlsDisabled = this.routerBusy || !this.routerAvailable;
+    const previewLiveAction = { icon: '📡', label: 'Mark feed live' };
+    const previewIdleAction = { icon: '🛑', label: 'Mark idle' };
+    const routerApplyAction = this.routerBusy && this.routerAvailable
+      ? { icon: '⚙️', label: 'Applying…' }
+      : { icon: '🧭', label: 'Apply routing' };
+    const routerRefreshAction = { icon: '🔄', label: 'Refresh state' };
+    const rescanDevicesAction = { icon: '🔍', label: 'Rescan devices' };
+    const settingsApplyAction = { icon: '🛠️', label: 'Apply settings' };
+    const captureColorAction = { icon: '📸', label: 'Capture color frame' };
+    const captureDepthAction = { icon: '🌊', label: 'Capture depth frame' };
 
     return html`
       <div class="surface-grid surface-grid--wide">
@@ -375,9 +385,25 @@ class EyeDashboard extends LitElement {
           </div>
           ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${this.markLive}>📡 Mark feed live</button>
-            <button type="button" class="surface-button surface-button--ghost" @click=${this.markIdle}>
-              🛑 Mark idle
+            <button
+              type="button"
+              class="surface-button"
+              @click=${this.markLive}
+              aria-label="${previewLiveAction.label}"
+              title="${previewLiveAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${previewLiveAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${previewLiveAction.label}</span>
+            </button>
+            <button
+              type="button"
+              class="surface-button surface-button--ghost"
+              @click=${this.markIdle}
+              aria-label="${previewIdleAction.label}"
+              title="${previewIdleAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${previewIdleAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${previewIdleAction.label}</span>
             </button>
           </div>
         </article>
@@ -463,16 +489,26 @@ class EyeDashboard extends LitElement {
               </div>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button" ?disabled=${routerControlsDisabled}>
-                ${this.routerBusy && this.routerAvailable ? '⚙️ Applying…' : '🧭 Apply routing'}
+              <button
+                type="submit"
+                class="surface-button"
+                ?disabled=${routerControlsDisabled}
+                aria-label="${routerApplyAction.label}"
+                title="${routerApplyAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${routerApplyAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${routerApplyAction.label}</span>
               </button>
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
                 @click=${() => this.refreshRouterState({ manual: true })}
                 ?disabled=${this.routerBusy}
+                aria-label="${routerRefreshAction.label}"
+                title="${routerRefreshAction.label}"
               >
-                🔄 Refresh state
+                <span class="surface-action__icon" aria-hidden="true">${routerRefreshAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${routerRefreshAction.label}</span>
               </button>
             </div>
           </form>
@@ -499,8 +535,12 @@ class EyeDashboard extends LitElement {
                               title=${device.readable
                                 ? `Switch router to ${device.path}`
                                 : 'Device is not readable by the eye module'}
+                              aria-label=${device.readable
+                                ? `Use camera ${device.path}`
+                                : 'Camera not readable'}
                             >
-                              🎥 Use this camera
+                              <span class="surface-action__icon" aria-hidden="true">🎥</span>
+                              <span class="surface-action__label" aria-hidden="true">Use this camera</span>
                             </button>`}
                       </div>
                     </li>`,
@@ -512,8 +552,11 @@ class EyeDashboard extends LitElement {
                 type="button"
                 class="surface-button surface-button--ghost"
                 @click=${() => this.refreshVideoDevices()}
+                aria-label="${rescanDevicesAction.label}"
+                title="${rescanDevicesAction.label}"
               >
-                🔍 Rescan devices
+                <span class="surface-action__icon" aria-hidden="true">${rescanDevicesAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${rescanDevicesAction.label}</span>
               </button>
             </div>
           </div>
@@ -620,7 +663,15 @@ class EyeDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button type="submit" class="surface-button">🛠️ Apply settings</button>
+              <button
+                type="submit"
+                class="surface-button"
+                aria-label="${settingsApplyAction.label}"
+                title="${settingsApplyAction.label}"
+              >
+                <span class="surface-action__icon" aria-hidden="true">${settingsApplyAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true">${settingsApplyAction.label}</span>
+              </button>
             </div>
           </form>
         </article>
@@ -631,11 +682,25 @@ class EyeDashboard extends LitElement {
             ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
             : ''}
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${() => this.handleCapture('color')}>
-              📸 Capture color frame
+            <button
+              type="button"
+              class="surface-button"
+              @click=${() => this.handleCapture('color')}
+              aria-label="${captureColorAction.label}"
+              title="${captureColorAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${captureColorAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${captureColorAction.label}</span>
             </button>
-            <button type="button" class="surface-button surface-button--ghost" @click=${() => this.handleCapture('depth')}>
-              🌊 Capture depth frame
+            <button
+              type="button"
+              class="surface-button surface-button--ghost"
+              @click=${() => this.handleCapture('depth')}
+              aria-label="${captureDepthAction.label}"
+              title="${captureDepthAction.label}"
+            >
+              <span class="surface-action__icon" aria-hidden="true">${captureDepthAction.icon}</span>
+              <span class="surface-action__label" aria-hidden="true">${captureDepthAction.label}</span>
             </button>
           </div>
           ${this.captureHistory.length
