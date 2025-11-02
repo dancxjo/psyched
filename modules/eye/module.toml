@@ -31,7 +31,7 @@ path = "libfreenect"
 
 [unit.eye.ros]
 workspace = "."
-packages = ["kinect_ros2", "psyched_eye"]
+packages = ["kinect_ros2"]
 
 [cockpit]
 display_name = "Eye"

@@ -28,7 +28,7 @@ const PREVIEW_RECONNECT_DELAY_MS = 1500;
  *
  * Custom events:
  * - ``eye-settings-request`` → `{ detail: EyeSettingsPayload }`
- * - ``eye-capture-request`` → `{ detail: { mode: 'color' | 'depth' } }`
+ * - ``eye-capture-request`` → `{ detail: { mode: 'colour' | 'depth' } }`
  */
 class EyeDashboard extends LitElement {
   static properties = {
@@ -154,7 +154,6 @@ class EyeDashboard extends LitElement {
         font-size: 0.75rem;
         color: var(--lcars-muted);
       }
-
     `,
   ];
 
@@ -216,17 +215,12 @@ class EyeDashboard extends LitElement {
     const hasFrame = this.previewFrameReady && (this.previewMode === 'image' ? Boolean(this.previewFrameUrl) : this.previewMode === 'canvas');
     const details = hasFrame
       ? [
-        this.previewSource ? `Topic: ${this.previewSource}` : '',
-        this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
-        this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
-        this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
-      ].filter(Boolean).join(' • ')
+          this.previewSource ? `Topic: ${this.previewSource}` : '',
+          this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
+          this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
+          this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
+        ].filter(Boolean).join(' • ')
       : '';
-    const previewLiveAction = { icon: '📡', label: 'Mark feed live' };
-    const previewIdleAction = { icon: '🛑', label: 'Mark idle' };
-    const settingsApplyAction = { icon: '🛠️', label: 'Apply settings' };
-    const captureColorAction = { icon: '📸', label: 'Capture color frame' };
-    const captureDepthAction = { icon: '🌊', label: 'Capture depth frame' };
 
     return html`
       <div class="surface-grid surface-grid--wide">
@@ -235,43 +229,27 @@ class EyeDashboard extends LitElement {
           <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
           <div class="preview" role="img" aria-label="Live video preview">
             ${this.previewMode === 'image' && this.previewFrameUrl
-        ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye color stream preview" />`
-        : ''}
+              ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye colour stream preview" />`
+              : ''}
             ${this.previewMode === 'canvas'
-        ? html`<canvas
+              ? html`<canvas
                   class="preview__frame preview__canvas"
                   width="${this.previewWidth || this.width}"
                   height="${this.previewHeight || this.height}"
                 ></canvas>`
-        : ''}
+              : ''}
             ${!hasFrame
-        ? html`<div class="preview__placeholder">
+              ? html`<div class="preview__placeholder">
                   <p>${this.previewSource ? `Waiting for ${this.previewSource}` : 'Initialising preview stream…'}</p>
                   <p>${this.width}×${this.height} @ ${this.frameRate} FPS</p>
                 </div>`
-        : ''}
+              : ''}
           </div>
           ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
-            <button
-              type="button"
-              class="surface-button"
-              @click=${this.markLive}
-              aria-label="${previewLiveAction.label}"
-              title="${previewLiveAction.label}"
-            >
-              <span class="surface-action__icon" aria-hidden="true">${previewLiveAction.icon}</span>
-              <span class="surface-action__label" aria-hidden="true">${previewLiveAction.label}</span>
-            </button>
-            <button
-              type="button"
-              class="surface-button surface-button--ghost"
-              @click=${this.markIdle}
-              aria-label="${previewIdleAction.label}"
-              title="${previewIdleAction.label}"
-            >
-              <span class="surface-action__icon" aria-hidden="true">${previewIdleAction.icon}</span>
-              <span class="surface-action__label" aria-hidden="true">${previewIdleAction.label}</span>
+            <button type="button" class="surface-button" @click=${this.markLive}>Mark feed live</button>
+            <button type="button" class="surface-button surface-button--ghost" @click=${this.markIdle}>
+              Mark idle
             </button>
           </div>
         </article>
@@ -324,7 +302,7 @@ class EyeDashboard extends LitElement {
                   .value=${this.depthMode}
                   @change=${(event) => (this.depthMode = normalizeDepthMode(event.target.value))}
                 >
-                  <option value="disabled">color only</option>
+                  <option value="disabled">Colour only</option>
                   <option value="depth">Depth stream</option>
                   <option value="aligned_depth">Aligned depth</option>
                 </select>
@@ -377,15 +355,7 @@ class EyeDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions">
-              <button
-                type="submit"
-                class="surface-button"
-                aria-label="${settingsApplyAction.label}"
-                title="${settingsApplyAction.label}"
-              >
-                <span class="surface-action__icon" aria-hidden="true">${settingsApplyAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${settingsApplyAction.label}</span>
-              </button>
+              <button type="submit" class="surface-button">Apply settings</button>
             </div>
           </form>
         </article>
@@ -393,43 +363,29 @@ class EyeDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Frame capture</h3>
           ${this.captureFeedback
-        ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
-        : ''}
+            ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
+            : ''}
           <div class="surface-actions">
-            <button
-              type="button"
-              class="surface-button"
-              @click=${() => this.handleCapture('color')}
-              aria-label="${captureColorAction.label}"
-              title="${captureColorAction.label}"
-            >
-              <span class="surface-action__icon" aria-hidden="true">${captureColorAction.icon}</span>
-              <span class="surface-action__label" aria-hidden="true">${captureColorAction.label}</span>
+            <button type="button" class="surface-button" @click=${() => this.handleCapture('colour')}>
+              Capture colour frame
             </button>
-            <button
-              type="button"
-              class="surface-button surface-button--ghost"
-              @click=${() => this.handleCapture('depth')}
-              aria-label="${captureDepthAction.label}"
-              title="${captureDepthAction.label}"
-            >
-              <span class="surface-action__icon" aria-hidden="true">${captureDepthAction.icon}</span>
-              <span class="surface-action__label" aria-hidden="true">${captureDepthAction.label}</span>
+            <button type="button" class="surface-button surface-button--ghost" @click=${() => this.handleCapture('depth')}>
+              Capture depth frame
             </button>
           </div>
           ${this.captureHistory.length
-        ? html`<ol class="capture-history">
+            ? html`<ol class="capture-history">
                 ${this.captureHistory.map(
-          (entry) => html`<li class="capture-entry">
+                  (entry) => html`<li class="capture-entry">
                     <div class="capture-entry__meta">
                       <span>${entry.timestamp}</span>
                       <span>${entry.mode}</span>
                     </div>
                     <p class="capture-entry__note">${entry.note}</p>
                   </li>`
-        )}
+                )}
               </ol>`
-        : html`<p class="surface-empty">No captures recorded yet.</p>`}
+            : html`<p class="surface-empty">No captures recorded yet.</p>`}
         </article>
       </div>
     `;
@@ -477,11 +433,12 @@ class EyeDashboard extends LitElement {
         id: makeId('capture'),
         mode,
         timestamp: new Date().toLocaleTimeString(),
-        note: mode === 'depth' ? 'Depth frame queued for export.' : 'color frame queued for export.',
+        note: mode === 'depth' ? 'Depth frame queued for export.' : 'Colour frame queued for export.',
       },
       ...this.captureHistory,
     ].slice(0, 20);
   }
+
   markLive() {
     this.statusMessage = 'Live stream detected.';
     this.statusTone = 'success';
@@ -729,7 +686,7 @@ class EyeDashboard extends LitElement {
 
   _scheduleReconnect() {
     if (this._reconnectTimer || !this._connected) {
-      return; lize
+      return;
     }
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;

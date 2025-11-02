@@ -4,8 +4,7 @@ set -euo pipefail
 # Gracefully stop Kinect ROS 2 processes spawned by the launch script.
 TIMEOUT=${TIMEOUT:-10}
 PATTERNS=(
-  "ros2 launch psyched_eye eye.launch.py"
-  "psyched_kinect"
+  "ros2 run kinect_ros2 kinect_ros2_node"
   "kinect_ros2_node"
 )
 

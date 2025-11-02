@@ -1,3 +1,4 @@
+ */
 /**
  * Helper utilities for the Eye dashboard.
  */
@@ -5,7 +6,7 @@
 const DEPTH_MODES = new Set(['disabled', 'depth', 'aligned_depth']);
 
 /**
- * Normalize a depth streaming mode value.
+ * Normalise a depth streaming mode value.
  *
  * @param {string | null | undefined} value Raw string from the dashboard form.
  * @returns {'disabled' | 'depth' | 'aligned_depth'}
@@ -44,7 +45,7 @@ export function clampSetting(value, options) {
  * @param {number|string} draft.height Desired image height.
  * @param {number|string} draft.frameRate Requested frame rate.
  * @param {string} draft.depthMode Depth streaming mode slug.
- * @param {boolean} draft.alignDepth Whether to align depth with color frames.
+ * @param {boolean} draft.alignDepth Whether to align depth with colour frames.
  * @param {number|string} draft.exposure Manual exposure in microseconds.
  * @param {number|string} draft.gain Manual gain value.
  * @param {boolean} draft.autoExposure Whether auto exposure is enabled.
@@ -82,7 +83,7 @@ export function buildEyeSettingsPayload(draft) {
  * @property {{ width: number, height: number }} resolution Requested resolution.
  * @property {number} frame_rate Requested frame rate.
  * @property {'disabled' | 'depth' | 'aligned_depth'} depth_mode Depth streaming mode.
- * @property {boolean} align_depth Whether to align depth with color frames.
+ * @property {boolean} align_depth Whether to align depth with colour frames.
  * @property {boolean} auto_exposure Whether automatic exposure is active.
  * @property {{ exposure: number, gain: number } | undefined} manual Manual overrides when ``auto_exposure`` is ``false``.
  */

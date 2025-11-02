@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Launch the Eye module Kinect stack.
+# Launch the Kinect ROS 2 driver with optional host-specific parameters.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
 HOST_SHORT="${HOST:-$(hostname -s)}"
@@ -11,6 +11,7 @@ PARAM_FILE="${REPO_DIR}/hosts/${HOST_SHORT}/config/eye.yaml"
 
 RGB_DEFAULT="/camera/color/image_raw"
 DEPTH_DEFAULT="/camera/depth/image_raw"
+
 derive_camera_info() {
   local topic="$1"
   if [[ "${topic}" == */* ]]; then
@@ -20,23 +21,8 @@ derive_camera_info() {
   fi
 }
 
-normalize_bool() {
-  local value="${1:-}"
-  local default="${2:-false}"
-  if [[ -z "${value}" ]]; then
-    echo "${default}"
-    return
-  fi
-  case "${value,,}" in
-    1|true|yes|on) echo "true" ;;
-    0|false|no|off) echo "false" ;;
-    *) echo "${default}" ;;
-  esac
-}
-
 if [[ -f "${CONFIG_FILE}" ]]; then
-  eval "$(python3 - "${CONFIG_FILE}" <<'PY'
-import shlex
+  mapfile -t CONFIG_TOPICS < <(python3 - "${CONFIG_FILE}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -46,16 +32,9 @@ try:
     except ModuleNotFoundError:  # pragma: no cover - best effort fallback
         import tomli as tomllib  # type: ignore
 except ModuleNotFoundError:
+    print()
+    print()
     raise SystemExit(0)
-
-def emit(name: str, value):
-    if value is None or value == "":
-        return
-    if isinstance(value, bool):
-        text = "true" if value else "false"
-    else:
-        text = str(value)
-    print(f'{name}={shlex.quote(text)}')
 
 path = Path(sys.argv[1])
 try:
@@ -63,49 +42,46 @@ try:
 except Exception:
     raise SystemExit(0)
 
-def get(*path, default=None):
-    cursor = data
-    for key in path:
-        if not isinstance(cursor, dict):
-            return default
-        cursor = cursor.get(key)
-    return cursor if cursor is not None else default
+def pick(*paths: str) -> str:
+    for dotted in paths:
+        cursor = data
+        for key in dotted.split('.'):
+            if not isinstance(cursor, dict):
+                break
+            cursor = cursor.get(key)
+        else:
+            if isinstance(cursor, str):
+                return cursor.strip()
+    return ""
 
-emit("CFG_RGB_TOPIC", get("config", "mod", "eye", "launch", "arguments", "rgb_topic"))
-emit("CFG_DEPTH_TOPIC", get("config", "mod", "eye", "launch", "arguments", "depth_topic"))
-emit("CFG_KINECT_ENABLED", get("config", "mod", "eye", "launch", "kinect", "enabled"))
-emit("CFG_KINECT_PARAMS_FILE", get("config", "mod", "eye", "launch", "kinect", "params_file"))
-emit("CFG_RGB_INFO_TOPIC", get("config", "mod", "eye", "launch", "kinect", "rgb_info_topic"))
-emit("CFG_DEPTH_INFO_TOPIC", get("config", "mod", "eye", "launch", "kinect", "depth_info_topic"))
+print(pick(
+    "config.mod.eye.launch.arguments.rgb_topic",
+    "config.mod.nav.launch.arguments.kinect_rgb_topic",
+))
+print(pick(
+    "config.mod.eye.launch.arguments.depth_topic",
+    "config.mod.nav.launch.arguments.kinect_depth_topic",
+))
 PY
-  )"
+  )
+  if [[ ${#CONFIG_TOPICS[@]} -ge 1 && -n "${CONFIG_TOPICS[0]}" ]]; then
+    RGB_DEFAULT="${CONFIG_TOPICS[0]}"
+  fi
+  if [[ ${#CONFIG_TOPICS[@]} -ge 2 && -n "${CONFIG_TOPICS[1]}" ]]; then
+    DEPTH_DEFAULT="${CONFIG_TOPICS[1]}"
+  fi
 fi
 
-RGB_TOPIC="${EYE_RGB_TOPIC:-${CFG_RGB_TOPIC:-${RGB_DEFAULT}}}"
-DEPTH_TOPIC="${EYE_DEPTH_TOPIC:-${CFG_DEPTH_TOPIC:-${DEPTH_DEFAULT}}}"
-RGB_INFO_TOPIC="${EYE_RGB_INFO_TOPIC:-${CFG_RGB_INFO_TOPIC:-$(derive_camera_info "${RGB_TOPIC}")}}"
-DEPTH_INFO_TOPIC="${EYE_DEPTH_INFO_TOPIC:-${CFG_DEPTH_INFO_TOPIC:-$(derive_camera_info "${DEPTH_TOPIC}")}}"
-
-KINECT_PARAMS="${EYE_KINECT_PARAMS_FILE:-${CFG_KINECT_PARAMS_FILE:-}}"
-if [[ -z "${KINECT_PARAMS}" && -f "${PARAM_FILE}" ]]; then
-  KINECT_PARAMS="${PARAM_FILE}"
-fi
-
-USE_KINECT="$(normalize_bool "${EYE_USE_KINECT:-${CFG_KINECT_ENABLED:-true}}" "true")"
-if [[ "${USE_KINECT}" != "true" ]]; then
-  echo "[eye/launch] Kinect launch disabled via configuration"
-  exit 0
-fi
+RGB_TOPIC="${EYE_RGB_TOPIC:-${RGB_DEFAULT}}"
+DEPTH_TOPIC="${EYE_DEPTH_TOPIC:-${DEPTH_DEFAULT}}"
+RGB_INFO_TOPIC="${EYE_RGB_INFO_TOPIC:-$(derive_camera_info "${RGB_TOPIC}")}"
+DEPTH_INFO_TOPIC="${EYE_DEPTH_INFO_TOPIC:-$(derive_camera_info "${DEPTH_TOPIC}")}"
 
 CMD=("ros2" "run" "kinect_ros2" "kinect_ros2_node")
 ROS_ARGS=()
 
-if [[ -n "${KINECT_PARAMS}" ]]; then
-  if [[ -f "${KINECT_PARAMS}" ]]; then
-    ROS_ARGS+=("--params-file" "${KINECT_PARAMS}")
-  else
-    echo "[eye/launch] Warning: Kinect params file not found: ${KINECT_PARAMS}" 1>&2
-  fi
+if [[ -f "${PARAM_FILE}" ]]; then
+  ROS_ARGS+=("--params-file" "${PARAM_FILE}")
 fi
 
 ROS_ARGS+=(
@@ -115,6 +91,8 @@ ROS_ARGS+=(
   "-r" "depth/camera_info:=${DEPTH_INFO_TOPIC}"
 )
 
-CMD+=("--ros-args" "${ROS_ARGS[@]}")
+if [[ ${#ROS_ARGS[@]} -gt 0 ]]; then
+  CMD+=("--ros-args" "${ROS_ARGS[@]}")
+fi
 
 exec "${CMD[@]}"

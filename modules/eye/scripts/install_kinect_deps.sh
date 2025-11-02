@@ -41,6 +41,7 @@ PACKAGES=(
   "ros-${ROS_DISTRO}-perception"
   "ros-${ROS_DISTRO}-perception-pcl"
   "ros-${ROS_DISTRO}-vision-msgs"
+  "ros-${ROS_DISTRO}-usb-cam"
   "libogre-1.12-dev"
   "ros-${ROS_DISTRO}-rviz2"
   "libgl1"
