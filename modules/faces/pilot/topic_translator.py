@@ -35,7 +35,7 @@ def _load_payload(payload: Any) -> Mapping[str, Any] | None:
 
 
 def summarise_face_trigger(payload: Any) -> str:
-    """Summarise the JSON trigger emitted on ``/vision/face_detected``.
+    """Summarize the JSON trigger emitted on ``/vision/face_detected``.
 
     Examples
     --------

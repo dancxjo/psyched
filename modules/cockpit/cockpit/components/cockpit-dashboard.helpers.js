@@ -7,7 +7,7 @@ const LOOPBACK_HOSTS = new Set([
 ]);
 
 /**
- * Normalise host metadata returned by the cockpit backend.
+ * Normalize host metadata returned by the cockpit backend.
  *
  * @param {object | null | undefined} hostRaw Host payload from /api/modules.
  * @returns {{ name: string, shortname: string }} Display-friendly metadata.
@@ -28,7 +28,7 @@ export function normaliseHostMetadata(hostRaw) {
 }
 
 /**
- * Summarise module metadata for cockpit dashboards.
+ * Summarize module metadata for cockpit dashboards.
  *
  * @param {Array<object>} modulesRaw Modules array from /api/modules.
  * @returns {{ total: number, withCockpit: number, withoutCockpit: number, modules: Array<object> }}
@@ -96,7 +96,7 @@ export function summariseModules(modulesRaw) {
 }
 
 /**
- * Normalise bridge configuration so dashboards can surface operator hints.
+ * Normalize bridge configuration so dashboards can surface operator hints.
  *
  * @param {object | null | undefined} bridgeRaw Bridge metadata from /api/modules.
  * @param {Location | { protocol?: string, hostname?: string, href?: string } | null} [location]
@@ -187,7 +187,7 @@ function extractPort(rawUri, baseHref) {
 
 function normaliseVideoEndpoint(videoBaseRaw, videoPort, location) {
   const locationProtocol = location && typeof location.protocol === "string" &&
-      location.protocol.trim()
+    location.protocol.trim()
     ? location.protocol.trim()
     : "";
   const fallbackProtocol = locationProtocol === "https:" ? "https:" : "http:";
@@ -196,8 +196,8 @@ function normaliseVideoEndpoint(videoBaseRaw, videoPort, location) {
       location.hostname.trim()
       ? location.hostname.trim()
       : location && typeof location.host === "string" && location.host.trim()
-      ? location.host.trim().split(":")[0]
-      : "";
+        ? location.host.trim().split(":")[0]
+        : "";
   const fallbackHost = locationHostCandidate || "127.0.0.1";
   const numericPort = Number.isFinite(videoPort) ? Number(videoPort) : null;
 

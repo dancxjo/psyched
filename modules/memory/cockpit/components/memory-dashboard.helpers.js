@@ -42,7 +42,7 @@ export function buildMemoryStorePayload(draft) {
 }
 
 /**
- * Normalise raw recall records returned by the memory service into
+ * Normalize raw recall records returned by the memory service into
  * dashboard-friendly entries.
  *
  * @param {RawRecallResult[] | undefined | null} rawResults Raw JSON response from the recall action.

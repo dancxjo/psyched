@@ -24,7 +24,7 @@ export function parseRosStamp(stamp) {
 }
 
 /**
- * Normalise a FeelingIntent ROS message into a cockpit-friendly shape.
+ * Normalize a FeelingIntent ROS message into a cockpit-friendly shape.
  *
  * @param {object | null | undefined} message
  * @returns {{
@@ -85,7 +85,7 @@ export function normaliseFeelingIntent(message) {
 }
 
 /**
- * Normalise the debug snapshot payload emitted by the pilot module.
+ * Normalize the debug snapshot payload emitted by the pilot module.
  *
  * @param {object | null | undefined} snapshot
  * @returns {{
@@ -169,8 +169,8 @@ export function normaliseDebugSnapshot(snapshot) {
       const vectorLength = Number.isFinite(Number(entry.vector_len))
         ? Number(entry.vector_len)
         : Array.isArray(entry.vector)
-        ? entry.vector.length
-        : 0;
+          ? entry.vector.length
+          : 0;
       return {
         topic,
         kind: cleanString(entry.kind),

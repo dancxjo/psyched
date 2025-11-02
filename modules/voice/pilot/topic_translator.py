@@ -23,7 +23,7 @@ def _extract_text(payload: Any) -> str | None:
 
 
 def summarise_queue(payload: Any) -> str:
-    """Summarise the queued speech request for ``/voice``.
+    """Summarize the queued speech request for ``/voice``.
 
     Examples
     --------
@@ -40,7 +40,7 @@ def summarise_queue(payload: Any) -> str:
 
 
 def summarise_spoken(payload: Any) -> str:
-    """Summarise the most recently spoken text for ``/voice/spoken``.
+    """Summarize the most recently spoken text for ``/voice/spoken``.
 
     Examples
     --------

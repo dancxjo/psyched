@@ -27,7 +27,7 @@ class TranscriptWord:
     end_ms: int | None = None
 
     def to_dict(self) -> dict[str, object]:
-        """Serialise the word into a JSON-friendly mapping."""
+        """Serialize the word into a JSON-friendly mapping."""
 
         payload: dict[str, object] = {"text": self.text}
         if self.start_ms is not None:
@@ -47,7 +47,7 @@ class TranscriptSegment:
     words: list[TranscriptWord] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
-        """Serialise the segment into a JSON-friendly mapping."""
+        """Serialize the segment into a JSON-friendly mapping."""
 
         payload: dict[str, object] = {"text": self.text}
         if self.start_ms is not None:
@@ -113,7 +113,7 @@ class TranscriptionEvent:
         return self.kind == "partial"
 
     def to_dict(self) -> dict[str, object]:
-        """Serialise the event into a JSON-friendly mapping."""
+        """Serialize the event into a JSON-friendly mapping."""
 
         payload: dict[str, object] = {
             "event": self.kind,

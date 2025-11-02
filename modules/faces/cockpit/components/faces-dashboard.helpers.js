@@ -34,7 +34,7 @@ export function buildFacesSettingsPayload(draft) {
     return { ok: false, error: 'Detection threshold must be between 0 and 1.' };
   }
   const window = Math.max(1, Math.trunc(Number(draft.window ?? 15)));
- return {
+  return {
     ok: true,
     value: {
       detection_threshold: Number(threshold.toFixed(3)),
@@ -46,7 +46,7 @@ export function buildFacesSettingsPayload(draft) {
 }
 
 /**
- * Normalise a payload emitted on the face sensation stream (/sensations) or the
+ * Normalize a payload emitted on the face sensation stream (/sensations) or the
  * legacy /vision/face_detected topic into a cockpit-friendly shape.
  *
  * @param {unknown} raw Payload returned from the websocket bridge.

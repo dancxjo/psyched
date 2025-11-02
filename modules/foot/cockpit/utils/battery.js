@@ -1,6 +1,6 @@
 import { extractNumeric } from './metrics.js';
 
-function normalise(topic) {
+function normalize(topic) {
   if (typeof topic !== 'string') {
     return '';
   }
@@ -70,7 +70,7 @@ const DEFAULT_METADATA = {
 };
 
 export function batteryMetadata(topic) {
-  const key = normalise(topic);
+  const key = normalize(topic);
   const source = BATTERY_METADATA[key];
   if (source) {
     return { ...DEFAULT_METADATA, ...source };

@@ -12,7 +12,7 @@ function resolveStorageArea(storage) {
 }
 
 /**
- * Normalise a dashboard scope identifier for use when persisting collapse state.
+ * Normalize a dashboard scope identifier for use when persisting collapse state.
  *
  * @example
  * normaliseDashboardScope(' Module-Pilot ');
@@ -25,8 +25,8 @@ export function normaliseDashboardScope(scope) {
   const raw = typeof scope === "string"
     ? scope
     : scope != null
-    ? String(scope)
-    : "";
+      ? String(scope)
+      : "";
   const trimmed = raw.trim().toLowerCase();
   const slug = trimmed.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || "cockpit";

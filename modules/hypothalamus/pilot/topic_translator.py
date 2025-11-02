@@ -14,7 +14,7 @@ def _coerce_float(value: Any) -> float | None:
 
 
 def summarise_temperature(payload: Any) -> str:
-    """Summarise the current Celsius temperature."""
+    """Summarize the current Celsius temperature."""
 
     if not isinstance(payload, Mapping):
         return "Temperature reading pending."
@@ -30,7 +30,7 @@ def summarise_temperature(payload: Any) -> str:
 
 
 def summarise_humidity_percent(payload: Any) -> str:
-    """Summarise the relative humidity percent."""
+    """Summarize the relative humidity percent."""
 
     value = None
     if isinstance(payload, Mapping):
@@ -47,7 +47,7 @@ def summarise_humidity_percent(payload: Any) -> str:
 
 
 def summarise_status(payload: Any) -> str:
-    """Summarise the latest thermal backend status string."""
+    """Summarize the latest thermal backend status string."""
 
     if isinstance(payload, Mapping):
         raw = payload.get("data") or payload.get("status")

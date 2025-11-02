@@ -64,7 +64,7 @@ class ModuleAction:
     streaming: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialise the action metadata for API consumers."""
+        """Serialize the action metadata for API consumers."""
 
         payload: Dict[str, Any] = {
             "name": self.name,

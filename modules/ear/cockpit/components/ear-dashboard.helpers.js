@@ -9,7 +9,7 @@
 const SUPPORTED_BACKENDS = new Set(['console', 'faster_whisper', 'service']);
 
 /**
- * Normalise the backend identifier selected by the operator.
+ * Normalize the backend identifier selected by the operator.
  *
  * @param {string | null | undefined} value Raw backend name from a form control.
  * @returns {string} Lowercase backend identifier that defaults to ``console``.
@@ -207,7 +207,7 @@ function safeText(value) {
 }
 
 /**
- * Normalise a transcript entry so it can be rendered consistently.
+ * Normalize a transcript entry so it can be rendered consistently.
  *
  * @param {object} entry Raw transcript payload captured from the websocket.
  * @returns {{

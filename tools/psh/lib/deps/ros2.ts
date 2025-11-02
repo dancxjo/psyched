@@ -200,7 +200,7 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
       `[ -f "${colconPlan.venvPath}/pyvenv.cfg" ] || python3 -m venv "${colconPlan.venvPath}"`,
     ], {
       sudo: true,
-      description: "initialise colcon virtualenv",
+      description: "initialize colcon virtualenv",
     });
     await step.exec([
       "bash",
@@ -241,7 +241,7 @@ export async function installRos2(context: ProvisionContext): Promise<void> {
     });
   });
 
-  await context.step("Initialise rosdep", async (step) => {
+  await context.step("Initialize rosdep", async (step) => {
     const rosdepSources = "/etc/ros/rosdep/sources.list.d/20-default.list";
     if (!(await pathExists(rosdepSources))) {
       await step.exec(["rosdep", "init"], {

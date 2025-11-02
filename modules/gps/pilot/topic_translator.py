@@ -45,7 +45,7 @@ def _describe_status(payload: Mapping[str, Any]) -> str:
 
 
 def summarise_nav_fix(payload: Any) -> str:
-    """Summarise the ``sensor_msgs/msg/NavSatFix`` telemetry."""
+    """Summarize the ``sensor_msgs/msg/NavSatFix`` telemetry."""
 
     if not isinstance(payload, Mapping):
         return "GPS fix: awaiting satellite lock."

@@ -35,7 +35,7 @@ def _load_payload(payload: Any) -> Mapping[str, Any] | None:
 
 
 def summarise_pilot_feed(payload: Any) -> str:
-    """Summarise JSON records streamed on ``/memory/pilot_feed``.
+    """Summarize JSON records streamed on ``/memory/pilot_feed``.
 
     Examples
     --------

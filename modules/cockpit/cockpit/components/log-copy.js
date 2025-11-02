@@ -79,7 +79,7 @@ export function formatVoiceEventLogForCopy(events) {
 }
 
 /**
- * Serialise conversation history for clipboard export.
+ * Serialize conversation history for clipboard export.
  *
  * @param {Array<{role?: string, speaker?: string, content?: unknown, confidence?: number}>} messages
  * @returns {string}

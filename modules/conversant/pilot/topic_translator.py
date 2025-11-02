@@ -22,7 +22,7 @@ def _extract_topic_text(payload: Any) -> str | None:
 
 
 def summarise_conversation_topic(payload: Any) -> str:
-    """Summarise the active Conversant stream for ``/conversant/topic``.
+    """Summarize the active Conversant stream for ``/conversant/topic``.
 
     Examples
     --------

@@ -47,7 +47,7 @@ class CommandResult:
     """Outcome of a shell command executed by the cockpit server.
 
     The helper centralises command execution diagnostics so HTTP handlers can
-    serialise the result consistently. ``stdout`` and ``stderr`` are decoded as
+    serialize the result consistently. ``stdout`` and ``stderr`` are decoded as
     UTF-8 with surrogate escaping to avoid crashes when the subprocess emits
     binary output.
 
@@ -72,7 +72,7 @@ class CommandResult:
         return self.returncode == 0
 
     def to_payload(self) -> Dict[str, Any]:
-        """Serialise the command outcome for JSON responses."""
+        """Serialize the command outcome for JSON responses."""
 
         return {
             "command": self.command,

@@ -153,14 +153,14 @@ class TopicSocket {
     this._streamId = null;
     // Optimistically honour the caller's requested role so publish calls can
     // be queued before the backend confirms the stream configuration. The
-    // server's response (handled in _initialise) still has the final say.
+    // server's response (handled in _initialize) still has the final say.
     this._publishEnabled = this.role === 'publish' || this.role === 'both';
     this._closed = false;
     this._initialisationError = null;
     this._readyDeferred = createDeferred();
     this.ready = this._readyDeferred.promise;
 
-    void this._initialise();
+    void this._initialize();
   }
 
   get readyState() {
@@ -229,7 +229,7 @@ class TopicSocket {
   }
 
   // Internal helpers ------------------------------------------------
-  async _initialise() {
+  async _initialize() {
     try {
       const response = this.actionName
         ? await invokeAction(this.module, this.actionName, this.actionArgs)

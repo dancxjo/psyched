@@ -5,7 +5,7 @@
 const DEPTH_MODES = new Set(['disabled', 'depth', 'aligned_depth']);
 
 /**
- * Normalise a depth streaming mode value.
+ * Normalize a depth streaming mode value.
  *
  * @param {string | null | undefined} value Raw string from the dashboard form.
  * @returns {'disabled' | 'depth' | 'aligned_depth'}

@@ -115,7 +115,7 @@ class VoiceNode(Node):
             )
         except Exception as error:
             self.get_logger().error(
-                f"Failed to initialise espeak backend: {error}; {failure_hint}",
+                f"Failed to initialize espeak backend: {error}; {failure_hint}",
             )
         return None
 
@@ -154,7 +154,7 @@ class VoiceNode(Node):
             )
         except Exception as error:
             self.get_logger().error(
-                f"Failed to initialise websocket speech backend: {error}",
+                f"Failed to initialize websocket speech backend: {error}",
             )
             return None
 

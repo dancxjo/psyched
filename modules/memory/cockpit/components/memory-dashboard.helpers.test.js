@@ -59,5 +59,5 @@ Deno.test('normaliseRecallResults tolerates malformed metadata payloads', () => 
   const [entry] = results;
   if (entry.title !== 'Memory entry') throw new Error('fallback title should be applied');
   if (entry.body !== '') throw new Error('fallback body should be empty');
-  if (entry.score !== 0) throw new Error('invalid scores should normalise to zero');
+  if (entry.score !== 0) throw new Error('invalid scores should normalize to zero');
 });

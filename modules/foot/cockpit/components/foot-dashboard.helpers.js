@@ -56,7 +56,7 @@ export function buildParameterRequest(values) {
 }
 
 /**
- * Normalise form input into a ``ParameterValue`` object.
+ * Normalize form input into a ``ParameterValue`` object.
  *
  * ``false`` is treated as a boolean, ``42`` as an integer, ``3.14`` as a
  * floating point value, and all other inputs as strings.

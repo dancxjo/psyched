@@ -20,7 +20,7 @@ def _extract_text(payload: Any) -> str | None:
 
 
 def summarise_vision_annotation(payload: Any) -> str:
-    """Summarise the free-form annotation emitted by the vision prompt node."""
+    """Summarize the free-form annotation emitted by the vision prompt node."""
 
     text = _extract_text(payload)
     if text is None:
@@ -41,7 +41,7 @@ def _finite_ranges(values: Iterable[Any]) -> list[float]:
 
 
 def summarise_laserscan(payload: Any) -> str:
-    """Summarise the ``sensor_msgs/msg/LaserScan`` payload."""
+    """Summarize the ``sensor_msgs/msg/LaserScan`` payload."""
 
     if not isinstance(payload, Mapping):
         return "Depth scan awaiting data."

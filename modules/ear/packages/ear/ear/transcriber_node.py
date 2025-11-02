@@ -239,7 +239,7 @@ class TranscriberNode(Node):
         self._worker.submit_audio(pcm, self._audio_sample_rate, self._audio_channels)
 
     def _handle_event(self, event: TranscriptionEvent) -> None:
-        """Serialise transcription events and forward final text to ROS topics."""
+        """Serialize transcription events and forward final text to ROS topics."""
 
         try:
             payload = json.dumps(event.to_dict(), ensure_ascii=False)

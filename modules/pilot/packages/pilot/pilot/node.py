@@ -738,7 +738,7 @@ class PilotNode(Node):
             )
         except Exception as exc:  # pragma: no cover - ROS publisher creation failures are host-specific
             self.get_logger().warning(
-                f"Failed to initialise voice publisher on {voice_topic}: {exc}"
+                f"Failed to initialize voice publisher on {voice_topic}: {exc}"
             )
             self._voice_publisher = None
 

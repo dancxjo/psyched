@@ -51,7 +51,7 @@ def _format_vector(payload: Mapping[str, Any] | None, *, precision: int = 2) -> 
 
 
 def summarise_imu_motion(payload: Any) -> str:
-    """Summarise ``sensor_msgs/msg/Imu`` orientation and motion."""
+    """Summarize ``sensor_msgs/msg/Imu`` orientation and motion."""
 
     if not isinstance(payload, Mapping):
         return "IMU telemetry awaiting first reading."

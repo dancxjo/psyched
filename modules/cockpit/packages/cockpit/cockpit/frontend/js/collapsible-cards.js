@@ -340,13 +340,13 @@ function scanForCards(root = document) {
 }
 
 if (typeof window !== "undefined") {
-  const initialise = () => {
+  const initialize = () => {
     scanForCards(document);
   };
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialise);
+    document.addEventListener("DOMContentLoaded", initialize);
   } else {
-    initialise();
+    initialize();
   }
 
   const observer = new MutationObserver((mutations) => {

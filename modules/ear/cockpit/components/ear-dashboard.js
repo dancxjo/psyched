@@ -364,7 +364,7 @@ class EarDashboard extends LitElement {
     }
     const publisher = this._ensureFakeTranscriptPublisher();
     if (!publisher) {
-      this._setFakeTranscriptFeedback('Unable to initialise transcript publisher.', 'error');
+      this._setFakeTranscriptFeedback('Unable to initialize transcript publisher.', 'error');
       return;
     }
     try {
@@ -542,8 +542,8 @@ class EarDashboard extends LitElement {
           typeof payload.audio_base64 === 'string'
             ? payload.audio_base64
             : typeof payload.audioBase64 === 'string'
-            ? payload.audioBase64
-            : null,
+              ? payload.audioBase64
+              : null,
         source: typeof payload.source === 'string' ? payload.source : 'event',
       };
       this._appendTranscriptEntry(entry, this._buildDedupeTokens('event', text));
@@ -562,8 +562,8 @@ class EarDashboard extends LitElement {
           typeof payload.audio_base64 === 'string'
             ? payload.audio_base64
             : typeof payload.audioBase64 === 'string'
-            ? payload.audioBase64
-            : null,
+              ? payload.audioBase64
+              : null,
         source: typeof payload.source === 'string' ? payload.source : 'event',
       }, this._buildDedupeTokens('event', text));
     }
@@ -673,8 +673,8 @@ class EarDashboard extends LitElement {
         typeof normalised.audioBase64 === 'string'
           ? normalised.audioBase64
           : typeof entry.audioBase64 === 'string'
-          ? entry.audioBase64
-          : null,
+            ? entry.audioBase64
+            : null,
     };
     const tokens = new Set();
     const primarySignature = transcriptSignature(finalEntry);
@@ -798,17 +798,17 @@ class EarDashboard extends LitElement {
         </header>
         <p class="partial-transcript__text">${resolvedText}</p>
         ${Array.isArray(segments) && segments.length
-          ? html`<ul class="partial-transcript__segments">
+        ? html`<ul class="partial-transcript__segments">
               ${segments.map((segment, index) => {
-                const rangeLabel = this._formatRange(segment.startMs, segment.endMs);
-                return html`<li>
+          const rangeLabel = this._formatRange(segment.startMs, segment.endMs);
+          return html`<li>
                   <strong>Segment ${index + 1}:</strong>
                   <span>${segment.text || ''}</span>
                   ${rangeLabel ? html`<span>(${rangeLabel})</span>` : nothing}
                 </li>`;
-              })}
+        })}
             </ul>`
-          : nothing}
+        : nothing}
       </div>
     `;
   }
@@ -829,9 +829,9 @@ class EarDashboard extends LitElement {
         ...options,
         ...(action
           ? {
-              action,
-              arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
-            }
+            action,
+            arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
+          }
           : {}),
       });
       socket.addEventListener('open', () => {
@@ -1058,8 +1058,8 @@ class EarDashboard extends LitElement {
                   placeholder="Type a transcript line to append to the log"
                   .value=${this.fakeTranscriptText}
                   @input=${(event) => {
-                    this.fakeTranscriptText = event.target.value;
-                  }}
+        this.fakeTranscriptText = event.target.value;
+      }}
                 />
               </label>
               <div class="surface-actions">
@@ -1096,8 +1096,8 @@ class EarDashboard extends LitElement {
                       <span>${entry.timestamp}</span>
                       ${rangeLabel ? html`<span>${rangeLabel}</span>` : nothing}
                       ${segmentCount
-                        ? html`<span>${segmentCount} segment${segmentCount === 1 ? '' : 's'}</span>`
-                        : nothing}
+              ? html`<span>${segmentCount} segment${segmentCount === 1 ? '' : 's'}</span>`
+              : nothing}
                       ${entry.source ? html`<span>${entry.source}</span>` : nothing}
                     </div>
                     <p class="transcript-entry__text">${entry.text}</p>

@@ -17,7 +17,7 @@ def _coerce_float(value: Any) -> float | None:
 
 
 def summarise_charge_ratio(payload: Any) -> str:
-    """Summarise the drive battery charge ratio as a percentage."""
+    """Summarize the drive battery charge ratio as a percentage."""
 
     value = None
     if isinstance(payload, Mapping):
@@ -72,7 +72,7 @@ def _yaw_from_quaternion(orientation: Mapping[str, Any] | None) -> float | None:
 
 
 def summarise_odometry(payload: Any) -> str:
-    """Summarise planar pose and twist from ``nav_msgs/msg/Odometry``."""
+    """Summarize planar pose and twist from ``nav_msgs/msg/Odometry``."""
 
     if not isinstance(payload, Mapping):
         return "Drive odom awaiting first reading."

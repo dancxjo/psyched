@@ -88,8 +88,11 @@ class CockpitModuleLogs extends LitElement {
       }
 
       .module-log-panel .surface-card__content {
-        display: grid;
         gap: 0.75rem;
+      }
+
+      .module-log-panel:not(.surface-card--collapsed) .surface-card__content {
+        display: grid;
       }
 
       .module-log-panel__header {

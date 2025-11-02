@@ -5,7 +5,7 @@
 const RESET_MODES = new Set(['hot', 'warm', 'cold']);
 
 /**
- * Normalise the requested GPS reset mode.
+ * Normalize the requested GPS reset mode.
  *
  * @param {string | null | undefined} value Raw mode string.
  * @returns {'hot' | 'warm' | 'cold'}
@@ -88,7 +88,7 @@ function resolveStatus(payload) {
 }
 
 /**
- * Summarise a ``NavSatFix`` message for cockpit presentation.
+ * Summarize a ``NavSatFix`` message for cockpit presentation.
  *
  * @param {Record<string, unknown> | null | undefined} message
  * @returns {{

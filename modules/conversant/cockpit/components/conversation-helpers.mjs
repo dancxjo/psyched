@@ -20,7 +20,7 @@ export function extractThreadIdFromStream(streamName, fallback = '') {
 }
 
 /**
- * Normalise a list of conversation messages for rendering.
+ * Normalize a list of conversation messages for rendering.
  *
  * @param {Array<{ role: string, content: string, timestamp: string, intent?: string, metadata?: Record<string, unknown> }>} messages
  * @returns {Array<{ role: string, content: string, timestamp: string, intent?: string, metadata?: Record<string, unknown> }>}
@@ -93,7 +93,7 @@ export function parseConversationSnapshot(payload) {
 }
 
 /**
- * Parse and normalise the LLM debug log payload published by Conversant.
+ * Parse and normalize the LLM debug log payload published by Conversant.
  *
  * @param {string} payload - JSON payload emitted on the llm_log topic.
  * @returns {{ threadId: string, timestamp: string, systemMessage: string, hint: string, source: string, response: string, responseIntent: string, responseEscalate: boolean, chatMessages: Array<{ role: string, content: string }> } | null}

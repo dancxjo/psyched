@@ -131,7 +131,7 @@ class TTSSynthesizer:
 
     @classmethod
     def from_env(cls) -> "TTSSynthesizer":
-        """Initialise the synthesiser using environment configuration."""
+        """Initialize the synthesiser using environment configuration."""
 
         model_name = os.environ.get("TTS_MODEL", "tts_models/en/vctk/vits")
         # If the operator has mounted a local models directory into the

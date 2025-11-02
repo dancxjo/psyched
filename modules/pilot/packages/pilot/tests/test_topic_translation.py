@@ -17,10 +17,10 @@ def test_discover_topic_translators_loads_translators(tmp_path: Path) -> None:
         """
 from typing import Any
 
-def summarise(payload: Any) -> str:
+def summarize(payload: Any) -> str:
     return f"seen {payload}"
 
-TOPIC_TRANSLATORS = {"/demo/topic": summarise}
+TOPIC_TRANSLATORS = {"/demo/topic": summarize}
 STATIC_PROMPT_SECTIONS = [
     "Demo module offers /demo/topic which keeps a rolling instant summary."
 ]

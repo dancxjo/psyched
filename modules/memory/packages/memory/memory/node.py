@@ -149,7 +149,7 @@ class MemoryNode(Node):
             return self.create_publisher(StdString, "/memory/pilot_feed", qos)
         except Exception:
             self.get_logger().warning(
-                "Failed to initialise cockpit memory feed publisher; pilot dashboard logs disabled"
+                "Failed to initialize cockpit memory feed publisher; pilot dashboard logs disabled"
             )
             return None
 

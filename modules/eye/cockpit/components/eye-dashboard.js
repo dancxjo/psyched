@@ -22,14 +22,6 @@ const DEFAULT_PREVIEW_STREAMS = [
 
 const PREVIEW_TIMEOUT_MS = 6000;
 const PREVIEW_RECONNECT_DELAY_MS = 1500;
-const PARAMETER_TYPE_BOOL = 1;
-const PARAMETER_TYPE_STRING = 4;
-const ROUTER_SOURCE_OPTIONS = [
-  ['auto', 'Auto'],
-  ['kinect', 'Kinect'],
-  ['usb', 'USB camera'],
-  ['off', 'Disabled'],
-];
 
 /**
  * Dashboard for the Eye module exposing Kinect stream controls.
@@ -60,17 +52,6 @@ class EyeDashboard extends LitElement {
     previewWidth: { state: true },
     previewHeight: { state: true },
     previewTimestamp: { state: true },
-    routerStatus: { state: true },
-    routerTone: { state: true },
-    routerBusy: { state: true },
-    routerAvailable: { state: true },
-    routerSource: { state: true },
-    routerFallback: { state: true },
-    kinectEnabled: { state: true },
-    usbEnabled: { state: true },
-    routerTopics: { state: true },
-    videoDevices: { state: true },
-    usbDevicePath: { state: true },
   };
 
   static styles = [
@@ -174,85 +155,6 @@ class EyeDashboard extends LitElement {
         color: var(--lcars-muted);
       }
 
-      .router-topics {
-        margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 0.25rem;
-        font-size: 0.75rem;
-        color: var(--lcars-muted);
-      }
-
-      .router-topics__entry {
-        display: flex;
-        flex-direction: column;
-        gap: 0.1rem;
-      }
-
-      .router-topics__label {
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .router-topics__value {
-        font-family: var(--metric-value-font);
-        color: var(--lcars-text);
-        word-break: break-word;
-      }
-
-      .device-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 0.4rem;
-      }
-
-      .device-entry {
-        background: rgba(0, 0, 0, 0.35);
-        border: 1px solid var(--control-surface-border);
-        border-radius: 0.5rem;
-        padding: 0.6rem;
-        display: grid;
-        gap: 0.3rem;
-      }
-
-      .device-entry__label {
-        font-family: var(--metric-value-font);
-        color: var(--lcars-text);
-      }
-
-      .device-entry__path {
-        font-size: 0.75rem;
-        color: var(--lcars-muted);
-      }
-
-      .device-entry__flags {
-        font-size: 0.7rem;
-        color: var(--lcars-muted);
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-      }
-
-      .device-entry__actions {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        font-size: 0.7rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--lcars-muted);
-      }
-
-      .device-entry__badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25rem 0.55rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.12);
-        color: var(--lcars-text);
-        font-family: var(--metric-value-font);
-      }
     `,
   ];
 
@@ -279,25 +181,6 @@ class EyeDashboard extends LitElement {
     this.previewHeight = this.height;
     this.previewTimestamp = '';
 
-    this.routerStatus = 'Checking faces router…';
-    this.routerTone = 'info';
-    this.routerBusy = false;
-    this.routerAvailable = false;
-    this.routerSource = 'auto';
-    this.routerFallback = 'auto';
-    this.kinectEnabled = true;
-    this.usbEnabled = false;
-    this.routerTopics = {
-      kinectImage: '/camera/color/image_raw',
-      kinectInfo: '/camera/color/camera_info',
-      usbImage: '/eye/usb/image_raw',
-      usbInfo: '/eye/usb/camera_info',
-      outputImage: '/faces/camera/image_raw',
-      outputInfo: '/faces/camera/camera_info',
-    };
-    this.videoDevices = [];
-    this.usbDevicePath = '';
-
     this._previewCandidates = [];
     this._previewCandidateIndex = 0;
     this._activePreviewCandidate = null;
@@ -310,11 +193,6 @@ class EyeDashboard extends LitElement {
     this._imageDataCache = null;
     this._connected = false;
 
-    this._routerRetryHandle = null;
-    this._routerRetryAttempt = 0;
-    this._routerRetryLimit = 5;
-    this._routerRetryDelayMs = 3000;
-
     this._handlePreviewEvent = this._handlePreviewEvent.bind(this);
     this._handlePreviewError = this._handlePreviewError.bind(this);
     this._handlePreviewClose = this._handlePreviewClose.bind(this);
@@ -326,36 +204,26 @@ class EyeDashboard extends LitElement {
     this._previewCandidates = this._resolvePreviewCandidates();
     this._previewCandidateIndex = 0;
     this._startPreviewStream();
-    void this.refreshRouterState();
-    void this.refreshUsbCameraState();
-    void this.refreshVideoDevices();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._connected = false;
     this._teardownPreview();
-    this._clearRouterRetry();
   }
 
   render() {
     const hasFrame = this.previewFrameReady && (this.previewMode === 'image' ? Boolean(this.previewFrameUrl) : this.previewMode === 'canvas');
     const details = hasFrame
       ? [
-          this.previewSource ? `Topic: ${this.previewSource}` : '',
-          this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
-          this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
-          this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
-        ].filter(Boolean).join(' • ')
+        this.previewSource ? `Topic: ${this.previewSource}` : '',
+        this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
+        this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
+        this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
+      ].filter(Boolean).join(' • ')
       : '';
-    const routerControlsDisabled = this.routerBusy || !this.routerAvailable;
     const previewLiveAction = { icon: '📡', label: 'Mark feed live' };
     const previewIdleAction = { icon: '🛑', label: 'Mark idle' };
-    const routerApplyAction = this.routerBusy && this.routerAvailable
-      ? { icon: '⚙️', label: 'Applying…' }
-      : { icon: '🧭', label: 'Apply routing' };
-    const routerRefreshAction = { icon: '🔄', label: 'Refresh state' };
-    const rescanDevicesAction = { icon: '🔍', label: 'Rescan devices' };
     const settingsApplyAction = { icon: '🛠️', label: 'Apply settings' };
     const captureColorAction = { icon: '📸', label: 'Capture color frame' };
     const captureDepthAction = { icon: '🌊', label: 'Capture depth frame' };
@@ -367,21 +235,21 @@ class EyeDashboard extends LitElement {
           <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
           <div class="preview" role="img" aria-label="Live video preview">
             ${this.previewMode === 'image' && this.previewFrameUrl
-              ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye color stream preview" />`
-              : ''}
+        ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye color stream preview" />`
+        : ''}
             ${this.previewMode === 'canvas'
-              ? html`<canvas
+        ? html`<canvas
                   class="preview__frame preview__canvas"
                   width="${this.previewWidth || this.width}"
                   height="${this.previewHeight || this.height}"
                 ></canvas>`
-              : ''}
+        : ''}
             ${!hasFrame
-              ? html`<div class="preview__placeholder">
+        ? html`<div class="preview__placeholder">
                   <p>${this.previewSource ? `Waiting for ${this.previewSource}` : 'Initialising preview stream…'}</p>
                   <p>${this.width}×${this.height} @ ${this.frameRate} FPS</p>
                 </div>`
-              : ''}
+        : ''}
           </div>
           ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
@@ -405,160 +273,6 @@ class EyeDashboard extends LitElement {
               <span class="surface-action__icon" aria-hidden="true">${previewIdleAction.icon}</span>
               <span class="surface-action__label" aria-hidden="true">${previewIdleAction.label}</span>
             </button>
-          </div>
-        </article>
-
-        <article class="surface-card">
-          <h3 class="surface-card__title">Faces router</h3>
-          <p class="surface-status" data-variant="${this.routerTone}">${this.routerStatus}</p>
-          <form @submit=${this.applyRouterSettings}>
-            <div class="form-row form-row--split">
-              <label>
-                Active source
-                <select
-                  .value=${this.routerSource}
-                  @change=${(event) => (this.routerSource = event.target.value)}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  ${ROUTER_SOURCE_OPTIONS.map(
-                    ([value, label]) => html`<option value=${value}>${label}</option>`,
-                  )}
-                </select>
-              </label>
-              <label>
-                Fallback source
-                <select
-                  .value=${this.routerFallback}
-                  @change=${(event) => (this.routerFallback = event.target.value)}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  ${ROUTER_SOURCE_OPTIONS.map(
-                    ([value, label]) => html`<option value=${value}>${label}</option>`,
-                  )}
-                </select>
-              </label>
-            </div>
-            <div class="form-row form-row--split">
-              <label>
-                Kinect feed enabled
-                <select
-                  .value=${this.kinectEnabled ? 'true' : 'false'}
-                  @change=${(event) => (this.kinectEnabled = event.target.value === 'true')}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </label>
-              <label>
-                USB feed enabled
-                <select
-                  .value=${this.usbEnabled ? 'true' : 'false'}
-                  @change=${(event) => (this.usbEnabled = event.target.value === 'true')}
-                  ?disabled=${routerControlsDisabled}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </label>
-            </div>
-            <div class="router-topics">
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Kinect image</span>
-                <span class="router-topics__value">${this.routerTopics?.kinectImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Kinect info</span>
-                <span class="router-topics__value">${this.routerTopics?.kinectInfo || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">USB image</span>
-                <span class="router-topics__value">${this.routerTopics?.usbImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">USB info</span>
-                <span class="router-topics__value">${this.routerTopics?.usbInfo || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Faces output image</span>
-                <span class="router-topics__value">${this.routerTopics?.outputImage || '—'}</span>
-              </div>
-              <div class="router-topics__entry">
-                <span class="router-topics__label">Faces output info</span>
-                <span class="router-topics__value">${this.routerTopics?.outputInfo || '—'}</span>
-              </div>
-            </div>
-            <div class="surface-actions">
-              <button
-                type="submit"
-                class="surface-button"
-                ?disabled=${routerControlsDisabled}
-                aria-label="${routerApplyAction.label}"
-                title="${routerApplyAction.label}"
-              >
-                <span class="surface-action__icon" aria-hidden="true">${routerApplyAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${routerApplyAction.label}</span>
-              </button>
-              <button
-                type="button"
-                class="surface-button surface-button--ghost"
-                @click=${() => this.refreshRouterState({ manual: true })}
-                ?disabled=${this.routerBusy}
-                aria-label="${routerRefreshAction.label}"
-                title="${routerRefreshAction.label}"
-              >
-                <span class="surface-action__icon" aria-hidden="true">${routerRefreshAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${routerRefreshAction.label}</span>
-              </button>
-            </div>
-          </form>
-          <div>
-            <h4 class="surface-card__subtitle">Detected video devices</h4>
-            ${this.videoDevices.length
-              ? html`<ul class="device-list">
-                  ${this.videoDevices.map(
-                    (device) => html`<li class="device-entry">
-                      <span class="device-entry__label">${device.label || device.path}</span>
-                      <span class="device-entry__path">${device.path}</span>
-                      <span class="device-entry__flags">
-                        ${device.readable ? 'readable' : 'no read access'} ·
-                        ${device.writable ? 'writable' : 'read-only'}
-                      </span>
-                      <div class="device-entry__actions">
-                        ${device.active
-                          ? html`<span class="device-entry__badge">Active</span>`
-                          : html`<button
-                              type="button"
-                              class="surface-button surface-button--ghost"
-                              @click=${() => this.selectVideoDevice(device)}
-                              ?disabled=${this.routerBusy || !device.readable}
-                              title=${device.readable
-                                ? `Switch router to ${device.path}`
-                                : 'Device is not readable by the eye module'}
-                              aria-label=${device.readable
-                                ? `Use camera ${device.path}`
-                                : 'Camera not readable'}
-                            >
-                              <span class="surface-action__icon" aria-hidden="true">🎥</span>
-                              <span class="surface-action__label" aria-hidden="true">Use this camera</span>
-                            </button>`}
-                      </div>
-                    </li>`,
-                  )}
-                </ul>`
-              : html`<p class="surface-empty">No video devices detected.</p>`}
-            <div class="surface-actions">
-              <button
-                type="button"
-                class="surface-button surface-button--ghost"
-                @click=${() => this.refreshVideoDevices()}
-                aria-label="${rescanDevicesAction.label}"
-                title="${rescanDevicesAction.label}"
-              >
-                <span class="surface-action__icon" aria-hidden="true">${rescanDevicesAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${rescanDevicesAction.label}</span>
-              </button>
-            </div>
           </div>
         </article>
 
@@ -679,8 +393,8 @@ class EyeDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Frame capture</h3>
           ${this.captureFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
+        : ''}
           <div class="surface-actions">
             <button
               type="button"
@@ -704,18 +418,18 @@ class EyeDashboard extends LitElement {
             </button>
           </div>
           ${this.captureHistory.length
-            ? html`<ol class="capture-history">
+        ? html`<ol class="capture-history">
                 ${this.captureHistory.map(
-                  (entry) => html`<li class="capture-entry">
+          (entry) => html`<li class="capture-entry">
                     <div class="capture-entry__meta">
                       <span>${entry.timestamp}</span>
                       <span>${entry.mode}</span>
                     </div>
                     <p class="capture-entry__note">${entry.note}</p>
                   </li>`
-                )}
+        )}
               </ol>`
-            : html`<p class="surface-empty">No captures recorded yet.</p>`}
+        : html`<p class="surface-empty">No captures recorded yet.</p>`}
         </article>
       </div>
     `;
@@ -768,292 +482,6 @@ class EyeDashboard extends LitElement {
       ...this.captureHistory,
     ].slice(0, 20);
   }
-
-  async refreshVideoDevices() {
-    try {
-      const payload = await callModuleAction('eye', 'list_video_devices', {});
-      const devicesRaw = Array.isArray(payload?.devices) ? payload.devices : [];
-      const devices = devicesRaw
-        .map((device) => {
-          const path = typeof device?.path === 'string' ? device.path : '';
-          if (!path) {
-            return null;
-          }
-          const label = typeof device?.label === 'string' ? device.label : '';
-          return {
-            id: typeof device?.id === 'string' && device.id ? device.id : path,
-            path,
-            label,
-            readable: Boolean(device?.readable),
-            writable: Boolean(device?.writable),
-          };
-        })
-        .filter(Boolean);
-      const normalized = this._withActiveDevice(
-        /** @type {Array<{ id: string, path: string, label: string, readable: boolean, writable: boolean }>} */ (devices),
-        this.usbDevicePath,
-      );
-      this.videoDevices = normalized;
-    } catch (error) {
-      console.error('Failed to enumerate video devices', error);
-      this.videoDevices = [];
-    }
-  }
-
-  async refreshUsbCameraState() {
-    try {
-      const response = await callRosService({
-        module: 'eye',
-        service: '/psyched_usb_camera/get_parameters',
-        type: 'rcl_interfaces/srv/GetParameters',
-        args: { names: ['device'] },
-        timeoutMs: 3000,
-      });
-      const values = Array.isArray(response?.values) ? response.values : [];
-      const deviceValue = values.length ? values[0] : null;
-      this.usbDevicePath = this._extractString(deviceValue, this.usbDevicePath);
-    } catch (error) {
-      console.error('Failed to query USB camera parameters', error);
-    } finally {
-      this.videoDevices = this._withActiveDevice(this.videoDevices, this.usbDevicePath);
-    }
-  }
-
-  _withActiveDevice(devices, activePath) {
-    const target = typeof activePath === 'string' ? activePath.trim() : '';
-    return devices.map((device) => ({
-      ...device,
-      active: Boolean(target && device.path === target),
-    }));
-  }
-
-  async selectVideoDevice(device) {
-    const path =
-      typeof device === 'string'
-        ? device
-        : device && typeof device.path === 'string'
-        ? device.path
-        : '';
-    const label =
-      device && typeof device === 'object' && typeof device.label === 'string' && device.label
-        ? device.label
-        : '';
-    const targetPath = path.trim();
-    if (!targetPath || this.routerBusy) {
-      return;
-    }
-
-    const statusLabel = label || targetPath;
-    this.routerBusy = true;
-    this.routerStatus = `Switching camera to ${statusLabel}…`;
-    this.routerTone = 'info';
-
-    try {
-      await this._setUsbCameraDevice(targetPath);
-      this.usbDevicePath = targetPath;
-      this.videoDevices = this._withActiveDevice(this.videoDevices, targetPath);
-
-      try {
-        await this._setFacesRouterSourceUsb();
-      } catch (routerError) {
-        const message = routerError instanceof Error ? routerError.message : String(routerError);
-        this.routerStatus = `Camera switched, but router update failed: ${message}`;
-        this.routerTone = 'error';
-        return;
-      }
-
-      await this.refreshRouterState({ manual: true });
-      this.routerStatus = `Faces router using USB feed (${statusLabel}).`;
-      this.routerTone = 'success';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.routerStatus = `Failed to switch camera: ${message}`;
-      this.routerTone = 'error';
-    } finally {
-      this.routerBusy = false;
-    }
-  }
-
-  async _setUsbCameraDevice(path) {
-    const parameters = [this._buildStringParameter('device', path)].filter(Boolean);
-    if (!parameters.length) {
-      throw new Error('Missing camera device path.');
-    }
-    const response = await callRosService({
-      module: 'eye',
-      service: '/psyched_usb_camera/set_parameters',
-      type: 'rcl_interfaces/srv/SetParameters',
-      args: { parameters },
-      timeoutMs: 4000,
-    });
-
-    const results = Array.isArray(response?.results) ? response.results : [];
-    for (const result of results) {
-      if (result && result.successful === false) {
-        const reason =
-          typeof result.reason === 'string' && result.reason ? result.reason : 'device update rejected';
-        throw new Error(reason);
-      }
-    }
-  }
-
-  async _setFacesRouterSourceUsb() {
-    const parameters = [
-      this._buildBoolParameter('usb_enabled', true),
-      this._buildStringParameter('faces_source', 'usb'),
-    ].filter(Boolean);
-    if (!parameters.length) {
-      return;
-    }
-
-    const response = await callRosService({
-      module: 'eye',
-      service: '/psyched_faces_router/set_parameters',
-      type: 'rcl_interfaces/srv/SetParameters',
-      args: { parameters },
-      timeoutMs: 5000,
-    });
-
-    const results = Array.isArray(response?.results) ? response.results : [];
-    for (const result of results) {
-      if (result && result.successful === false) {
-        const reason =
-          typeof result.reason === 'string' && result.reason ? result.reason : 'faces router rejected update';
-        throw new Error(reason);
-      }
-    }
-  }
-
-  async refreshRouterState(options = {}) {
-    const manual = Boolean(options.manual);
-    if (manual) {
-      this._routerRetryAttempt = 0;
-    }
-    this._clearRouterRetry();
-    const previousBusy = this.routerBusy;
-    this.routerBusy = true;
-    this.routerStatus = 'Querying faces router state…';
-    this.routerTone = 'info';
-
-    const parameterNames = [
-      'faces_source',
-      'fallback_source',
-      'kinect_enabled',
-      'usb_enabled',
-      'kinect_image_topic',
-      'kinect_camera_info_topic',
-      'usb_image_topic',
-      'usb_camera_info_topic',
-      'output_image_topic',
-      'output_camera_info_topic',
-    ];
-
-    try {
-      const response = await callRosService({
-        module: 'eye',
-        service: '/psyched_faces_router/get_parameters',
-        type: 'rcl_interfaces/srv/GetParameters',
-        args: { names: parameterNames },
-        timeoutMs: 4000,
-      });
-
-      const values = Array.isArray(response?.values) ? response.values : [];
-      const lookup = new Map();
-      for (let index = 0; index < parameterNames.length; index += 1) {
-        lookup.set(parameterNames[index], values[index] ?? null);
-      }
-
-      this.routerSource = this._extractString(lookup.get('faces_source'), this.routerSource);
-      this.routerFallback = this._extractString(lookup.get('fallback_source'), this.routerFallback);
-      this.kinectEnabled = this._extractBool(lookup.get('kinect_enabled'), this.kinectEnabled);
-      this.usbEnabled = this._extractBool(lookup.get('usb_enabled'), this.usbEnabled);
-      this.routerTopics = {
-        kinectImage: this._extractString(lookup.get('kinect_image_topic'), this.routerTopics?.kinectImage),
-        kinectInfo: this._extractString(lookup.get('kinect_camera_info_topic'), this.routerTopics?.kinectInfo),
-        usbImage: this._extractString(lookup.get('usb_image_topic'), this.routerTopics?.usbImage),
-        usbInfo: this._extractString(lookup.get('usb_camera_info_topic'), this.routerTopics?.usbInfo),
-        outputImage: this._extractString(lookup.get('output_image_topic'), this.routerTopics?.outputImage),
-        outputInfo: this._extractString(lookup.get('output_camera_info_topic'), this.routerTopics?.outputInfo),
-      };
-
-      this.routerStatus = 'Faces router ready.';
-      this.routerTone = 'success';
-      this.routerAvailable = true;
-      this._routerRetryAttempt = 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const unavailable = typeof message === 'string' && message.toLowerCase().includes('not available');
-      if (unavailable && this._routerRetryAttempt < this._routerRetryLimit) {
-        this._routerRetryAttempt += 1;
-        const delaySeconds = Math.max(this._routerRetryDelayMs / 1000, 0.1);
-        this.routerStatus = `Faces router starting (waiting for eye); retrying in ${delaySeconds.toFixed(1)}s…`;
-        this.routerTone = 'warning';
-        this.routerAvailable = false;
-        this._routerRetryHandle = setTimeout(() => {
-          this._routerRetryHandle = null;
-          void this.refreshRouterState();
-        }, this._routerRetryDelayMs);
-      } else {
-        this.routerStatus = `Faces router unavailable: ${message}`;
-        this.routerTone = 'error';
-        this.routerAvailable = false;
-      }
-    } finally {
-      this.routerBusy = previousBusy;
-    }
-  }
-
-  async applyRouterSettings(event) {
-    event.preventDefault();
-    if (this.routerBusy) {
-      return;
-    }
-    if (!this.routerAvailable) {
-      this.routerStatus = 'Faces router service is unavailable.';
-      this.routerTone = 'error';
-      return;
-    }
-
-    this.routerBusy = true;
-    this.routerStatus = 'Applying routing updates…';
-    this.routerTone = 'info';
-
-    const parameters = [
-      this._buildStringParameter('faces_source', this.routerSource),
-      this._buildStringParameter('fallback_source', this.routerFallback),
-      this._buildBoolParameter('kinect_enabled', this.kinectEnabled),
-      this._buildBoolParameter('usb_enabled', this.usbEnabled),
-    ].filter(Boolean);
-
-    if (!parameters.length) {
-      this.routerBusy = false;
-      this.routerStatus = 'No routing changes detected.';
-      this.routerTone = 'warning';
-      return;
-    }
-
-    try {
-      await callRosService({
-        module: 'eye',
-        service: '/psyched_faces_router/set_parameters',
-        type: 'rcl_interfaces/srv/SetParameters',
-        args: { parameters },
-        timeoutMs: 5000,
-      });
-      await this.refreshRouterState({ manual: true });
-      if (this.routerAvailable) {
-        this.routerStatus = 'Faces routing updated.';
-        this.routerTone = 'success';
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.routerStatus = `Failed to update faces routing: ${message}`;
-      this.routerTone = 'error';
-    } finally {
-      this.routerBusy = false;
-    }
-  }
-
   markLive() {
     this.statusMessage = 'Live stream detected.';
     this.statusTone = 'success';
@@ -1062,69 +490,6 @@ class EyeDashboard extends LitElement {
   markIdle() {
     this.statusMessage = 'Awaiting stream status updates…';
     this.statusTone = 'info';
-  }
-
-  _clearRouterRetry() {
-    if (this._routerRetryHandle) {
-      clearTimeout(this._routerRetryHandle);
-      this._routerRetryHandle = null;
-    }
-  }
-
-  _extractString(parameterValue, fallback = '') {
-    if (!parameterValue || typeof parameterValue !== 'object') {
-      return fallback;
-    }
-    const text = typeof parameterValue.string_value === 'string' ? parameterValue.string_value.trim() : '';
-    if (text) {
-      return text;
-    }
-    if (Array.isArray(parameterValue.string_array_value) && parameterValue.string_array_value.length > 0) {
-      const first = parameterValue.string_array_value[0];
-      if (typeof first === 'string' && first.trim()) {
-        return first.trim();
-      }
-    }
-    return fallback;
-  }
-
-  _extractBool(parameterValue, fallback = false) {
-    if (!parameterValue || typeof parameterValue !== 'object') {
-      return fallback;
-    }
-    if (typeof parameterValue.bool_value === 'boolean') {
-      return parameterValue.bool_value;
-    }
-    if (typeof parameterValue.integer_value === 'number') {
-      return parameterValue.integer_value !== 0;
-    }
-    return fallback;
-  }
-
-  _buildStringParameter(name, value) {
-    if (typeof value !== 'string' || !value.trim()) {
-      return null;
-    }
-    return {
-      name,
-      value: {
-        type: PARAMETER_TYPE_STRING,
-        string_value: value.trim(),
-      },
-    };
-  }
-
-  _buildBoolParameter(name, value) {
-    if (typeof value !== 'boolean') {
-      return null;
-    }
-    return {
-      name,
-      value: {
-        type: PARAMETER_TYPE_BOOL,
-        bool_value: value,
-      },
-    };
   }
 
   _resolvePreviewCandidates() {
@@ -1364,7 +729,7 @@ class EyeDashboard extends LitElement {
 
   _scheduleReconnect() {
     if (this._reconnectTimer || !this._connected) {
-      return;
+      return; lize
     }
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;

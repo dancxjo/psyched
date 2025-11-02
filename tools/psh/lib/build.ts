@@ -55,7 +55,7 @@ function ensureWorkspaceExists(path: string): void {
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       throw new Error(
-        `ROS workspace not found at '${path}'. Run 'psh clean' or 'psh mod setup' to initialise it.`,
+        `ROS workspace not found at '${path}'. Run 'psh clean' or 'psh mod setup' to initialize it.`,
       );
     }
     throw error;

@@ -72,7 +72,7 @@ async def memorize_event_action(*, context: ActionContext, ros: RosClient, defin
             timeout=timeout,
         )
     except Exception as exc:  # pragma: no cover - ROS errors exercised in integration
-        raise ActionError(f"Failed to memorise event: {exc}") from exc
+        raise ActionError(f"Failed to memorize event: {exc}") from exc
 
     return ActionResult(payload={"result": result})
 

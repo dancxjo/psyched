@@ -200,7 +200,7 @@ def build_conversation_export(
     Parameters
     ----------
     thread:
-        The conversation thread to serialise.
+        The conversation thread to serialize.
     user_id:
         Identifier of the human participant associated with the thread.
     delivered_only:
