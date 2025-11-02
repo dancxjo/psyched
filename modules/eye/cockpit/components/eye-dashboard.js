@@ -1,6 +1,6 @@
 
 import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { createTopicSocket, callModuleAction, callRosService } from '/js/cockpit.js';
+import { createTopicSocket } from '/js/cockpit.js';
 import { surfaceStyles } from '/components/cockpit-style.js';
 import {
   buildEyeSettingsPayload,
