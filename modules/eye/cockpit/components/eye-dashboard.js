@@ -70,6 +70,7 @@ class EyeDashboard extends LitElement {
     usbEnabled: { state: true },
     routerTopics: { state: true },
     videoDevices: { state: true },
+    usbDevicePath: { state: true },
   };
 
   static styles = [
@@ -232,6 +233,26 @@ class EyeDashboard extends LitElement {
         letter-spacing: 0.05em;
         text-transform: uppercase;
       }
+
+      .device-entry__actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lcars-muted);
+      }
+
+      .device-entry__badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--lcars-text);
+        font-family: var(--metric-value-font);
+      }
     `,
   ];
 
@@ -275,6 +296,7 @@ class EyeDashboard extends LitElement {
       outputInfo: '/faces/camera/camera_info',
     };
     this.videoDevices = [];
+    this.usbDevicePath = '';
 
     this._previewCandidates = [];
     this._previewCandidateIndex = 0;
@@ -305,6 +327,7 @@ class EyeDashboard extends LitElement {
     this._previewCandidateIndex = 0;
     this._startPreviewStream();
     void this.refreshRouterState();
+    void this.refreshUsbCameraState();
     void this.refreshVideoDevices();
   }
 
@@ -465,6 +488,21 @@ class EyeDashboard extends LitElement {
                         ${device.readable ? 'readable' : 'no read access'} ·
                         ${device.writable ? 'writable' : 'read-only'}
                       </span>
+                      <div class="device-entry__actions">
+                        ${device.active
+                          ? html`<span class="device-entry__badge">Active</span>`
+                          : html`<button
+                              type="button"
+                              class="surface-button surface-button--ghost"
+                              @click=${() => this.selectVideoDevice(device)}
+                              ?disabled=${this.routerBusy || !device.readable}
+                              title=${device.readable
+                                ? `Switch router to ${device.path}`
+                                : 'Device is not readable by the eye module'}
+                            >
+                              Use this camera
+                            </button>`}
+                      </div>
                     </li>`,
                   )}
                 </ul>`
@@ -686,10 +724,138 @@ class EyeDashboard extends LitElement {
           };
         })
         .filter(Boolean);
-      this.videoDevices = /** @type {Array<{ id: string, path: string, label: string, readable: boolean, writable: boolean }>} */ (devices);
+      const normalized = this._withActiveDevice(
+        /** @type {Array<{ id: string, path: string, label: string, readable: boolean, writable: boolean }>} */ (devices),
+        this.usbDevicePath,
+      );
+      this.videoDevices = normalized;
     } catch (error) {
       console.error('Failed to enumerate video devices', error);
       this.videoDevices = [];
+    }
+  }
+
+  async refreshUsbCameraState() {
+    try {
+      const response = await callRosService({
+        module: 'eye',
+        service: '/psyched_usb_camera/get_parameters',
+        type: 'rcl_interfaces/srv/GetParameters',
+        args: { names: ['device'] },
+        timeoutMs: 3000,
+      });
+      const values = Array.isArray(response?.values) ? response.values : [];
+      const deviceValue = values.length ? values[0] : null;
+      this.usbDevicePath = this._extractString(deviceValue, this.usbDevicePath);
+    } catch (error) {
+      console.error('Failed to query USB camera parameters', error);
+    } finally {
+      this.videoDevices = this._withActiveDevice(this.videoDevices, this.usbDevicePath);
+    }
+  }
+
+  _withActiveDevice(devices, activePath) {
+    const target = typeof activePath === 'string' ? activePath.trim() : '';
+    return devices.map((device) => ({
+      ...device,
+      active: Boolean(target && device.path === target),
+    }));
+  }
+
+  async selectVideoDevice(device) {
+    const path =
+      typeof device === 'string'
+        ? device
+        : device && typeof device.path === 'string'
+        ? device.path
+        : '';
+    const label =
+      device && typeof device === 'object' && typeof device.label === 'string' && device.label
+        ? device.label
+        : '';
+    const targetPath = path.trim();
+    if (!targetPath || this.routerBusy) {
+      return;
+    }
+
+    const statusLabel = label || targetPath;
+    this.routerBusy = true;
+    this.routerStatus = `Switching camera to ${statusLabel}…`;
+    this.routerTone = 'info';
+
+    try {
+      await this._setUsbCameraDevice(targetPath);
+      this.usbDevicePath = targetPath;
+      this.videoDevices = this._withActiveDevice(this.videoDevices, targetPath);
+
+      try {
+        await this._setFacesRouterSourceUsb();
+      } catch (routerError) {
+        const message = routerError instanceof Error ? routerError.message : String(routerError);
+        this.routerStatus = `Camera switched, but router update failed: ${message}`;
+        this.routerTone = 'error';
+        return;
+      }
+
+      await this.refreshRouterState({ manual: true });
+      this.routerStatus = `Faces router using USB feed (${statusLabel}).`;
+      this.routerTone = 'success';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.routerStatus = `Failed to switch camera: ${message}`;
+      this.routerTone = 'error';
+    } finally {
+      this.routerBusy = false;
+    }
+  }
+
+  async _setUsbCameraDevice(path) {
+    const parameters = [this._buildStringParameter('device', path)].filter(Boolean);
+    if (!parameters.length) {
+      throw new Error('Missing camera device path.');
+    }
+    const response = await callRosService({
+      module: 'eye',
+      service: '/psyched_usb_camera/set_parameters',
+      type: 'rcl_interfaces/srv/SetParameters',
+      args: { parameters },
+      timeoutMs: 4000,
+    });
+
+    const results = Array.isArray(response?.results) ? response.results : [];
+    for (const result of results) {
+      if (result && result.successful === false) {
+        const reason =
+          typeof result.reason === 'string' && result.reason ? result.reason : 'device update rejected';
+        throw new Error(reason);
+      }
+    }
+  }
+
+  async _setFacesRouterSourceUsb() {
+    const parameters = [
+      this._buildBoolParameter('usb_enabled', true),
+      this._buildStringParameter('faces_source', 'usb'),
+    ].filter(Boolean);
+    if (!parameters.length) {
+      return;
+    }
+
+    const response = await callRosService({
+      module: 'eye',
+      service: '/psyched_faces_router/set_parameters',
+      type: 'rcl_interfaces/srv/SetParameters',
+      args: { parameters },
+      timeoutMs: 5000,
+    });
+
+    const results = Array.isArray(response?.results) ? response.results : [];
+    for (const result of results) {
+      if (result && result.successful === false) {
+        const reason =
+          typeof result.reason === 'string' && result.reason ? result.reason : 'faces router rejected update';
+        throw new Error(reason);
+      }
     }
   }
 

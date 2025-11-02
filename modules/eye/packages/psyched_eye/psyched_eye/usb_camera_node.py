@@ -10,6 +10,7 @@ from typing import Optional
 import cv2
 import rclpy
 from cv_bridge import CvBridge
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.logging import get_logger
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -65,6 +66,7 @@ class UsbCameraNode(Node):
         self._last_failed_read = 0
         self._next_reopen_time = time.monotonic()
         self._timer = self.create_timer(self._timer_period, self._capture_frame)
+        self.add_on_set_parameters_callback(self._handle_parameter_update)
 
         self.get_logger().info(
             "USB camera node initialised (device=%s, resolution=%dx%d @ %.1f FPS, encoding=%s)",
@@ -182,6 +184,35 @@ class UsbCameraNode(Node):
                     pass
             self._capture = None
         self._next_reopen_time = time.monotonic() + self._REOPEN_DELAY
+
+    # Parameter handling ------------------------------------------------
+    def _handle_parameter_update(self, params) -> SetParametersResult:
+        updated_device: Optional[str] = None
+
+        for param in params:
+            if param.name != "device":
+                continue
+
+            raw_value = param.value
+            device = str(raw_value).strip() if raw_value is not None else ""
+            if not device:
+                return SetParametersResult(successful=False, reason="Camera device path cannot be empty.")
+            if device != self._config.device:
+                updated_device = device
+
+        if updated_device is not None:
+            self._apply_device_update(updated_device)
+
+        return SetParametersResult(successful=True)
+
+    def _apply_device_update(self, device: str) -> None:
+        self.get_logger().info("Camera device update requested: %s", device)
+        with self._lock:
+            self._config.device = device
+
+        self._release_capture()
+        self._next_reopen_time = time.monotonic()
+        self._open_capture()
 
     def destroy_node(self) -> bool:
         self._release_capture()
