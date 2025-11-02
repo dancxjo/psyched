@@ -69,6 +69,7 @@ Deno.test('parseFaceTriggerPayload handles face sensations', () => {
     json_payload: JSON.stringify({
       memory_id: 'mem-900',
       vector_id: 'vec-321',
+      topic: '/vision/faces',
       confidence: 0.82,
       embedding_dim: 512,
     }),
@@ -82,6 +83,9 @@ Deno.test('parseFaceTriggerPayload handles face sensations', () => {
   }
   if (result.value.collection !== 'faces') {
     throw new Error('Collection should fall back to collection_hint when missing');
+  }
+  if (result.value.cropTopic !== '/vision/faces') {
+    throw new Error('Crop topic should be normalised from the sensation payload');
   }
   if (!result.value.note || !result.value.note.includes('confidence')) {
     throw new Error('Sensation notes should include confidence details when available');

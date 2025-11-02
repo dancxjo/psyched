@@ -406,6 +406,12 @@ class FacesDashboard extends LitElement {
                       Vector:
                       <span class="detection-entry__value">${entry.vectorId || '—'}</span>
                     </p>
+                    ${entry.cropTopic
+                      ? html`<p class="detection-entry__note">
+                          Crops topic:
+                          <span class="detection-entry__value">${entry.cropTopic}</span>
+                        </p>`
+                      : ''}
                     ${entry.note
                       ? html`<p class="detection-entry__note detection-entry__note--muted">${entry.note}</p>`
                       : ''}
@@ -730,6 +736,7 @@ class FacesDashboard extends LitElement {
       memoryId: details?.memoryId ?? '',
       vectorId: details?.vectorId ?? '',
       collection: details?.collection ?? '',
+      cropTopic: details?.cropTopic ?? '',
       note: details?.note ?? '',
       raw: details?.raw ?? '',
     };

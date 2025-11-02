@@ -129,8 +129,10 @@ function ensureToggle(header) {
   if (!toggle) {
     toggle = document.createElement("button");
     toggle.type = "button";
-    toggle.className = "surface-card__toggle";
+    toggle.className = "surface-card__toggle icon-button icon-button--compact";
     header.appendChild(toggle);
+  } else {
+    toggle.classList.add("surface-card__toggle", "icon-button", "icon-button--compact");
   }
   return toggle;
 }
@@ -148,24 +150,31 @@ function ensureToggleParts(toggle) {
   let icon = toggle.querySelector(".surface-card__toggleIcon");
   if (!icon) {
     icon = document.createElement("span");
-    icon.className = "surface-card__toggleIcon";
+    icon.className = "surface-card__toggleIcon icon-button__icon";
     icon.setAttribute("aria-hidden", "true");
     toggle.appendChild(icon);
+  } else {
+    icon.classList.add("surface-card__toggleIcon", "icon-button__icon");
   }
 
   let label = toggle.querySelector(".surface-card__toggleLabel");
   if (!label) {
     label = document.createElement("span");
-    label.className = "surface-card__toggleLabel";
+    label.className = "surface-card__toggleLabel icon-button__label";
     label.setAttribute("aria-hidden", "true");
     toggle.appendChild(label);
+  } else {
+    label.classList.add("surface-card__toggleLabel", "icon-button__label");
+    label.setAttribute("aria-hidden", "true");
   }
 
   let srText = toggle.querySelector(".surface-card__toggleText");
   if (!srText) {
     srText = document.createElement("span");
-    srText.className = "surface-card__toggleText";
+    srText.className = "surface-card__toggleText icon-button__sr";
     toggle.appendChild(srText);
+  } else {
+    srText.classList.add("surface-card__toggleText", "icon-button__sr");
   }
 
   return { icon, srText, label };

@@ -41,21 +41,31 @@
 
     <section class="config-toolbar" aria-label="Configuration actions">
       <div class="config-toolbar__actions">
-        <button type="button" class="config-action" data-role="refresh">
-          🔄 Refresh from host manifest
+        <button type="button" class="config-action icon-button icon-button--compact" data-role="refresh">
+          <span class="icon-button__icon" aria-hidden="true">🔄</span>
+          <span class="icon-button__label" aria-hidden="true">Refresh from host manifest</span>
+          <span class="icon-button__sr">Refresh from host manifest</span>
         </button>
-        <button type="button" class="config-action" data-role="git-pull">
-          📥 Git pull latest
+        <button type="button" class="config-action icon-button icon-button--compact" data-role="git-pull">
+          <span class="icon-button__icon" aria-hidden="true">📥</span>
+          <span class="icon-button__label" aria-hidden="true">Git pull latest</span>
+          <span class="icon-button__sr">Git pull latest</span>
         </button>
         <div class="config-toolbar__group" role="group" aria-label="Bulk module lifecycle operations">
-          <button type="button" class="config-action" data-role="psh-operation" data-operation="module-setup">
-            🛠️ psh mod setup
+          <button type="button" class="config-action icon-button icon-button--compact" data-role="psh-operation" data-operation="module-setup">
+            <span class="icon-button__icon" aria-hidden="true">🛠️</span>
+            <span class="icon-button__label" aria-hidden="true">psh mod setup</span>
+            <span class="icon-button__sr">psh mod setup</span>
           </button>
-          <button type="button" class="config-action" data-role="psh-operation" data-operation="module-up">
-            🚀 psh mod up
+          <button type="button" class="config-action icon-button icon-button--compact" data-role="psh-operation" data-operation="module-up">
+            <span class="icon-button__icon" aria-hidden="true">🚀</span>
+            <span class="icon-button__label" aria-hidden="true">psh mod up</span>
+            <span class="icon-button__sr">psh mod up</span>
           </button>
-          <button type="button" class="config-action" data-role="psh-operation" data-operation="module-down">
-            🛑 psh mod down
+          <button type="button" class="config-action icon-button icon-button--compact" data-role="psh-operation" data-operation="module-down">
+            <span class="icon-button__icon" aria-hidden="true">🛑</span>
+            <span class="icon-button__label" aria-hidden="true">psh mod down</span>
+            <span class="icon-button__sr">psh mod down</span>
           </button>
         </div>
       </div>

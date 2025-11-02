@@ -41,13 +41,23 @@
           <span class="nav-label" x-text="section.label"></span>
         </a>
         <template x-if="section.id === activeId && topSectionId && section.id !== topSectionId">
-          <button type="button" class="nav-shortcut" title="Back to top"
+          <button type="button" class="nav-shortcut icon-button icon-button--compact icon-button--flush" title="Back to top"
             :aria-label="`Back to ${sections[0] ? sections[0].label : 'top'}`" @click.stop="scrollToTop()">
-            ↑
+            <span class="icon-button__icon" aria-hidden="true">↑</span>
+            <span class="icon-button__label" aria-hidden="true"
+              x-text="`Back to ${sections[0] ? sections[0].label : 'top'}`"></span>
+            <span class="icon-button__sr" x-text="`Back to ${sections[0] ? sections[0].label : 'top'}`"></span>
           </button>
         </template>
         <template x-if="section.url">
-          <a class="nav-link" :href="section.url" target="_blank" rel="noopener" @click.stop>↗</a>
+          <a class="nav-link icon-button icon-button--compact icon-button--flush" :href="section.url" target="_blank"
+            rel="noopener" @click.stop
+            :aria-label="`Open ${section.label} dashboard in a new tab`">
+            <span class="icon-button__icon" aria-hidden="true">↗</span>
+            <span class="icon-button__label" aria-hidden="true"
+              x-text="`Open ${section.label}`"></span>
+            <span class="icon-button__sr" x-text="`Open ${section.label} dashboard in a new tab`"></span>
+          </a>
         </template>
       </div>
     </template>

@@ -137,6 +137,11 @@ function parseSensation(message) {
   const memoryId = normaliseString(parsed.memory_id);
   const vectorId = normaliseString(parsed.vector_id);
   const collection = normaliseString(parsed.collection, normaliseString(message.collection_hint));
+  const cropTopic =
+    normaliseString(parsed.crop_topic) ||
+    normaliseString(parsed.crops_topic) ||
+    normaliseString(parsed.topic) ||
+    normaliseString(message.topic);
 
   const noteParts = [];
   const confidence = Number(parsed.confidence);
@@ -156,6 +161,7 @@ function parseSensation(message) {
       memoryId,
       vectorId,
       collection,
+      cropTopic,
       note,
       raw: payloadText,
     },
@@ -183,6 +189,7 @@ function parseLegacyTrigger(text) {
       memoryId,
       vectorId,
       collection,
+      cropTopic: '',
       raw: text,
     },
   };
@@ -202,6 +209,7 @@ function parseLegacyTrigger(text) {
  * @property {string} memoryId Identifier returned by the memory service.
  * @property {string} vectorId Embedding vector identifier.
  * @property {string} collection Backing collection name.
+ * @property {string=} cropTopic ROS topic that publishes cropped face detections.
  * @property {string} raw Raw JSON payload string.
  * @property {string=} note Contextual note about the event (confidence, embedding dims, etc).
  */
