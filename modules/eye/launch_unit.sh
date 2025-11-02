@@ -92,18 +92,29 @@ if [[ -z "${KINECT_PARAMS}" && -f "${PARAM_FILE}" ]]; then
 fi
 
 USE_KINECT="$(normalize_bool "${EYE_USE_KINECT:-${CFG_KINECT_ENABLED:-true}}" "true")"
-
-CMD=("ros2" "launch" "psyched_eye" "eye.launch.py")
-ARGS=(
-  "use_kinect:=${USE_KINECT}"
-  "kinect_rgb_topic:=${RGB_TOPIC}"
-  "kinect_rgb_info_topic:=${RGB_INFO_TOPIC}"
-  "kinect_depth_topic:=${DEPTH_TOPIC}"
-  "kinect_depth_info_topic:=${DEPTH_INFO_TOPIC}"
-)
-
-if [[ -n "${KINECT_PARAMS}" ]]; then
-  ARGS+=("kinect_params_file:=${KINECT_PARAMS}")
+if [[ "${USE_KINECT}" != "true" ]]; then
+  echo "[eye/launch] Kinect launch disabled via configuration"
+  exit 0
 fi
 
-exec "${CMD[@]}" "${ARGS[@]}"
+CMD=("ros2" "run" "kinect_ros2" "kinect_ros2_node")
+ROS_ARGS=()
+
+if [[ -n "${KINECT_PARAMS}" ]]; then
+  if [[ -f "${KINECT_PARAMS}" ]]; then
+    ROS_ARGS+=("--params-file" "${KINECT_PARAMS}")
+  else
+    echo "[eye/launch] Warning: Kinect params file not found: ${KINECT_PARAMS}" 1>&2
+  fi
+fi
+
+ROS_ARGS+=(
+  "-r" "image_raw:=${RGB_TOPIC}"
+  "-r" "camera_info:=${RGB_INFO_TOPIC}"
+  "-r" "depth/image_raw:=${DEPTH_TOPIC}"
+  "-r" "depth/camera_info:=${DEPTH_INFO_TOPIC}"
+)
+
+CMD+=("--ros-args" "${ROS_ARGS[@]}")
+
+exec "${CMD[@]}"
