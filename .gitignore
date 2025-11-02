@@ -95,3 +95,4 @@ modules/cockpit/packages/cockpit/cockpit/frontend/api/actions.json
 modules/cockpit/packages/cockpit/cockpit/frontend/components/README.md
 modules/cockpit/packages/cockpit/cockpit/frontend/utils/battery.js
 modules/cockpit/packages/cockpit/cockpit/frontend/utils/voice.js
+modules/cockpit/packages/cockpit/cockpit/frontend/actions.py
