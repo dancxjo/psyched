@@ -28,7 +28,7 @@ const PREVIEW_RECONNECT_DELAY_MS = 1500;
  *
  * Custom events:
  * - ``eye-settings-request`` → `{ detail: EyeSettingsPayload }`
- * - ``eye-capture-request`` → `{ detail: { mode: 'colour' | 'depth' } }`
+ * - ``eye-capture-request`` → `{ detail: { mode: 'color' | 'depth' } }`
  */
 class EyeDashboard extends LitElement {
   static properties = {
@@ -215,11 +215,11 @@ class EyeDashboard extends LitElement {
     const hasFrame = this.previewFrameReady && (this.previewMode === 'image' ? Boolean(this.previewFrameUrl) : this.previewMode === 'canvas');
     const details = hasFrame
       ? [
-          this.previewSource ? `Topic: ${this.previewSource}` : '',
-          this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
-          this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
-          this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
-        ].filter(Boolean).join(' • ')
+        this.previewSource ? `Topic: ${this.previewSource}` : '',
+        this.previewEncoding ? `Encoding: ${this.previewEncoding}` : '',
+        this.previewWidth && this.previewHeight ? `${this.previewWidth}×${this.previewHeight}` : '',
+        this.previewTimestamp ? `Last frame: ${this.previewTimestamp}` : '',
+      ].filter(Boolean).join(' • ')
       : '';
 
     return html`
@@ -229,21 +229,21 @@ class EyeDashboard extends LitElement {
           <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
           <div class="preview" role="img" aria-label="Live video preview">
             ${this.previewMode === 'image' && this.previewFrameUrl
-              ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye colour stream preview" />`
-              : ''}
+        ? html`<img class="preview__frame" src="${this.previewFrameUrl}" alt="Eye color stream preview" />`
+        : ''}
             ${this.previewMode === 'canvas'
-              ? html`<canvas
+        ? html`<canvas
                   class="preview__frame preview__canvas"
                   width="${this.previewWidth || this.width}"
                   height="${this.previewHeight || this.height}"
                 ></canvas>`
-              : ''}
+        : ''}
             ${!hasFrame
-              ? html`<div class="preview__placeholder">
+        ? html`<div class="preview__placeholder">
                   <p>${this.previewSource ? `Waiting for ${this.previewSource}` : 'Initialising preview stream…'}</p>
                   <p>${this.width}×${this.height} @ ${this.frameRate} FPS</p>
                 </div>`
-              : ''}
+        : ''}
           </div>
           ${details ? html`<p class="preview__details">${details}</p>` : ''}
           <div class="surface-actions">
@@ -302,7 +302,7 @@ class EyeDashboard extends LitElement {
                   .value=${this.depthMode}
                   @change=${(event) => (this.depthMode = normalizeDepthMode(event.target.value))}
                 >
-                  <option value="disabled">Colour only</option>
+                  <option value="disabled">Color only</option>
                   <option value="depth">Depth stream</option>
                   <option value="aligned_depth">Aligned depth</option>
                 </select>
@@ -363,29 +363,29 @@ class EyeDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Frame capture</h3>
           ${this.captureFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
-            : ''}
+        ? html`<p class="surface-status" data-variant="error">${this.captureFeedback}</p>`
+        : ''}
           <div class="surface-actions">
-            <button type="button" class="surface-button" @click=${() => this.handleCapture('colour')}>
-              Capture colour frame
+            <button type="button" class="surface-button" @click=${() => this.handleCapture('color')}>
+              Capture color frame
             </button>
             <button type="button" class="surface-button surface-button--ghost" @click=${() => this.handleCapture('depth')}>
               Capture depth frame
             </button>
           </div>
           ${this.captureHistory.length
-            ? html`<ol class="capture-history">
+        ? html`<ol class="capture-history">
                 ${this.captureHistory.map(
-                  (entry) => html`<li class="capture-entry">
+          (entry) => html`<li class="capture-entry">
                     <div class="capture-entry__meta">
                       <span>${entry.timestamp}</span>
                       <span>${entry.mode}</span>
                     </div>
                     <p class="capture-entry__note">${entry.note}</p>
                   </li>`
-                )}
+        )}
               </ol>`
-            : html`<p class="surface-empty">No captures recorded yet.</p>`}
+        : html`<p class="surface-empty">No captures recorded yet.</p>`}
         </article>
       </div>
     `;
@@ -433,7 +433,7 @@ class EyeDashboard extends LitElement {
         id: makeId('capture'),
         mode,
         timestamp: new Date().toLocaleTimeString(),
-        note: mode === 'depth' ? 'Depth frame queued for export.' : 'Colour frame queued for export.',
+        note: mode === 'depth' ? 'Depth frame queued for export.' : 'Color frame queued for export.',
       },
       ...this.captureHistory,
     ].slice(0, 20);
