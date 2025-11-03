@@ -15,7 +15,7 @@ CONFIG_FACES_TOPIC=""
 CONFIG_FACE_DETECTED_TOPIC=""
 
 if [[ -f "${CONFIG_FILE}" ]]; then
-  # Prefer the faces-specific topic overrides but fall back to the eye/nav defaults.
+  # Prefer the shared camera topic overrides but fall back to the module defaults.
   mapfile -t CONFIG_TOPICS < <(python3 - "${CONFIG_FILE}" <<'PY'
 import sys
 from pathlib import Path
@@ -50,6 +50,7 @@ def pick(*paths: str) -> str:
   return ""
 
 print(pick(
+  "config.topics.camera.rgb",
   "config.mod.faces.launch.arguments.camera_topic",
   "config.mod.eye.launch.arguments.rgb_topic",
   "config.mod.nav.launch.arguments.kinect_rgb_topic",

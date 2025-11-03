@@ -134,6 +134,16 @@ module launch arguments:
 }
 ```
 
+When multiple modules rely on the same camera data, define shared entries under
+`config.topics.camera`. Modules such as Eye, Faces, and Nav read these values
+before falling back to module-specific overrides:
+
+```toml
+[config.topics.camera]
+rgb = "/camera/color/image_raw"
+depth = "/camera/depth/image_raw"
+```
+
 ### Declaring dependencies
 
 When a module relies on a remote service, add entries to the `dependencies`

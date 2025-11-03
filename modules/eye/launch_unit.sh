@@ -55,10 +55,12 @@ def pick(*paths: str) -> str:
     return ""
 
 print(pick(
+    "config.topics.camera.rgb",
     "config.mod.eye.launch.arguments.rgb_topic",
     "config.mod.nav.launch.arguments.kinect_rgb_topic",
 ))
 print(pick(
+    "config.topics.camera.depth",
     "config.mod.eye.launch.arguments.depth_topic",
     "config.mod.nav.launch.arguments.kinect_depth_topic",
 ))

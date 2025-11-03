@@ -48,6 +48,10 @@ via = "bolt://forebrain.local:7687"
 bind_env = "NEO4J_URI"
 summary = "Persists memory relationships via Neo4j Bolt endpoint"
 
+[config.topics.camera]
+rgb = "/camera/color/image_raw"
+depth = "/camera/depth/image_raw"
+
 [config.mod.faces.launch.arguments]
 camera_topic = "/camera/color/image_raw"
 faces_topic = "/vision/faces"
