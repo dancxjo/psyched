@@ -1,10 +1,19 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@3.1.4/index.js?module';
-import { createTopicSocket } from '/js/cockpit.js';
-import { surfaceStyles } from '/components/cockpit-style.js';
-import { buildFacesSettingsPayload, parseFaceTriggerPayload } from './faces-dashboard.helpers.js';
+import {
+  css,
+  html,
+  LitElement,
+} from "https://unpkg.com/lit@3.1.4/index.js?module";
+import { createTopicSocket } from "/js/cockpit.js";
+import { surfaceStyles } from "/components/cockpit-style.js";
+import {
+  buildFacesSettingsPayload,
+  parseFaceTriggerPayload,
+} from "./faces-dashboard.helpers.js";
 
 function makeId(prefix) {
-  return crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 const MAX_CROP_HISTORY = 12;
@@ -171,15 +180,15 @@ class FacesDashboard extends LitElement {
     this.threshold = 0.6;
     this.window = 15;
     this.publishCrops = true;
-   this.publishEmbeddings = true;
-   this.statusMessage = 'Connecting to recognition stream…';
-   this.statusTone = 'info';
-    this.cropStatusMessage = 'Connecting to detections stream…';
-    this.cropStatusTone = 'info';
+    this.publishEmbeddings = true;
+    this.statusMessage = "Connecting to recognition stream…";
+    this.statusTone = "info";
+    this.cropStatusMessage = "Connecting to detections stream…";
+    this.cropStatusTone = "info";
     this.faceCrops = [];
-    this.tagFaceId = '';
-    this.tagLabel = '';
-    this.tagFeedback = '';
+    this.tagFaceId = "";
+    this.tagLabel = "";
+    this.tagFeedback = "";
     this.detectionLog = [];
     this.sockets = [];
     this._cropCanvas = null;
@@ -208,17 +217,24 @@ class FacesDashboard extends LitElement {
 
   render() {
     const hasCrops = this.faceCrops.length > 0;
-    const tuningApplyAction = { icon: '🎛️', label: 'Apply tuning' };
-    const resetEmbeddingsAction = { icon: '♻️', label: 'Reset embedding cache' };
-    const simulateRecognitionAction = { icon: '🎭', label: 'Simulate recognition' };
-    const submitLabelAction = { icon: '🏷️', label: 'Submit label' };
-    const clearLabelAction = { icon: '🧹', label: 'Clear' };
+    const tuningApplyAction = { icon: "🎛️", label: "Apply tuning" };
+    const resetEmbeddingsAction = {
+      icon: "♻️",
+      label: "Reset embedding cache",
+    };
+    const simulateRecognitionAction = {
+      icon: "🎭",
+      label: "Simulate recognition",
+    };
+    const submitLabelAction = { icon: "🏷️", label: "Submit label" };
+    const clearLabelAction = { icon: "🧹", label: "Clear" };
     return html`
       <div class="surface-grid surface-grid--wide">
         <article class="surface-card">
           <h3 class="surface-card__title">Detector tuning</h3>
-          <p class="surface-status" data-variant="${this.statusTone}">${this.statusMessage}</p>
-          <form @submit=${this.handleSettingsSubmit}>
+          <p class="surface-status" data-variant="${this.statusTone}">${this
+            .statusMessage}</p>
+          <form @submit="${this.handleSettingsSubmit}">
             <div class="form-row form-row--split">
               <label>
                 Detection threshold
@@ -227,8 +243,10 @@ class FacesDashboard extends LitElement {
                   step="0.05"
                   min="0.1"
                   max="1"
-                  .value=${String(this.threshold)}
-                  @input=${(event) => (this.threshold = Number(event.target.value))}
+                  .value="${String(this.threshold)}"
+                  @input="${(
+                    event,
+                  ) => (this.threshold = Number(event.target.value))}"
                 />
               </label>
               <label>
@@ -237,8 +255,10 @@ class FacesDashboard extends LitElement {
                   type="number"
                   min="1"
                   max="120"
-                  .value=${String(this.window)}
-                  @input=${(event) => (this.window = Number(event.target.value))}
+                  .value="${String(this.window)}"
+                  @input="${(
+                    event,
+                  ) => (this.window = Number(event.target.value))}"
                 />
               </label>
             </div>
@@ -247,8 +267,10 @@ class FacesDashboard extends LitElement {
                 Publish crops
                 <select
                   name="publishCrops"
-                  .value=${this.publishCrops ? 'true' : 'false'}
-                  @change=${(event) => (this.publishCrops = event.target.value === 'true')}
+                  .value="${this.publishCrops ? "true" : "false"}"
+                  @change="${(
+                    event,
+                  ) => (this.publishCrops = event.target.value === "true")}"
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -258,8 +280,11 @@ class FacesDashboard extends LitElement {
                 Publish embeddings
                 <select
                   name="publishEmbeddings"
-                  .value=${this.publishEmbeddings ? 'true' : 'false'}
-                  @change=${(event) => (this.publishEmbeddings = event.target.value === 'true')}
+                  .value="${this.publishEmbeddings ? "true" : "false"}"
+                  @change="${(
+                    event,
+                  ) => (this.publishEmbeddings =
+                    event.target.value === "true")}"
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -273,18 +298,22 @@ class FacesDashboard extends LitElement {
                 aria-label="${tuningApplyAction.label}"
                 title="${tuningApplyAction.label}"
               >
-                <span class="surface-action__icon" aria-hidden="true">${tuningApplyAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${tuningApplyAction.label}</span>
+                <span class="surface-action__icon" aria-hidden="true"
+                >${tuningApplyAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >${tuningApplyAction.label}</span>
               </button>
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
-                @click=${this.resetEmbeddings}
+                @click="${this.resetEmbeddings}"
                 aria-label="${resetEmbeddingsAction.label}"
                 title="${resetEmbeddingsAction.label}"
               >
-                <span class="surface-action__icon" aria-hidden="true">${resetEmbeddingsAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${resetEmbeddingsAction.label}</span>
+                <span class="surface-action__icon" aria-hidden="true"
+                >${resetEmbeddingsAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >${resetEmbeddingsAction.label}</span>
               </button>
             </div>
           </form>
@@ -292,75 +321,117 @@ class FacesDashboard extends LitElement {
 
         <article class="surface-card">
           <h3 class="surface-card__title">Recent face crops</h3>
-          <p class="surface-status" data-variant="${this.cropStatusTone}">${this.cropStatusMessage}</p>
+          <p class="surface-status" data-variant="${this.cropStatusTone}">${this
+            .cropStatusMessage}</p>
           ${hasCrops
-            ? html`<div class="crop-gallery">
+            ? html`
+              <div class="crop-gallery">
                 ${this.faceCrops.map(
-                  (crop) => html`<div class="crop-card" data-crop-id=${crop.id}>
-                    <img class="crop-card__image" src="${crop.url}" alt="Face crop preview" />
-                    <div class="crop-card__meta">
-                      <div>
-                        Captured <span>${crop.timestamp}</span>
+                  (crop) =>
+                    html`
+                      <div class="crop-card" data-crop-id="${crop.id}">
+                        <img class="crop-card__image" src="${crop
+                          .url}" alt="Face crop preview" />
+                        <div class="crop-card__meta">
+                          <div>
+                            Captured <span>${crop.timestamp}</span>
+                          </div>
+                          <div>
+                            Confidence
+                            <span>${typeof crop.confidence === "number"
+                              ? `${(crop.confidence * 100).toFixed(1)}%`
+                              : "—"}</span>
+                          </div>
+                          <div>
+                            Size <span>${crop.width}×${crop.height}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        Confidence
-                        <span>${typeof crop.confidence === 'number' ? `${(crop.confidence * 100).toFixed(1)}%` : '—'}</span>
-                      </div>
-                      <div>
-                        Size <span>${crop.width}×${crop.height}</span>
-                      </div>
-                    </div>
-                  </div>`,
+                    `,
                 )}
-              </div>`
-            : html`<p class="surface-empty">No face crops received yet.</p>`}
+              </div>
+            `
+            : html`
+              <p class="surface-empty">No face crops received yet.</p>
+            `}
         </article>
 
         <article class="surface-card surface-card--wide">
           <h3 class="surface-card__title">Recognition events</h3>
           ${this.detectionLog.length
-            ? html`<ol class="detection-log">
+            ? html`
+              <ol class="detection-log">
                 ${this.detectionLog.map(
-                  (entry) => html`<li class="detection-entry">
-                    <div class="detection-entry__meta">
-                      <span>${entry.timestamp}</span>
-                      <span>${entry.name}</span>
-                      ${entry.collection ? html`<span>${entry.collection}</span>` : ''}
-                    </div>
-                    <p class="detection-entry__note">
-                      Memory:
-                      <span class="detection-entry__value">${entry.memoryId || '—'}</span>
-                    </p>
-                    <p class="detection-entry__note">
-                      Vector:
-                      <span class="detection-entry__value">${entry.vectorId || '—'}</span>
-                    </p>
-                    ${entry.cropTopic
-                      ? html`<p class="detection-entry__note">
-                          Crops topic:
-                          <span class="detection-entry__value">${entry.cropTopic}</span>
-                        </p>`
-                      : ''}
-                    ${entry.note
-                      ? html`<p class="detection-entry__note detection-entry__note--muted">${entry.note}</p>`
-                      : ''}
-                    ${entry.raw
-                      ? html`<p class="detection-entry__raw"><code>${entry.raw}</code></p>`
-                      : ''}
-                  </li>`
+                  (entry) =>
+                    html`
+                      <li class="detection-entry">
+                        <div class="detection-entry__meta">
+                          <span>${entry.timestamp}</span>
+                          <span>${entry.name}</span>
+                          ${entry.collection
+                            ? html`
+                              <span>${entry.collection}</span>
+                            `
+                            : ""}
+                        </div>
+                        <p class="detection-entry__note">
+                          Memory:
+                          <span class="detection-entry__value">${entry
+                            .memoryId || "—"}</span>
+                        </p>
+                        <p class="detection-entry__note">
+                          Vector:
+                          <span class="detection-entry__value">${entry
+                            .vectorId || "—"}</span>
+                        </p>
+                        ${entry.vectorPreview?.length
+                          ? html`
+                            <p class="detection-entry__note detection-entry__note--muted">
+                              Vector preview:
+                              <code>${entry.vectorPreview
+                                .map((value) => Number(value).toFixed(3))
+                                .join(", ")}</code>
+                            </p>
+                          `
+                          : ""} ${entry.cropTopic
+                          ? html`
+                            <p class="detection-entry__note">
+                              Crops topic:
+                              <span class="detection-entry__value">${entry
+                                .cropTopic}</span>
+                            </p>
+                          `
+                          : ""} ${entry.note
+                          ? html`
+                            <p class="detection-entry__note detection-entry__note--muted">${entry
+                              .note}</p>
+                          `
+                          : ""} ${entry.raw
+                          ? html`
+                            <p class="detection-entry__raw"><code>${entry
+                              .raw}</code></p>
+                          `
+                          : ""}
+                      </li>
+                    `,
                 )}
-              </ol>`
-            : html`<p class="surface-empty">No recognition events recorded yet.</p>`}
+              </ol>
+            `
+            : html`
+              <p class="surface-empty">No recognition events recorded yet.</p>
+            `}
           <div class="surface-actions">
             <button
               type="button"
               class="surface-button surface-button--ghost"
-              @click=${this.simulateDetection}
+              @click="${this.simulateDetection}"
               aria-label="${simulateRecognitionAction.label}"
               title="${simulateRecognitionAction.label}"
             >
-              <span class="surface-action__icon" aria-hidden="true">${simulateRecognitionAction.icon}</span>
-              <span class="surface-action__label" aria-hidden="true">${simulateRecognitionAction.label}</span>
+              <span class="surface-action__icon" aria-hidden="true">${simulateRecognitionAction
+                .icon}</span>
+              <span class="surface-action__label" aria-hidden="true"
+              >${simulateRecognitionAction.label}</span>
             </button>
           </div>
         </article>
@@ -368,16 +439,19 @@ class FacesDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Manual labelling</h3>
           ${this.tagFeedback
-            ? html`<p class="surface-status" data-variant="error">${this.tagFeedback}</p>`
-            : ''}
-          <form @submit=${this.handleTagSubmit}>
+            ? html`
+              <p class="surface-status" data-variant="error">${this
+                .tagFeedback}</p>
+            `
+            : ""}
+          <form @submit="${this.handleTagSubmit}">
             <label>
               Face identifier
               <input
                 type="text"
                 name="faceId"
-                .value=${this.tagFaceId}
-                @input=${(event) => (this.tagFaceId = event.target.value)}
+                .value="${this.tagFaceId}"
+                @input="${(event) => (this.tagFaceId = event.target.value)}"
               />
             </label>
             <label>
@@ -385,8 +459,8 @@ class FacesDashboard extends LitElement {
               <input
                 type="text"
                 name="label"
-                .value=${this.tagLabel}
-                @input=${(event) => (this.tagLabel = event.target.value)}
+                .value="${this.tagLabel}"
+                @input="${(event) => (this.tagLabel = event.target.value)}"
               />
             </label>
             <div class="surface-actions">
@@ -396,18 +470,22 @@ class FacesDashboard extends LitElement {
                 aria-label="${submitLabelAction.label}"
                 title="${submitLabelAction.label}"
               >
-                <span class="surface-action__icon" aria-hidden="true">${submitLabelAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${submitLabelAction.label}</span>
+                <span class="surface-action__icon" aria-hidden="true"
+                >${submitLabelAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >${submitLabelAction.label}</span>
               </button>
               <button
                 type="button"
                 class="surface-button surface-button--ghost"
-                @click=${this.clearTagForm}
+                @click="${this.clearTagForm}"
                 aria-label="${clearLabelAction.label}"
                 title="${clearLabelAction.label}"
               >
-                <span class="surface-action__icon" aria-hidden="true">${clearLabelAction.icon}</span>
-                <span class="surface-action__label" aria-hidden="true">${clearLabelAction.label}</span>
+                <span class="surface-action__icon" aria-hidden="true"
+                >${clearLabelAction.icon}</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >${clearLabelAction.label}</span>
               </button>
             </div>
           </form>
@@ -418,50 +496,50 @@ class FacesDashboard extends LitElement {
 
   connectDetectionsStream() {
     const socket = createTopicSocket({
-      module: 'faces',
-      action: 'face_detections_stream',
-      type: 'faces_msgs/msg/FaceDetections',
-      role: 'subscribe',
+      module: "faces",
+      action: "face_detections_stream",
+      type: "faces_msgs/msg/FaceDetections",
+      role: "subscribe",
       queueLength: 2,
     });
-    socket.addEventListener('open', () => {
-      this.cropStatusMessage = 'Detections stream connected.';
-      this.cropStatusTone = 'success';
+    socket.addEventListener("open", () => {
+      this.cropStatusMessage = "Detections stream connected.";
+      this.cropStatusTone = "success";
     });
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener("message", (event) => {
       const payload = this.parseStreamEnvelope(event);
       if (!payload) {
         return;
       }
-      if (payload.event === 'status') {
+      if (payload.event === "status") {
         const state = payload?.data?.state;
-        if (state === 'ready') {
-          this.cropStatusMessage = 'Detections stream ready.';
-          this.cropStatusTone = 'success';
-        } else if (state === 'closed') {
-          this.cropStatusMessage = 'Detections stream closed.';
-          this.cropStatusTone = 'warning';
+        if (state === "ready") {
+          this.cropStatusMessage = "Detections stream ready.";
+          this.cropStatusTone = "success";
+        } else if (state === "closed") {
+          this.cropStatusMessage = "Detections stream closed.";
+          this.cropStatusTone = "warning";
         }
         return;
       }
-      if (payload.event !== 'message') {
+      if (payload.event !== "message") {
         return;
       }
       this._processDetectionsPayload(payload.data);
     });
-    socket.addEventListener('error', () => {
-      this.cropStatusMessage = 'Detections stream error.';
-      this.cropStatusTone = 'error';
+    socket.addEventListener("error", () => {
+      this.cropStatusMessage = "Detections stream error.";
+      this.cropStatusTone = "error";
     });
-    socket.addEventListener('close', () => {
-      this.cropStatusMessage = 'Detections stream disconnected.';
-      this.cropStatusTone = 'warning';
+    socket.addEventListener("close", () => {
+      this.cropStatusMessage = "Detections stream disconnected.";
+      this.cropStatusTone = "warning";
     });
     this.sockets.push(socket);
   }
 
   _processDetectionsPayload(message) {
-    if (!message || typeof message !== 'object') {
+    if (!message || typeof message !== "object") {
       return;
     }
     const faces = Array.isArray(message.faces) ? message.faces : [];
@@ -474,7 +552,7 @@ class FacesDashboard extends LitElement {
       const preview = this._renderFaceCrop(face);
       if (preview) {
         previews.push({
-          id: makeId('crop'),
+          id: makeId("crop"),
           timestamp,
           ...preview,
         });
@@ -483,11 +561,14 @@ class FacesDashboard extends LitElement {
     if (!previews.length) {
       return;
     }
-    this.faceCrops = [...previews, ...this.faceCrops].slice(0, MAX_CROP_HISTORY);
+    this.faceCrops = [...previews, ...this.faceCrops].slice(
+      0,
+      MAX_CROP_HISTORY,
+    );
   }
 
   _renderFaceCrop(face) {
-    if (!face || typeof face !== 'object') {
+    if (!face || typeof face !== "object") {
       return null;
     }
     const preview = this._imageMessageToDataUrl(face.crop);
@@ -504,12 +585,14 @@ class FacesDashboard extends LitElement {
   }
 
   _imageMessageToDataUrl(image) {
-    if (!image || typeof image !== 'object') {
+    if (!image || typeof image !== "object") {
       return null;
     }
     const width = Number(image.width) || 0;
     const height = Number(image.height) || 0;
-    const encoding = typeof image.encoding === 'string' ? image.encoding.toLowerCase() : '';
+    const encoding = typeof image.encoding === "string"
+      ? image.encoding.toLowerCase()
+      : "";
     const data = this._toUint8Array(image.data);
     if (!width || !height || !encoding || !data.length) {
       return null;
@@ -521,41 +604,49 @@ class FacesDashboard extends LitElement {
     }
 
     let rgba;
-    if (encoding === 'rgb8' || encoding === 'bgr8') {
+    if (encoding === "rgb8" || encoding === "bgr8") {
       if (data.length < width * height * 3) {
         return null;
       }
       rgba = new Uint8ClampedArray(width * height * 4);
-      for (let source = 0, target = 0; source < width * height * 3; source += 3, target += 4) {
-        const r = encoding === 'bgr8' ? data[source + 2] : data[source];
+      for (
+        let source = 0, target = 0;
+        source < width * height * 3;
+        source += 3, target += 4
+      ) {
+        const r = encoding === "bgr8" ? data[source + 2] : data[source];
         const g = data[source + 1];
-        const b = encoding === 'bgr8' ? data[source] : data[source + 2];
+        const b = encoding === "bgr8" ? data[source] : data[source + 2];
         rgba[target] = r;
         rgba[target + 1] = g;
         rgba[target + 2] = b;
         rgba[target + 3] = 255;
       }
-    } else if (encoding === 'rgba8' || encoding === 'bgra8') {
+    } else if (encoding === "rgba8" || encoding === "bgra8") {
       if (data.length < width * height * 4) {
         return null;
       }
       rgba = new Uint8ClampedArray(width * height * 4);
       for (let source = 0; source < width * height * 4; source += 4) {
-        const r = encoding === 'bgra8' ? data[source + 2] : data[source];
+        const r = encoding === "bgra8" ? data[source + 2] : data[source];
         const g = data[source + 1];
-        const b = encoding === 'bgra8' ? data[source] : data[source + 2];
+        const b = encoding === "bgra8" ? data[source] : data[source + 2];
         const a = data[source + 3];
         rgba[source] = r;
         rgba[source + 1] = g;
         rgba[source + 2] = b;
         rgba[source + 3] = a > 0 ? a : 255;
       }
-    } else if (encoding.startsWith('mono')) {
+    } else if (encoding.startsWith("mono")) {
       if (data.length < width * height) {
         return null;
       }
       rgba = new Uint8ClampedArray(width * height * 4);
-      for (let index = 0, target = 0; index < width * height; index += 1, target += 4) {
+      for (
+        let index = 0, target = 0;
+        index < width * height;
+        index += 1, target += 4
+      ) {
         const value = data[index];
         rgba[target] = value;
         rgba[target + 1] = value;
@@ -570,7 +661,7 @@ class FacesDashboard extends LitElement {
     context.putImageData(imageData, 0, 0);
     try {
       return {
-        url: this._cropCanvas.toDataURL('image/png'),
+        url: this._cropCanvas.toDataURL("image/png"),
         width,
         height,
       };
@@ -581,13 +672,19 @@ class FacesDashboard extends LitElement {
 
   _ensureCropContext(width, height) {
     if (!this._cropCanvas) {
-      this._cropCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-      this._cropContext = this._cropCanvas ? this._cropCanvas.getContext('2d', { willReadFrequently: true }) : null;
+      this._cropCanvas = typeof document !== "undefined"
+        ? document.createElement("canvas")
+        : null;
+      this._cropContext = this._cropCanvas
+        ? this._cropCanvas.getContext("2d", { willReadFrequently: true })
+        : null;
     }
     if (!this._cropCanvas || !this._cropContext) {
       return null;
     }
-    if (this._cropCanvas.width !== width || this._cropCanvas.height !== height) {
+    if (
+      this._cropCanvas.width !== width || this._cropCanvas.height !== height
+    ) {
       this._cropCanvas.width = width;
       this._cropCanvas.height = height;
     }
@@ -596,69 +693,69 @@ class FacesDashboard extends LitElement {
 
   connectTriggerStream() {
     const socket = createTopicSocket({
-      module: 'faces',
-      action: 'face_trigger_stream',
-      type: 'psyched_msgs/msg/SensationStamped',
-      role: 'subscribe',
+      module: "faces",
+      action: "face_trigger_stream",
+      type: "psyched_msgs/msg/SensationStamped",
+      role: "subscribe",
     });
-    socket.addEventListener('open', () => {
-      this.statusMessage = 'Recognition stream connected.';
-      this.statusTone = 'success';
+    socket.addEventListener("open", () => {
+      this.statusMessage = "Recognition stream connected.";
+      this.statusTone = "success";
     });
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener("message", (event) => {
       const payload = this.parseStreamEnvelope(event);
       if (!payload) {
         return;
       }
-      if (payload.event === 'status') {
+      if (payload.event === "status") {
         const state = payload?.data?.state;
-        if (state === 'ready') {
-          this.statusMessage = 'Recognition stream ready.';
-          this.statusTone = 'success';
-        } else if (state === 'closed') {
-          this.statusMessage = 'Recognition stream closed.';
-          this.statusTone = 'warning';
+        if (state === "ready") {
+          this.statusMessage = "Recognition stream ready.";
+          this.statusTone = "success";
+        } else if (state === "closed") {
+          this.statusMessage = "Recognition stream closed.";
+          this.statusTone = "warning";
         }
         return;
       }
-      if (payload.event !== 'message') {
+      if (payload.event !== "message") {
         return;
       }
       const result = parseFaceTriggerPayload(payload.data);
       if (!result.ok) {
-        if (result.reason === 'ignored' || result.reason === 'empty') {
+        if (result.reason === "ignored" || result.reason === "empty") {
           return;
         }
         this.statusMessage = result.error;
-        this.statusTone = 'error';
+        this.statusTone = "error";
         this.recordRecognitionEvent({
-          name: 'Unparsed trigger',
+          name: "Unparsed trigger",
           note: result.error,
           raw: this.formatRawPayload(payload.data),
-          collection: '',
-          memoryId: '',
-          vectorId: '',
+          collection: "",
+          memoryId: "",
+          vectorId: "",
         });
         return;
       }
       const eventData = result.value;
       this.statusMessage = `Recognition event: ${eventData.name}`;
-      this.statusTone = 'success';
+      this.statusTone = "success";
       this.recordRecognitionEvent(eventData);
     });
-    socket.addEventListener('error', () => {
-      this.statusMessage = 'Recognition stream error.';
-      this.statusTone = 'error';
+    socket.addEventListener("error", () => {
+      this.statusMessage = "Recognition stream error.";
+      this.statusTone = "error";
     });
-    socket.addEventListener('close', () => {
-      this.statusMessage = 'Recognition stream disconnected.';
-      this.statusTone = 'warning';
+    socket.addEventListener("close", () => {
+      this.statusMessage = "Recognition stream disconnected.";
+      this.statusTone = "warning";
     });
     this.sockets.push(socket);
   }
 
   parseStreamEnvelope(event) {
-    if (!event || typeof event.data !== 'string') {
+    if (!event || typeof event.data !== "string") {
       return null;
     }
     try {
@@ -670,27 +767,33 @@ class FacesDashboard extends LitElement {
 
   recordRecognitionEvent(details) {
     const entry = {
-      id: makeId('face'),
+      id: makeId("face"),
       timestamp: new Date().toLocaleTimeString(),
-      name: details?.name ?? 'Unknown',
-      memoryId: details?.memoryId ?? '',
-      vectorId: details?.vectorId ?? '',
-      collection: details?.collection ?? '',
-      cropTopic: details?.cropTopic ?? '',
-      note: details?.note ?? '',
-      raw: details?.raw ?? '',
+      name: details?.name ?? "Unknown",
+      memoryId: details?.memoryId ?? "",
+      vectorId: details?.vectorId ?? "",
+      memoryHint: details?.memoryHint ?? "",
+      vectorHint: details?.vectorHint ?? "",
+      signature: details?.signature ?? "",
+      vectorPreview: Array.isArray(details?.vectorPreview)
+        ? details.vectorPreview
+        : [],
+      collection: details?.collection ?? "",
+      cropTopic: details?.cropTopic ?? "",
+      note: details?.note ?? "",
+      raw: details?.raw ?? "",
     };
     this.detectionLog = [entry, ...this.detectionLog].slice(0, 40);
   }
 
   formatRawPayload(data) {
-    if (typeof data === 'string') {
+    if (typeof data === "string") {
       return data;
     }
     try {
       return JSON.stringify(data);
     } catch (_error) {
-      return '';
+      return "";
     }
   }
 
@@ -704,18 +807,18 @@ class FacesDashboard extends LitElement {
     });
     if (!payload.ok) {
       this.statusMessage = payload.error;
-      this.statusTone = 'error';
+      this.statusTone = "error";
       return;
     }
     this.dispatchEvent(
-      new CustomEvent('faces-settings-request', {
+      new CustomEvent("faces-settings-request", {
         detail: payload.value,
         bubbles: true,
         composed: true,
       }),
     );
-    this.statusMessage = 'Detector settings submitted for synchronisation.';
-    this.statusTone = 'success';
+    this.statusMessage = "Detector settings submitted for synchronisation.";
+    this.statusTone = "success";
   }
 
   handleTagSubmit(event) {
@@ -723,35 +826,35 @@ class FacesDashboard extends LitElement {
     const faceId = this.tagFaceId.trim();
     const label = this.tagLabel.trim();
     if (!faceId || !label) {
-      this.tagFeedback = 'Face identifier and label are required.';
+      this.tagFeedback = "Face identifier and label are required.";
       return;
     }
     this.dispatchEvent(
-      new CustomEvent('faces-tag-request', {
+      new CustomEvent("faces-tag-request", {
         detail: { faceId, label },
         bubbles: true,
         composed: true,
       }),
     );
-    this.tagFeedback = '';
+    this.tagFeedback = "";
     this.clearTagForm();
   }
 
   clearTagForm() {
-    this.tagFaceId = '';
-    this.tagLabel = '';
+    this.tagFaceId = "";
+    this.tagLabel = "";
   }
 
   resetEmbeddings() {
     this.dispatchEvent(
-      new CustomEvent('faces-database-reset', {
-        detail: { scope: 'embeddings' },
+      new CustomEvent("faces-database-reset", {
+        detail: { scope: "embeddings" },
         bubbles: true,
         composed: true,
       }),
     );
-    this.statusMessage = 'Embedding cache reset request queued.';
-    this.statusTone = 'warning';
+    this.statusMessage = "Embedding cache reset request queued.";
+    this.statusTone = "warning";
   }
 
   _toUint8Array(data) {
@@ -761,7 +864,7 @@ class FacesDashboard extends LitElement {
     if (Array.isArray(data)) {
       return Uint8Array.from(data);
     }
-    if (data && typeof data === 'object' && typeof data.length === 'number') {
+    if (data && typeof data === "object" && typeof data.length === "number") {
       try {
         return Uint8Array.from(data);
       } catch (_error) {
@@ -775,22 +878,22 @@ class FacesDashboard extends LitElement {
     const memoryId = `mem-${Math.random().toString(16).slice(2, 10)}`;
     const vectorId = `vec-${Math.random().toString(16).slice(2, 10)}`;
     const payload = {
-      name: 'Simulated face',
+      name: "Simulated face",
       memoryId,
       vectorId,
-      collection: 'faces',
-      note: 'Simulated recognition event.',
+      collection: "faces",
+      note: "Simulated recognition event.",
       raw: JSON.stringify({
-        name: 'Simulated face',
+        name: "Simulated face",
         memory_id: memoryId,
         vector_id: vectorId,
-        collection: 'faces',
+        collection: "faces",
       }),
     };
     this.recordRecognitionEvent(payload);
-    this.statusMessage = 'Simulated recognition event recorded.';
-    this.statusTone = 'info';
+    this.statusMessage = "Simulated recognition event recorded.";
+    this.statusTone = "info";
   }
 }
 
-customElements.define('faces-dashboard', FacesDashboard);
+customElements.define("faces-dashboard", FacesDashboard);

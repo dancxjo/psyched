@@ -305,12 +305,27 @@ class FaceDetectorNode(Node):
 
         if decision in ("new_signature", "cooldown_elapsed"):
             first_payload = sensation_payloads[0] if sensation_payloads else {}
+            memory_hint = str(
+                first_payload.get("memory_id") or first_payload.get("memory_hint") or ""
+            )
+            vector_hint = str(
+                first_payload.get("vector_id") or first_payload.get("vector_hint") or ""
+            )
             payload = {
                 "name": "Stranger",
-                "memory_id": str(first_payload.get("memory_id", "")),
-                "vector_id": str(first_payload.get("vector_id", "")),
+                "memory_id": memory_hint,
+                "vector_id": vector_hint,
                 "collection": first_payload.get("collection", "faces"),
             }
+            signature_hint = str(first_payload.get("signature") or signature or "")
+            if signature_hint:
+                payload["signature"] = signature_hint
+            memory_fallback = str(first_payload.get("memory_hint") or "")
+            if memory_fallback:
+                payload["memory_hint"] = memory_fallback
+            vector_fallback = str(first_payload.get("vector_hint") or "")
+            if vector_fallback:
+                payload["vector_hint"] = vector_fallback
             trigger_msg = String()
             trigger_msg.data = json.dumps(payload)
             self._trigger_pub.publish(trigger_msg)
@@ -335,7 +350,14 @@ class FaceDetectorNode(Node):
                 "height": int(face.bbox.height),
             }
             embedding_values = np.asarray(face.embedding, dtype=np.float32).tolist()
-            metadata = self._build_memory_metadata(frame_id=frame_id, bbox=bbox, face=face, embedding_dim=len(embedding_values))
+            signature = self._derive_signature(face.embedding)
+            metadata = self._build_memory_metadata(
+                frame_id=frame_id,
+                bbox=bbox,
+                face=face,
+                embedding_dim=len(embedding_values),
+                signature=signature,
+            )
             memory_result = MemoryWriteResult(memory_id=None, vector_id=None)
             if memory_client is not None:
                 memory_result = memory_client.memorize(
@@ -344,10 +366,18 @@ class FaceDetectorNode(Node):
                     metadata=metadata,
                     flush=self._memory_flush,
                 )
+            stored_memory_id = memory_result.memory_id or ""
+            stored_vector_id = memory_result.vector_id or ""
+            fallback_memory_id = stored_memory_id or f"mem-{signature}"
+            fallback_vector_id = stored_vector_id or signature
 
             payload = {
-                "memory_id": memory_result.memory_id or "",
-                "vector_id": memory_result.vector_id or "",
+                "memory_id": stored_memory_id,
+                "memory_hint": fallback_memory_id,
+                "vector_id": stored_vector_id,
+                "vector_hint": fallback_vector_id,
+                "signature": signature,
+                "vector_preview": embedding_values[:8],
                 "collection": "faces",
                 "confidence": float(face.confidence),
                 "frame_id": frame_id,
@@ -391,6 +421,7 @@ class FaceDetectorNode(Node):
         bbox: Mapping[str, int],
         face: "ProcessedFace",
         embedding_dim: int,
+        signature: str,
     ) -> dict[str, Any]:
         return {
             "source": "faces/detector",
@@ -398,10 +429,12 @@ class FaceDetectorNode(Node):
             "collection_hint": "faces",
             "frame_id": frame_id or "faces",
             "embedding_dim": int(embedding_dim),
+            "signature": signature,
             "payload": {
                 "bbox": dict(bbox),
                 "confidence": float(face.confidence),
                 "topic": self._faces_topic,
+                "signature": signature,
             },
         }
 

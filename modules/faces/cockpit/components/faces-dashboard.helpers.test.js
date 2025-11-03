@@ -2,24 +2,24 @@ import {
   buildFacesSettingsPayload,
   clampNumber,
   parseFaceTriggerPayload,
-} from './faces-dashboard.helpers.js';
+} from "./faces-dashboard.helpers.js";
 
-Deno.test('clampNumber respects numeric bounds', () => {
+Deno.test("clampNumber respects numeric bounds", () => {
   if (clampNumber(0.8, { min: 0, max: 1, defaultValue: 0.6 }) !== 0.8) {
-    throw new Error('should pass through valid values');
+    throw new Error("should pass through valid values");
   }
   if (clampNumber(-1, { min: 0, max: 1, defaultValue: 0.6 }) !== 0) {
-    throw new Error('should clamp to min');
+    throw new Error("should clamp to min");
   }
   if (clampNumber(5, { min: 0, max: 1, defaultValue: 0.6 }) !== 1) {
-    throw new Error('should clamp to max');
+    throw new Error("should clamp to max");
   }
-  if (clampNumber('nan', { min: 0, max: 1, defaultValue: 0.6 }) !== 0.6) {
-    throw new Error('should fallback to default');
+  if (clampNumber("nan", { min: 0, max: 1, defaultValue: 0.6 }) !== 0.6) {
+    throw new Error("should fallback to default");
   }
 });
 
-Deno.test('buildFacesSettingsPayload validates threshold', () => {
+Deno.test("buildFacesSettingsPayload validates threshold", () => {
   const ok = buildFacesSettingsPayload({
     threshold: 0.7,
     window: 12,
@@ -30,46 +30,48 @@ Deno.test('buildFacesSettingsPayload validates threshold', () => {
     throw new Error(`Expected success but received ${ok.error}`);
   }
   if (ok.value.smoothing_window !== 12) {
-    throw new Error('Smoothing window should be preserved');
+    throw new Error("Smoothing window should be preserved");
   }
 
   const bad = buildFacesSettingsPayload({ threshold: 0 });
   if (bad.ok) {
-    throw new Error('Zero threshold should be rejected');
+    throw new Error("Zero threshold should be rejected");
   }
 });
 
-Deno.test('parseFaceTriggerPayload handles std_msgs/String envelopes', () => {
+Deno.test("parseFaceTriggerPayload handles std_msgs/String envelopes", () => {
   const result = parseFaceTriggerPayload({
     data: JSON.stringify({
-      name: 'Stranger',
-      memory_id: 'mem-123',
-      vector_id: 'vec-456',
-      collection: 'faces',
+      name: "Stranger",
+      memory_id: "mem-123",
+      vector_id: "vec-456",
+      collection: "faces",
     }),
   });
   if (!result.ok) {
     throw new Error(`Expected success but received error: ${result.error}`);
   }
-  if (result.value.name !== 'Stranger') {
-    throw new Error('Name should be preserved');
+  if (result.value.name !== "Stranger") {
+    throw new Error("Name should be preserved");
   }
-  if (result.value.memoryId !== 'mem-123' || result.value.vectorId !== 'vec-456') {
-    throw new Error('Identifiers should be normalised');
+  if (
+    result.value.memoryId !== "mem-123" || result.value.vectorId !== "vec-456"
+  ) {
+    throw new Error("Identifiers should be normalised");
   }
   if (!result.value.raw.includes('"memory_id"')) {
-    throw new Error('Raw payload should echo the JSON string');
+    throw new Error("Raw payload should echo the JSON string");
   }
 });
 
-Deno.test('parseFaceTriggerPayload handles face sensations', () => {
+Deno.test("parseFaceTriggerPayload handles face sensations", () => {
   const result = parseFaceTriggerPayload({
-    kind: 'face',
-    collection_hint: 'faces',
+    kind: "face",
+    collection_hint: "faces",
     json_payload: JSON.stringify({
-      memory_id: 'mem-900',
-      vector_id: 'vec-321',
-      topic: '/vision/faces',
+      memory_id: "mem-900",
+      vector_id: "vec-321",
+      topic: "/vision/faces",
       confidence: 0.82,
       embedding_dim: 512,
     }),
@@ -78,47 +80,96 @@ Deno.test('parseFaceTriggerPayload handles face sensations', () => {
   if (!result.ok) {
     throw new Error(`Expected success but received error: ${result.error}`);
   }
-  if (result.value.memoryId !== 'mem-900' || result.value.vectorId !== 'vec-321') {
-    throw new Error('Identifiers should be normalised from sensations');
+  if (
+    result.value.memoryId !== "mem-900" || result.value.vectorId !== "vec-321"
+  ) {
+    throw new Error("Identifiers should be normalised from sensations");
   }
-  if (result.value.collection !== 'faces') {
-    throw new Error('Collection should fall back to collection_hint when missing');
+  if (result.value.collection !== "faces") {
+    throw new Error(
+      "Collection should fall back to collection_hint when missing",
+    );
   }
-  if (result.value.cropTopic !== '/vision/faces') {
-    throw new Error('Crop topic should be normalised from the sensation payload');
+  if (result.value.cropTopic !== "/vision/faces") {
+    throw new Error(
+      "Crop topic should be normalised from the sensation payload",
+    );
   }
-  if (!result.value.note || !result.value.note.includes('confidence')) {
-    throw new Error('Sensation notes should include confidence details when available');
+  if (!result.value.note || !result.value.note.includes("confidence")) {
+    throw new Error(
+      "Sensation notes should include confidence details when available",
+    );
   }
 });
 
-Deno.test('parseFaceTriggerPayload ignores non-face sensations', () => {
+Deno.test("parseFaceTriggerPayload ignores non-face sensations", () => {
   const result = parseFaceTriggerPayload({
-    kind: 'audio',
-    collection_hint: 'audio',
-    json_payload: JSON.stringify({ memory_id: 'mem-x' }),
+    kind: "audio",
+    collection_hint: "audio",
+    json_payload: JSON.stringify({ memory_id: "mem-x" }),
   });
   if (result.ok) {
-    throw new Error('Non-face sensations should be ignored');
+    throw new Error("Non-face sensations should be ignored");
   }
-  if (result.reason !== 'ignored') {
-    throw new Error('Non-face sensations should be flagged as ignored');
+  if (result.reason !== "ignored") {
+    throw new Error("Non-face sensations should be flagged as ignored");
   }
 });
 
-Deno.test('parseFaceTriggerPayload rejects malformed payloads', () => {
-  const empty = parseFaceTriggerPayload({ data: ' ' });
+Deno.test("parseFaceTriggerPayload rejects malformed payloads", () => {
+  const empty = parseFaceTriggerPayload({ data: " " });
   if (empty.ok) {
-    throw new Error('Empty payload should be rejected');
+    throw new Error("Empty payload should be rejected");
   }
-  if (empty.reason !== 'empty') {
-    throw new Error('Empty payloads should be flagged with the empty reason');
+  if (empty.reason !== "empty") {
+    throw new Error("Empty payloads should be flagged with the empty reason");
   }
-  const invalid = parseFaceTriggerPayload({ data: '{' });
+  const invalid = parseFaceTriggerPayload({ data: "{" });
   if (invalid.ok) {
-    throw new Error('Malformed JSON should be rejected');
+    throw new Error("Malformed JSON should be rejected");
   }
-  if (invalid.reason !== 'invalid-json') {
-    throw new Error('Malformed payloads should surface the invalid-json reason');
+  if (invalid.reason !== "invalid-json") {
+    throw new Error(
+      "Malformed payloads should surface the invalid-json reason",
+    );
+  }
+});
+
+Deno.test("parseFaceTriggerPayload derives signature fallbacks when identifiers are missing", () => {
+  const signature = "abc123def456";
+  const result = parseFaceTriggerPayload({
+    kind: "face",
+    collection_hint: "faces",
+    json_payload: JSON.stringify({
+      memory_id: "",
+      vector_id: "",
+      signature,
+      confidence: 0.5,
+      embedding_dim: 128,
+    }),
+    vector: Array.from({ length: 32 }, (_, index) => index / 10),
+  });
+  if (!result.ok) {
+    throw new Error(`Expected success but received error: ${result.error}`);
+  }
+  if (result.value.memoryId !== `mem-${signature}`) {
+    throw new Error("Memory fallback should derive from the signature.");
+  }
+  if (result.value.vectorId !== signature) {
+    throw new Error("Vector fallback should expose the embedding signature.");
+  }
+  if (
+    !result.value.note.includes("memory hash") ||
+    !result.value.note.includes("vector hash")
+  ) {
+    throw new Error("Note should describe hashed fallbacks when used.");
+  }
+  if (
+    !Array.isArray(result.value.vectorPreview) ||
+    result.value.vectorPreview.length !== 8
+  ) {
+    throw new Error(
+      "Vector preview should surface the first 8 embedding values.",
+    );
   }
 });

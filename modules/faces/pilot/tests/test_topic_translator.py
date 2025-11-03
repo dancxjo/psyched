@@ -22,3 +22,15 @@ def test_face_trigger_summary_handles_missing_payload() -> None:
         summarise_face_trigger({})
         == "Face trigger: awaiting identification."
     )
+
+
+def test_face_trigger_summary_uses_signature_fallback_when_ids_missing() -> None:
+    """Signatures should surface when memory/vector identifiers are absent."""
+
+    payload = {
+        "data": '{"name": "Stranger", "signature": "deadbeef1234"}'
+    }
+    assert (
+        summarise_face_trigger(payload)
+        == "Face trigger: Stranger (memory mem-deadbeef1234, vector deadbeef1234)."
+    )

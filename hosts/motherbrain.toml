@@ -8,7 +8,7 @@ modules = [
     "faces",
     # "voice",
     # "ear",
-    # "memory",
+    "memory",
     # "nav",
     # "imu",
     # "gps",

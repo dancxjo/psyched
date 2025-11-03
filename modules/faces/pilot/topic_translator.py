@@ -50,8 +50,22 @@ def summarise_face_trigger(payload: Any) -> str:
         return "Face trigger: awaiting identification."
 
     name = str(parsed.get("name") or "").strip() or "Unknown"
+    signature = str(parsed.get("signature") or "").strip()
+    memory_hint = str(parsed.get("memory_hint") or "").strip()
+    vector_hint = str(parsed.get("vector_hint") or "").strip()
     memory_id = str(parsed.get("memory_id") or "").strip()
     vector_id = str(parsed.get("vector_id") or "").strip()
+
+    if not memory_id:
+        if memory_hint:
+            memory_id = memory_hint
+        elif signature:
+            memory_id = f"mem-{signature}"
+    if not vector_id:
+        if vector_hint:
+            vector_id = vector_hint
+        elif signature:
+            vector_id = signature
 
     extras: list[str] = []
     if memory_id:

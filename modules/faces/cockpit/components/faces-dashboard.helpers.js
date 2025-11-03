@@ -14,8 +14,14 @@ export function clampNumber(value, options) {
   if (!Number.isFinite(parsed)) {
     return options.defaultValue;
   }
-  const numeric = parsed < options.min ? options.min : parsed > options.max ? options.max : parsed;
-  return Number.isInteger(options.defaultValue) ? Math.round(numeric * 1000) / 1000 : numeric;
+  const numeric = parsed < options.min
+    ? options.min
+    : parsed > options.max
+    ? options.max
+    : parsed;
+  return Number.isInteger(options.defaultValue)
+    ? Math.round(numeric * 1000) / 1000
+    : numeric;
 }
 
 /**
@@ -29,9 +35,13 @@ export function clampNumber(value, options) {
  * @returns {{ ok: true, value: FacesSettingsPayload } | { ok: false, error: string }}
  */
 export function buildFacesSettingsPayload(draft) {
-  const threshold = clampNumber(draft.threshold, { min: 0, max: 1, defaultValue: 0.6 });
+  const threshold = clampNumber(draft.threshold, {
+    min: 0,
+    max: 1,
+    defaultValue: 0.6,
+  });
   if (threshold <= 0 || threshold > 1) {
-    return { ok: false, error: 'Detection threshold must be between 0 and 1.' };
+    return { ok: false, error: "Detection threshold must be between 0 and 1." };
   }
   const window = Math.max(1, Math.trunc(Number(draft.window ?? 15)));
   return {
@@ -59,49 +69,52 @@ export function parseFaceTriggerPayload(raw) {
   }
 
   const legacy = unwrapDataField(raw);
-  const text = typeof legacy === 'string' ? legacy.trim() : '';
+  const text = typeof legacy === "string" ? legacy.trim() : "";
   if (!text) {
-    return { ok: false, error: 'Trigger payload was empty.', reason: 'empty' };
+    return { ok: false, error: "Trigger payload was empty.", reason: "empty" };
   }
   return parseLegacyTrigger(text);
 }
 
 function unwrapDataField(raw) {
-  if (raw && typeof raw === 'object') {
-    if (typeof raw.data === 'string') {
+  if (raw && typeof raw === "object") {
+    if (typeof raw.data === "string") {
       return raw.data;
     }
-    if (raw.data && typeof raw.data === 'object' && typeof raw.data.data === 'string') {
+    if (
+      raw.data && typeof raw.data === "object" &&
+      typeof raw.data.data === "string"
+    ) {
       return raw.data.data;
     }
   }
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     return raw;
   }
-  return '';
+  return "";
 }
 
-function normaliseString(value, fallback = '') {
-  if (typeof value === 'string') {
+function normaliseString(value, fallback = "") {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed) {
       return trimmed;
     }
   }
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return String(value);
   }
   return fallback;
 }
 
 function extractSensationPayload(raw) {
-  if (raw && typeof raw === 'object') {
-    if (typeof raw.json_payload === 'string') {
+  if (raw && typeof raw === "object") {
+    if (typeof raw.json_payload === "string") {
       return raw;
     }
-    if (raw.data && typeof raw.data === 'object') {
+    if (raw.data && typeof raw.data === "object") {
       const inner = raw.data;
-      if (typeof inner.json_payload === 'string') {
+      if (typeof inner.json_payload === "string") {
         return inner;
       }
     }
@@ -111,34 +124,56 @@ function extractSensationPayload(raw) {
 
 function parseSensation(message) {
   const kind = normaliseString(message.kind);
-  if (kind && kind.toLowerCase() !== 'face') {
-    return { ok: false, error: 'Sensation did not describe a face event.', reason: 'ignored' };
+  if (kind && kind.toLowerCase() !== "face") {
+    return {
+      ok: false,
+      error: "Sensation did not describe a face event.",
+      reason: "ignored",
+    };
   }
 
   const payloadText = normaliseString(message.json_payload);
   if (!payloadText) {
-    return { ok: false, error: 'Sensation payload was empty.', reason: 'empty' };
+    return {
+      ok: false,
+      error: "Sensation payload was empty.",
+      reason: "empty",
+    };
   }
 
   let parsed;
   try {
     parsed = JSON.parse(payloadText);
   } catch (_error) {
-    return { ok: false, error: 'Sensation payload was not valid JSON.', reason: 'invalid-json' };
+    return {
+      ok: false,
+      error: "Sensation payload was not valid JSON.",
+      reason: "invalid-json",
+    };
   }
-  if (!parsed || typeof parsed !== 'object') {
-    return { ok: false, error: 'Sensation payload was not a JSON object.', reason: 'invalid-json' };
+  if (!parsed || typeof parsed !== "object") {
+    return {
+      ok: false,
+      error: "Sensation payload was not a JSON object.",
+      reason: "invalid-json",
+    };
   }
 
-  const name =
-    normaliseString(parsed.name) ||
+  const signature = normaliseString(parsed.signature);
+  const memoryHint = normaliseString(parsed.memory_hint) ||
+    (signature ? `mem-${signature}` : "");
+  const vectorHint = normaliseString(parsed.vector_hint) ||
+    signature;
+  const name = normaliseString(parsed.name) ||
     normaliseString(parsed.label) ||
-    'Unknown face';
-  const memoryId = normaliseString(parsed.memory_id);
-  const vectorId = normaliseString(parsed.vector_id);
-  const collection = normaliseString(parsed.collection, normaliseString(message.collection_hint));
-  const cropTopic =
-    normaliseString(parsed.crop_topic) ||
+    "Unknown face";
+  const memoryId = normaliseString(parsed.memory_id) || memoryHint;
+  const vectorId = normaliseString(parsed.vector_id) || vectorHint;
+  const collection = normaliseString(
+    parsed.collection,
+    normaliseString(message.collection_hint),
+  );
+  const cropTopic = normaliseString(parsed.crop_topic) ||
     normaliseString(parsed.crops_topic) ||
     normaliseString(parsed.topic) ||
     normaliseString(message.topic);
@@ -152,7 +187,19 @@ function parseSensation(message) {
   if (Number.isInteger(embeddingDim) && embeddingDim > 0) {
     noteParts.push(`${embeddingDim}-dim vector`);
   }
-  const note = noteParts.join(' · ');
+  if (
+    memoryId && memoryId === memoryHint &&
+    normaliseString(parsed.memory_id) === ""
+  ) {
+    noteParts.push(`memory hash ${memoryId}`);
+  }
+  if (
+    vectorId && vectorId === vectorHint &&
+    normaliseString(parsed.vector_id) === ""
+  ) {
+    noteParts.push(`vector hash ${vectorId}`);
+  }
+  const note = noteParts.join(" · ");
 
   return {
     ok: true,
@@ -163,6 +210,14 @@ function parseSensation(message) {
       collection,
       cropTopic,
       note,
+      signature,
+      memoryHint,
+      vectorHint,
+      vectorPreview: Array.isArray(message.vector)
+        ? message.vector.slice(0, 8)
+        : Array.isArray(parsed.vector_preview)
+        ? parsed.vector_preview.slice(0, 8)
+        : [],
       raw: payloadText,
     },
   };
@@ -173,14 +228,27 @@ function parseLegacyTrigger(text) {
   try {
     parsed = JSON.parse(text);
   } catch (_error) {
-    return { ok: false, error: 'Trigger payload was not valid JSON.', reason: 'invalid-json' };
+    return {
+      ok: false,
+      error: "Trigger payload was not valid JSON.",
+      reason: "invalid-json",
+    };
   }
-  if (!parsed || typeof parsed !== 'object') {
-    return { ok: false, error: 'Trigger payload was not a JSON object.', reason: 'invalid-json' };
+  if (!parsed || typeof parsed !== "object") {
+    return {
+      ok: false,
+      error: "Trigger payload was not a JSON object.",
+      reason: "invalid-json",
+    };
   }
-  const name = normaliseString(parsed.name, 'Unknown');
-  const memoryId = normaliseString(parsed.memory_id);
-  const vectorId = normaliseString(parsed.vector_id);
+  const name = normaliseString(parsed.name, "Unknown");
+  const signature = normaliseString(parsed.signature);
+  const memoryHint = normaliseString(parsed.memory_hint) ||
+    (signature ? `mem-${signature}` : "");
+  const vectorHint = normaliseString(parsed.vector_hint) ||
+    signature;
+  const memoryId = normaliseString(parsed.memory_id) || memoryHint;
+  const vectorId = normaliseString(parsed.vector_id) || vectorHint;
   const collection = normaliseString(parsed.collection);
   return {
     ok: true,
@@ -189,7 +257,11 @@ function parseLegacyTrigger(text) {
       memoryId,
       vectorId,
       collection,
-      cropTopic: '',
+      cropTopic: "",
+      signature,
+      memoryHint,
+      vectorHint,
+      vectorPreview: [],
       raw: text,
     },
   };
@@ -208,6 +280,10 @@ function parseLegacyTrigger(text) {
  * @property {string} name Human-readable label associated with the detection.
  * @property {string} memoryId Identifier returned by the memory service.
  * @property {string} vectorId Embedding vector identifier.
+ * @property {string=} memoryHint Fallback identifier derived from the embedding signature.
+ * @property {string=} vectorHint Fallback vector identifier derived from the embedding signature.
+ * @property {string=} signature Short hash describing the embedding.
+ * @property {number[]} vectorPreview Sample of the embedding values for quick inspection.
  * @property {string} collection Backing collection name.
  * @property {string=} cropTopic ROS topic that publishes cropped face detections.
  * @property {string} raw Raw JSON payload string.
