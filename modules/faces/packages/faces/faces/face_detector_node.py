@@ -4,8 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import ModuleType
+from threading import Lock
 from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
 
 from rcl_interfaces.msg import SetParametersResult
@@ -234,6 +236,13 @@ class FaceDetectorNode(Node):
         self._last_signature: Optional[str] = None
         self._last_trigger_time: float = 0.0
 
+        self._frame_lock = Lock()
+        self._pending_frame: Optional[Image] = None
+        self._processing_active = False
+        self._dropped_frames = 0
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="faces-detector")
+        self._camera_qos = self._build_camera_qos()
+
         self._detections_pub = self.create_publisher(FaceDetections, self._faces_topic, SensorDataQoS())
         self._trigger_pub = self.create_publisher(String, self._face_detected_topic, _best_effort_qos(depth=5))
         self._sensation_pub = self.create_publisher(SensationStamped, self._sensation_topic, SensorDataQoS())
@@ -243,7 +252,7 @@ class FaceDetectorNode(Node):
             Image,
             self._camera_topic,
             self._handle_image,
-            SensorDataQoS(),
+            self._camera_qos,
         )
 
         # watch for parameter updates so we can re-subscribe if camera_topic changes
@@ -271,7 +280,60 @@ class FaceDetectorNode(Node):
             return default
         return value
 
+    def _build_camera_qos(self):
+        qos = SensorDataQoS()
+        if hasattr(qos, "depth"):
+            qos.depth = 1
+            return qos
+        if isinstance(qos, int):
+            return 1
+        return qos
+
     def _handle_image(self, msg: Image) -> None:
+        with self._frame_lock:
+            if self._processing_active:
+                dropped = self._pending_frame is not None
+                self._pending_frame = msg
+                if dropped:
+                    self._dropped_frames += 1
+                    if self._dropped_frames == 1 or (self._dropped_frames % 25) == 0:
+                        self.get_logger().warning(
+                            "Face detector busy; replacing %d queued frame(s)", self._dropped_frames
+                        )
+                else:
+                    self._dropped_frames = 0
+                return
+            self._processing_active = True
+
+        try:
+            self._executor.submit(self._process_frames, msg)
+        except Exception as exc:
+            self.get_logger().error(f"Failed to schedule face processing task: {exc}")
+            with self._frame_lock:
+                self._processing_active = False
+
+    def _process_frames(self, first_msg: Image) -> None:
+        next_msg: Optional[Image] = first_msg
+        while next_msg is not None:
+            try:
+                self._process_frame(next_msg)
+            except Exception as exc:  # pragma: no cover - defensive
+                self.get_logger().error(f"Face processing failed: {exc}")
+
+            drop_count = 0
+            with self._frame_lock:
+                next_msg = self._pending_frame
+                self._pending_frame = None
+                if next_msg is None:
+                    drop_count = self._dropped_frames
+                    self._dropped_frames = 0
+                    self._processing_active = False
+            if next_msg is None and drop_count:
+                self.get_logger().warning(
+                    f"Face detector skipped {drop_count} intermediate frame(s) to catch up"
+                )
+
+    def _process_frame(self, msg: Image) -> None:
         # Log that we've received a frame and include some basic header info
         try:
             stamp = msg.header.stamp
@@ -463,7 +525,7 @@ class FaceDetectorNode(Node):
                 Image,
                 self._camera_topic,
                 self._handle_image,
-                SensorDataQoS(),
+                self._camera_qos,
             )
             self.get_logger().info(f"Re-subscribed to camera topic: {self._camera_topic}")
             return SetParametersResult(successful=True)
@@ -477,6 +539,13 @@ class FaceDetectorNode(Node):
 
         digest = hashlib.sha1(np.asarray(embedding, dtype=np.float32).tobytes()).hexdigest()
         return digest[:12]
+
+    def destroy_node(self) -> bool:
+        try:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+        return super().destroy_node()
 
 
 def main(args: Optional[list[str]] = None) -> None:
