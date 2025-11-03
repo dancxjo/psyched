@@ -85,6 +85,22 @@ class Detection:
     confidence: float
 
 
+def _normalise_detection_confidence(weight: float) -> float:
+    """Map raw cascade scores to a bounded [0, 1] interval."""
+
+    if not math.isfinite(weight):
+        return 0.0
+    if weight <= 0.0:
+        return 0.0
+
+    normalised = 1.0 - math.exp(-weight)
+    if normalised < 0.0:
+        return 0.0
+    if normalised > 1.0:
+        return 1.0
+    return float(normalised)
+
+
 @dataclass(frozen=True)
 class ProcessedFace:
     """Container for cropped faces and their embeddings."""
@@ -147,7 +163,7 @@ class HaarCascadeDetector:
                 return []
             for (x, y, w, h), weight in zip(rects, level_weights):
                 bbox = BoundingBox(int(x), int(y), int(w), int(h))
-                faces.append(Detection(bbox=bbox, confidence=float(weight)))
+                faces.append(Detection(bbox=bbox, confidence=_normalise_detection_confidence(float(weight))))
             return faces
 
         rects = self._classifier.detectMultiScale(

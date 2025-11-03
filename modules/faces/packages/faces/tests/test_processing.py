@@ -5,6 +5,7 @@ import sys
 import types
 from typing import List
 
+import math
 import numpy as np
 import pytest
 
@@ -93,6 +94,7 @@ from faces.processing import (  # noqa: E402  pylint: disable=wrong-import-posit
     Detection,
     FaceProcessor,
     ProcessedFace,
+    _normalise_detection_confidence,
 )
 from faces.message_builder import (  # noqa: E402  pylint: disable=wrong-import-position
     build_face_detections_msg,
@@ -156,3 +158,14 @@ def test_face_detections_message_contains_crops_and_vectors(sample_image: np.nda
     assert face_msg.crop.width == faces[0].bbox.width
     assert len(face_msg.embedding) == BasicEmbeddingExtractor.EMBEDDING_SIZE
     assert pytest.approx(face_msg.embedding[0]) == faces[0].embedding[0]
+
+
+def test_normalise_detection_confidence_bounds() -> None:
+    """Raw cascade confidences should normalise into a usable probability."""
+
+    assert _normalise_detection_confidence(float("nan")) == 0.0
+    assert _normalise_detection_confidence(float("inf")) == 0.0
+    assert _normalise_detection_confidence(-0.5) == 0.0
+    assert _normalise_detection_confidence(0.0) == 0.0
+    assert _normalise_detection_confidence(0.5) == pytest.approx(1.0 - math.exp(-0.5))
+    assert _normalise_detection_confidence(8.0) == pytest.approx(1.0, rel=1e-3)
