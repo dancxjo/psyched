@@ -199,6 +199,37 @@ def test_memorize_records_identity_links(service: MemoryService) -> None:
     assert "sig-alice-1" in identity_meta.get("signatures", [])
 
 
+def test_tag_identity_updates_existing_memory(service: MemoryService) -> None:
+    """Manual labelling should enrich stored metadata and identity links."""
+
+    event = _build_event(
+        stamp=datetime(2024, 5, 10, 12, 45, tzinfo=timezone.utc),
+        embedding=[0.11, 0.22, 0.33],
+        json_data={"note": "initial face capture"},
+    )
+
+    record = service.memorize(event)
+
+    result = service.tag_identity(record.memory_id, "Alice Example", aliases=["Alice"])
+
+    identity = result["identity"]
+    assert identity["name"] == "Alice Example"
+    assert identity["id"].startswith("person:")
+
+    stored_metadata = service.graph_store.memories[record.memory_id]["metadata"]  # type: ignore[attr-defined]
+    identity_meta = stored_metadata["identity"]
+    assert identity_meta["name"] == "Alice Example"
+    assert record.memory_id in identity_meta.get("memory_ids", [])
+    assert "Alice" in identity_meta.get("aliases", [])
+    assert "Alice Example" in stored_metadata.get("tags", [])
+    assert stored_metadata.get("name") == "Alice Example"
+
+    identity_links = service.graph_store.identity_links  # type: ignore[attr-defined]
+    assert identity_links[-1][0] == record.memory_id
+    assert identity_links[-1][1] == identity["id"]
+    assert identity_links[-1][2]["name"] == "Alice Example"
+
+
 def test_associate_records_relationship(service: MemoryService) -> None:
     """Associations are forwarded to the graph store with metadata."""
 

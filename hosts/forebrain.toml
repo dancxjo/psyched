@@ -2,7 +2,7 @@
 name = "forebrain"
 roles = ["compute", "inference"]
 installers = ["docker", "cuda"]
-services = ["asr", "tts", "llm", "graphs", "vectors"]
+services = ["asr", "tts", "faces", "llm", "graphs", "vectors"]
 
 [config.srv.asr]
 intent = "speech-to-text"
@@ -33,6 +33,21 @@ port = 5002
 target = 5002
 advertise = "ws://forebrain.local:5002/tts"
 description = "Websocket endpoint consumed by motherbrain.voice"
+
+[config.srv.faces]
+intent = "face-embeddings"
+summary = "face_recognition embeddings over websocket"
+runtime = "container"
+ports = [5005]
+
+[[config.srv.faces.endpoints]]
+name = "ws"
+protocol = "ws"
+bind = "0.0.0.0"
+port = 5005
+target = 5005
+advertise = "ws://forebrain.local:5005/faces"
+description = "Websocket endpoint consumed by motherbrain.faces"
 
 [config.srv.llm]
 intent = "language-model"

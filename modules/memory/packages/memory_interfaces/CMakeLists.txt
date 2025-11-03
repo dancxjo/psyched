@@ -14,6 +14,7 @@ set(srv_files
   "srv/Associate.srv"
   "srv/Memorize.srv"
   "srv/Recall.srv"
+  "srv/TagIdentity.srv"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

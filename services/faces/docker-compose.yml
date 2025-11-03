@@ -1,0 +1,15 @@
+services:
+  faces:
+    build:
+      context: ../..
+      dockerfile: services/faces/docker/face-embeddings.Dockerfile
+    image: psyched-face-embeddings:local
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: "info"
+      WEBSOCKET_HOST: "0.0.0.0"
+      WEBSOCKET_PORT: "5005"
+      FACES_MODEL: "small"
+      FACES_NUM_JITTERS: "1"
+    ports:
+      - "5005:5005"

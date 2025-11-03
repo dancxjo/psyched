@@ -1,0 +1,2 @@
+"""Face embedding websocket service."""
+

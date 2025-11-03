@@ -22,6 +22,46 @@
         "role": "subscribe",
         "queue_length": 10
       }
+    },
+    {
+      "name": "tag_face",
+      "signature": "tag_face(face_id: str, label: str, identity_id: str | None = None, aliases: list[str] = [])",
+      "description": "Tag an existing face memory with a human-friendly identity label.",
+      "kind": "python-handler",
+      "defaults": {
+        "callable": "modules.faces.cockpit.actions:tag_face_action",
+        "service": "/memory/tag_identity",
+        "service_type": "memory_interfaces/srv/TagIdentity",
+        "timeout_ms": 8000
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "face_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Memory identifier for the face embedding to label."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human readable label to associate with the face."
+          },
+          "identity_id": {
+            "type": "string",
+            "description": "Optional identity identifier override; defaults to a slugified value."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional aliases that should be linked to the identity."
+          }
+        },
+        "required": ["face_id", "label"],
+        "additionalProperties": false
+      }
     }
   ]
 }

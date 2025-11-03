@@ -1,0 +1,5 @@
+[service.faces]
+compose = "docker-compose.yml"
+setup_scripts = ["setup.sh"]
+description = "Face embedding service that exposes face_recognition over websockets"
+

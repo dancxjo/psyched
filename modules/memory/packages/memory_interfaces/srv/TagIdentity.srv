@@ -1,0 +1,8 @@
+string memory_id
+string label
+string identity_id
+string[] aliases
+---
+bool success
+string message
+string identity_id

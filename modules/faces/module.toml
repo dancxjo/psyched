@@ -8,11 +8,10 @@ apt = [
     "python3-opencv",
 ]
 pip = [
-    "face-recognition",
-    "face-recognition-models",
     "numpy",
     "opencv-contrib-python",
     "opencv-python",
+    "websockets>=12,<13",
 ]
 patches = []
 launch = "modules/faces/launch_unit.sh"

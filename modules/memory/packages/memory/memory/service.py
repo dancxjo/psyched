@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import math
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence
 from uuid import uuid4
@@ -173,6 +174,116 @@ class MemoryService:
         """Create an explicit association between two memories."""
 
         self.graph_store.create_association(source_id, target_id, relation_type, properties)
+
+    # ------------------------------------------------------------------
+    # Identity tagging
+    # ------------------------------------------------------------------
+    def tag_identity(
+        self,
+        memory_id: str,
+        label: str,
+        *,
+        identity_id: Optional[str] = None,
+        aliases: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        """Attach a human-friendly identity label to an existing memory."""
+
+        memory_key = self._normalise_text(memory_id)
+        if not memory_key:
+            raise ValueError("memory_id must be a non-empty string")
+        label_text = self._normalise_text(label)
+        if not label_text:
+            raise ValueError("label must be a non-empty string")
+
+        try:
+            record = self.graph_store.fetch_memory(memory_key)
+        except KeyError as exc:  # pragma: no cover - defensive guard for fake stores
+            raise ValueError(f"Memory '{memory_key}' not found") from exc
+        if not record:
+            raise ValueError(f"Memory '{memory_key}' not found")
+
+        metadata_raw = record.get("metadata") if isinstance(record, Mapping) else {}
+        metadata: Dict[str, Any] = dict(metadata_raw) if isinstance(metadata_raw, Mapping) else {}
+
+        existing_identity = metadata.get("identity") if isinstance(metadata.get("identity"), Mapping) else None
+        candidate_id = self._normalise_text(identity_id) if identity_id is not None else ""
+        if not candidate_id and existing_identity:
+            candidate_id = self._normalise_text(
+                existing_identity.get("id"),
+                existing_identity.get("identity_id"),
+                existing_identity.get("uuid"),
+            )
+        identity_key = candidate_id or self._generate_identity_id(label_text, memory_key)
+
+        alias_source: List[str] = []
+        if existing_identity:
+            alias_source.extend(self._normalise_text_list(existing_identity.get("aliases")))
+        alias_source.extend(self._normalise_text_list(aliases))
+        alias_source = self._extend_unique(alias_source, [label_text])
+
+        memory_ids = []
+        if existing_identity:
+            memory_ids = self._normalise_text_list(existing_identity.get("memory_ids"))
+        memory_ids = self._extend_unique(memory_ids, [memory_key])
+
+        identity_summary: Dict[str, Any] = {"id": identity_key, "name": label_text}
+        if alias_source:
+            identity_summary["aliases"] = alias_source
+        if memory_ids:
+            identity_summary["memory_ids"] = memory_ids
+        metadata["identity"] = identity_summary
+
+        identities_field = metadata.get("identities")
+        identities: List[Dict[str, Any]] = []
+        if isinstance(identities_field, Sequence):
+            for entry in identities_field:
+                if isinstance(entry, Mapping):
+                    summary = dict(entry)
+                    key = self._normalise_text(
+                        summary.get("id"),
+                        summary.get("identity_id"),
+                        summary.get("uuid"),
+                    )
+                    if key and key != identity_key:
+                        identities.append(summary)
+        identities.insert(0, identity_summary)
+        metadata["identities"] = identities
+
+        metadata["name"] = label_text
+        tags_field = metadata.get("tags")
+        if isinstance(tags_field, list):
+            if label_text not in tags_field:
+                tags_field.append(label_text)
+        elif isinstance(tags_field, Sequence) and not isinstance(tags_field, (str, bytes)):
+            tags_list = list(tags_field)
+            if label_text not in tags_list:
+                tags_list.append(label_text)
+            metadata["tags"] = tags_list
+        else:
+            metadata["tags"] = [label_text]
+
+        updated_payload = {
+            "memory_id": record.get("memory_id", memory_key),
+            "vector_id": record.get("vector_id"),
+            "kind": record.get("kind", "Memory"),
+            "timestamp": record.get("timestamp"),
+            "frame_id": record.get("frame_id", ""),
+            "source": record.get("source", ""),
+            "metadata": metadata,
+        }
+        self.graph_store.upsert_memory(updated_payload)
+
+        identity_properties: Dict[str, Any] = {"name": label_text}
+        if alias_source:
+            identity_properties["aliases"] = alias_source
+        if memory_ids:
+            identity_properties["memory_ids"] = memory_ids
+        self.graph_store.link_identity(memory_key, identity_key, identity_properties)
+
+        return {
+            "memory_id": memory_key,
+            "identity": identity_summary,
+        }
 
     # ------------------------------------------------------------------
     # Recall
@@ -428,6 +539,24 @@ class MemoryService:
             if item not in base:
                 base.append(item)
         return base
+
+    @staticmethod
+    def _slugify(value: str) -> str:
+        cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return cleaned
+
+    def _generate_identity_id(self, label: str, memory_id: str) -> str:
+        slug_parts: List[str] = []
+        label_slug = self._slugify(label)
+        if label_slug:
+            slug_parts.append(label_slug)
+        memory_slug = self._slugify(memory_id)
+        if memory_slug and memory_slug not in slug_parts:
+            slug_parts.append(memory_slug)
+        slug = "-".join(slug_parts) or uuid4().hex[:8]
+        if not slug.startswith("person:"):
+            slug = f"person:{slug}"
+        return slug
 
     @staticmethod
     def _merge_identity_lists(

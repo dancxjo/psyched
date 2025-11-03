@@ -61,6 +61,14 @@ face_detected_topic = "/vision/face_detected"
 FACES_CAMERA_TOPIC = "/camera/color/image_raw"
 FACES_FACES_TOPIC = "/vision/faces"
 FACES_FACE_DETECTED_TOPIC = "/vision/face_detected"
+FACES_SERVICE_URI = "ws://forebrain.local:5005/faces"
+
+[[config.mod.faces.dependencies]]
+service = "forebrain.faces"
+port = "ws"
+via = "ws://forebrain.local:5005/faces"
+bind_env = "FACES_SERVICE_URI"
+summary = "Streams face crops to the forebrain embedding service"
 
 [config.mod.eye.launch.arguments]
 rgb_topic = "/camera/color/image_raw"

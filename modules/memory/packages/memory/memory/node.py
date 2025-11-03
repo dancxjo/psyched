@@ -17,6 +17,7 @@ from memory_interfaces.msg import MemoryRecall as MemoryRecallMsg
 from memory_interfaces.srv import Associate as AssociateSrv
 from memory_interfaces.srv import Memorize as MemorizeSrv
 from memory_interfaces.srv import Recall as RecallSrv
+from memory_interfaces.srv import TagIdentity as TagIdentitySrv
 
 from .models import MemoryEventPayload, MemoryHeader, MemoryRecord
 from .service import MemoryService
@@ -32,6 +33,7 @@ class MemoryNode(Node):
         self._memorize_srv = self.create_service(MemorizeSrv, "/memory/memorize", self._handle_memorize)
         self._associate_srv = self.create_service(AssociateSrv, "/memory/associate", self._handle_associate)
         self._recall_srv = self.create_service(RecallSrv, "/memory/recall", self._handle_recall)
+        self._tag_identity_srv = self.create_service(TagIdentitySrv, "/memory/tag_identity", self._handle_tag_identity)
         self._pilot_feed_publisher = self._create_pilot_feed_publisher()
         self._closeables = self._collect_closeables()
 
@@ -87,6 +89,29 @@ class MemoryNode(Node):
         except Exception:  # pragma: no cover - defensive logging
             self.get_logger().exception("Failed to recall memories")
             response.results = []
+        return response
+
+    def _handle_tag_identity(
+        self,
+        request: TagIdentitySrv.Request,
+        response: TagIdentitySrv.Response,
+    ) -> TagIdentitySrv.Response:
+        try:
+            aliases = list(request.aliases) if request.aliases else []
+            result = self._service.tag_identity(
+                request.memory_id,
+                request.label,
+                identity_id=request.identity_id or None,
+                aliases=aliases,
+            )
+            response.success = True
+            response.message = "Identity tag applied."
+            response.identity_id = str(result["identity"]["id"])
+        except Exception:  # pragma: no cover - defensive logging
+            self.get_logger().exception("Failed to tag identity")
+            response.success = False
+            response.message = "Failed to tag identity."
+            response.identity_id = ""
         return response
 
     # ------------------------------------------------------------------

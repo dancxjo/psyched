@@ -3,7 +3,7 @@ import {
   html,
   LitElement,
 } from "https://unpkg.com/lit@3.1.4/index.js?module";
-import { createTopicSocket } from "/js/cockpit.js";
+import { createTopicSocket, callModuleAction } from "/js/cockpit.js";
 import { surfaceStyles } from "/components/cockpit-style.js";
 import {
   buildFacesSettingsPayload,
@@ -40,6 +40,7 @@ class FacesDashboard extends LitElement {
     tagFaceId: { state: true },
     tagLabel: { state: true },
     tagFeedback: { state: true },
+    tagFeedbackTone: { state: true },
     detectionLog: { state: true },
   };
 
@@ -189,6 +190,7 @@ class FacesDashboard extends LitElement {
     this.tagFaceId = "";
     this.tagLabel = "";
     this.tagFeedback = "";
+    this.tagFeedbackTone = "info";
     this.detectionLog = [];
     this.sockets = [];
     this._cropCanvas = null;
@@ -463,7 +465,7 @@ class FacesDashboard extends LitElement {
           <h3 class="surface-card__title">Manual labelling</h3>
           ${this.tagFeedback
             ? html`
-              <p class="surface-status" data-variant="error">${this
+              <p class="surface-status" data-variant="${this.tagFeedbackTone}">${this
                 .tagFeedback}</p>
             `
             : ""}
@@ -877,11 +879,12 @@ class FacesDashboard extends LitElement {
     this.statusTone = "success";
   }
 
-  handleTagSubmit(event) {
+  async handleTagSubmit(event) {
     event.preventDefault();
     const faceId = this.tagFaceId.trim();
     const label = this.tagLabel.trim();
     if (!faceId || !label) {
+      this.tagFeedbackTone = "error";
       this.tagFeedback = "Face identifier and label are required.";
       return;
     }
@@ -892,8 +895,22 @@ class FacesDashboard extends LitElement {
         composed: true,
       }),
     );
-    this.tagFeedback = "";
-    this.clearTagForm();
+    this.tagFeedbackTone = "info";
+    this.tagFeedback = "Submitting label…";
+    try {
+      await callModuleAction("faces", "tag_face", {
+        face_id: faceId,
+        label,
+        aliases: [label],
+      });
+      this.tagFeedbackTone = "success";
+      this.tagFeedback = "Label submitted for synchronisation.";
+      this.clearTagForm();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.tagFeedbackTone = "error";
+      this.tagFeedback = message;
+    }
   }
 
   clearTagForm() {
