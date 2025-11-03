@@ -102,6 +102,41 @@ Deno.test("parseFaceTriggerPayload handles face sensations", () => {
   }
 });
 
+Deno.test("parseFaceTriggerPayload surfaces identity metadata when available", () => {
+  const result = parseFaceTriggerPayload({
+    kind: "face",
+    collection_hint: "faces",
+    json_payload: JSON.stringify({
+      memory_id: "mem-identity",
+      vector_id: "vec-identity",
+      identity: { id: "person:alice", name: "Alice Example", confidence: 0.93 },
+      matches: [
+        {
+          memory_id: "mem-identity",
+          score: 0.93,
+          identity: { id: "person:alice", name: "Alice Example" },
+        },
+      ],
+    }),
+    vector: [0.15, 0.25],
+  });
+  if (!result.ok) {
+    throw new Error(`Expected success but received error: ${result.error}`);
+  }
+  if (!result.value.identity || result.value.identity.name !== "Alice Example") {
+    throw new Error("Identity metadata should be normalised when provided.");
+  }
+  if (!Array.isArray(result.value.matches) || result.value.matches.length !== 1) {
+    throw new Error("Identity matches should be surfaced.");
+  }
+  if (result.value.name !== "Alice Example") {
+    throw new Error("Identity name should drive the primary label when present.");
+  }
+  if (typeof result.value.identityConfidence !== "number") {
+    throw new Error("Identity confidence should be extracted from the payload.");
+  }
+});
+
 Deno.test("parseFaceTriggerPayload ignores non-face sensations", () => {
   const result = parseFaceTriggerPayload({
     kind: "audio",

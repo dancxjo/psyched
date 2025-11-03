@@ -374,6 +374,22 @@ class FacesDashboard extends LitElement {
                             `
                             : ""}
                         </div>
+                        ${entry.identity
+                          ? html`
+                            <p class="detection-entry__note">
+                              Identity:
+                              <span class="detection-entry__value">${entry.identity.name ||
+                                entry.identity.id || "—"}</span>
+                              ${typeof entry.identityConfidence === "number"
+                                ? html`
+                                  <span class="detection-entry__note--muted">
+                                    ${(entry.identityConfidence * 100).toFixed(1)}%
+                                  </span>
+                                `
+                                : ""}
+                            </p>
+                          `
+                          : ""}
                         <p class="detection-entry__note">
                           Memory:
                           <span class="detection-entry__value">${entry
@@ -391,6 +407,13 @@ class FacesDashboard extends LitElement {
                               <code>${entry.vectorPreview
                                 .map((value) => Number(value).toFixed(3))
                                 .join(", ")}</code>
+                            </p>
+                          `
+                          : ""} ${entry.matches?.length
+                          ? html`
+                            <p class="detection-entry__note detection-entry__note--muted">
+                              Matches:
+                              ${this.formatMatches(entry.matches)}
                             </p>
                           `
                           : ""} ${entry.cropTopic
@@ -782,8 +805,41 @@ class FacesDashboard extends LitElement {
       cropTopic: details?.cropTopic ?? "",
       note: details?.note ?? "",
       raw: details?.raw ?? "",
+      identity: details?.identity ?? null,
+      identityConfidence: typeof details?.identityConfidence === "number"
+        ? details.identityConfidence
+        : (details?.identity && typeof details.identity.confidence === "number"
+          ? details.identity.confidence
+          : null),
+      matches: Array.isArray(details?.matches) ? details.matches : [],
     };
     this.detectionLog = [entry, ...this.detectionLog].slice(0, 40);
+  }
+
+  formatMatches(matches) {
+    if (!Array.isArray(matches) || !matches.length) {
+      return "";
+    }
+    return matches
+      .map((match) => {
+        const identity = match && typeof match === "object"
+          ? match.identity
+          : null;
+        const label = identity && (identity.name || identity.id)
+          ? identity.name || identity.id
+          : (() => {
+            const memoryId = match && typeof match === "object" ? match.memoryId : "";
+            return typeof memoryId === "string" && memoryId.trim() ? memoryId.trim() : "";
+          })();
+        const score = match && typeof match === "object" && typeof match.score === "number"
+          ? match.score.toFixed(2)
+          : "";
+        if (label && score) {
+          return `${label} (${score})`;
+        }
+        return label || score || "match";
+      })
+      .join(" · ");
   }
 
   formatRawPayload(data) {

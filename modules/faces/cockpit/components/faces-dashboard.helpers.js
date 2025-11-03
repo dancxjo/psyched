@@ -107,6 +107,136 @@ function normaliseString(value, fallback = "") {
   return fallback;
 }
 
+function normaliseStringList(value) {
+  if (Array.isArray(value)) {
+    const seen = new Set();
+    const output = [];
+    for (const entry of value) {
+      const text = normaliseString(entry);
+      if (text && !seen.has(text)) {
+        seen.add(text);
+        output.push(text);
+      }
+    }
+    return output;
+  }
+  const single = normaliseString(value);
+  return single ? [single] : [];
+}
+
+function dedupeStrings(values) {
+  const seen = new Set();
+  const output = [];
+  for (const entry of values) {
+    if (!seen.has(entry)) {
+      seen.add(entry);
+      output.push(entry);
+    }
+  }
+  return output;
+}
+
+function normaliseIdentitySummary(raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const id = normaliseString(raw.id) ||
+    normaliseString(raw.identity_id) ||
+    normaliseString(raw.uuid);
+  const name = normaliseString(raw.name);
+  if (!id && !name) {
+    return null;
+  }
+  const summary = {};
+  if (id) summary.id = id;
+  if (name) summary.name = name;
+  const aliases = dedupeStrings([
+    ...normaliseStringList(raw.aliases),
+    ...normaliseStringList(raw.labels),
+  ]);
+  if (aliases.length) summary.aliases = aliases;
+  let signatures = normaliseStringList(raw.signatures);
+  const history = normaliseStringList(raw.signature_history);
+  if (history.length) {
+    signatures = dedupeStrings(signatures.concat(history));
+  }
+  const signatureHint = normaliseString(raw.signature);
+  if (signatureHint) {
+    signatures = dedupeStrings(signatures.concat([signatureHint]));
+  }
+  if (signatures.length) summary.signatures = signatures;
+  let memoryIds = normaliseStringList(raw.memory_ids);
+  const memoryHint = normaliseString(raw.memory_id);
+  if (memoryHint) {
+    memoryIds = dedupeStrings(memoryIds.concat([memoryHint]));
+  }
+  if (memoryIds.length) summary.memoryIds = memoryIds;
+  const confidence = Number(raw.confidence ?? raw.score);
+  if (Number.isFinite(confidence)) {
+    summary.confidence = confidence;
+  }
+  return Object.keys(summary).length ? summary : null;
+}
+
+function resolveIdentitySummary(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const direct = normaliseIdentitySummary(payload.identity);
+  if (direct) {
+    return direct;
+  }
+  if (Array.isArray(payload.identities)) {
+    for (const entry of payload.identities) {
+      const summary = normaliseIdentitySummary(entry);
+      if (summary) {
+        return summary;
+      }
+    }
+  }
+  const name = normaliseString(payload.name);
+  if (name) {
+    const id = normaliseString(payload.memory_id) ||
+      normaliseString(payload.vector_id) ||
+      name;
+    return { id, name };
+  }
+  return null;
+}
+
+function normaliseIdentityMatches(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const matches = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const match = {};
+    const memoryId = normaliseString(entry.memory_id);
+    if (memoryId) {
+      match.memoryId = memoryId;
+    }
+    const score = Number(entry.score);
+    if (Number.isFinite(score)) {
+      match.score = score;
+    }
+    const signature = normaliseString(entry.signature);
+    if (signature) {
+      match.signature = signature;
+    }
+    const identity = normaliseIdentitySummary(entry.identity);
+    if (identity) {
+      match.identity = identity;
+    }
+    if (Object.keys(match).length) {
+      matches.push(match);
+    }
+  }
+  return matches;
+}
+
 function extractSensationPayload(raw) {
   if (raw && typeof raw === "object") {
     if (typeof raw.json_payload === "string") {
@@ -164,10 +294,18 @@ function parseSensation(message) {
     (signature ? `mem-${signature}` : "");
   const vectorHint = normaliseString(parsed.vector_hint) ||
     signature;
-  const name = normaliseString(parsed.name) ||
+  const identity = resolveIdentitySummary(parsed);
+  const matches = normaliseIdentityMatches(parsed.matches);
+  const identityName = identity ? normaliseString(identity.name) : "";
+  let memoryId = normaliseString(parsed.memory_id);
+  if (!memoryId && identity && Array.isArray(identity.memoryIds) && identity.memoryIds.length) {
+    memoryId = normaliseString(identity.memoryIds[0]);
+  }
+  memoryId = memoryId || memoryHint;
+  const name = identityName ||
+    normaliseString(parsed.name) ||
     normaliseString(parsed.label) ||
     "Unknown face";
-  const memoryId = normaliseString(parsed.memory_id) || memoryHint;
   const vectorId = normaliseString(parsed.vector_id) || vectorHint;
   const collection = normaliseString(
     parsed.collection,
@@ -186,6 +324,12 @@ function parseSensation(message) {
   const embeddingDim = Number(parsed.embedding_dim);
   if (Number.isInteger(embeddingDim) && embeddingDim > 0) {
     noteParts.push(`${embeddingDim}-dim vector`);
+  }
+  const identityConfidence = Number(
+    parsed.identity_confidence ?? (identity ? identity.confidence : undefined),
+  );
+  if (Number.isFinite(identityConfidence)) {
+    noteParts.push(`identity ${(identityConfidence * 100).toFixed(1)}%`);
   }
   if (
     memoryId && memoryId === memoryHint &&
@@ -219,6 +363,11 @@ function parseSensation(message) {
         ? parsed.vector_preview.slice(0, 8)
         : [],
       raw: payloadText,
+      identity,
+      identityConfidence: Number.isFinite(identityConfidence)
+        ? identityConfidence
+        : undefined,
+      matches,
     },
   };
 }
@@ -263,6 +412,9 @@ function parseLegacyTrigger(text) {
       vectorHint,
       vectorPreview: [],
       raw: text,
+      identity: null,
+      identityConfidence: undefined,
+      matches: [],
     },
   };
 }
@@ -273,6 +425,24 @@ function parseLegacyTrigger(text) {
  * @property {number} smoothing_window Temporal smoothing window in frames.
  * @property {boolean} publish_crops Whether face crops should be published.
  * @property {boolean} publish_embeddings Whether embeddings should be emitted.
+ */
+
+/**
+ * @typedef {object} FaceIdentitySummary
+ * @property {string} id Unique identifier for the resolved identity.
+ * @property {string=} name Human readable label for the identity.
+ * @property {string[]=} aliases Known aliases or alternate names.
+ * @property {string[]=} signatures Embedding signatures linked to the identity.
+ * @property {string[]=} memoryIds Historical memory identifiers associated with the identity.
+ * @property {number=} confidence Similarity score (0-1) for the identity match.
+ */
+
+/**
+ * @typedef {object} FaceIdentityMatch
+ * @property {string=} memoryId Memory identifier returned by the recall service.
+ * @property {number=} score Similarity score for the match.
+ * @property {string=} signature Embedding signature associated with the match.
+ * @property {FaceIdentitySummary=} identity Structured identity summary for the match.
  */
 
 /**
@@ -288,4 +458,7 @@ function parseLegacyTrigger(text) {
  * @property {string=} cropTopic ROS topic that publishes cropped face detections.
  * @property {string} raw Raw JSON payload string.
  * @property {string=} note Contextual note about the event (confidence, embedding dims, etc).
+ * @property {FaceIdentitySummary|null} identity Best-match identity summary, when available.
+ * @property {number|undefined} identityConfidence Confidence score for the resolved identity (0-1).
+ * @property {FaceIdentityMatch[]} matches Additional recall matches surfaced by the memory service.
  */

@@ -52,6 +52,23 @@ Deno.test('normaliseRecallResults derives display metadata from recall payload',
   }
 });
 
+Deno.test('normaliseRecallResults prefers identity names when present', () => {
+  const raw = [{
+    memory_id: 'face-1',
+    score: 0.92,
+    json_metadata: JSON.stringify({
+      identity: { id: 'person:alice', name: 'Alice Example' },
+      name: 'Alice Example',
+      summary: 'Recognised Alice near the atrium.',
+    }),
+  }];
+  const results = normaliseRecallResults(raw);
+  if (results.length !== 1) throw new Error('expected a single result');
+  const [entry] = results;
+  if (entry.title !== 'Alice Example') throw new Error('identity name should take precedence in titles');
+  if (!entry.tags.includes('Alice Example')) throw new Error('identity names should be included in tags');
+});
+
 Deno.test('normaliseRecallResults tolerates malformed metadata payloads', () => {
   const raw = [{ memory_id: 'xyz', score: 'not-a-number', json_metadata: '{' }];
   const results = normaliseRecallResults(raw);

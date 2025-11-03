@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from types import ModuleType
 from threading import Lock
-from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, TYPE_CHECKING
 
 from rcl_interfaces.msg import SetParametersResult
 
@@ -77,6 +78,238 @@ class MissingDependencyError(RuntimeError):
 
 
 DEFAULT_CAMERA_TOPIC = "/camera/color/image_raw"
+IDENTITY_RECALL_LIMIT = 6
+IDENTITY_MIN_SCORE = 0.82
+
+
+def _normalise_text(value: Any) -> str:
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            return text
+        return ""
+    if isinstance(value, (int, float)):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return ""
+        if math.isnan(numeric) or math.isinf(numeric):
+            return ""
+        text = str(value).strip()
+        return text
+    return ""
+
+
+def _normalise_list(value: Any) -> List[str]:
+    items: List[str] = []
+    if value is None:
+        return items
+    if isinstance(value, str):
+        text = _normalise_text(value)
+        if text:
+            items.append(text)
+        return items
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
+        for element in value:
+            text = _normalise_text(element)
+            if text and text not in items:
+                items.append(text)
+    return items
+
+
+def _dedupe_preserving_order(items: Sequence[str]) -> List[str]:
+    seen: set[str] = set()
+    ordered: List[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
+def _coerce_float(value: Any) -> Optional[float]:
+    try:
+        numeric = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(numeric) or math.isinf(numeric):
+        return None
+    return numeric
+
+
+def _sanitize_identity_summary(raw: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    identity_id = (
+        _normalise_text(raw.get("id"))
+        or _normalise_text(raw.get("identity_id"))
+        or _normalise_text(raw.get("uuid"))
+    )
+    name = _normalise_text(raw.get("name"))
+    if not identity_id:
+        identity_id = name
+    if not identity_id:
+        return None
+    summary: Dict[str, Any] = {"id": identity_id}
+    if name:
+        summary["name"] = name
+    aliases = _normalise_list(raw.get("aliases"))
+    labels = _normalise_list(raw.get("labels"))
+    if labels:
+        aliases = _dedupe_preserving_order(aliases + labels)
+    if aliases:
+        summary["aliases"] = aliases
+    signatures = _normalise_list(raw.get("signatures"))
+    signature_history = _normalise_list(raw.get("signature_history"))
+    if signature_history:
+        signatures = _dedupe_preserving_order(signatures + signature_history)
+    signature_hint = _normalise_text(raw.get("signature"))
+    if signature_hint:
+        signatures = _dedupe_preserving_order(signatures + [signature_hint])
+    if signatures:
+        summary["signatures"] = signatures
+    memory_ids = _normalise_list(raw.get("memory_ids"))
+    memory_hint = _normalise_text(raw.get("memory_id"))
+    if memory_hint:
+        memory_ids = _dedupe_preserving_order(memory_ids + [memory_hint])
+    if memory_ids:
+        summary["memory_ids"] = memory_ids
+    confidence = _coerce_float(raw.get("confidence"))
+    if confidence is None:
+        confidence = _coerce_float(raw.get("score"))
+    if confidence is not None:
+        summary["confidence"] = confidence
+    return summary
+
+
+def _extract_identity_summary(metadata: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(metadata, Mapping):
+        return None
+    identity_field = metadata.get("identity")
+    if isinstance(identity_field, Mapping):
+        summary = _sanitize_identity_summary(identity_field)
+        if summary:
+            return summary
+    identities_field = metadata.get("identities")
+    if isinstance(identities_field, Sequence):
+        for entry in identities_field:
+            if isinstance(entry, Mapping):
+                summary = _sanitize_identity_summary(entry)
+                if summary:
+                    return summary
+    fallback_name = _normalise_text(metadata.get("name"))
+    if fallback_name:
+        memory_hint = _normalise_text(metadata.get("memory_id"))
+        return {"id": memory_hint or fallback_name, "name": fallback_name}
+    return None
+
+
+def resolve_identity_from_recall(
+    signature: str,
+    recall_results: Sequence[Mapping[str, Any]],
+    *,
+    min_score: float = IDENTITY_MIN_SCORE,
+) -> tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    best_identity: Optional[Dict[str, Any]] = None
+    best_score = float("-inf")
+    best_memory_id = ""
+    cleaned_signature = _normalise_text(signature)
+    matches: List[Dict[str, Any]] = []
+    for result in recall_results:
+        if not isinstance(result, Mapping):
+            continue
+        metadata_raw = result.get("metadata")
+        metadata = metadata_raw if isinstance(metadata_raw, Mapping) else {}
+        summary = _extract_identity_summary(metadata)
+        memory_id_hint = (
+            _normalise_text(result.get("memory_id"))
+            or _normalise_text(metadata.get("memory_id"))
+        )
+        try:
+            score = float(result.get("score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+        signature_hint = _normalise_text(metadata.get("signature"))
+        match_entry: Dict[str, Any] = {
+            "memory_id": memory_id_hint,
+            "score": score,
+        }
+        if signature_hint:
+            match_entry["signature"] = signature_hint
+        if summary is None and metadata:
+            name = _normalise_text(metadata.get("name"))
+            if name:
+                summary = {"id": memory_id_hint or name, "name": name}
+        if summary is not None:
+            match_entry["identity"] = dict(summary)
+        if match_entry.get("identity") or match_entry["memory_id"]:
+            matches.append(match_entry)
+        if summary is None:
+            continue
+        candidate = dict(summary)
+        signatures = _normalise_list(candidate.get("signatures"))
+        if signature_hint:
+            signatures = _dedupe_preserving_order(signatures + [signature_hint])
+        if cleaned_signature:
+            signatures = _dedupe_preserving_order(signatures + [cleaned_signature])
+        if signatures:
+            candidate["signatures"] = signatures
+        if memory_id_hint:
+            memory_ids = _normalise_list(candidate.get("memory_ids"))
+            memory_ids = _dedupe_preserving_order(memory_ids + [memory_id_hint])
+            candidate["memory_ids"] = memory_ids
+        if score >= min_score and (best_identity is None or score > best_score):
+            best_identity = candidate
+            best_score = score
+            best_memory_id = memory_id_hint
+    if best_identity is not None:
+        best_identity["confidence"] = best_score
+        if best_memory_id:
+            memory_ids = _normalise_list(best_identity.get("memory_ids"))
+            if best_memory_id not in memory_ids:
+                memory_ids.append(best_memory_id)
+            if memory_ids:
+                best_identity["memory_ids"] = _dedupe_preserving_order(memory_ids)
+    return best_identity, matches
+
+
+def _enrich_identity_metadata(
+    metadata: MutableMapping[str, Any],
+    identity: Mapping[str, Any],
+    signature: str,
+) -> Dict[str, Any]:
+    summary = _sanitize_identity_summary(identity) or {
+        "id": _normalise_text(identity.get("id")) or _normalise_text(identity.get("name")) or signature
+    }
+    identity_copy: Dict[str, Any] = dict(summary)
+    signatures = _normalise_list(identity_copy.get("signatures"))
+    cleaned_signature = _normalise_text(signature)
+    if cleaned_signature:
+        signatures = _dedupe_preserving_order(signatures + [cleaned_signature])
+    if signatures:
+        identity_copy["signatures"] = signatures
+    metadata["identity"] = identity_copy
+    existing_list = metadata.get("identities")
+    consolidated: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in [identity_copy] + (list(existing_list) if isinstance(existing_list, list) else []):
+        if not isinstance(entry, Mapping):
+            continue
+        summary_entry = _sanitize_identity_summary(entry)
+        if summary_entry is None:
+            continue
+        identity_id = summary_entry["id"]
+        if identity_id in seen:
+            continue
+        seen.add(identity_id)
+        consolidated.append(summary_entry)
+    metadata["identities"] = consolidated
+    name = _normalise_text(identity_copy.get("name"))
+    if name:
+        metadata["name"] = name
+        tags = metadata.setdefault("tags", [])
+        if isinstance(tags, list) and name not in tags:
+            tags.append(name)
+    return identity_copy
+
 
 
 def _missing_dependency_message(missing: str) -> str:
@@ -123,7 +356,12 @@ class MemoryClient:
         self._kind = kind
         self._timeout = float(timeout)
         self._enabled = False
-        self._warned: dict[str, bool] = {"memorize": False}
+        self._warned: dict[str, bool] = {"memorize": False, "recall": False}
+        self._MemoryEvent = None
+        self._Memorize = None
+        self._Recall = None
+        self._memorize_client = None
+        self._recall_client = None
         try:
             from memory_interfaces.msg import MemoryEvent as _MemoryEvent  # type: ignore[import]
             from memory_interfaces.srv import Memorize as _Memorize  # type: ignore[import]
@@ -131,14 +369,23 @@ class MemoryClient:
             node.get_logger().info(
                 "memory_interfaces not available; faces memory bridge disabled"
             )
-            self._MemoryEvent = None
-            self._Memorize = None
-            self._memorize_client = None
             return
-
+        try:
+            from memory_interfaces.srv import Recall as _Recall  # type: ignore[import]
+        except ImportError:
+            _Recall = None
         self._MemoryEvent = _MemoryEvent
         self._Memorize = _Memorize
         self._memorize_client = node.create_client(self._Memorize, "/memory/memorize")
+        if _Recall is not None:
+            self._Recall = _Recall
+            self._recall_client = node.create_client(self._Recall, "/memory/recall")
+        else:  # pragma: no cover - optional dependency path
+            self._node.get_logger().info(
+                "memory recall service unavailable; identity resolution disabled"
+            )
+            self._Recall = None
+            self._recall_client = None
         self._enabled = True
 
     @property
@@ -198,6 +445,65 @@ class MemoryClient:
         vector_id = response.vector_id or None
         return MemoryWriteResult(memory_id=memory_id, vector_id=vector_id)
 
+    def recall(
+        self,
+        embedding: Sequence[float],
+        *,
+        limit: int = 5,
+    ) -> List[dict[str, Any]]:
+        if (
+            not self._enabled
+            or self._Recall is None
+            or self._recall_client is None
+        ):
+            return []
+        if not embedding:
+            return []
+        max_results = max(1, min(int(limit or 1), 20))
+        if not self._recall_client.wait_for_service(timeout_sec=0.0):
+            if not self._warned["recall"]:
+                self._node.get_logger().warning(
+                    "/memory/recall unavailable; face identification will rely on fallbacks"
+                )
+                self._warned["recall"] = True
+            return []
+        request = self._Recall.Request()
+        request.kind = self._kind
+        request.embedding = [float(value) for value in embedding]
+        request.text = ""
+        request.limit = max_results
+        future = self._recall_client.call_async(request)
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=self._timeout)
+        if not future.done():
+            future.cancel()
+            self._node.get_logger().warning("/memory/recall call timed out")
+            return []
+        exc = future.exception()
+        if exc is not None:
+            self._node.get_logger().warning(f"/memory/recall call failed: {exc}")
+            return []
+        response = future.result()
+        if response is None:
+            return []
+        results: List[dict[str, Any]] = []
+        for record in getattr(response, "results", ()):
+            try:
+                metadata = json.loads(record.json_metadata) if record.json_metadata else {}
+            except json.JSONDecodeError:
+                metadata = {"raw": record.json_metadata}
+            try:
+                score = float(record.score)
+            except (TypeError, ValueError):
+                score = 0.0
+            results.append(
+                {
+                    "memory_id": getattr(record, "memory_id", "") or "",
+                    "score": score,
+                    "metadata": metadata,
+                }
+            )
+        return results
+
 
 class FaceDetectorNode(Node):
     """Detect faces from camera frames and publish crops and embeddings."""
@@ -223,6 +529,8 @@ class FaceDetectorNode(Node):
         self.declare_parameter("memory.enabled", True)
         self.declare_parameter("memory.flush", True)
         self.declare_parameter("memory.timeout_sec", 0.75)
+        self.declare_parameter("memory.identity_min_score", IDENTITY_MIN_SCORE)
+        self.declare_parameter("memory.identity_max_results", IDENTITY_RECALL_LIMIT)
 
         self._camera_topic = self._get_param("camera_topic", DEFAULT_CAMERA_TOPIC)
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
@@ -230,6 +538,14 @@ class FaceDetectorNode(Node):
         self._sensation_topic = self._get_param("sensation_topic", "/sensations")
         self._trigger_cooldown = float(self._get_param("trigger_cooldown_sec", 2.0))
         self._memory_flush = bool(self._get_param("memory.flush", True))
+        identity_threshold = float(
+            self._get_param("memory.identity_min_score", IDENTITY_MIN_SCORE)
+        )
+        identity_limit = int(
+            self._get_param("memory.identity_max_results", IDENTITY_RECALL_LIMIT)
+        )
+        self._identity_match_threshold = max(0.0, min(identity_threshold, 1.0))
+        self._identity_recall_limit = max(1, identity_limit)
         memory_enabled = bool(self._get_param("memory.enabled", True))
         memory_timeout = float(self._get_param("memory.timeout_sec", 0.75))
         self._memory_client = MemoryClient(self, kind="faces", timeout=memory_timeout) if memory_enabled else None
@@ -373,12 +689,19 @@ class FaceDetectorNode(Node):
             vector_hint = str(
                 first_payload.get("vector_id") or first_payload.get("vector_hint") or ""
             )
+            name_hint = _normalise_text(first_payload.get("name")) or "Stranger"
             payload = {
-                "name": "Stranger",
+                "name": name_hint,
                 "memory_id": memory_hint,
                 "vector_id": vector_hint,
                 "collection": first_payload.get("collection", "faces"),
             }
+            identity_hint = first_payload.get("identity")
+            if isinstance(identity_hint, Mapping):
+                payload["identity"] = identity_hint
+            matches_hint = first_payload.get("matches")
+            if isinstance(matches_hint, list) and matches_hint:
+                payload["matches"] = matches_hint
             signature_hint = str(first_payload.get("signature") or signature or "")
             if signature_hint:
                 payload["signature"] = signature_hint
@@ -413,6 +736,22 @@ class FaceDetectorNode(Node):
             }
             embedding_values = np.asarray(face.embedding, dtype=np.float32).tolist()
             signature = self._derive_signature(face.embedding)
+            identity_matches: List[Dict[str, Any]] = []
+            resolved_identity: Optional[Dict[str, Any]] = None
+            if memory_client is not None:
+                try:
+                    recall_candidates = memory_client.recall(
+                        embedding=embedding_values,
+                        limit=self._identity_recall_limit,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive guard
+                    self.get_logger().warning(f"Face identity recall failed: {exc}")
+                    recall_candidates = []
+                resolved_identity, identity_matches = resolve_identity_from_recall(
+                    signature,
+                    recall_candidates,
+                    min_score=self._identity_match_threshold,
+                )
             metadata = self._build_memory_metadata(
                 frame_id=frame_id,
                 bbox=bbox,
@@ -420,6 +759,10 @@ class FaceDetectorNode(Node):
                 embedding_dim=len(embedding_values),
                 signature=signature,
             )
+            if resolved_identity is not None:
+                resolved_identity = _enrich_identity_metadata(metadata, resolved_identity, signature)
+            else:
+                metadata.setdefault("name", "Unknown face")
             memory_result = MemoryWriteResult(memory_id=None, vector_id=None)
             if memory_client is not None:
                 memory_result = memory_client.memorize(
@@ -430,10 +773,14 @@ class FaceDetectorNode(Node):
                 )
             stored_memory_id = memory_result.memory_id or ""
             stored_vector_id = memory_result.vector_id or ""
+            if resolved_identity is not None and stored_memory_id:
+                memory_ids = resolved_identity.setdefault("memory_ids", [])
+                if stored_memory_id not in memory_ids:
+                    memory_ids.append(stored_memory_id)
             fallback_memory_id = stored_memory_id or f"mem-{signature}"
             fallback_vector_id = stored_vector_id or signature
 
-            payload = {
+            payload: Dict[str, Any] = {
                 "memory_id": stored_memory_id,
                 "memory_hint": fallback_memory_id,
                 "vector_id": stored_vector_id,
@@ -447,6 +794,18 @@ class FaceDetectorNode(Node):
                 "topic": self._faces_topic,
                 "embedding_dim": len(embedding_values),
             }
+            if resolved_identity is not None:
+                payload["name"] = resolved_identity.get("name", "Unknown face")
+                payload["identity"] = resolved_identity
+                if identity_matches:
+                    payload["matches"] = identity_matches
+                confidence = resolved_identity.get("confidence")
+                if isinstance(confidence, (int, float)):
+                    payload["identity_confidence"] = float(confidence)
+            else:
+                payload["name"] = metadata.get("name", "Unknown face")
+                if identity_matches:
+                    payload["matches"] = identity_matches
 
             sensation = SensationStamped()
             sensation.stamp = header.stamp if header is not None else None

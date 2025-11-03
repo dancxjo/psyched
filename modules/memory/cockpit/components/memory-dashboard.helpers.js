@@ -115,7 +115,13 @@ function _safeNumber(value) {
 }
 
 function _resolveTitle(metadata) {
+  const identity = metadata.identity && typeof metadata.identity === 'object'
+    ? metadata.identity
+    : null;
+  const identityName = identity ? _safeString(identity.name) : '';
   const candidates = [
+    identityName,
+    metadata.name,
     metadata.title,
     metadata.memory_tag,
     metadata.topic,
@@ -167,6 +173,24 @@ function _collectTags(metadata) {
     if (text) {
       bucket.add(text);
     }
+  }
+  if (metadata.identity && typeof metadata.identity === 'object') {
+    const identityName = _safeString(metadata.identity.name);
+    if (identityName) {
+      bucket.add(identityName);
+    }
+    if (Array.isArray(metadata.identity.aliases)) {
+      for (const alias of metadata.identity.aliases) {
+        const text = _safeString(alias);
+        if (text) {
+          bucket.add(text);
+        }
+      }
+    }
+  }
+  const metadataName = _safeString(metadata.name);
+  if (metadataName) {
+    bucket.add(metadataName);
   }
   return Array.from(bucket);
 }

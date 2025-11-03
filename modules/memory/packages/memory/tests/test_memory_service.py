@@ -54,6 +54,7 @@ class FakeGraphStore:
         self.frame_links: List[tuple[str, str]] = []
         self.vector_links: List[tuple[str, Optional[str]]] = []
         self.associations: List[tuple[str, str, str, Mapping[str, Any]]] = []
+        self.identity_links: List[tuple[str, str, Mapping[str, Any]]] = []
 
     def upsert_memory(self, memory: Mapping[str, Any]) -> str:
         self.memories[memory["memory_id"]] = dict(memory)
@@ -78,6 +79,9 @@ class FakeGraphStore:
         properties: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self.associations.append((source_id, target_id, relation_type, dict(properties or {})))
+
+    def link_identity(self, memory_id: str, identity_id: str, properties: Mapping[str, Any]) -> None:
+        self.identity_links.append((memory_id, identity_id, dict(properties)))
 
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         return self.memories[memory_id]
@@ -161,6 +165,40 @@ def test_memorize_without_embedding_skips_vector_storage(service: MemoryService)
     assert graph_memory["vector_id"] is None
 
 
+def test_memorize_records_identity_links(service: MemoryService) -> None:
+    """Face memories link to identity nodes when metadata includes identity context."""
+
+    identity_payload = {
+        "id": "person:alice",
+        "name": "Alice Example",
+        "aliases": ["Alice"],
+        "signatures": ["sig-alice-1"],
+    }
+    event = _build_event(
+        stamp=datetime(2024, 5, 10, 12, 33, tzinfo=timezone.utc),
+        embedding=[0.12, 0.34, 0.56],
+        json_data={
+            "identity": identity_payload,
+            "tags": ["face"],
+        },
+    )
+
+    record = service.memorize(event)
+
+    identity_links = service.graph_store.identity_links  # type: ignore[attr-defined]
+    assert len(identity_links) == 1
+    link_memory_id, identity_id, properties = identity_links[0]
+    assert link_memory_id == record.memory_id
+    assert identity_id == "person:alice"
+    assert properties.get("name") == "Alice Example"
+    assert "sig-alice-1" in properties.get("signatures", [])
+
+    stored_metadata = service.graph_store.memories[record.memory_id]["metadata"]  # type: ignore[attr-defined]
+    identity_meta = stored_metadata.get("identity", {})
+    assert identity_meta.get("id") == "person:alice"
+    assert "sig-alice-1" in identity_meta.get("signatures", [])
+
+
 def test_associate_records_relationship(service: MemoryService) -> None:
     """Associations are forwarded to the graph store with metadata."""
 
@@ -184,6 +222,9 @@ def test_recall_enriches_vector_results_with_graph_context(service: MemoryServic
         embedding=[0.7, 0.4],
     )
     record = service.memorize(event)
+    service.graph_store.memories[record.memory_id]["identities"] = [  # type: ignore[attr-defined]
+        {"id": "person:alice", "name": "Alice Example"}
+    ]
 
     fake_result = MemoryRecallResult(memory_id=record.memory_id, score=0.92, metadata={"foo": "bar"})
     service.vector_store.queue_search_result("face", [fake_result])  # type: ignore[attr-defined]
@@ -194,3 +235,4 @@ def test_recall_enriches_vector_results_with_graph_context(service: MemoryServic
     assert results[0].memory_id == record.memory_id
     assert results[0].metadata["foo"] == "bar"
     assert results[0].metadata["kind"] == "face"
+    assert results[0].metadata["identity"]["name"] == "Alice Example"

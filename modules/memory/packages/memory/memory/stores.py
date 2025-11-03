@@ -81,6 +81,14 @@ class GraphStoreProtocol(Protocol):
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         """Return metadata describing a stored memory node."""
 
+    def link_identity(
+        self,
+        memory_id: str,
+        identity_id: str,
+        properties: Mapping[str, Any],
+    ) -> None:
+        """Associate a memory entry with a person/identity node."""
+
 
 class QdrantVectorStore(VectorStoreProtocol):
     """Implementation of :class:`VectorStoreProtocol` using Qdrant."""
@@ -189,6 +197,23 @@ class Neo4jGraphStore(GraphStoreProtocol):
             record = session.execute_read(self._read_memory, memory_id)
             return record or {}
 
+    def link_identity(
+        self,
+        memory_id: str,
+        identity_id: str,
+        properties: Mapping[str, Any],
+    ) -> None:
+        identity_key = str(identity_id or "").strip()
+        if not identity_key:
+            return
+        with self._driver.session() as session:
+            session.execute_write(
+                self._write_identity_link,
+                memory_id,
+                identity_key,
+                dict(properties),
+            )
+
     # Neo4j transactions -----------------------------------------------
     @staticmethod
     def _write_memory(tx, label: str, properties: Mapping[str, Any]) -> None:  # pragma: no cover - exercised via driver
@@ -257,13 +282,44 @@ class Neo4jGraphStore(GraphStoreProtocol):
         tx.run(query, source_id=source_id, target_id=target_id, properties=dict(properties))
 
     @staticmethod
+    def _write_identity_link(
+        tx,
+        memory_id: str,
+        identity_id: str,
+        properties: Mapping[str, Any],
+    ) -> None:
+        tx.run(
+            """
+            MATCH (memory:Memory {memory_id: $memory_id})
+            MERGE (identity:Identity {identity_id: $identity_id})
+            SET identity += $properties
+            MERGE (memory)-[:IDENTIFIES]->(identity)
+            """,
+            memory_id=memory_id,
+            identity_id=identity_id,
+            properties=dict(properties),
+        )
+
+    @staticmethod
     def _read_memory(tx, memory_id: str) -> Optional[Mapping[str, Any]]:
-        result = tx.run("MATCH (memory:Memory {memory_id: $memory_id}) RETURN memory", memory_id=memory_id)
+        result = tx.run(
+            """
+            MATCH (memory:Memory {memory_id: $memory_id})
+            OPTIONAL MATCH (memory)-[:IDENTIFIES]->(identity:Identity)
+            RETURN memory, collect(identity) AS identities
+            """,
+            memory_id=memory_id,
+        )
         record = result.single()
         if record is None:
             return None
-        node = record["memory"]
-        return dict(node)
+        node = dict(record["memory"])
+        identities = record.get("identities") if record else None
+        if identities:
+            node["identities"] = [
+                dict(identity) for identity in identities if identity is not None
+            ]
+        return node
 
     @staticmethod
     def _kind_to_label(kind: str) -> str:
@@ -274,9 +330,9 @@ class Neo4jGraphStore(GraphStoreProtocol):
 
     @staticmethod
     def _relationship_type(relation_type: str) -> str:
-        cleaned = ''.join(ch if ch.isalnum() else '_' for ch in relation_type.upper() or "ASSOCIATED_WITH")
+        cleaned = ''.join(ch if ch.isalnum() else '_' for ch in relation_type.strip()) or "ASSOCIATED_WITH"
         if cleaned[0].isdigit():
-            cleaned = f"R_{cleaned}"
+            cleaned = f"_{cleaned}"
         return cleaned
 
 
