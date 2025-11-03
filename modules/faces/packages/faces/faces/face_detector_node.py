@@ -614,7 +614,7 @@ class FaceDetectorNode(Node):
                     self._dropped_frames += 1
                     if self._dropped_frames == 1 or (self._dropped_frames % 25) == 0:
                         self.get_logger().warning(
-                            "Face detector busy; replacing %d queued frame(s)", self._dropped_frames
+                            f"Face detector busy; replacing {self._dropped_frames} queued frame(s)"
                         )
                 else:
                     self._dropped_frames = 0
