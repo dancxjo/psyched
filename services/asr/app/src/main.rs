@@ -31,6 +31,8 @@ struct WhisperService {
     hop: Duration,
     min_duration: Duration,
     finality_lag: Duration,
+    silence_threshold: f32,
+    silence_duration: Duration,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -119,6 +121,14 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "900".to_string())
         .parse()
         .context("invalid ASR_FINALITY_LAG_MS")?;
+    let silence_threshold: f32 = env::var("ASR_SILENCE_THRESHOLD")
+        .unwrap_or_else(|_| "0.015".to_string())
+        .parse()
+        .context("invalid ASR_SILENCE_THRESHOLD")?;
+    let silence_duration_ms: u64 = env::var("ASR_SILENCE_DURATION_MS")
+        .unwrap_or_else(|_| "1200".to_string())
+        .parse()
+        .context("invalid ASR_SILENCE_DURATION_MS")?;
 
     let listen_host = env::var("WEBSOCKET_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let listen_port: u16 = env::var("WEBSOCKET_PORT")
@@ -137,6 +147,8 @@ async fn main() -> Result<()> {
         hop: Duration::from_millis(hop_ms.max(100)),
         min_duration: Duration::from_millis(min_duration_ms.max(100)),
         finality_lag: Duration::from_millis(finality_lag_ms.min(10_000).max(100)),
+        silence_threshold: silence_threshold.clamp(0.0, 1.0),
+        silence_duration: Duration::from_millis(silence_duration_ms.min(10_000).max(100)),
     });
 
     let app = Router::new()
@@ -175,8 +187,9 @@ async fn harness_page() -> Html<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        reconcile_segments, SegmentInternal, TrackedSegment, WordTiming, HARNESS_HTML,
+        reconcile_segments, SegmentInternal, SilenceTracker, TrackedSegment, WordTiming, HARNESS_HTML,
     };
+    use std::time::Duration;
 
     #[test]
     fn harness_contains_basic_controls() {
@@ -216,7 +229,7 @@ mod tests {
         ];
 
         let (finalised, remaining) =
-            reconcile_segments(&latest, &tracked, 2, 2.5, 0.9);
+            reconcile_segments(&latest, &tracked, 2, 2.5, 0.9, false);
 
         assert_eq!(finalised.len(), 1);
         assert_eq!(finalised[0].text, "hello");
@@ -236,10 +249,40 @@ mod tests {
         }];
 
         let (finalised, remaining) =
-            reconcile_segments(&latest, &tracked, 4, 5.0, 0.5);
+            reconcile_segments(&latest, &tracked, 4, 5.0, 0.5, false);
 
         assert_eq!(finalised.len(), 1, "segment should finalize once it ages out");
         assert!(remaining.is_empty(), "no tracked segments expected after finalization");
+    }
+
+    #[test]
+    fn reconcile_segments_can_force_finalization() {
+        let latest = vec![make_segment("forced", 0.0, 0.8)];
+        let tracked = vec![TrackedSegment {
+            text: "forced".to_string(),
+            start_s: 0.0,
+            end_s: 0.8,
+            stability: 1,
+        }];
+
+        let (finalised, remaining) =
+            reconcile_segments(&latest, &tracked, 10, 2.0, 5.0, true);
+
+        assert_eq!(finalised.len(), 1);
+        assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn silence_tracker_detects_required_duration() {
+        let mut tracker = SilenceTracker::new(16_000, 0.01, Duration::from_millis(500));
+        assert!(!tracker.has_boundary());
+
+        tracker.ingest(0.005, 8_000);
+        assert!(tracker.has_boundary());
+
+        tracker.reset();
+        tracker.ingest(0.02, 8_000);
+        assert!(!tracker.has_boundary());
     }
 }
 
@@ -379,6 +422,8 @@ async fn run_connection(
     let mut tracked: Vec<TrackedSegment> = Vec::new();
     let mut total_consumed_samples: usize = 0;
     let sample_rate = service.sample_rate as f32;
+    let mut silence_tracker =
+        SilenceTracker::new(service.sample_rate, service.silence_threshold, service.silence_duration);
     let min_samples = (service.min_duration.as_secs_f32() * sample_rate) as usize;
     let mut pcm_open = true;
     let mut ticker = interval(service.hop);
@@ -389,7 +434,8 @@ async fn run_connection(
             chunk = pcm_rx.recv(), if pcm_open => {
                 match chunk {
                     Some(bytes) => {
-                        extend_buffer(&mut buffer, &bytes);
+                        let (samples, rms) = extend_buffer(&mut buffer, &bytes);
+                        silence_tracker.ingest(rms, samples);
                     }
                     None => {
                         pcm_open = false;
@@ -409,7 +455,15 @@ async fn run_connection(
                 let audio: Vec<f32> = buffer.iter().copied().collect();
                 match service.transcribe(audio).await {
                     Ok(segments) => {
+                        let silence_boundary = silence_tracker.has_boundary();
                         if segments.is_empty() {
+                            if silence_boundary && !buffer.is_empty() {
+                                let dropped = buffer.len();
+                                buffer.clear();
+                                total_consumed_samples += dropped;
+                                silence_tracker.reset();
+                                tracked.clear();
+                            }
                             continue;
                         }
                         let offset_seconds = total_consumed_samples as f32 / sample_rate;
@@ -420,6 +474,7 @@ async fn run_connection(
                             service.stability_hits,
                             buffer_duration,
                             service.finality_lag.as_secs_f32(),
+                            silence_boundary,
                         );
 
                         let partial_payload = segments
@@ -453,12 +508,20 @@ async fn run_connection(
                                 let wav_bytes = encode_wav(&wav_audio, service.sample_rate)
                                     .context("failed to encode wav")?;
 
-                                buffer.drain(..final_samples);
-                                total_consumed_samples += final_samples;
-
-                                for seg in new_tracked.iter_mut() {
-                                    seg.start_s = (seg.start_s - final_end).max(0.0);
-                                    seg.end_s = (seg.end_s - final_end).max(0.0);
+                                let forced_by_silence = silence_boundary;
+                                if forced_by_silence {
+                                    let dropped = buffer.len();
+                                    buffer.clear();
+                                    total_consumed_samples += dropped;
+                                    silence_tracker.reset();
+                                    new_tracked.clear();
+                                } else {
+                                    buffer.drain(..final_samples);
+                                    total_consumed_samples += final_samples;
+                                    for seg in new_tracked.iter_mut() {
+                                        seg.start_s = (seg.start_s - final_end).max(0.0);
+                                        seg.end_s = (seg.end_s - final_end).max(0.0);
+                                    }
                                 }
 
                                 let final_segments = finalised
@@ -486,6 +549,12 @@ async fn run_connection(
                                     let _ = out_tx.send(payload).await;
                                 }
                             }
+                        } else if silence_boundary && !buffer.is_empty() {
+                            let dropped = buffer.len();
+                            buffer.clear();
+                            total_consumed_samples += dropped;
+                            silence_tracker.reset();
+                            new_tracked.clear();
                         }
 
                         tracked = new_tracked;
@@ -612,11 +681,64 @@ impl WhisperService {
     }
 }
 
-fn extend_buffer(buffer: &mut VecDeque<f32>, bytes: &[u8]) {
+struct SilenceTracker {
+    threshold: f32,
+    required_samples: usize,
+    tail_silence_samples: usize,
+}
+
+impl SilenceTracker {
+    fn new(sample_rate: u32, threshold: f32, duration: Duration) -> Self {
+        let mut required_samples =
+            (sample_rate as f32 * duration.as_secs_f32()).round() as usize;
+        if required_samples == 0 {
+            required_samples = ((sample_rate as f32) * 0.2).round() as usize; // default 200ms
+        }
+        SilenceTracker {
+            threshold,
+            required_samples,
+            tail_silence_samples: 0,
+        }
+    }
+
+    fn ingest(&mut self, rms: f32, samples: usize) {
+        if samples == 0 {
+            return;
+        }
+        if rms <= self.threshold {
+            self.tail_silence_samples = self.tail_silence_samples.saturating_add(samples);
+        } else {
+            self.tail_silence_samples = 0;
+        }
+    }
+
+    fn has_boundary(&self) -> bool {
+        self.required_samples > 0 && self.tail_silence_samples >= self.required_samples
+    }
+
+    fn reset(&mut self) {
+        self.tail_silence_samples = 0;
+    }
+
+}
+
+fn extend_buffer(buffer: &mut VecDeque<f32>, bytes: &[u8]) -> (usize, f32) {
+    let mut sum_sq = 0.0f64;
+    let mut count = 0usize;
     for chunk in bytes.chunks_exact(2) {
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-        buffer.push_back(sample as f32 / i16::MAX as f32);
+        let normalized = sample as f32 / i16::MAX as f32;
+        let value = f64::from(normalized);
+        sum_sq += value * value;
+        buffer.push_back(normalized);
+        count += 1;
     }
+    let rms = if count > 0 {
+        (sum_sq / count as f64).sqrt() as f32
+    } else {
+        0.0
+    };
+    (count, rms)
 }
 
 fn segment_to_message(segment: &SegmentInternal, offset_seconds: f32) -> SegmentMessage {
@@ -646,7 +768,12 @@ fn reconcile_segments(
     stability_threshold: usize,
     buffer_duration: f32,
     finality_lag_s: f32,
+    force_finalize: bool,
 ) -> (Vec<SegmentInternal>, Vec<TrackedSegment>) {
+    if force_finalize {
+        return (latest.to_vec(), Vec::new());
+    }
+
     let mut prefix = Vec::new();
     let mut new_tracked = Vec::new();
 

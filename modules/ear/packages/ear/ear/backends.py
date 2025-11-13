@@ -357,6 +357,9 @@ class ServiceASREarBackend(AudioAwareBackend):
         self._last_final_signature: str | None = None
         self._debug_hook = debug_hook
         self._debug_sequence = 0
+        self._silence_profile: tuple[int, int, int] | None = None  # (sample_rate, channels, samples_per_chunk)
+        self._last_chunk_time = time.monotonic()
+        self._state_lock = threading.Lock()
 
     def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
         """Queue audio to forward to the websocket service or fallback backend."""
@@ -365,6 +368,7 @@ class ServiceASREarBackend(AudioAwareBackend):
             self._delegate.submit_audio(pcm, sample_rate, channels)
             return
         self._queue.put((pcm, sample_rate, channels))
+        self._record_silence_profile(len(pcm), sample_rate, channels)
 
     def close(self) -> None:
         """Signal the active backend to finish processing."""
@@ -467,7 +471,7 @@ class ServiceASREarBackend(AudioAwareBackend):
 
         while not stop_event.is_set():
             try:
-                item = await asyncio.to_thread(self._queue.get, True, 0.1)
+                item = await asyncio.to_thread(self._get_next_audio_chunk, 0.1)
             except queue.Empty:
                 continue
             if item is None:
@@ -495,6 +499,16 @@ class ServiceASREarBackend(AudioAwareBackend):
                 )
             except WebSocketException as error:
                 raise error
+
+    def _get_next_audio_chunk(self, timeout: float) -> tuple[bytes, int, int] | None:
+        try:
+            item = self._queue.get(True, timeout)
+        except queue.Empty as error:
+            silence = self._build_silence_chunk()
+            if silence is None:
+                raise error
+            return silence
+        return item
 
     async def _receive_service_messages(self, ws, publish: PublishCallback, stop_event: threading.Event) -> None:
         from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
@@ -663,3 +677,36 @@ class ServiceASREarBackend(AudioAwareBackend):
             "segments": [segment.to_dict() for segment in event.segments],
         }
         return json.dumps(payload, sort_keys=True)
+
+    def _record_silence_profile(self, byte_length: int, sample_rate: int, channels: int) -> None:
+        """Remember the latest chunk metadata so silence padding matches the live stream cadence."""
+
+        bytes_per_sample = 2 * max(channels, 1)
+        if bytes_per_sample <= 0:
+            return
+        samples_per_chunk = byte_length // bytes_per_sample
+        if samples_per_chunk <= 0:
+            return
+        with self._state_lock:
+            self._silence_profile = (sample_rate, channels, samples_per_chunk)
+            self._last_chunk_time = time.monotonic()
+
+    def _build_silence_chunk(self) -> tuple[bytes, int, int] | None:
+        """Construct a synthetic silence chunk when the recorder is idle."""
+
+        with self._state_lock:
+            profile = self._silence_profile
+            if profile is None:
+                return None
+            sample_rate, channels, samples_per_chunk = profile
+            if samples_per_chunk <= 0:
+                return None
+            rate = max(sample_rate, 1)
+            chunk_duration = samples_per_chunk / float(rate)
+            now = time.monotonic()
+            if (now - self._last_chunk_time) < chunk_duration:
+                return None
+            bytes_per_sample = 2 * max(channels, 1)
+            byte_length = samples_per_chunk * bytes_per_sample
+            self._last_chunk_time = now
+        return (bytes(byte_length), sample_rate, channels)

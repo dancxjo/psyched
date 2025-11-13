@@ -234,3 +234,36 @@ def test_service_backend_encodes_pcm_frames() -> None:
     assert payload["channels"] == 2
     decoded = base64.b64decode(payload["pcm"])
     assert decoded == pcm
+
+
+def test_service_backend_emits_silence_when_queue_is_idle() -> None:
+    """Silence padding should keep the websocket stream active between utterances."""
+
+    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/asr")
+    backend.submit_audio(b"\x00\x00", 16000, 1)
+
+    stop_event = threading.Event()
+
+    class _CollectingWebSocket:
+        def __init__(self) -> None:
+            self.sent: list[dict[str, object]] = []
+
+        async def send(self, payload: str) -> None:
+            self.sent.append(json.loads(payload))
+            if len(self.sent) >= 2:
+                stop_event.set()
+                backend._queue.put(None)
+
+    fake_ws = _CollectingWebSocket()
+
+    async def _run() -> None:
+        await backend._pump_audio_chunks(fake_ws, stop_event)
+
+    asyncio.run(asyncio.wait_for(_run(), timeout=1.0))
+
+    assert len(fake_ws.sent) >= 2, "Expected a silence frame to be synthesized after the live chunk"
+    silence_payload = fake_ws.sent[1]
+    assert silence_payload["sample_rate"] == 16000
+    assert silence_payload["channels"] == 1
+    silence_bytes = base64.b64decode(silence_payload["pcm"])
+    assert silence_bytes == b"\x00\x00"
