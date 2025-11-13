@@ -13,7 +13,13 @@ from typing import Optional
 
 import cv2
 import numpy as np
-from websockets.asyncio.server import ServerConnection, serve
+
+try:  # pragma: no cover - exercised in integration tests.
+    from websockets.asyncio.server import ServerConnection, serve
+except ImportError:  # pragma: no cover - compatibility with older websockets builds.
+    from websockets.server import WebSocketServerProtocol as ServerConnection
+    from websockets.server import serve
+
 from websockets.exceptions import ConnectionClosed
 
 try:  # pragma: no cover - dependency resolved at image build time.
