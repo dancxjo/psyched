@@ -8,8 +8,8 @@ import {
   normalizeTranscriptEntry,
   transcriptSignature,
 } from './ear-dashboard.helpers.js';
-import '/components/audio-oscilloscope.js';
-import '/components/audio-spectrogram.js';
+import './audio-oscilloscope.js';
+import './audio-spectrogram.js';
 
 const AUDIO_TOPIC = '/audio/raw';
 const SPEECH_TOPIC = '/ear/speech_active';
