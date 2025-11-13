@@ -30,6 +30,7 @@ struct WhisperService {
     stability_hits: usize,
     hop: Duration,
     min_duration: Duration,
+    finality_lag: Duration,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -114,6 +115,10 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "2000".to_string())
         .parse()
         .context("invalid ASR_MIN_DURATION_MS")?;
+    let finality_lag_ms: u64 = env::var("ASR_FINALITY_LAG_MS")
+        .unwrap_or_else(|_| "900".to_string())
+        .parse()
+        .context("invalid ASR_FINALITY_LAG_MS")?;
 
     let listen_host = env::var("WEBSOCKET_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let listen_port: u16 = env::var("WEBSOCKET_PORT")
@@ -131,6 +136,7 @@ async fn main() -> Result<()> {
         stability_hits: stability_hits.max(1),
         hop: Duration::from_millis(hop_ms.max(100)),
         min_duration: Duration::from_millis(min_duration_ms.max(100)),
+        finality_lag: Duration::from_millis(finality_lag_ms.min(10_000).max(100)),
     });
 
     let app = Router::new()
@@ -168,13 +174,72 @@ async fn harness_page() -> Html<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::HARNESS_HTML;
+    use super::{
+        reconcile_segments, SegmentInternal, TrackedSegment, WordTiming, HARNESS_HTML,
+    };
 
     #[test]
     fn harness_contains_basic_controls() {
         assert!(HARNESS_HTML.contains("ASR Service Harness"));
         assert!(HARNESS_HTML.contains("start-record"));
         assert!(HARNESS_HTML.contains("event-log"));
+    }
+
+    fn make_segment(text: &str, start: f32, end: f32) -> SegmentInternal {
+        SegmentInternal {
+            text: text.to_string(),
+            start_s: start,
+            end_s: end,
+            words: Vec::<WordTiming>::new(),
+        }
+    }
+
+    #[test]
+    fn reconcile_segments_promotes_stable_prefix() {
+        let latest = vec![
+            make_segment("hello", 0.0, 1.0),
+            make_segment("world", 1.0, 2.0),
+        ];
+        let tracked = vec![
+            TrackedSegment {
+                text: "hello".to_string(),
+                start_s: 0.0,
+                end_s: 1.0,
+                stability: 2,
+            },
+            TrackedSegment {
+                text: "world".to_string(),
+                start_s: 1.0,
+                end_s: 2.0,
+                stability: 1,
+            },
+        ];
+
+        let (finalised, remaining) =
+            reconcile_segments(&latest, &tracked, 2, 2.5, 0.9);
+
+        assert_eq!(finalised.len(), 1);
+        assert_eq!(finalised[0].text, "hello");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].text, "world");
+        assert_eq!(remaining[0].stability, 1);
+    }
+
+    #[test]
+    fn reconcile_segments_emits_when_audio_has_aged_out() {
+        let latest = vec![make_segment("hello there", 0.0, 1.2)];
+        let tracked = vec![TrackedSegment {
+            text: "hello".to_string(),
+            start_s: 0.0,
+            end_s: 1.2,
+            stability: 1,
+        }];
+
+        let (finalised, remaining) =
+            reconcile_segments(&latest, &tracked, 4, 5.0, 0.5);
+
+        assert_eq!(finalised.len(), 1, "segment should finalize once it ages out");
+        assert!(remaining.is_empty(), "no tracked segments expected after finalization");
     }
 }
 
@@ -348,10 +413,13 @@ async fn run_connection(
                             continue;
                         }
                         let offset_seconds = total_consumed_samples as f32 / sample_rate;
+                        let buffer_duration = buffer.len() as f32 / sample_rate;
                         let (finalised, mut new_tracked) = reconcile_segments(
                             &segments,
                             &tracked,
                             service.stability_hits,
+                            buffer_duration,
+                            service.finality_lag.as_secs_f32(),
                         );
 
                         let partial_payload = segments
@@ -576,41 +644,31 @@ fn reconcile_segments(
     latest: &[SegmentInternal],
     tracked: &[TrackedSegment],
     stability_threshold: usize,
+    buffer_duration: f32,
+    finality_lag_s: f32,
 ) -> (Vec<SegmentInternal>, Vec<TrackedSegment>) {
     let mut prefix = Vec::new();
     let mut new_tracked = Vec::new();
 
     for (idx, seg) in latest.iter().enumerate() {
+        let mut stability = 1;
         if let Some(prev) = tracked.get(idx) {
             if prev.text == seg.text {
-                let stability = prev.stability + 1;
-                if idx == prefix.len() && stability >= stability_threshold {
-                    prefix.push(seg.clone());
-                    continue;
-                } else {
-                    new_tracked.push(TrackedSegment {
-                        text: seg.text.clone(),
-                        start_s: seg.start_s,
-                        end_s: seg.end_s,
-                        stability,
-                    });
-                }
-            } else {
-                new_tracked.push(TrackedSegment {
-                    text: seg.text.clone(),
-                    start_s: seg.start_s,
-                    end_s: seg.end_s,
-                    stability: 1,
-                });
+                stability = prev.stability + 1;
             }
-        } else {
-            new_tracked.push(TrackedSegment {
-                text: seg.text.clone(),
-                start_s: seg.start_s,
-                end_s: seg.end_s,
-                stability: 1,
-            });
         }
+        let segment_age = (buffer_duration - seg.end_s).max(0.0);
+        let aged_out = finality_lag_s <= 0.0 || segment_age >= finality_lag_s;
+        if idx == prefix.len() && (stability >= stability_threshold || aged_out) {
+            prefix.push(seg.clone());
+            continue;
+        }
+        new_tracked.push(TrackedSegment {
+            text: seg.text.clone(),
+            start_s: seg.start_s,
+            end_s: seg.end_s,
+            stability,
+        });
     }
 
     (prefix, new_tracked)
