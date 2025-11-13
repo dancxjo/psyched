@@ -8,6 +8,7 @@ import json
 import io
 import sys
 import threading
+import types
 from collections.abc import Callable
 from pathlib import Path
 
@@ -24,6 +25,26 @@ from ear.backends import (
     TranscriptionEvent,
 )
 from ear.worker import EarWorker
+
+
+@pytest.fixture(autouse=True)
+def _stub_websockets(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """Provide a lightweight websockets stub for tests that import backend helpers."""
+
+    module = types.ModuleType("websockets")
+    exceptions_module = types.ModuleType("websockets.exceptions")
+    exceptions_module.WebSocketException = RuntimeError
+    exceptions_module.ConnectionClosedError = RuntimeError
+    exceptions_module.ConnectionClosedOK = RuntimeError
+
+    async def _connect(*_args, **_kwargs):  # pragma: no cover - connection not used in unit tests
+        raise RuntimeError("websocket connections are not available in tests")
+
+    module.connect = _connect
+    module.exceptions = exceptions_module
+    monkeypatch.setitem(sys.modules, "websockets", module)
+    monkeypatch.setitem(sys.modules, "websockets.exceptions", exceptions_module)
+    return module
 
 
 class _PublishCollector:
@@ -175,7 +196,10 @@ def test_service_backend_falls_back_when_service_unavailable(monkeypatch: pytest
 def test_service_backend_processes_partial_and_final_payloads() -> None:
     """Service backend should publish deduplicated partial and final transcripts."""
 
-    backend = ServiceASREarBackend(uri="ws://127.0.0.1:65535/asr")
+    backend = ServiceASREarBackend(
+        uri="ws://127.0.0.1:65535/asr",
+        partial_event_timeout=60.0,
+    )
     collector = _PublishCollector()
 
     partial_payload = json.dumps(
@@ -234,6 +258,68 @@ def test_service_backend_encodes_pcm_frames() -> None:
     assert payload["channels"] == 2
     decoded = base64.b64decode(payload["pcm"])
     assert decoded == pcm
+
+
+def test_service_backend_promotes_stale_partial_to_final(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unchanged partial transcripts should be promoted to final events after a timeout."""
+
+    current_time = {"value": 0.0}
+
+    def _monotonic() -> float:
+        return current_time["value"]
+
+    monkeypatch.setattr("ear.backends.time.monotonic", _monotonic)
+
+    backend = ServiceASREarBackend(
+        uri="ws://127.0.0.1:65535/asr",
+        partial_event_timeout=0.5,
+    )
+    collector = _PublishCollector()
+
+    payload = json.dumps({"event": "partial", "text": "hello"})
+    backend._process_service_message(payload, collector)
+
+    assert len(collector.items) == 1
+    first_event = collector.items[0]
+    assert first_event.is_partial
+    assert first_event.text == "hello"
+
+    current_time["value"] = 1.0
+    backend._process_service_message(payload, collector)
+
+    events = collector.items
+    assert len(events) == 2
+    assert events[-1].text == "hello"
+    assert not events[-1].is_partial
+
+
+def test_service_backend_timeout_flushes_without_new_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stalled partial transcript should promote itself during websocket idle periods."""
+
+    current_time = {"value": 0.0}
+
+    def _monotonic() -> float:
+        return current_time["value"]
+
+    monkeypatch.setattr("ear.backends.time.monotonic", _monotonic)
+
+    backend = ServiceASREarBackend(
+        uri="ws://127.0.0.1:65535/asr",
+        partial_event_timeout=0.25,
+    )
+    collector = _PublishCollector()
+
+    payload = json.dumps({"event": "partial", "text": "testing"})
+    backend._process_service_message(payload, collector)
+
+    current_time["value"] = 1.0
+    emitted = backend._finalize_stale_partial(collector)
+
+    assert emitted is True
+    events = collector.items
+    assert len(events) == 2
+    assert events[-1].text == "testing"
+    assert not events[-1].is_partial
 
 
 def test_service_backend_emits_silence_when_queue_is_idle() -> None:

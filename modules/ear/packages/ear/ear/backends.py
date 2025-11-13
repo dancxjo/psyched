@@ -336,7 +336,25 @@ class FasterWhisperEarBackend(AudioAwareBackend):
 
 
 class ServiceASREarBackend(AudioAwareBackend):
-    """Backend that streams audio frames to the `/service/asr` websocket with optional fallback."""
+    """Backend that streams audio frames to the `/service/asr` websocket with optional fallback.
+
+    Parameters
+    ----------
+    uri:
+        Websocket endpoint providing transcription results.
+    loop:
+        Optional event loop reused for asynchronous tasks.
+    connect_timeout:
+        Maximum number of seconds to wait while establishing the websocket connection.
+    fallback_factory:
+        Callable that returns an :class:`AudioAwareBackend` instance to process audio when the
+        websocket is unavailable.
+    debug_hook:
+        Optional callback invoked with structured debug payloads for observability.
+    partial_event_timeout:
+        Number of seconds a partial transcript may remain unchanged before it is promoted to a
+        synthetic final event. Set to ``0`` to disable the automatic promotion.
+    """
 
     def __init__(
         self,
@@ -346,6 +364,7 @@ class ServiceASREarBackend(AudioAwareBackend):
         connect_timeout: float = 5.0,
         fallback_factory: Callable[[], AudioAwareBackend] | None = None,
         debug_hook: Callable[[dict[str, object]], None] | None = None,
+        partial_event_timeout: float = 2.0,
     ) -> None:
         self._uri = uri
         self._loop = loop
@@ -360,6 +379,9 @@ class ServiceASREarBackend(AudioAwareBackend):
         self._silence_profile: tuple[int, int, int] | None = None  # (sample_rate, channels, samples_per_chunk)
         self._last_chunk_time = time.monotonic()
         self._state_lock = threading.Lock()
+        self._partial_timeout = max(partial_event_timeout, 0.0)
+        self._last_partial_event: TranscriptionEvent | None = None
+        self._last_partial_time: float | None = None
 
     def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
         """Queue audio to forward to the websocket service or fallback backend."""
@@ -517,6 +539,8 @@ class ServiceASREarBackend(AudioAwareBackend):
             try:
                 response = await asyncio.wait_for(ws.recv(), timeout=0.5)
             except asyncio.TimeoutError:
+                if self._finalize_stale_partial(publish):
+                    continue
                 continue
             except (ConnectionClosedError, ConnectionClosedOK):
                 break
@@ -532,18 +556,55 @@ class ServiceASREarBackend(AudioAwareBackend):
     def _process_service_message(self, message: str, publish: PublishCallback) -> None:
         event = self._parse_service_message(message)
         if event is None:
+            self._finalize_stale_partial(publish)
             return
         signature = self._event_signature(event)
         if event.is_partial:
             if signature == self._last_partial_signature:
+                if self._finalize_stale_partial(publish):
+                    return
                 return
             self._last_partial_signature = signature
+            self._last_partial_event = event
+            self._last_partial_time = time.monotonic()
         else:
             if signature == self._last_final_signature:
+                self._clear_partial_state()
                 return
             self._last_final_signature = signature
-            self._last_partial_signature = None
+            self._clear_partial_state()
         publish(event)
+
+    def _clear_partial_state(self) -> None:
+        """Reset cached partial transcript tracking state."""
+
+        self._last_partial_signature = None
+        self._last_partial_event = None
+        self._last_partial_time = None
+
+    def _finalize_stale_partial(self, publish: PublishCallback) -> bool:
+        """Emit the cached partial transcript as a final event when it stagnates."""
+
+        event = self._last_partial_event
+        if event is None:
+            return False
+        if self._partial_timeout <= 0:
+            return False
+        last_update = self._last_partial_time
+        if last_update is None:
+            return False
+        elapsed = time.monotonic() - last_update
+        if elapsed < self._partial_timeout:
+            return False
+        final_event = TranscriptionEvent.final(event.text, segments=event.segments)
+        final_signature = self._event_signature(final_event)
+        if final_signature == self._last_final_signature:
+            self._clear_partial_state()
+            return False
+        self._last_final_signature = final_signature
+        self._clear_partial_state()
+        publish(final_event)
+        return True
 
     def _emit_debug(self, kind: str, **fields) -> None:
         if not self._debug_hook:
