@@ -115,6 +115,29 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "asr_debug_stream",
+      "description": "Subscribe to websocket client debug events published on /ear/asr_debug.",
+      "kind": "stream-topic",
+      "defaults": {
+        "topic": "/ear/asr_debug",
+        "message_type": "std_msgs/msg/String",
+        "role": "subscribe",
+        "queue_length": 100
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queue_length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 400,
+            "description": "Optional override for the subscription queue length."
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ]
 }

@@ -9,6 +9,7 @@ import logging
 import queue
 import sys
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, Sequence, TextIO, runtime_checkable
@@ -344,6 +345,7 @@ class ServiceASREarBackend(AudioAwareBackend):
         loop: asyncio.AbstractEventLoop | None = None,
         connect_timeout: float = 5.0,
         fallback_factory: Callable[[], AudioAwareBackend] | None = None,
+        debug_hook: Callable[[dict[str, object]], None] | None = None,
     ) -> None:
         self._uri = uri
         self._loop = loop
@@ -353,6 +355,8 @@ class ServiceASREarBackend(AudioAwareBackend):
         self._delegate: AudioAwareBackend | None = None
         self._last_partial_signature: str | None = None
         self._last_final_signature: str | None = None
+        self._debug_hook = debug_hook
+        self._debug_sequence = 0
 
     def submit_audio(self, pcm: bytes, sample_rate: int, channels: int) -> None:
         """Queue audio to forward to the websocket service or fallback backend."""
@@ -395,8 +399,18 @@ class ServiceASREarBackend(AudioAwareBackend):
         import websockets
         from websockets.exceptions import WebSocketException
 
+        self._emit_debug(
+            "connecting",
+            direction="status",
+            uri=self._uri,
+        )
         try:
             async with websockets.connect(self._uri, open_timeout=self._connect_timeout) as ws:
+                self._emit_debug(
+                    "connected",
+                    direction="status",
+                    uri=self._uri,
+                )
                 self._last_partial_signature = None
                 self._last_final_signature = None
                 tasks = [
@@ -407,7 +421,18 @@ class ServiceASREarBackend(AudioAwareBackend):
                 for result in results:
                     if isinstance(result, Exception):
                         raise result
+                self._emit_debug(
+                    "disconnected",
+                    direction="status",
+                    uri=self._uri,
+                )
         except (OSError, asyncio.TimeoutError, WebSocketException) as error:
+            self._emit_debug(
+                "error",
+                direction="status",
+                uri=self._uri,
+                message=str(error),
+            )
             raise BackendUnavailableError(
                 f"Failed to connect to ASR service at {self._uri}"
             ) from error
@@ -446,6 +471,10 @@ class ServiceASREarBackend(AudioAwareBackend):
             except queue.Empty:
                 continue
             if item is None:
+                self._emit_debug(
+                    "queue_drained",
+                    direction="status",
+                )
                 break
             pcm, sample_rate, channels = item
             payload = {
@@ -456,6 +485,14 @@ class ServiceASREarBackend(AudioAwareBackend):
             }
             try:
                 await ws.send(json.dumps(payload))
+                self._emit_debug(
+                    "chunk_sent",
+                    direction="outbound",
+                    sample_rate=sample_rate,
+                    channels=channels,
+                    byte_length=len(pcm),
+                    queue_depth=self._queue.qsize(),
+                )
             except WebSocketException as error:
                 raise error
 
@@ -471,6 +508,11 @@ class ServiceASREarBackend(AudioAwareBackend):
                 break
             if isinstance(response, bytes):
                 continue
+            self._emit_debug(
+                "message_received",
+                direction="inbound",
+                payload=response,
+            )
             self._process_service_message(response, publish)
 
     def _process_service_message(self, message: str, publish: PublishCallback) -> None:
@@ -488,6 +530,21 @@ class ServiceASREarBackend(AudioAwareBackend):
             self._last_final_signature = signature
             self._last_partial_signature = None
         publish(event)
+
+    def _emit_debug(self, kind: str, **fields) -> None:
+        if not self._debug_hook:
+            return
+        self._debug_sequence += 1
+        payload = {
+            "kind": kind,
+            "sequence": self._debug_sequence,
+            "timestamp": time.time(),
+            **fields,
+        }
+        try:
+            self._debug_hook(payload)
+        except Exception:  # pragma: no cover - debug hooks should not break transcription
+            _LOGGER.debug("ASR service debug hook failed", exc_info=True)
 
     def _parse_service_message(self, message: str) -> TranscriptionEvent | None:
         trimmed = message.strip()

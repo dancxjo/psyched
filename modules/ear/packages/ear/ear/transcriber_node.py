@@ -5,6 +5,8 @@ from __future__ import annotations
 import audioop
 import importlib
 import json
+import queue
+import time
 from typing import Sequence
 
 import rclpy
@@ -58,6 +60,11 @@ class TranscriberNode(Node):
         self._publisher = self.create_publisher(String, self._transcript_topic, 10)
         self._event_topic = self._declare_topic("event_topic", "/ear/asr_event")
         self._event_publisher = self.create_publisher(String, self._event_topic, 10)
+        self._asr_debug_topic = self._declare_topic("asr_debug_topic", "/ear/asr_debug")
+        self._asr_debug_publisher = self.create_publisher(String, self._asr_debug_topic, 10)
+        self._asr_debug_queue: "queue.Queue[dict[str, object]]" = queue.Queue(maxsize=500)
+        self._asr_debug_timer = self.create_timer(0.1, self._flush_asr_debug_queue)
+        self._debug_queue_overflow_logged = False
         backend = self._create_backend()
         self._worker = EarWorker(backend=backend, publisher=self._handle_event, logger=self.get_logger())
         self._worker.start()
@@ -176,11 +183,71 @@ class TranscriberNode(Node):
                 self.get_logger().warning(
                     "ASR service fallback to faster-whisper is disabled until the dependency is installed.",
                 )
-            return ServiceASREarBackend(uri=uri, fallback_factory=fallback_factory)
+            return ServiceASREarBackend(
+                uri=uri,
+                fallback_factory=fallback_factory,
+                debug_hook=self._handle_backend_debug,
+            )
         self.get_logger().warning(
             f"Unknown backend '{backend_name}'; defaulting to console backend",
         )
         return ConsoleEarBackend()
+
+    def _handle_backend_debug(self, payload: dict[str, object]) -> None:
+        if not payload:
+            return
+        queue_ref = getattr(self, "_asr_debug_queue", None)
+        if queue_ref is None:
+            return
+        entry = dict(payload)
+        entry.setdefault("timestamp", time.time())
+        try:
+            queue_ref.put_nowait(entry)
+        except queue.Full:
+            if not self._debug_queue_overflow_logged:
+                self.get_logger().warning(
+                    "ASR debug queue is full; dropping events until space becomes available",
+                )
+                self._debug_queue_overflow_logged = True
+
+    def _flush_asr_debug_queue(self) -> None:
+        queue_ref = getattr(self, "_asr_debug_queue", None)
+        publisher = getattr(self, "_asr_debug_publisher", None)
+        if queue_ref is None or publisher is None:
+            return
+        published = False
+        while True:
+            try:
+                payload = queue_ref.get_nowait()
+            except queue.Empty:
+                break
+            message = self._serialize_debug_payload(payload)
+            if not message:
+                continue
+            msg = String()
+            msg.data = message
+            publisher.publish(msg)
+            published = True
+        if published:
+            self._debug_queue_overflow_logged = False
+
+    def _serialize_debug_payload(self, payload: dict[str, object] | None) -> str:
+        if not payload:
+            return ""
+        entry = dict(payload)
+        timestamp = entry.get("timestamp")
+        if isinstance(timestamp, (int, float)):
+            entry["timestamp_ms"] = int(timestamp * 1000)
+        else:
+            now = time.time()
+            entry["timestamp_ms"] = int(now * 1000)
+            entry["timestamp"] = now
+        entry.setdefault("source", "service_backend")
+        try:
+            return json.dumps(entry, ensure_ascii=False)
+        except (TypeError, ValueError):
+            self.get_logger().debug("Failed to encode ASR debug payload", exc_info=True)
+            return ""
 
     def _read_faster_whisper_options(self) -> dict[str, object]:
         model = str(self.declare_parameter("faster_whisper_model", "base").value).strip() or "base"

@@ -9,13 +9,18 @@ import {
   transcriptSignature,
 } from './ear-dashboard.helpers.js';
 import '/components/audio-oscilloscope.js';
+import '/components/audio-spectrogram.js';
 
 const AUDIO_TOPIC = '/audio/raw';
 const SPEECH_TOPIC = '/ear/speech_active';
 const SILENCE_TOPIC = '/ear/silence';
 const TRANSCRIPT_TOPIC = '/ear/hole';
 const TRANSCRIPT_EVENT_TOPIC = '/ear/asr_event';
+const ASR_DEBUG_TOPIC = '/ear/asr_debug';
 const MAX_TRANSCRIPTS = 40;
+const MAX_SERVICE_MESSAGES = 80;
+const MAX_ACTIVITY_HISTORY = 12;
+const MAX_ASR_SEGMENTS = 8;
 
 function resolveStreamAction(topic) {
   if (typeof topic !== 'string') {
@@ -31,6 +36,8 @@ function resolveStreamAction(topic) {
       return 'silence_stream';
     case TRANSCRIPT_TOPIC:
       return 'transcript_stream';
+    case ASR_DEBUG_TOPIC:
+      return 'asr_debug_stream';
     default:
       return null;
   }
@@ -86,6 +93,14 @@ class EarDashboard extends LitElement {
     lastFrameByteLength: { state: true },
     speechActive: { state: true },
     silenceDetected: { state: true },
+    speechHistory: { state: true },
+    silenceHistory: { state: true },
+    speechLastUpdate: { state: true },
+    silenceLastUpdate: { state: true },
+    speechLastChange: { state: true },
+    silenceLastChange: { state: true },
+    asrSegments: { state: true },
+    serviceMessages: { state: true },
     transcripts: { state: true },
     partialTranscript: { state: true },
     fakeTranscriptText: { state: true },
@@ -124,6 +139,151 @@ class EarDashboard extends LitElement {
         gap: 0.5rem;
       }
 
+      .spectrogram-wrapper {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .diagnostic-grid {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .diagnostic-grid__rows {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      .diagnostic-card {
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.65rem;
+        display: grid;
+        gap: 0.35rem;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .diagnostic-card[data-state='active'] {
+        border-color: rgba(106, 209, 255, 0.6);
+        box-shadow: 0 0 12px rgba(106, 209, 255, 0.25);
+      }
+
+      .diagnostic-card__label {
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lcars-muted);
+      }
+
+      .detector-history {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .detector-history__columns {
+        display: grid;
+        gap: 0.65rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      .detector-history__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .detector-history__list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        padding-bottom: 0.15rem;
+      }
+
+      .service-log {
+        max-height: 320px;
+        overflow-y: auto;
+        display: grid;
+        gap: 0.5rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+
+      .service-log__entry {
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.65rem;
+        font-size: 0.85rem;
+        display: grid;
+        gap: 0.25rem;
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      .service-log__entry[data-direction='outbound'] {
+        border-color: rgba(165, 129, 255, 0.5);
+      }
+
+      .service-log__entry[data-direction='inbound'] {
+        border-color: rgba(106, 209, 255, 0.5);
+      }
+
+      .service-log__entry header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: var(--lcars-muted);
+      }
+
+      .service-log__entry pre {
+        margin: 0;
+        font-size: 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(0, 0, 0, 0.35);
+        border-radius: 0.35rem;
+        padding: 0.35rem;
+      }
+
+      .asr-segment-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .asr-segment {
+        border: 1px solid var(--control-surface-border);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        display: grid;
+        gap: 0.35rem;
+        background: rgba(0, 0, 0, 0.15);
+      }
+
+      .asr-segment header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+      }
+
+      .asr-segment audio {
+        width: 100%;
+      }
+
+      .asr-segment__meta {
+        font-size: 0.8rem;
+        color: var(--lcars-muted);
+      }
+
       cockpit-audio-oscilloscope {
         display: block;
         width: 100%;
@@ -136,6 +296,16 @@ class EarDashboard extends LitElement {
 
       .oscilloscope-wrapper[data-state='idle'] {
         min-height: 200px;
+      }
+
+      cockpit-audio-spectrogram {
+        display: block;
+        width: 100%;
+      }
+
+      cockpit-audio-spectrogram canvas {
+        width: 100%;
+        height: auto;
       }
 
       .transcript-log {
@@ -296,6 +466,14 @@ class EarDashboard extends LitElement {
     this.lastFrameByteLength = 0;
     this.speechActive = false;
     this.silenceDetected = true;
+    this.speechHistory = [];
+    this.silenceHistory = [];
+    this.speechLastUpdate = 0;
+    this.silenceLastUpdate = 0;
+    this.speechLastChange = 0;
+    this.silenceLastChange = 0;
+    this.asrSegments = [];
+    this.serviceMessages = [];
     this.transcripts = [];
     this.partialTranscript = null;
     this.fakeTranscriptText = '';
@@ -309,6 +487,12 @@ class EarDashboard extends LitElement {
     this._lastPartialSignature = '';
     this._deduplicator = createTranscriptDeduplicator(MAX_TRANSCRIPTS * 3);
     this._pendingManualTranscripts = [];
+    this._activityHistoryLimit = MAX_ACTIVITY_HISTORY;
+    this._serviceLogLimit = MAX_SERVICE_MESSAGES;
+    this._asrSegmentLimit = MAX_ASR_SEGMENTS;
+    this._lastSpeechState = null;
+    this._lastSilenceState = null;
+    this._asrSegmentUrlMap = new Map();
   }
 
   connectedCallback() {
@@ -317,6 +501,7 @@ class EarDashboard extends LitElement {
     this._subscribeSilence();
     this._subscribeTranscriptEvents();
     this._subscribeTranscripts();
+    this._subscribeAsrDebug();
     if (this.audioMonitoringEnabled) {
       this._subscribeAudio();
     } else {
@@ -332,6 +517,10 @@ class EarDashboard extends LitElement {
     this._lastPartialSignature = '';
     this._deduplicator.clear();
     this._pendingManualTranscripts = [];
+    this._clearAsrSegments();
+    this.serviceMessages = [];
+    this.speechHistory = [];
+    this.silenceHistory = [];
   }
 
   toggleAudioMonitoring() {
@@ -353,9 +542,10 @@ class EarDashboard extends LitElement {
     this.partialTranscript = null;
     this._lastPartialSignature = '';
     this._deduplicator.clear();
+    this._clearAsrSegments();
   }
 
-  async injectFakeTranscript(event) {
+  injectFakeTranscript(event) {
     event.preventDefault();
     const text = this.fakeTranscriptText.trim();
     if (!text) {
@@ -409,10 +599,15 @@ class EarDashboard extends LitElement {
         this._latestAudio = message;
         if (!this._audioRenderScheduled) {
           this._audioRenderScheduled = true;
+          const rafHost = typeof globalThis !== 'undefined' ? globalThis : {};
+          const schedule =
+            typeof rafHost.requestAnimationFrame === 'function'
+              ? rafHost.requestAnimationFrame.bind(rafHost)
+              : (callback) => setTimeout(callback, 16);
           // Use requestAnimationFrame to align updates with the display
           // refresh; this reduces latency compared to arbitrary timers and
           // allows the oscilloscope element to render smoothly.
-          window.requestAnimationFrame(() => {
+          schedule(() => {
             const msg = this._latestAudio;
             this._latestAudio = null;
             this._audioRenderScheduled = false;
@@ -446,7 +641,8 @@ class EarDashboard extends LitElement {
         role: 'subscribe',
       },
       (message) => {
-        this.speechActive = Boolean(message?.data);
+        const active = Boolean(message?.data);
+        this._recordSpeechState(active);
       },
     );
   }
@@ -460,11 +656,9 @@ class EarDashboard extends LitElement {
         role: 'subscribe',
       },
       (message) => {
-        if (typeof message?.data === 'boolean') {
-          this.silenceDetected = message.data;
-        } else {
-          this.silenceDetected = Boolean(message?.data ?? true);
-        }
+        const state =
+          typeof message?.data === 'boolean' ? message.data : Boolean(message?.data ?? true);
+        this._recordSilenceState(state);
       },
     );
   }
@@ -493,6 +687,21 @@ class EarDashboard extends LitElement {
       },
       (message) => {
         this._handleTranscriptMessage(message);
+      },
+    );
+  }
+
+  _subscribeAsrDebug() {
+    this._openSocket(
+      'asrDebug',
+      {
+        topic: ASR_DEBUG_TOPIC,
+        type: 'std_msgs/msg/String',
+        role: 'subscribe',
+        queueLength: 200,
+      },
+      (message) => {
+        this._handleAsrDebugMessage(message);
       },
     );
   }
@@ -589,6 +798,128 @@ class EarDashboard extends LitElement {
       },
       tokens,
     );
+  }
+
+  _handleAsrDebugMessage(message) {
+    const payloadText = typeof message?.data === 'string' ? message.data.trim() : '';
+    if (!payloadText) {
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(payloadText);
+    } catch (error) {
+      console.warn('Ear dashboard failed to parse ASR debug payload', error, payloadText);
+      return;
+    }
+    const timestampMs = this._coerceTimestampMs(payload);
+    const kind = typeof payload?.kind === 'string' ? payload.kind : 'message';
+    const direction = typeof payload?.direction === 'string' ? payload.direction : 'status';
+    const entry = {
+      id: `${kind}-${timestampMs}-${Math.random().toString(16).slice(2)}`,
+      kind,
+      direction,
+      timestampMs,
+      summary: this._summariseServiceDebug(payload),
+      detail: this._extractServiceDetail(payload),
+    };
+    this.serviceMessages = [entry, ...this.serviceMessages].slice(0, this._serviceLogLimit);
+  }
+
+  _recordSpeechState(state) {
+    const now = Date.now();
+    this.speechActive = state;
+    this.speechLastUpdate = now;
+    if (this._lastSpeechState !== state) {
+      this._lastSpeechState = state;
+      this.speechLastChange = now;
+      const entry = { state, changedAt: now };
+      this.speechHistory = [entry, ...this.speechHistory].slice(0, this._activityHistoryLimit);
+    }
+  }
+
+  _recordSilenceState(state) {
+    const now = Date.now();
+    this.silenceDetected = state;
+    this.silenceLastUpdate = now;
+    if (this._lastSilenceState !== state) {
+      this._lastSilenceState = state;
+      this.silenceLastChange = now;
+      const entry = { state, changedAt: now };
+      this.silenceHistory = [entry, ...this.silenceHistory].slice(0, this._activityHistoryLimit);
+    }
+  }
+
+  _coerceTimestampMs(payload) {
+    const direct = this._coerceInt(payload?.timestamp_ms ?? payload?.timestampMs);
+    if (direct) {
+      return direct;
+    }
+    const seconds = Number(payload?.timestamp);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.trunc(seconds * 1000);
+    }
+    return Date.now();
+  }
+
+  _summariseServiceDebug(payload) {
+    const kind = typeof payload?.kind === 'string' ? payload.kind : 'message';
+    if (kind === 'chunk_sent') {
+      const bytes = Number(payload?.byte_length) || 0;
+      const rate = Number(payload?.sample_rate) || 0;
+      const channels = Number(payload?.channels) || 0;
+      return `Chunk sent · ${bytes} bytes @ ${rate || '—'} Hz · ${channels || 1} channel${
+        channels === 1 ? '' : 's'
+      }`;
+    }
+    if (kind === 'message_received') {
+      const raw = typeof payload?.payload === 'string' ? payload.payload.trim() : '';
+      if (raw.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(raw);
+          const event = typeof parsed?.event === 'string' ? parsed.event : 'message';
+          return `Received ${event}`;
+        } catch {
+          return 'Received JSON message';
+        }
+      }
+      if (raw) {
+        return `Message: ${raw.slice(0, 80)}${raw.length > 80 ? '…' : ''}`;
+      }
+      return 'Received message';
+    }
+    if (kind === 'connected') {
+      return `Connected to ${payload?.uri || 'ASR service'}`;
+    }
+    if (kind === 'disconnected') {
+      return 'Connection closed';
+    }
+    if (kind === 'queue_drained') {
+      return 'Audio queue drained';
+    }
+    if (kind === 'error') {
+      const message = typeof payload?.message === 'string' ? payload.message : 'Unhandled error';
+      return `Service error: ${message}`;
+    }
+    if (kind === 'connecting') {
+      return `Connecting to ${payload?.uri || 'ASR service'}…`;
+    }
+    return kind;
+  }
+
+  _extractServiceDetail(payload) {
+    const kind = typeof payload?.kind === 'string' ? payload.kind : 'message';
+    if (kind === 'message_received') {
+      const raw = typeof payload?.payload === 'string' ? payload.payload.trim() : '';
+      if (!raw) {
+        return '';
+      }
+      return raw.length > 1000 ? `${raw.slice(0, 1000)}…` : raw;
+    }
+    if (kind === 'error' && typeof payload?.message === 'string') {
+      return payload.message;
+    }
+    return '';
   }
 
   _parseTranscriptEventMessage(message) {
@@ -691,6 +1022,9 @@ class EarDashboard extends LitElement {
         return;
       }
     }
+    if (finalEntry.audioBase64) {
+      this._rememberAsrSegment(finalEntry);
+    }
     this.transcripts = [finalEntry, ...this.transcripts].slice(0, MAX_TRANSCRIPTS);
     for (const token of tokens) {
       this._deduplicator.remember(token);
@@ -754,6 +1088,98 @@ class EarDashboard extends LitElement {
     return true;
   }
 
+  _rememberAsrSegment(entry) {
+    const base64 = typeof entry?.audioBase64 === 'string' ? entry.audioBase64.trim() : '';
+    if (!base64) {
+      return;
+    }
+    const url = this._createAudioUrlFromBase64(base64);
+    if (!url) {
+      return;
+    }
+    this._revokeAsrSegmentUrl(entry.id);
+    const segment = {
+      id: entry.id || uniqueId('segment'),
+      text: entry.text || '',
+      timestamp: entry.timestamp || new Date().toLocaleTimeString(),
+      startMs: entry.startMs ?? null,
+      endMs: entry.endMs ?? null,
+      url,
+      rangeLabel: this._formatRange(entry.startMs, entry.endMs),
+    };
+    const filtered = this.asrSegments.filter((item) => item.id !== segment.id);
+    const next = [segment, ...filtered].slice(0, this._asrSegmentLimit);
+    this._pruneAsrSegmentUrls(next);
+    this.asrSegments = next;
+    this._asrSegmentUrlMap.set(segment.id, url);
+  }
+
+  _createAudioUrlFromBase64(encoded) {
+    const decoded = typeof encoded === 'string' ? encoded.trim() : '';
+    if (!decoded) {
+      return null;
+    }
+    const scope = typeof globalThis !== 'undefined' ? globalThis : {};
+    if (typeof scope.atob !== 'function' || !scope.Blob || !scope.URL?.createObjectURL) {
+      return null;
+    }
+    try {
+      const binary = scope.atob(decoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'audio/wav' });
+      return scope.URL.createObjectURL(blob);
+    } catch (error) {
+      console.warn('Ear dashboard failed to decode ASR audio segment', error);
+      return null;
+    }
+  }
+
+  _revokeAsrSegmentUrl(id) {
+    if (!id) {
+      return;
+    }
+    const url = this._asrSegmentUrlMap.get(id);
+    if (url && globalThis.URL?.revokeObjectURL) {
+      try {
+        globalThis.URL.revokeObjectURL(url);
+      } catch (_) {
+        // ignore revoke failures
+      }
+    }
+    this._asrSegmentUrlMap.delete(id);
+  }
+
+  _pruneAsrSegmentUrls(nextSegments) {
+    const keep = new Set(nextSegments.map((segment) => segment.id));
+    for (const [id, url] of this._asrSegmentUrlMap.entries()) {
+      if (!keep.has(id) && globalThis.URL?.revokeObjectURL) {
+        try {
+          globalThis.URL.revokeObjectURL(url);
+        } catch (_) {
+          // ignore revoke failures
+        }
+        this._asrSegmentUrlMap.delete(id);
+      }
+    }
+  }
+
+  _clearAsrSegments() {
+    for (const url of this._asrSegmentUrlMap.values()) {
+      if (globalThis.URL?.revokeObjectURL) {
+        try {
+          globalThis.URL.revokeObjectURL(url);
+        } catch (_) {
+          // ignore revoke failures
+        }
+      }
+    }
+    this._asrSegmentUrlMap.clear();
+    this.asrSegments = [];
+  }
+
   _coerceInt(value) {
     return coerceTranscriptInt(value);
   }
@@ -784,6 +1210,29 @@ class EarDashboard extends LitElement {
     return startLabel || endLabel || null;
   }
 
+  _formatTimestamp(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return '—';
+    }
+    return new Date(ms).toLocaleTimeString();
+  }
+
+  _formatElapsed(ms, referenceTime = Date.now()) {
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return '—';
+    }
+    const delta = Math.max(0, referenceTime - ms);
+    if (delta < 1000) {
+      return `${delta.toFixed(0)} ms ago`;
+    }
+    if (delta < 60_000) {
+      return `${(delta / 1000).toFixed(1)} s ago`;
+    }
+    const minutes = Math.floor(delta / 60_000);
+    const seconds = Math.floor((delta % 60_000) / 1000);
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s ago`;
+  }
+
   renderPartialTranscript() {
     if (!this.partialTranscript) {
       return html`<p class="surface-note">No active partial transcript.</p>`;
@@ -810,6 +1259,69 @@ class EarDashboard extends LitElement {
             </ul>`
         : nothing}
       </div>
+    `;
+  }
+
+  renderDetectorHistoryList(history, type) {
+    if (!Array.isArray(history) || history.length === 0) {
+      return html`<p class="surface-empty">No transitions yet.</p>`;
+    }
+    return html`
+      <ul class="detector-history__list">
+        ${history.map((entry) => {
+          const label =
+            type === 'speech' ? (entry.state ? 'Speech detected' : 'No speech') : entry.state
+              ? 'Silence'
+              : 'Audio energy';
+          const timestamp = this._formatTimestamp(entry.changedAt);
+          const elapsed = this._formatElapsed(entry.changedAt);
+          return html`<li>
+            <span>${label}</span>
+            <span>${timestamp} (${elapsed})</span>
+          </li>`;
+        })}
+      </ul>
+    `;
+  }
+
+  renderServiceLog() {
+    if (!this.serviceMessages.length) {
+      return html`<p class="surface-empty">Awaiting service traffic…</p>`;
+    }
+    return html`
+      <ol class="service-log">
+        ${this.serviceMessages.map((entry) => html`
+          <li class="service-log__entry" data-direction=${entry.direction}>
+            <header>
+              <span>${this._formatTimestamp(entry.timestampMs)}</span>
+              <span>${entry.kind}</span>
+            </header>
+            <p>${entry.summary}</p>
+            ${entry.detail ? html`<pre>${entry.detail}</pre>` : nothing}
+          </li>
+        `)}
+      </ol>
+    `;
+  }
+
+  renderAsrSegments() {
+    if (!this.asrSegments.length) {
+      return html`<p class="surface-empty">No ASR segments captured yet.</p>`;
+    }
+    return html`
+      <ol class="asr-segment-list">
+        ${this.asrSegments.map((segment, index) => html`
+          <li class="asr-segment" key=${segment.id}>
+            <header>
+              <span>Segment #${this.asrSegments.length - index}</span>
+              <span class="asr-segment__meta">${segment.timestamp}</span>
+            </header>
+            <p>${segment.text || '∅'}</p>
+            ${segment.rangeLabel ? html`<p class="asr-segment__meta">${segment.rangeLabel}</p>` : nothing}
+            <audio controls preload="metadata" src=${segment.url}></audio>
+          </li>
+        `)}
+      </ol>
     `;
   }
 
@@ -987,10 +1499,16 @@ class EarDashboard extends LitElement {
   }
 
   render() {
+    const now = Date.now();
     const speechVariant = this.speechActive ? 'success' : 'muted';
     const silenceVariant = this.silenceDetected ? 'muted' : 'warning';
     const sampleRateLabel = this.audioSampleRate ? `${this.audioSampleRate} Hz` : '—';
     const audioActive = this.audioStatus === 'Live';
+    const speechUpdateLabel = this._formatTimestamp(this.speechLastUpdate);
+    const speechChangeAgo = this._formatElapsed(this.speechLastChange, now);
+    const silenceUpdateLabel = this._formatTimestamp(this.silenceLastUpdate);
+    const silenceChangeAgo = this._formatElapsed(this.silenceLastChange, now);
+    const detectorsAligned = this.speechActive === !this.silenceDetected;
     return html`
       <div class="dashboard-layout">
         <div class="dashboard-row dashboard-row--wide">
@@ -1031,8 +1549,74 @@ class EarDashboard extends LitElement {
           </article>
         </div>
 
-        <div class="dashboard-row">
-          <article class="surface-card surface-card--wide">
+        <div class="dashboard-row dashboard-row--wide">
+          <article class="surface-card">
+            <h3 class="surface-card__title">Detector diagnostics</h3>
+            <div class="diagnostic-grid">
+              <div class="diagnostic-grid__rows">
+                <div class="diagnostic-card" data-state=${this.speechActive ? 'active' : 'idle'}>
+                  <span class="diagnostic-card__label">Speech detector</span>
+                  <strong>${this.speechActive ? 'Speech detected' : 'No speech'}</strong>
+                  <span>Last update: ${speechUpdateLabel}</span>
+                  <span>Last change: ${speechChangeAgo}</span>
+                </div>
+                <div class="diagnostic-card" data-state=${!this.silenceDetected ? 'active' : 'idle'}>
+                  <span class="diagnostic-card__label">Silence detector</span>
+                  <strong>${this.silenceDetected ? 'Silence' : 'Audio energy'}</strong>
+                  <span>Last update: ${silenceUpdateLabel}</span>
+                  <span>Last change: ${silenceChangeAgo}</span>
+                </div>
+              </div>
+              <p class="surface-note" data-variant=${detectorsAligned ? 'success' : 'warning'}>
+                ${detectorsAligned
+        ? 'Speech and silence detectors agree.'
+        : 'Speech detector disagrees with the silence flag—investigate thresholds.'}
+              </p>
+              <div class="detector-history">
+                <h4>Recent transitions</h4>
+                <div class="detector-history__columns">
+                  <div>
+                    <h5>Speech activity</h5>
+                    ${this.renderDetectorHistoryList(this.speechHistory, 'speech')}
+                  </div>
+                  <div>
+                    <h5>Silence detector</h5>
+                    ${this.renderDetectorHistoryList(this.silenceHistory, 'silence')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="surface-card">
+            <h3 class="surface-card__title">ASR service log</h3>
+            <p class="surface-note">Websocket messages exchanged with the ASR service.</p>
+            ${this.renderServiceLog()}
+          </article>
+        </div>
+
+        <div class="dashboard-row dashboard-row--wide">
+          <article class="surface-card">
+            <h3 class="surface-card__title">Live spectrogram</h3>
+            <p class="surface-note">
+              Rolling FFT heatmap from <code>${AUDIO_TOPIC}</code>; oldest columns drop automatically to stay real time.
+            </p>
+            <div class="spectrogram-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
+              <cockpit-audio-spectrogram
+                .height=${240}
+                .record=${this.audioRecord ?? null}
+                .fftSize=${512}
+                .hopSize=${256}
+                .minDb=${-100}
+                .maxDb=${-20}
+              ></cockpit-audio-spectrogram>
+              <p class="surface-note surface-mono">
+                Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
+              </p>
+            </div>
+          </article>
+
+          <article class="surface-card">
             <h3 class="surface-card__title">PCM oscilloscope</h3>
             <p class="surface-note">Visualises frames from <code>${AUDIO_TOPIC}</code>.</p>
             <div class="oscilloscope-wrapper" data-state=${this.audioRecord ? 'ready' : 'idle'}>
@@ -1044,6 +1628,16 @@ class EarDashboard extends LitElement {
                 Sample rate: ${sampleRateLabel} · Frame bytes: ${this.lastFrameByteLength}
               </p>
             </div>
+          </article>
+        </div>
+
+        <div class="dashboard-row">
+          <article class="surface-card surface-card--wide">
+            <h3 class="surface-card__title">ASR audio segments</h3>
+            <p class="surface-note">
+              Audio attachments returned by the ASR service for each final transcript.
+            </p>
+            ${this.renderAsrSegments()}
           </article>
         </div>
 
