@@ -26,6 +26,7 @@ class ServiceEmbeddingExtractor(EmbeddingExtractor):
         num_jitters: Optional[int] = None,
         fallback: EmbeddingExtractor | None = None,
         logger: Any | None = None,
+        expected_dim: Optional[int] = None,
     ) -> None:
         self._uri = uri
         self._timeout = float(max(0.1, timeout))
@@ -34,7 +35,10 @@ class ServiceEmbeddingExtractor(EmbeddingExtractor):
         self._fallback = fallback
         self._logger = logger
         self._warned = False
-        self._size = 128 if fallback is None else int(fallback.size)
+        default_dim = 128 if fallback is None else int(getattr(fallback, "size", 128))
+        size_hint = expected_dim if expected_dim is not None else default_dim
+        self._size = max(1, int(size_hint))
+        self._warned_dim = False
 
     @property
     def size(self) -> int:
@@ -60,12 +64,7 @@ class ServiceEmbeddingExtractor(EmbeddingExtractor):
                 self._warned = True
                 self._warned = True
             vector = self._fallback.embed(crop)
-            fallback_vec = np.asarray(vector, dtype=np.float32)
-            if fallback_vec.size < self._size:
-                padded = np.zeros(self._size, dtype=np.float32)
-                padded[: fallback_vec.size] = fallback_vec
-                return padded
-            return fallback_vec[: self._size]
+            return self._reshape_vector(vector, source="fallback")
 
     def _encode_crop(self, crop: np.ndarray) -> str:
         if crop.ndim not in (2, 3):
@@ -133,9 +132,22 @@ class ServiceEmbeddingExtractor(EmbeddingExtractor):
         embedding = response.get("embedding")
         if not isinstance(embedding, list):
             raise RuntimeError("embedding response is missing data")
-        vector = np.asarray(embedding, dtype=np.float32)
-        if vector.size != self._size:
-            raise RuntimeError(
-                f"embedding dimension mismatch (expected {self._size}, received {vector.size})"
-            )
-        return vector
+        return self._reshape_vector(embedding, source="service")
+
+    def _reshape_vector(self, vector: np.ndarray | list[float], *, source: str) -> np.ndarray:
+        array = np.asarray(vector, dtype=np.float32).flatten()
+        if array.size == self._size:
+            return array
+        adjusted = np.zeros(self._size, dtype=np.float32)
+        if array.size > 0:
+            limit = min(self._size, array.size)
+            adjusted[:limit] = array[:limit]
+        if not self._warned_dim and self._logger is not None and array.size != self._size:
+            try:
+                self._logger.warning(
+                    "Adjusted %s embedding dimension from %s to %s", source, array.size, self._size
+                )
+            except Exception:
+                pass
+            self._warned_dim = True
+        return adjusted

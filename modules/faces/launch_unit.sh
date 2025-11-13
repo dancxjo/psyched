@@ -97,5 +97,17 @@ ARGS+=("face_detected_topic:=${FACE_DETECTED_TOPIC}")
 if [[ -n "${FACES_TRIGGER_COOLDOWN_SEC:-}" ]]; then
   ARGS+=("trigger_cooldown_sec:=${FACES_TRIGGER_COOLDOWN_SEC}")
 fi
+if [[ -n "${FACES_SERVICE_URI:-}" ]]; then
+  ARGS+=("embedding.service_uri:=${FACES_SERVICE_URI}")
+fi
+if [[ -n "${FACES_SERVICE_TIMEOUT_SEC:-}" ]]; then
+  ARGS+=("embedding.service_timeout_sec:=${FACES_SERVICE_TIMEOUT_SEC}")
+fi
+if [[ -n "${FACES_SERVICE_MODEL:-}" ]]; then
+  ARGS+=("embedding.service_model:=${FACES_SERVICE_MODEL}")
+fi
+if [[ -n "${FACES_SERVICE_NUM_JITTERS:-}" ]]; then
+  ARGS+=("embedding.service_num_jitters:=${FACES_SERVICE_NUM_JITTERS}")
+fi
 
 exec ros2 launch faces face_detector.launch.py "${ARGS[@]}"

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -513,12 +514,22 @@ class FaceDetectorNode(Node):
 
         super().__init__("psyched_faces")
         self._bridge = CvBridge()
-        embedder = self._build_embedder(processing)
-        self._processor = processing.FaceProcessor(
-            detector=processing.HaarCascadeDetector(),
-            embedder=embedder,
-        )
-        self._embedding_dim = embedder.size
+        service_uri_default = os.environ.get("FACES_SERVICE_URI", "").strip()
+        service_timeout_default = 3.0
+        timeout_env = os.environ.get("FACES_SERVICE_TIMEOUT_SEC")
+        if timeout_env:
+            try:
+                service_timeout_default = float(timeout_env)
+            except (TypeError, ValueError):
+                service_timeout_default = 3.0
+        service_model_default = os.environ.get("FACES_SERVICE_MODEL", "").strip()
+        service_num_jitters_default = 0
+        num_jitters_env = os.environ.get("FACES_SERVICE_NUM_JITTERS")
+        if num_jitters_env:
+            try:
+                service_num_jitters_default = int(num_jitters_env)
+            except (TypeError, ValueError):
+                service_num_jitters_default = 0
 
         # default to the Kinect RGB stream published by the eye module
         self.declare_parameter("camera_topic", DEFAULT_CAMERA_TOPIC)
@@ -531,6 +542,44 @@ class FaceDetectorNode(Node):
         self.declare_parameter("memory.timeout_sec", 0.75)
         self.declare_parameter("memory.identity_min_score", IDENTITY_MIN_SCORE)
         self.declare_parameter("memory.identity_max_results", IDENTITY_RECALL_LIMIT)
+        self.declare_parameter("embedding.service_uri", service_uri_default)
+        self.declare_parameter("embedding.service_timeout_sec", service_timeout_default)
+        self.declare_parameter("embedding.service_model", service_model_default)
+        self.declare_parameter("embedding.service_num_jitters", service_num_jitters_default)
+
+        service_uri_param = self._get_param("embedding.service_uri", service_uri_default)
+        self._embedding_service_uri = str(service_uri_param).strip() if isinstance(service_uri_param, str) else service_uri_default
+
+        service_timeout_param = self._get_param("embedding.service_timeout_sec", service_timeout_default)
+        try:
+            self._embedding_service_timeout = float(service_timeout_param)
+        except (TypeError, ValueError):
+            self._embedding_service_timeout = service_timeout_default
+        if self._embedding_service_timeout <= 0.0:
+            self._embedding_service_timeout = service_timeout_default
+
+        service_model_param = self._get_param("embedding.service_model", service_model_default)
+        self._embedding_service_model = (
+            str(service_model_param).strip()
+            if isinstance(service_model_param, str)
+            else service_model_default
+        )
+
+        num_jitters_param = self._get_param("embedding.service_num_jitters", service_num_jitters_default)
+        try:
+            self._embedding_service_num_jitters = int(num_jitters_param)
+        except (TypeError, ValueError):
+            self._embedding_service_num_jitters = service_num_jitters_default
+        if self._embedding_service_num_jitters < 0:
+            self._embedding_service_num_jitters = 0
+
+        embedder, backend_label = self._build_embedder(processing)
+        self._embedding_backend_label = backend_label
+        self._processor = processing.FaceProcessor(
+            detector=processing.HaarCascadeDetector(),
+            embedder=embedder,
+        )
+        self._embedding_dim = embedder.size
 
         self._camera_topic = self._get_param("camera_topic", DEFAULT_CAMERA_TOPIC)
         self._faces_topic = self._get_param("faces_topic", "/vision/faces")
@@ -580,7 +629,9 @@ class FaceDetectorNode(Node):
         )
         # Extra visibility: node is watching for frames
         self.get_logger().info("Keeping an eye out for faces...")
-        self.get_logger().info(f"Embedding backend dimension={self._embedding_dim}")
+        self.get_logger().info(
+            f"Embedding backend ({self._embedding_backend_label}) dimension={self._embedding_dim}"
+        )
         if self._memory_client is None or not self._memory_client.enabled:
             self.get_logger().info("Face memory bridge disabled; embeddings will not be persisted")
         else:
@@ -821,19 +872,105 @@ class FaceDetectorNode(Node):
         )
         return payloads
 
-    def _build_embedder(self, processing: ModuleType) -> EmbeddingExtractor:
+    def _build_embedder(self, processing: ModuleType) -> tuple["EmbeddingExtractor", str]:
+        service_uri = (self._embedding_service_uri or "").strip()
+        if service_uri:
+            service_result = self._build_service_embedder(processing, service_uri)
+            if service_result is not None:
+                return service_result
+        return self._build_local_embedder(processing, log=True)
+
+    def _build_service_embedder(
+        self,
+        processing: ModuleType,
+        uri: str,
+    ) -> Optional[tuple["EmbeddingExtractor", str]]:
         try:
-            embedder = processing.FaceRecognitionEmbeddingExtractor()
-            self.get_logger().info("Using face_recognition embeddings (128D)")
-            return embedder
-        except (AttributeError, NameError):  # pragma: no cover - attribute missing
-            pass
-        except EmbeddingBackendUnavailableError as exc:
-            self.get_logger().warning(f"face_recognition embeddings unavailable: {exc}")
+            from .service_client import ServiceEmbeddingExtractor
+        except ModuleNotFoundError as exc:
+            self.get_logger().warning(
+                f"Embedding service disabled; client dependency missing ({exc})"
+            )
+            return None
+        except Exception as exc:  # pragma: no cover - defensive import guard
+            self.get_logger().warning(
+                f"Embedding service disabled; client initialisation failed ({exc})"
+            )
+            return None
+
+        fallback_embedder, fallback_label = self._build_local_embedder(processing, log=False)
+        try:
+            embedder = ServiceEmbeddingExtractor(
+                uri,
+                timeout=self._embedding_service_timeout,
+                model=self._embedding_service_model or None,
+                num_jitters=(
+                    self._embedding_service_num_jitters
+                    if self._embedding_service_num_jitters > 0
+                    else None
+                ),
+                fallback=fallback_embedder,
+                logger=self.get_logger(),
+                expected_dim=128,
+            )
+        except Exception as exc:
+            self.get_logger().warning(
+                f"Embedding service initialisation failed ({exc}); using local embeddings instead"
+            )
+            return None
+
+        self.get_logger().info(
+            "Using remote face embedding service at %s (timeout=%.2fs)",
+            uri,
+            self._embedding_service_timeout,
+        )
+        if fallback_label == "face_recognition":
+            self.get_logger().info(
+                "Remote embedding fallback: local face_recognition backend"
+            )
+        elif fallback_label == "basic":
+            self.get_logger().info(
+                "Remote embedding fallback: basic downsampled embeddings"
+            )
+        label = "service+" + fallback_label if fallback_label else "service"
+        return embedder, label
+
+    def _build_local_embedder(
+        self,
+        processing: ModuleType,
+        *,
+        log: bool,
+    ) -> tuple["EmbeddingExtractor", str]:
+        unavailable_exc = getattr(processing, "EmbeddingBackendUnavailableError", RuntimeError)
+        try:
+            embedder = processing.FaceRecognitionEmbeddingExtractor(
+                model=self._embedding_service_model or "small",
+                num_jitters=max(1, int(self._embedding_service_num_jitters or 1)),
+            )
+        except unavailable_exc as exc:
+            if log:
+                self.get_logger().warning(f"face_recognition embeddings unavailable: {exc}")
         except Exception as exc:  # pragma: no cover - defensive
-            self.get_logger().warning(f"Failed to initialise face_recognition embeddings: {exc}")
-        self.get_logger().info("Falling back to basic downsampled embeddings (256D)")
-        return processing.BasicEmbeddingExtractor()
+            if log:
+                self.get_logger().warning(
+                    f"Failed to initialise face_recognition embeddings: {exc}"
+                )
+        else:
+            if log:
+                self.get_logger().info("Using face_recognition embeddings (128D)")
+            return embedder, "face_recognition"
+
+        try:
+            embedder = processing.BasicEmbeddingExtractor()
+        except Exception as exc:  # pragma: no cover - defensive
+            if log:
+                self.get_logger().error(
+                    f"Failed to initialise basic embedding extractor: {exc}"
+                )
+            raise
+        if log:
+            self.get_logger().info("Falling back to basic downsampled embeddings (256D)")
+        return embedder, "basic"
 
     def _build_memory_metadata(
         self,
