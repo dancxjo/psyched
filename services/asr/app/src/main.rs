@@ -453,7 +453,30 @@ async fn run_connection(
                     continue;
                 }
                 let audio: Vec<f32> = buffer.iter().copied().collect();
-                match service.transcribe(audio).await {
+
+                // Trim leading/trailing silence before sending to the model.
+                let (trimmed_audio, leading_trim) = trim_silence(
+                    &audio,
+                    service.sample_rate,
+                    service.silence_threshold,
+                    service.silence_duration,
+                );
+
+                // If the trimmed audio is empty, it's silence — optionally drop
+                // the whole buffer if we've detected a silence boundary, otherwise
+                // continue waiting for more audio.
+                if trimmed_audio.is_empty() {
+                    if silence_tracker.has_boundary() && !buffer.is_empty() {
+                        let dropped = buffer.len();
+                        buffer.clear();
+                        total_consumed_samples += dropped;
+                        silence_tracker.reset();
+                        tracked.clear();
+                    }
+                    continue;
+                }
+
+                match service.transcribe(trimmed_audio).await {
                     Ok(segments) => {
                         let silence_boundary = silence_tracker.has_boundary();
                         if segments.is_empty() {
@@ -466,8 +489,12 @@ async fn run_connection(
                             }
                             continue;
                         }
-                        let offset_seconds = total_consumed_samples as f32 / sample_rate;
-                        let buffer_duration = buffer.len() as f32 / sample_rate;
+                        // offset_seconds and buffer_duration must reflect the amount of
+                        // leading silence removed so that token timings returned from
+                        // the model (which are relative to the trimmed audio) map
+                        // correctly into the original buffer/timebase.
+                        let offset_seconds = (total_consumed_samples + leading_trim) as f32 / sample_rate;
+                        let buffer_duration = (buffer.len().saturating_sub(leading_trim)) as f32 / sample_rate;
                         let (finalised, mut new_tracked) = reconcile_segments(
                             &segments,
                             &tracked,
@@ -496,12 +523,16 @@ async fn run_connection(
                                 .map(|seg| seg.end_s)
                                 .fold(0.0f32, f32::max);
                             let final_samples = (final_end * sample_rate).round() as usize;
-                            if final_samples > 0 && final_samples <= buffer.len() {
+                            // final_samples is relative to the trimmed_audio; map that
+                            // back into the original buffer by accounting for the
+                            // leading_trim we removed before transcription.
+                            if final_samples > 0 && final_samples <= (buffer.len().saturating_sub(leading_trim)) {
                                 let consumed_before = total_consumed_samples;
-                                let global_offset = consumed_before as f32 / sample_rate;
+                                let global_offset = (consumed_before + leading_trim) as f32 / sample_rate;
 
                                 let wav_audio = buffer
                                     .iter()
+                                    .skip(leading_trim)
                                     .take(final_samples)
                                     .copied()
                                     .collect::<Vec<_>>();
@@ -516,8 +547,10 @@ async fn run_connection(
                                     silence_tracker.reset();
                                     new_tracked.clear();
                                 } else {
-                                    buffer.drain(..final_samples);
-                                    total_consumed_samples += final_samples;
+                                    // drain leading_trim + final_samples from the original buffer
+                                    let drain_amount = leading_trim + final_samples;
+                                    buffer.drain(..drain_amount);
+                                    total_consumed_samples += drain_amount;
                                     for seg in new_tracked.iter_mut() {
                                         seg.start_s = (seg.start_s - final_end).max(0.0);
                                         seg.end_s = (seg.end_s - final_end).max(0.0);
@@ -739,6 +772,67 @@ fn extend_buffer(buffer: &mut VecDeque<f32>, bytes: &[u8]) -> (usize, f32) {
         0.0
     };
     (count, rms)
+}
+
+fn trim_silence(
+    samples: &[f32],
+    sample_rate: u32,
+    threshold: f32,
+    silence_duration: Duration,
+) -> (Vec<f32>, usize) {
+    let len = samples.len();
+    if len == 0 {
+        return (Vec::new(), 0);
+    }
+
+    // Window to measure short-term RMS for silence detection. Use the configured
+    // silence duration as a guideline but clamp to reasonable bounds.
+    let window_ms = silence_duration.as_millis().clamp(20, 500) as usize;
+    let window = ((sample_rate as usize) * window_ms) / 1000;
+    let window = window.max(1);
+    let step = (window / 2).max(1);
+
+    // find leading boundary
+    let mut start = 0usize;
+    'outer_start: while start + window <= len {
+        let mut sum_sq = 0.0f64;
+        for s in &samples[start..start + window] {
+            let v = *s as f64;
+            sum_sq += v * v;
+        }
+        let rms = (sum_sq / window as f64).sqrt() as f32;
+        if rms > threshold {
+            break 'outer_start;
+        }
+        start = (start + step).min(len);
+    }
+
+    if start >= len {
+        return (Vec::new(), len);
+    }
+
+    // find trailing boundary
+    let mut end = len;
+    'outer_end: while end >= window && end > start {
+        let from = end.saturating_sub(window);
+        let mut sum_sq = 0.0f64;
+        for s in &samples[from..end] {
+            let v = *s as f64;
+            sum_sq += v * v;
+        }
+        let rms = (sum_sq / window as f64).sqrt() as f32;
+        if rms > threshold {
+            break 'outer_end;
+        }
+        end = end.saturating_sub(step);
+    }
+
+    if end <= start {
+        return (Vec::new(), len);
+    }
+
+    let trimmed = samples[start..end].to_vec();
+    (trimmed, start)
 }
 
 fn segment_to_message(segment: &SegmentInternal, offset_seconds: f32) -> SegmentMessage {
