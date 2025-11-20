@@ -2,6 +2,9 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 
 import {
+  blobToBase64,
+  encodeBytesToBase64,
+  formatByteSize,
   normaliseDebugSnapshot,
   normaliseFeelingIntent,
   parseRosStamp,
@@ -16,6 +19,25 @@ test("parseRosStamp returns Date for valid stamp", () => {
 test("parseRosStamp returns null for invalid input", () => {
   assert.equal(parseRosStamp({}), null);
   assert.equal(parseRosStamp(null), null);
+});
+
+test("encodeBytesToBase64 converts ArrayBuffers", () => {
+  const view = new Uint8Array([0, 1, 2, 3]);
+  assert.equal(encodeBytesToBase64(view), "AAECAw==");
+  assert.equal(encodeBytesToBase64(view.buffer), "AAECAw==");
+});
+
+test("blobToBase64 handles short payloads", async () => {
+  const blob = new Blob([Uint8Array.from([104, 105])], { type: "text/plain" });
+  const result = await blobToBase64(blob);
+  assert.equal(result, "aGk=");
+});
+
+test("formatByteSize renders human readable sizes", () => {
+  assert.equal(formatByteSize(0), "0 B");
+  assert.equal(formatByteSize(12), "12 B");
+  assert.equal(formatByteSize(2048), "2.0 KB");
+  assert.equal(formatByteSize(10_485_760), "10.0 MB");
 });
 
 test("normaliseFeelingIntent trims and preserves key fields", () => {

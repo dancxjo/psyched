@@ -24,6 +24,74 @@ export function parseRosStamp(stamp) {
 }
 
 /**
+ * Convert raw bytes into a base64-encoded string.
+ *
+ * Works in both browser and Node environments without requiring Buffer to be
+ * present globally.
+ *
+ * @param {ArrayBufferView | ArrayBuffer} bytes
+ * @returns {string}
+ */
+export function encodeBytesToBase64(bytes) {
+  if (!bytes) {
+    return "";
+  }
+  const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let binary = "";
+  for (let i = 0; i < view.byteLength; i += 1) {
+    binary += String.fromCharCode(view[i]);
+  }
+  if (typeof btoa === "function") {
+    return btoa(binary);
+  }
+  // Fallback for environments without btoa (e.g., Node tests)
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(binary, "binary").toString("base64");
+  }
+  throw new Error("No base64 encoder available");
+}
+
+/**
+ * Produce a base64 representation of a Blob, retaining an empty string for
+ * zero-length payloads.
+ *
+ * @param {Blob} blob
+ * @returns {Promise<string>}
+ */
+export async function blobToBase64(blob) {
+  if (!blob || typeof blob.arrayBuffer !== "function") {
+    throw new TypeError("blob must expose arrayBuffer()");
+  }
+  const buffer = await blob.arrayBuffer();
+  if (!buffer || (buffer instanceof ArrayBuffer && buffer.byteLength === 0)) {
+    return "";
+  }
+  return encodeBytesToBase64(buffer);
+}
+
+/**
+ * Format a byte length using base-2 units with human-readable precision.
+ *
+ * @param {number | null | undefined} value
+ * @returns {string}
+ */
+export function formatByteSize(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let remaining = bytes;
+  let unitIndex = 0;
+  while (remaining >= 1024 && unitIndex < units.length - 1) {
+    remaining /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : 1;
+  return `${remaining.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+/**
  * Normalize a FeelingIntent ROS message into a cockpit-friendly shape.
  *
  * @param {object | null | undefined} message
