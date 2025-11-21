@@ -11,9 +11,10 @@
   <script>
     (function setupAlpineBootstrap() {
       const startIfReady = () => {
-        if (!window.Alpine || window.Alpine.__psychedStarted) {
+        if (!window.Alpine || window.__psychedAlpineStarted || window.Alpine.__psychedStarted) {
           return;
         }
+        window.__psychedAlpineStarted = true;
         window.Alpine.__psychedStarted = true;
         queueMicrotask(() => window.Alpine.start());
       };
