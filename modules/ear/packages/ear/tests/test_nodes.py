@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import warnings
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="audioop")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=r".*audioop.*")
+
 import audioop
 import json
 import struct
@@ -13,7 +18,8 @@ if str(MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(MODULE_ROOT))
 
 import pytest
-import rclpy
+
+rclpy = pytest.importorskip("rclpy")
 from std_msgs.msg import UInt8MultiArray
 import importlib.util
 

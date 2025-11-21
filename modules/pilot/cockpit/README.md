@@ -4,7 +4,7 @@ This folder contains the cockpit's web interface for the `pilot` module. The das
 
 - Live stream of the module debug feed exposed via the `pilot.debug_stream` cockpit action. The payload mirrors the ROS `/pilot/debug` topic and includes keys such as `status`, `heartbeat`, `config`, `recent_sensations`, `logs`, and `errors`.
 - Buttons to request a debug snapshot (`pilot-debug-request`), request config (`pilot-config-request`), clear cockpit logs (`pilot-clear-logs`), and copy config to clipboard.
-- Browser hooks to publish operator-provided data: record a short WebM clip directly to the eye module (`/eye/browser_clip`) and send transcript text to the ear module (`/ear/hole`) using the ASR harness.
+- Operators should use the dedicated HTTPS harness (`ear_browser_bridge`) to stream audio/video when mic or camera access is required.
 
 Integration notes
 
@@ -16,7 +16,7 @@ How to use
 1. Start `pilot` with the ROS environment sourced and the cockpit server running.
 2. Open the cockpit `Pilot Integrator` panel. The debug card will show module status, recent inbound messages, config and a tail of logs and errors.
 3. Use the "Request debug snapshot" button to ask the module for an immediate snapshot (the cockpit emits a `pilot-debug-request` CustomEvent which your backend or module action can handle).
-4. Use the "Browser hooks" card to publish human-provided context: record a WebM clip for the eye module or inject a transcript line for the ear module without leaving the pilot console.
+4. To publish browser media, start the `ear_browser_bridge` HTTPS server and open `/ear` or `/eye` from that host; the pilot cockpit no longer exposes browser hooks directly.
 
 Notes
 

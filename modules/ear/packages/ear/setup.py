@@ -15,6 +15,7 @@ setup(
     install_requires=[
         'setuptools',
         'numpy>=1.24,<3',
+        'aiohttp>=3.9,<4',
         'websockets>=12,<13',
         'webrtcvad>=2.0.10',
         faster_whisper_requirement,
@@ -31,6 +32,7 @@ setup(
             'ear_vad = ear.vad_node:main',
             'ear_silence = ear.silence_node:main',
             'ear_transcriber = ear.transcriber_node:main',
+            'ear_browser_bridge = ear.browser_server:main',
         ],
     },
 )

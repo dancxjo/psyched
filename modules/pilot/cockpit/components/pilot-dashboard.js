@@ -8,8 +8,6 @@ import { surfaceStyles } from "/components/cockpit-style.js";
 import { createCollapsedCardManager } from "/components/dashboard-collapse.js";
 import { createTopicSocket } from "/js/cockpit.js";
 import {
-  blobToBase64,
-  formatByteSize,
   normaliseDebugSnapshot,
   normaliseFeelingIntent,
 } from "./pilot-dashboard.helpers.js";
@@ -43,15 +41,6 @@ class PilotDashboard extends LitElement {
     errorsCount: { state: true },
     intentFeed: { state: true },
     collapsedCards: { state: true },
-    earTextInput: { state: true },
-    earFeedback: { state: true },
-    earFeedbackTone: { state: true },
-    eyeRecordingState: { state: true },
-    eyeStatusMessage: { state: true },
-    eyeFeedback: { state: true },
-    eyeFeedbackTone: { state: true },
-    eyeClipSummary: { state: true },
-    eyeDurationSeconds: { state: true },
   };
 
   static styles = [
@@ -82,40 +71,6 @@ class PilotDashboard extends LitElement {
         margin: 0;
         color: var(--lcars-muted);
         font-size: 0.85rem;
-      }
-
-      .harness-grid {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      }
-
-      .harness-panel {
-        border: 1px solid var(--control-surface-border);
-        border-radius: 0.75rem;
-        padding: 0.85rem;
-        display: grid;
-        gap: 0.65rem;
-        background: rgba(255, 255, 255, 0.02);
-      }
-
-      .harness-panel textarea,
-      .harness-panel input[type="number"] {
-        width: 100%;
-        font: inherit;
-        padding: 0.65rem 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--control-surface-border);
-        background: rgba(0, 0, 0, 0.4);
-        color: var(--lcars-text);
-        resize: vertical;
-        min-height: 3.2rem;
-      }
-
-      .harness-meta {
-        margin: 0;
-        font-size: 0.8rem;
-        color: var(--lcars-muted);
       }
 
       .chip-list {
@@ -266,28 +221,11 @@ class PilotDashboard extends LitElement {
     this.logsCount = 0;
     this.errorsCount = 0;
     this.intentFeed = [];
-    this.earTextInput = "";
-    this.earFeedback = "";
-    this.earFeedbackTone = "";
-    this.eyeRecordingState = "idle";
-    this.eyeStatusMessage = "Awaiting recording request.";
-    this.eyeFeedback = "";
-    this.eyeFeedbackTone = "";
-    this.eyeClipSummary = "";
-    this.eyeDurationSeconds = 5;
     this._cardManager = createCollapsedCardManager("module-pilot");
     this.collapsedCards = this._cardManager.getCollapsedIds();
 
     this._debugSocket = null;
     this._intentSocket = null;
-    this._earPublisher = null;
-    this._eyePublisher = null;
-    this._eyeMediaStream = null;
-    this._eyeRecorder = null;
-    this._eyeChunks = [];
-    this._eyeStopTimer = null;
-    this._earFeedbackTimer = null;
-    this._eyeFeedbackTimer = null;
   }
 
   connectedCallback() {
@@ -300,21 +238,8 @@ class PilotDashboard extends LitElement {
     super.disconnectedCallback();
     this._shutdownSocket(this._debugSocket);
     this._shutdownSocket(this._intentSocket);
-    this._shutdownSocket(this._earPublisher);
-    this._shutdownSocket(this._eyePublisher);
-    this._teardownEyeRecorder();
-    if (this._earFeedbackTimer) {
-      clearTimeout(this._earFeedbackTimer);
-      this._earFeedbackTimer = null;
-    }
-    if (this._eyeFeedbackTimer) {
-      clearTimeout(this._eyeFeedbackTimer);
-      this._eyeFeedbackTimer = null;
-    }
     this._debugSocket = null;
     this._intentSocket = null;
-    this._earPublisher = null;
-    this._eyePublisher = null;
   }
 
   isCardCollapsed(id) {
@@ -684,10 +609,7 @@ class PilotDashboard extends LitElement {
       })
       : null;
 
-    const harnessCard = this.renderHarnessCard();
-
     const cards = [
-      harnessCard,
       statusCard,
       sensationsCard,
       scriptsCard,
@@ -705,108 +627,6 @@ class PilotDashboard extends LitElement {
         ${cards}
       </div>
     `;
-  }
-
-  renderHarnessCard() {
-    const recording = this.eyeRecordingState === "recording";
-    const uploading = this.eyeRecordingState === "uploading";
-
-    return this.renderSurfaceCard({
-      id: "pilot-browser-hooks",
-      title: "Browser hooks",
-      wide: true,
-      content: html`
-        <div class="harness-grid">
-          <section class="harness-panel">
-            <h4>Eye video capture</h4>
-            <p class="section-note">
-              Record a short WebM clip using your browser camera and publish it to
-              <code>/eye/browser_clip</code> for ingestion by the Eye module.
-            </p>
-            <label>
-              Clip length (seconds)
-              <input
-                type="number"
-                min="1"
-                max="30"
-                step="1"
-                inputmode="numeric"
-                .value=${this.eyeDurationSeconds}
-                @input=${(event) => this._handleEyeDurationInput(event)}
-              />
-            </label>
-            <div class="surface-actions">
-              <button
-                type="button"
-                class="surface-button"
-                @click=${() => this.startEyeRecording()}
-                ?disabled=${recording || uploading}
-              >
-                🎥 Start recording
-              </button>
-              <button
-                type="button"
-                class="surface-button surface-button--ghost"
-                @click=${() => this.stopEyeRecording()}
-                ?disabled=${!recording}
-              >
-                ⏹ Stop
-              </button>
-            </div>
-            <p class="harness-meta">Status: ${this.eyeStatusMessage}</p>
-            ${this.eyeClipSummary
-              ? html`<p class="surface-note surface-mono">${this.eyeClipSummary}</p>`
-              : null}
-            ${this.eyeFeedback
-              ? html`<p class="surface-status" data-variant=${this.eyeFeedbackTone || ""}>
-                  ${this.eyeFeedback}
-                </p>`
-              : null}
-          </section>
-
-          <section class="harness-panel">
-            <h4>Ear transcript injector</h4>
-            <p class="section-note">
-              Send transcript lines through the ASR harness to feed the ear module directly.
-            </p>
-            <form class="harness-form" @submit=${(event) => this.sendEarTranscript(event)}>
-              <label>
-                Transcript text
-                <textarea
-                  placeholder="e.g. Observed a person waving near the doorway"
-                  .value=${this.earTextInput}
-                  @input=${(event) => {
-                    this.earTextInput = event.target.value;
-                  }}
-                ></textarea>
-              </label>
-              <div class="surface-actions">
-                <button
-                  type="submit"
-                  class="surface-button"
-                  ?disabled=${this.earTextInput.trim().length === 0}
-                >
-                  🗣️ Send to ear
-                </button>
-                <button
-                  type="button"
-                  class="surface-button surface-button--ghost"
-                  @click=${() => this._clearEarInput()}
-                  ?disabled=${this.earTextInput.trim().length === 0}
-                >
-                  🧼 Clear
-                </button>
-              </div>
-            </form>
-            ${this.earFeedback
-              ? html`<p class="surface-status" data-variant=${this.earFeedbackTone || ""}>
-                  ${this.earFeedback}
-                </p>`
-              : null}
-          </section>
-        </div>
-      `,
-    });
   }
 
   renderSurfaceCard({ id, title, content, wide = false }) {
@@ -848,305 +668,6 @@ class PilotDashboard extends LitElement {
     `;
   }
 
-  _handleEyeDurationInput(event) {
-    const next = Number(event?.target?.value);
-    if (Number.isFinite(next) && next > 0) {
-      this.eyeDurationSeconds = Math.min(Math.max(Math.floor(next), 1), 60);
-      return;
-    }
-    this.eyeDurationSeconds = 5;
-  }
-
-  _selectRecorderOptions() {
-    if (typeof MediaRecorder === "undefined") {
-      return {};
-    }
-    const candidates = [
-      "video/webm;codecs=vp9,opus",
-      "video/webm;codecs=vp8,opus",
-      "video/webm",
-    ];
-    for (const mimeType of candidates) {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
-        return { mimeType };
-      }
-    }
-    return {};
-  }
-
-  async startEyeRecording() {
-    if (this.eyeRecordingState === "recording" || this.eyeRecordingState === "uploading") {
-      return;
-    }
-    if (
-      typeof navigator === "undefined" || !navigator.mediaDevices ||
-      typeof navigator.mediaDevices.getUserMedia !== "function"
-    ) {
-      this._setEyeFeedback("Browser camera access is unavailable.", "error");
-      return;
-    }
-    if (typeof MediaRecorder === "undefined") {
-      this._setEyeFeedback("MediaRecorder is not supported in this browser.", "error");
-      return;
-    }
-
-    try {
-      this.eyeRecordingState = "recording";
-      this.eyeStatusMessage = "Requesting camera access…";
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      this._eyeMediaStream = stream;
-
-      const options = this._selectRecorderOptions();
-      this._eyeChunks = [];
-      const recorder = new MediaRecorder(stream, options);
-      recorder.addEventListener("dataavailable", (event) => {
-        if (event?.data && event.data.size > 0) {
-          this._eyeChunks.push(event.data);
-        }
-      });
-      recorder.addEventListener("stop", () => {
-        void this._publishEyeClip(recorder.mimeType);
-      });
-      recorder.addEventListener("error", (event) => {
-        const message = event?.error?.message || "Recorder error";
-        this._setEyeFeedback(message, "error");
-        this._teardownEyeRecorder();
-      });
-
-      const durationMs = Math.max(1, Number(this.eyeDurationSeconds)) * 1000;
-      recorder.start();
-      this.eyeStatusMessage = "Recording…";
-      this._eyeRecorder = recorder;
-      this._eyeStopTimer = setTimeout(() => this.stopEyeRecording(), durationMs);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.eyeRecordingState = "idle";
-      this._setEyeFeedback(`Unable to start recording: ${message}`, "error");
-      this._teardownEyeRecorder();
-    }
-  }
-
-  stopEyeRecording() {
-    if (this._eyeStopTimer) {
-      clearTimeout(this._eyeStopTimer);
-      this._eyeStopTimer = null;
-    }
-    if (this._eyeRecorder && this._eyeRecorder.state !== "inactive") {
-      this.eyeStatusMessage = "Stopping recorder…";
-      try {
-        this._eyeRecorder.stop();
-      } catch (_error) {
-        this._teardownEyeRecorder();
-      }
-      return;
-    }
-    this._teardownEyeRecorder();
-  }
-
-  async _publishEyeClip(mimeTypeHint) {
-    const chunks = Array.isArray(this._eyeChunks) ? [...this._eyeChunks] : [];
-    this._eyeChunks = [];
-    const recorder = this._eyeRecorder;
-    this._eyeRecorder = null;
-    if (this._eyeStopTimer) {
-      clearTimeout(this._eyeStopTimer);
-      this._eyeStopTimer = null;
-    }
-    if (this._eyeMediaStream) {
-      try {
-        this._eyeMediaStream.getTracks().forEach((track) => track.stop());
-      } catch (_error) {
-        // Ignore stream teardown issues.
-      }
-    }
-    this._eyeMediaStream = null;
-
-    if (chunks.length === 0) {
-      this.eyeRecordingState = "idle";
-      this.eyeStatusMessage = "No frames captured.";
-      return;
-    }
-
-    this.eyeRecordingState = "uploading";
-    this.eyeStatusMessage = "Encoding clip…";
-    try {
-      const blob = new Blob(chunks, {
-        type: mimeTypeHint || (recorder ? recorder.mimeType : "video/webm") || "video/webm",
-      });
-      const base64 = await blobToBase64(blob);
-      const payload = {
-        mime_type: blob.type || "video/webm",
-        bytes: blob.size,
-        captured_at: new Date().toISOString(),
-        source: "pilot-cockpit",
-        encoding: "base64",
-        data: base64,
-      };
-      const publisher = this._ensureEyePublisher();
-      if (!publisher) {
-        throw new Error("Unable to open Eye publisher");
-      }
-      await publisher.ready.catch(() => {});
-      publisher.send({ data: JSON.stringify(payload) });
-      const sizeLabel = formatByteSize(blob.size);
-      this.eyeClipSummary = `${sizeLabel} ${blob.type || "video"} clip sent at ${new Date().toLocaleTimeString()}`;
-      this.eyeStatusMessage = "Clip published to Eye.";
-      this._setEyeFeedback("Browser recording forwarded to the Eye module.", "success", true);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this._setEyeFeedback(`Failed to publish clip: ${message}`);
-      this.eyeStatusMessage = "Clip failed to send.";
-    } finally {
-      this.eyeRecordingState = "idle";
-    }
-  }
-
-  _teardownEyeRecorder() {
-    if (this._eyeStopTimer) {
-      clearTimeout(this._eyeStopTimer);
-      this._eyeStopTimer = null;
-    }
-    if (this._eyeRecorder && this._eyeRecorder.state !== "inactive") {
-      try {
-        this._eyeRecorder.stop();
-      } catch (_error) {
-        // ignore recorder shutdown issues
-      }
-    }
-    this._eyeRecorder = null;
-    if (this._eyeMediaStream) {
-      try {
-        this._eyeMediaStream.getTracks().forEach((track) => track.stop());
-      } catch (_error) {
-        // ignore stream teardown
-      }
-    }
-    this._eyeMediaStream = null;
-    this._eyeChunks = [];
-    if (this.eyeRecordingState !== "idle") {
-      this.eyeRecordingState = "idle";
-      this.eyeStatusMessage = "Recording cancelled.";
-    }
-  }
-
-  _ensureEyePublisher() {
-    if (this._eyePublisher) {
-      return this._eyePublisher;
-    }
-    try {
-      const socket = createTopicSocket({
-        module: "eye",
-        topic: "/eye/browser_clip",
-        type: "std_msgs/msg/String",
-        role: "publish",
-      });
-      socket.addEventListener("close", () => {
-        if (this._eyePublisher === socket) {
-          this._eyePublisher = null;
-        }
-      });
-      socket.addEventListener("error", () => {
-        if (this._eyePublisher === socket) {
-          this._eyePublisher = null;
-        }
-      });
-      this._eyePublisher = socket;
-      return socket;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this._setEyeFeedback(`Unable to open Eye publisher: ${message}`);
-      return null;
-    }
-  }
-
-  _setEyeFeedback(message, tone = "error", autoClear = false) {
-    this.eyeFeedback = message;
-    this.eyeFeedbackTone = tone;
-    if (this._eyeFeedbackTimer) {
-      clearTimeout(this._eyeFeedbackTimer);
-      this._eyeFeedbackTimer = null;
-    }
-    if (autoClear && message) {
-      this._eyeFeedbackTimer = setTimeout(() => {
-        this.eyeFeedback = "";
-        this.eyeFeedbackTone = "";
-        this._eyeFeedbackTimer = null;
-      }, 3200);
-    }
-  }
-
-  _ensureEarPublisher() {
-    if (this._earPublisher) {
-      return this._earPublisher;
-    }
-    try {
-      const socket = createTopicSocket({
-        module: "ear",
-        topic: "/ear/hole",
-        type: "std_msgs/msg/String",
-        role: "publish",
-      });
-      socket.addEventListener("close", () => {
-        if (this._earPublisher === socket) {
-          this._earPublisher = null;
-        }
-      });
-      socket.addEventListener("error", () => {
-        if (this._earPublisher === socket) {
-          this._earPublisher = null;
-        }
-      });
-      this._earPublisher = socket;
-      return socket;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this._setEarFeedback(`Unable to reach ear topic: ${message}`);
-      return null;
-    }
-  }
-
-  _clearEarInput() {
-    this.earTextInput = "";
-    this._setEarFeedback("", "");
-  }
-
-  sendEarTranscript(event) {
-    event?.preventDefault();
-    const text = this.earTextInput.trim();
-    if (!text) {
-      this._setEarFeedback("Enter text to inject into the ear transcript stream.", "warning", true);
-      return;
-    }
-    const publisher = this._ensureEarPublisher();
-    if (!publisher) {
-      this._setEarFeedback("Ear publisher unavailable.", "error");
-      return;
-    }
-    try {
-      publisher.send({ data: text });
-      this.earTextInput = "";
-      this._setEarFeedback("Transcript delivered to the ear module.", "success", true);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this._setEarFeedback(`Failed to send transcript: ${message}`, "error");
-    }
-  }
-
-  _setEarFeedback(message, tone = "info", autoClear = false) {
-    this.earFeedback = message;
-    this.earFeedbackTone = tone;
-    if (this._earFeedbackTimer) {
-      clearTimeout(this._earFeedbackTimer);
-      this._earFeedbackTimer = null;
-    }
-    if (autoClear && message) {
-      this._earFeedbackTimer = setTimeout(() => {
-        this.earFeedback = "";
-        this.earFeedbackTone = "";
-        this._earFeedbackTimer = null;
-      }, 2400);
-    }
-  }
 
   _connectDebugStream() {
     try {

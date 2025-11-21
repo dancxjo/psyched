@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eye HTTPS Harness</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #04060b;
+      color: #f7f8ff;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+
+    section {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(18, 22, 32, 0.8);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    h1 { margin: 0 0 0.35rem; }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      padding: 0.55rem 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(148, 196, 255, 0.2);
+      color: inherit;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    video {
+      width: 100%;
+      max-height: 320px;
+      border-radius: 0.5rem;
+      background: #000;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .status { font-size: 0.95rem; opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Eye HTTPS Harness</h1>
+      <p>Stream camera chunks over HTTPS and forward them to the Eye module without relying on cockpit hooks.</p>
+    </header>
+
+    <section>
+      <div class="row">
+        <button id="start">Start streaming</button>
+        <button id="stop" disabled>Stop</button>
+        <label>Chunk duration (seconds)
+          <input id="duration" type="number" min="1" max="30" value="3" />
+        </label>
+      </div>
+      <p class="status">Status: <span id="status">Idle</span></p>
+    </section>
+
+    <section>
+      <video id="preview" autoplay muted playsinline></video>
+      <p class="status">Last upload: <span id="summary">None</span></p>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const ui = {
+        start: document.getElementById('start'),
+        stop: document.getElementById('stop'),
+        duration: document.getElementById('duration'),
+        status: document.getElementById('status'),
+        preview: document.getElementById('preview'),
+        summary: document.getElementById('summary'),
+      };
+
+      const state = {
+        mediaStream: null,
+        recorder: null,
+        stopTimer: null,
+        ws: null,
+        sequence: 0,
+        connecting: null,
+      };
+
+      function updateStatus(text) {
+        ui.status.textContent = text;
+      }
+
+      function websocketUrl() {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${protocol}://${window.location.host}/eye/stream`;
+      }
+
+      function ensureWebSocket() {
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          return Promise.resolve(state.ws);
+        }
+        if (state.connecting) return state.connecting;
+        state.connecting = new Promise((resolve, reject) => {
+          const ws = new WebSocket(websocketUrl());
+          const resetConnecting = () => { state.connecting = null; };
+          ws.addEventListener('open', () => {
+            state.ws = ws;
+            resetConnecting();
+            resolve(ws);
+            updateStatus('Connected to Eye stream');
+          });
+          ws.addEventListener('close', () => {
+            if (state.ws === ws) state.ws = null;
+            resetConnecting();
+            updateStatus('Disconnected');
+          });
+          ws.addEventListener('error', (error) => {
+            resetConnecting();
+            updateStatus(`WebSocket error: ${error.message || error}`);
+            reject(error);
+          });
+          ws.addEventListener('message', (event) => {
+            try {
+              const message = JSON.parse(event.data);
+              if (message.event === 'ack') {
+                ui.summary.textContent = `Chunk ${message.sequence} acknowledged at ${new Date().toLocaleTimeString()}`;
+              } else if (message.event === 'error') {
+                updateStatus(`Stream error: ${message.message}`);
+              }
+            } catch (err) {
+              console.warn('Malformed stream message', err);
+            }
+          });
+        });
+        return state.connecting;
+      }
+
+      function startRecording() {
+        if (state.recorder) return;
+        ensureWebSocket().then(() => {
+          navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+            state.mediaStream = stream;
+            state.sequence = 0;
+            ui.preview.srcObject = stream;
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+              ? 'video/webm;codecs=vp9'
+              : 'video/webm';
+            const recorder = new MediaRecorder(stream, { mimeType });
+            state.recorder = recorder;
+            recorder.ondataavailable = (event) => {
+              if (event.data && event.data.size > 0) {
+                sendFrame(event.data);
+              }
+            };
+            recorder.onstop = () => {
+              teardownMedia();
+            };
+            const seconds = Math.max(1, Math.min(30, Number(ui.duration.value) || 3));
+            recorder.start(seconds * 1000);
+            state.stopTimer = setTimeout(() => stopRecording(), seconds * 1000 * 10);
+            ui.start.disabled = true;
+            ui.stop.disabled = false;
+            updateStatus('Streaming…');
+          }).catch((error) => {
+            updateStatus(`Camera error: ${error}`);
+          });
+        }).catch((error) => {
+          updateStatus(`WebSocket connection failed: ${error}`);
+        });
+      }
+
+      function stopRecording() {
+        if (state.stopTimer) {
+          clearTimeout(state.stopTimer);
+          state.stopTimer = null;
+        }
+        if (state.recorder && state.recorder.state !== 'inactive') {
+          state.recorder.stop();
+        } else {
+          teardownMedia();
+        }
+      }
+
+      function teardownMedia() {
+        if (state.mediaStream) {
+          state.mediaStream.getTracks().forEach((track) => track.stop());
+          state.mediaStream = null;
+        }
+        if (state.recorder) {
+          state.recorder.ondataavailable = null;
+          state.recorder.onstop = null;
+          state.recorder = null;
+        }
+        ui.start.disabled = false;
+        ui.stop.disabled = true;
+        updateStatus(state.ws && state.ws.readyState === WebSocket.OPEN ? 'Connected' : 'Idle');
+      }
+
+      async function sendFrame(blob) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        bytes.forEach((b) => { binary += String.fromCharCode(b); });
+        const payload = {
+          type: 'frame',
+          sequence: ++state.sequence,
+          mime_type: blob.type || 'video/webm',
+          bytes: bytes.byteLength,
+          captured_at: new Date().toISOString(),
+          source: 'eye-browser',
+          encoding: 'base64',
+          data: btoa(binary),
+        };
+        state.ws.send(JSON.stringify(payload));
+        ui.summary.textContent = `Sent chunk ${payload.sequence} (${(payload.bytes / 1024).toFixed(1)} KiB)`;
+      }
+
+      ui.start.addEventListener('click', startRecording);
+      ui.stop.addEventListener('click', stopRecording);
+    })();
+  </script>
+</body>
+</html>

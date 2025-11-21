@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ear HTTPS Harness</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #05080f;
+      color: #f6f8ff;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      max-width: 960px;
+      margin-inline: auto;
+    }
+
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+    }
+
+    section {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background: rgba(22, 28, 44, 0.7);
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      padding: 0.5rem 0.9rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(92, 185, 255, 0.2);
+      color: inherit;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .log {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.35rem;
+      max-height: 240px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+    }
+
+    .log li {
+      background: rgba(255, 255, 255, 0.04);
+      border-left: 3px solid #6ad2ff;
+      border-radius: 0.5rem;
+      padding: 0.45rem 0.6rem;
+    }
+
+    .log li[data-kind="final"] { border-color: #90f093; }
+    .log li[data-kind="error"] { border-color: #ff9494; }
+
+    .pill {
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Ear HTTPS Harness</h1>
+      <p>Stream microphone audio over HTTPS to the ASR service and relay transcripts into ROS.</p>
+    </header>
+
+    <section>
+      <h2>Connection</h2>
+      <div class="row">
+        <button id="connect">Connect</button>
+        <button id="disconnect" disabled>Disconnect</button>
+        <label>Sample rate (Hz)
+          <input id="sample-rate" type="number" min="8000" max="48000" step="1000" value="16000" />
+        </label>
+      </div>
+      <p class="pill">Status: <span id="status">Disconnected</span></p>
+    </section>
+
+    <section>
+      <h2>Microphone streaming</h2>
+      <div class="row">
+        <button id="start" disabled>Start streaming</button>
+        <button id="stop" disabled>Stop</button>
+      </div>
+      <p class="pill">Partial: <span id="partial">—</span></p>
+      <p class="pill">Final: <span id="final">—</span></p>
+    </section>
+
+    <section>
+      <h2>Event log</h2>
+      <ul id="log" class="log"></ul>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const ui = {
+        connect: document.getElementById('connect'),
+        disconnect: document.getElementById('disconnect'),
+        start: document.getElementById('start'),
+        stop: document.getElementById('stop'),
+        sampleRate: document.getElementById('sample-rate'),
+        status: document.getElementById('status'),
+        partial: document.getElementById('partial'),
+        final: document.getElementById('final'),
+        log: document.getElementById('log'),
+      };
+
+      const state = {
+        ws: null,
+        audioContext: null,
+        processor: null,
+        mediaStream: null,
+        targetSampleRate: 16000,
+      };
+
+      function websocketUrl() {
+        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${proto}://${window.location.host}/ear/stream`;
+      }
+
+      function log(kind, message) {
+        const entry = document.createElement('li');
+        entry.dataset.kind = kind;
+        const time = new Date().toLocaleTimeString();
+        entry.textContent = `[${time}] ${message}`;
+        ui.log.prepend(entry);
+        while (ui.log.children.length > 60) {
+          ui.log.removeChild(ui.log.lastChild);
+        }
+      }
+
+      function setConnection(connected) {
+        ui.status.textContent = connected ? 'Connected' : 'Disconnected';
+        ui.connect.disabled = connected;
+        ui.disconnect.disabled = !connected;
+        ui.start.disabled = !connected;
+        ui.stop.disabled = !connected || !state.mediaStream;
+      }
+
+      function connect() {
+        if (state.ws) return;
+        try {
+          state.targetSampleRate = Math.max(8000, Math.min(48000, Number(ui.sampleRate.value) || 16000));
+        } catch (_) {
+          state.targetSampleRate = 16000;
+        }
+        const ws = new WebSocket(websocketUrl());
+        ws.addEventListener('open', () => {
+          state.ws = ws;
+          setConnection(true);
+          log('info', 'WebSocket connected');
+        });
+        ws.addEventListener('close', () => {
+          if (state.ws === ws) {
+            state.ws = null;
+            teardownAudio();
+            setConnection(false);
+            ui.partial.textContent = '—';
+            log('info', 'WebSocket disconnected');
+          }
+        });
+        ws.addEventListener('message', (event) => handleMessage(event.data));
+        ws.addEventListener('error', () => log('error', 'WebSocket error'));
+      }
+
+      function disconnect() {
+        if (state.ws) {
+          state.ws.close(1000, 'client closing');
+          state.ws = null;
+        }
+        teardownAudio();
+        setConnection(false);
+      }
+
+      function startStreaming() {
+        if (!state.ws || state.mediaStream) return;
+        navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+          state.mediaStream = stream;
+          state.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+          const input = state.audioContext.createMediaStreamSource(stream);
+          const processor = state.audioContext.createScriptProcessor(4096, input.channelCount, 1);
+          processor.onaudioprocess = (event) => {
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+            const data = event.inputBuffer.getChannelData(0);
+            const downsampled = downsample(data, state.audioContext.sampleRate, state.targetSampleRate);
+            const pcm = floatTo16BitPCM(downsampled);
+            const payload = {
+              type: 'chunk',
+              sample_rate: state.targetSampleRate,
+              channels: 1,
+              pcm: btoa(String.fromCharCode.apply(null, pcm)),
+            };
+            state.ws.send(JSON.stringify(payload));
+          };
+          input.connect(processor);
+          processor.connect(state.audioContext.destination);
+          state.processor = processor;
+          ui.start.disabled = true;
+          ui.stop.disabled = false;
+          log('info', 'Microphone capture started');
+        }).catch((error) => {
+          log('error', `Microphone access failed: ${error}`);
+        });
+      }
+
+      function stopStreaming() {
+        teardownAudio();
+        log('info', 'Microphone capture stopped');
+      }
+
+      function teardownAudio() {
+        if (state.processor) {
+          state.processor.disconnect();
+          state.processor.onaudioprocess = null;
+          state.processor = null;
+        }
+        if (state.mediaStream) {
+          state.mediaStream.getTracks().forEach((track) => track.stop());
+          state.mediaStream = null;
+        }
+        if (state.audioContext) {
+          state.audioContext.close().catch(() => {});
+          state.audioContext = null;
+        }
+        ui.start.disabled = !state.ws;
+        ui.stop.disabled = true;
+      }
+
+      function handleMessage(raw) {
+        try {
+          const payload = JSON.parse(raw);
+          const event = String(payload.event || payload.kind || '').toLowerCase();
+          const text = resolveText(payload) || '—';
+          if (event === 'partial') {
+            ui.partial.textContent = text;
+            log('partial', text);
+            return;
+          }
+          if (event === 'final') {
+            ui.partial.textContent = '—';
+            ui.final.textContent = text;
+            log('final', text);
+            return;
+          }
+          log('info', text);
+        } catch (error) {
+          log('error', `Malformed event: ${error}`);
+        }
+      }
+
+      function resolveText(payload) {
+        if (typeof payload.text === 'string' && payload.text.trim()) return payload.text.trim();
+        if (Array.isArray(payload.segments)) {
+          const parts = payload.segments.map((seg) => (seg && seg.text ? String(seg.text).trim() : ''))
+            .filter(Boolean);
+          if (parts.length) return parts.join(' ');
+        }
+        return '';
+      }
+
+      function downsample(data, inputRate, targetRate) {
+        if (targetRate >= inputRate) return data;
+        const ratio = inputRate / targetRate;
+        const length = Math.floor(data.length / ratio);
+        const result = new Float32Array(length);
+        for (let i = 0; i < length; i++) {
+          const start = Math.floor(i * ratio);
+          const end = Math.floor((i + 1) * ratio);
+          let sum = 0;
+          let count = 0;
+          for (let j = start; j < end && j < data.length; j++) {
+            sum += data[j];
+            count++;
+          }
+          result[i] = count ? sum / count : 0;
+        }
+        return result;
+      }
+
+      function floatTo16BitPCM(float32) {
+        const output = new Uint8Array(float32.length * 2);
+        for (let i = 0; i < float32.length; i++) {
+          let s = Math.max(-1, Math.min(1, float32[i]));
+          s = s < 0 ? s * 0x8000 : s * 0x7fff;
+          output[i * 2] = s & 0xff;
+          output[i * 2 + 1] = (s >> 8) & 0xff;
+        }
+        return output;
+      }
+
+      ui.connect.addEventListener('click', connect);
+      ui.disconnect.addEventListener('click', disconnect);
+      ui.start.addEventListener('click', startStreaming);
+      ui.stop.addEventListener('click', stopStreaming);
+    })();
+  </script>
+</body>
+</html>

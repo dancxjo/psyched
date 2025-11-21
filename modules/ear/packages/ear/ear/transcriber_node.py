@@ -157,7 +157,7 @@ class TranscriberNode(Node):
         return True
 
     def _create_backend(self) -> EarBackend:
-        backend_name = str(self.declare_parameter("backend", "console").value).strip().lower()
+        backend_name = str(self.declare_parameter("backend", "service").value).strip().lower()
         if backend_name in {"console", "stdin", "text"}:
             return ConsoleEarBackend()
         if backend_name in {"faster_whisper", "whisper"}:
