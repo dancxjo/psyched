@@ -186,9 +186,10 @@ class EyeDashboard extends LitElement {
     this._previewSocket = null;
     this._previewTimeoutId = null;
     this._reconnectTimer = null;
-    this._frameObjectUrl = '';
     this._latestRawFrame = null;
+    this._latestCompressedFrame = null;
     this._frameRenderScheduled = false;
+    this._compressedRenderScheduled = false;
     this._imageDataCache = null;
     this._connected = false;
 
@@ -547,11 +548,12 @@ class EyeDashboard extends LitElement {
       this._reconnectTimer = null;
     }
     this._latestRawFrame = null;
+    this._latestCompressedFrame = null;
     this._frameRenderScheduled = false;
+    this._compressedRenderScheduled = false;
     this._imageDataCache = null;
     this._activePreviewCandidate = null;
     this._clearPreviewSocket();
-    this._revokeObjectUrl();
     this._resetPreviewState();
   }
 
@@ -563,6 +565,10 @@ class EyeDashboard extends LitElement {
     this.previewTimestamp = '';
     this.previewWidth = this.width;
     this.previewHeight = this.height;
+    this._latestRawFrame = null;
+    this._latestCompressedFrame = null;
+    this._frameRenderScheduled = false;
+    this._compressedRenderScheduled = false;
   }
 
   _clearPreviewSocket() {
@@ -717,10 +723,7 @@ class EyeDashboard extends LitElement {
     }
     const mimeType = this._resolveMimeType(message.format);
     const blob = new Blob([data], { type: mimeType });
-    this._revokeObjectUrl();
-    this._frameObjectUrl = URL.createObjectURL(blob);
-    this.previewFrameUrl = this._frameObjectUrl;
-    this.previewMode = 'image';
+    this.previewMode = 'canvas';
     this.previewEncoding = `compressed (${mimeType.replace('image/', '')})`;
     if (typeof message.width === 'number' && message.width > 0) {
       this.previewWidth = message.width;
@@ -728,7 +731,101 @@ class EyeDashboard extends LitElement {
     if (typeof message.height === 'number' && message.height > 0) {
       this.previewHeight = message.height;
     }
+    this.previewFrameUrl = '';
+    this._latestCompressedFrame = {
+      blob,
+      width: this.previewWidth,
+      height: this.previewHeight,
+    };
+    this._scheduleCompressedFrameDraw();
     return true;
+  }
+
+  _scheduleCompressedFrameDraw() {
+    if (this._compressedRenderScheduled) {
+      return;
+    }
+    this._compressedRenderScheduled = true;
+    requestAnimationFrame(() => this._flushCompressedFrame());
+  }
+
+  async _flushCompressedFrame() {
+    this._compressedRenderScheduled = false;
+    const frame = this._latestCompressedFrame;
+    if (!frame || !this._connected) {
+      return;
+    }
+    await this.updateComplete;
+    if (!this._connected) {
+      return;
+    }
+    const canvas = this.renderRoot?.querySelector('.preview__canvas');
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+
+    let bitmap;
+    try {
+      bitmap = await this._decodeCompressedFrame(frame.blob);
+    } catch (error) {
+      console.warn('Failed to decode compressed eye frame', error);
+      this.previewFrameReady = false;
+      return;
+    }
+
+    const width = frame.width || bitmap.width || this.previewWidth;
+    const height = frame.height || bitmap.height || this.previewHeight;
+
+    if (width && width > 0) {
+      this.previewWidth = width;
+      if (canvas.width !== width) {
+        canvas.width = width;
+      }
+    }
+    if (height && height > 0) {
+      this.previewHeight = height;
+      if (canvas.height !== height) {
+        canvas.height = height;
+      }
+    }
+
+    try {
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      console.warn('Failed to draw compressed eye frame', error);
+      this.previewFrameReady = false;
+    } finally {
+      if (bitmap && typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+    }
+  }
+
+  async _decodeCompressedFrame(blob) {
+    if (typeof createImageBitmap === 'function') {
+      return createImageBitmap(blob);
+    }
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read compressed frame payload'));
+      reader.readAsDataURL(blob);
+    });
+    if (typeof dataUrl !== 'string') {
+      throw new Error('Compressed frame did not contain valid image data');
+    }
+    const image = new Image();
+    image.decoding = 'async';
+    await new Promise((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Failed to load compressed frame image'));
+      image.src = dataUrl;
+    });
+    return image;
   }
 
   _renderRawFrame(message) {
@@ -887,13 +984,6 @@ class EyeDashboard extends LitElement {
       }
     }
     return new Uint8Array();
-  }
-
-  _revokeObjectUrl() {
-    if (this._frameObjectUrl) {
-      URL.revokeObjectURL(this._frameObjectUrl);
-      this._frameObjectUrl = '';
-    }
   }
 }
 

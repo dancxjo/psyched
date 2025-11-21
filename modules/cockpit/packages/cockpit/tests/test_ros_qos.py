@@ -29,3 +29,13 @@ def test_qos_override_restores_reliable() -> None:
     profile = RosClient._build_qos_profile(_ros_client(), queue_length=1, overrides=overrides)
     assert profile.reliability == QoSReliabilityPolicy.RELIABLE
     assert profile.durability == QoSDurabilityPolicy.TRANSIENT_LOCAL
+
+
+def test_publish_paths_default_to_reliable_qos() -> None:
+    profile = RosClient._build_qos_profile(
+        _ros_client(),
+        queue_length=2,
+        overrides=None,
+        reliability_default=QoSReliabilityPolicy.RELIABLE,
+    )
+    assert profile.reliability == QoSReliabilityPolicy.RELIABLE

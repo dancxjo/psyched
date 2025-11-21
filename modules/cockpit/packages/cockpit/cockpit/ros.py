@@ -275,7 +275,15 @@ class RosClient:
         except (AttributeError, ValueError) as exc:
             raise TopicStreamError(f"Unknown message type: {message_type}") from exc
 
-        qos_profile = self._build_qos_profile(queue_length=queue_length, overrides=qos)
+        # Prefer reliable publishers so command topics (e.g. /voice) reach reliable subscribers.
+        reliability_default = (
+            QoSReliabilityPolicy.RELIABLE if role in {"publish", "both"} else QoSReliabilityPolicy.BEST_EFFORT
+        )
+        qos_profile = self._build_qos_profile(
+            queue_length=queue_length,
+            overrides=qos,
+            reliability_default=reliability_default,
+        )
         stream_id = uuid.uuid4().hex
         event_loop = loop or asyncio.get_running_loop()
         stream = TopicStream(
@@ -382,6 +390,7 @@ class RosClient:
         *,
         queue_length: int,
         overrides: Optional[Mapping[str, Any]],
+        reliability_default: QoSReliabilityPolicy = QoSReliabilityPolicy.BEST_EFFORT,
     ) -> QoSProfile:
         depth = max(int(queue_length), 1)
         # Default to best-effort reliability so we can subscribe to sensor topics
@@ -389,7 +398,7 @@ class RosClient:
         profile = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=depth,
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            reliability=reliability_default,
             durability=QoSDurabilityPolicy.VOLATILE,
         )
         if overrides and isinstance(overrides, Mapping):
@@ -462,7 +471,11 @@ class RosClient:
         except (AttributeError, ValueError) as exc:
             raise TopicPublishError(f"Unknown message type: {message_type}") from exc
 
-        qos_profile = self._build_qos_profile(queue_length=1, overrides=qos)
+        qos_profile = self._build_qos_profile(
+            queue_length=1,
+            overrides=qos,
+            reliability_default=QoSReliabilityPolicy.RELIABLE,
+        )
         publisher = self._node.create_publisher(message_cls, topic, qos_profile)
         try:
             message = message_cls()
