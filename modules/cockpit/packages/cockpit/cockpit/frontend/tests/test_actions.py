@@ -1,1 +1,0 @@
-/home/ubuntu/psyched/modules/faces/cockpit/tests/test_actions.py
