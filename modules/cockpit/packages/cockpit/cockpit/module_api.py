@@ -224,7 +224,7 @@ def _allowed_argument_keys(parameters: Optional[Mapping[str, Any]]) -> set[str]:
         return set()
     props = parameters.get("properties")
     if isinstance(props, Mapping):
-        return {str(key) for key in props.keys()}
+        return {str(key) for key in props}
     return set()
 
 
@@ -662,7 +662,7 @@ def _render_signature(name: str, parameters: Optional[Mapping[str, Any]]) -> str
         return f"{name}()"
 
     ordered = OrderedDict()
-    for key in props.keys():
+    for key in props:
         ordered[str(key)] = props[key]
 
     parts: list[str] = []
