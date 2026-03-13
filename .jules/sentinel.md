@@ -1,0 +1,4 @@
+## 2024-05-14 - Removed hardcoded Neo4j passwords
+**Vulnerability:** Hardcoded database credentials ("test" and "password") were present in host configurations (motherbrain.toml), Docker compose files, ROS node parameters, and shell scripts for the Neo4j graph database.
+**Learning:** Hardcoding passwords for local development environments can leak into production or public repositories, posing a critical security risk even for default databases.
+**Prevention:** Default to empty passwords or "none" (if auth is disabled) in default configuration files and prompt users to configure these via environment variables or secure configuration mechanisms.
