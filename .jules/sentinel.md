@@ -1,0 +1,4 @@
+## 2025-03-14 - Hardcoded neo4j Default Passwords
+**Vulnerability:** Several parts of the application (module configs, node scripts, Docker compose files) hardcoded "test" or "neo4j/password" for the Neo4j database password, which is a critical security vulnerability for any exposed or shared environments.
+**Learning:** Default passwords frequently sneak in through launch configurations (`launch_unit.sh`), node parameter declarations (`declare_parameter`), and host manifests (`hosts/motherbrain.toml`). Also, when falling back to an empty password in Neo4j's Python driver, you must explicitly set the `auth` parameter to `None` instead of passing an empty string to prevent connection failures.
+**Prevention:** Remove all default passwords and force configuration from the environment. Ensure appropriate auth disablement (`NEO4J_AUTH: none`) or configuration loading takes place instead of falling back to unsafe hardcoded defaults.
