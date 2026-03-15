@@ -1826,6 +1826,11 @@ h5.audio-oscilloscope {
   background: rgba(248, 128, 60, 0.4);
 }
 
+.config-card__save:focus-visible {
+  outline: 2px solid rgba(248, 128, 60, 0.75);
+  outline-offset: 2px;
+}
+
 .config-card__reset {
   background: rgba(27, 31, 42, 0.6);
   color: var(--lcars-muted);
@@ -1835,6 +1840,11 @@ h5.audio-oscilloscope {
 .config-card__reset:hover,
 .config-card__reset:focus {
   background: rgba(27, 31, 42, 0.85);
+}
+
+.config-card__reset:focus-visible {
+  outline: 2px solid rgba(88, 178, 220, 0.75);
+  outline-offset: 2px;
 }
 
 .config-card__status {

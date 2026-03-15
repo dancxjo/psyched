@@ -265,12 +265,14 @@ function renderModuleCard(module) {
   saveButton.type = 'button';
   saveButton.className = 'config-card__save';
   saveButton.textContent = 'Save changes';
+  saveButton.setAttribute('aria-label', `Save changes to ${module.display_name || module.name}`);
   saveButton.addEventListener('click', () => submitModule(card, editor));
 
   const resetButton = document.createElement('button');
   resetButton.type = 'button';
   resetButton.className = 'config-card__reset';
   resetButton.textContent = 'Reset';
+  resetButton.setAttribute('aria-label', `Reset changes to ${module.display_name || module.name}`);
   resetButton.addEventListener('click', () => resetEditor(module.name, editor));
 
   const status = document.createElement('p');
