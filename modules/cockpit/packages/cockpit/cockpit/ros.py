@@ -374,7 +374,7 @@ class RosClient:
             return
         self._shutdown = True
 
-        for stream_id in list(self._streams.keys()):
+        for stream_id in list(self._streams):
             await self.close_stream(stream_id)
 
         self._executor.remove_node(self._node)

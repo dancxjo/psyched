@@ -50,7 +50,7 @@ def test_load_local_cockpit_actions_reads_all_modules(tmp_path: Path) -> None:
 
     metadata, schemas = load_local_cockpit_actions(modules_root)
 
-    assert sorted(metadata.keys()) == [
+    assert sorted(metadata) == [
         "alpha.noop",
         "alpha.say_hi",
         "beta.wave",
