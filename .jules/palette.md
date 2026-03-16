@@ -1,0 +1,3 @@
+## 2024-03-16 - Ensure Focus Visible Ring is Maintained on Buttons
+**Learning:** By default, buttons in the `surface-button` and `surface-action` classes disabled default browser outlines using `outline: none;`. This caused keyboard navigation to rely solely on hover/focus background color shifts and drop shadows which aren't adequate focus rings for accessibility.
+**Action:** When removing default outlines in custom components, always explicitly provide a clear visual indicator for keyboard focus using `:focus-visible` (e.g. `box-shadow: 0 0 0 2px <color>;`) so keyboard users can clearly see the currently focused element.
