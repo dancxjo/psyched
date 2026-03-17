@@ -122,7 +122,7 @@ class MemoryNode(Node):
         qdrant_api_key = str(self.declare_parameter("qdrant.api_key", "").value)
         neo4j_uri = str(self.declare_parameter("neo4j.uri", "bolt://localhost:7687").value)
         neo4j_user = str(self.declare_parameter("neo4j.user", "neo4j").value)
-        neo4j_password = str(self.declare_parameter("neo4j.password", "test").value)
+        neo4j_password = str(self.declare_parameter("neo4j.password", "").value)
         batch_size = int(self.declare_parameter("memory.batch_size", 10).value)
 
         vector_store = self._create_vector_store(qdrant_url, qdrant_api_key)
