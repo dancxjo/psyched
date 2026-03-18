@@ -38,8 +38,12 @@ export function encodeBytesToBase64(bytes) {
   }
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  // ⚡ Bolt: Chunked processing to avoid O(N^2) string concatenation overhead
+  // Process up to 8192 bytes at a time, drastically improving performance for large payloads.
+  const len = view.byteLength;
+  const chunk = 8192;
+  for (let i = 0; i < len; i += chunk) {
+    binary += String.fromCharCode.apply(null, view.subarray(i, i + chunk));
   }
   if (typeof btoa === "function") {
     return btoa(binary);
