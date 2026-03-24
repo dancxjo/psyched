@@ -85,7 +85,7 @@ def stub_ros_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
                 await stream.close()
 
         async def shutdown(self) -> None:
-            for stream_id in list(self._streams.keys()):
+            for stream_id in list(self._streams):
                 await self.close_stream(stream_id)
 
         @property

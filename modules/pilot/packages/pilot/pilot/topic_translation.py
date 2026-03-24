@@ -131,7 +131,7 @@ def discover_topic_translators(
         for section in static_sections:
             if section not in seen:
                 seen[section] = None
-        static_sections = list(seen.keys())
+        static_sections = list(seen)
     return TranslatorRegistry(translators, static_sections)
 
 

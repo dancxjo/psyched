@@ -39,7 +39,7 @@ def render_action_signature(name: str, parameters: Mapping[str, Any] | None) -> 
         return f"{name}()"
 
     ordered = OrderedDict()
-    for key in props.keys():
+    for key in props:
         ordered[str(key)] = props[key]
 
     parts: list[str] = []
