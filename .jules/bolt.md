@@ -1,0 +1,3 @@
+## 2025-02-14 - Optimize JavaScript Byte Array to Base64 Conversion
+**Learning:** In JavaScript, converting byte arrays (e.g. `Uint8Array`, `Int16Array`) to Base64 using byte-by-byte string concatenation (e.g., `for` loops appending `String.fromCharCode(byte)`) causes severe O(N^2) performance bottlenecks due to continuous string reallocation. Alternatively, calling `String.fromCharCode.apply(null, array)` on the entire array can throw a "Maximum call stack size exceeded" error for large payloads.
+**Action:** When converting large byte arrays to strings for Base64 encoding, always use chunked processing (e.g., 8192-byte chunks) combined with `String.fromCharCode.apply(null, chunk)` to prevent both performance bottlenecks and stack overflow errors.
