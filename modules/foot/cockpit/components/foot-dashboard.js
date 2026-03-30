@@ -9,14 +9,14 @@ import "/components/joystick-control.js";
 import { normaliseTopic, streamActionForTopic } from "../utils/streams.js";
 
 import {
+  buildDefineSongPayload,
   buildParameterRequest,
   buildPowerLedPayload,
-  buildDefineSongPayload,
   formatJointState,
   formatOdometry,
   formatParameterEvent,
-  SONG_LIMITS,
   parseSongSheet,
+  SONG_LIMITS,
   toAsciiPayload,
 } from "./foot-dashboard.helpers.js";
 
@@ -33,9 +33,11 @@ function createFootSocket(options, onError) {
     ...options,
     ...(action
       ? {
-          action,
-          arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
-        }
+        action,
+        arguments: Object.keys(actionArguments).length
+          ? actionArguments
+          : undefined,
+      }
       : {}),
   });
   const handler = typeof onError === "function" ? onError : () => undefined;
@@ -882,7 +884,8 @@ class FootDashboard extends LitElement {
         "create_msgs/msg/DefineSong",
       );
       socket.send(JSON.stringify(payload));
-      this.songStatus = `Song ${payload.song} programmed with ${payload.length} notes.`;
+      this.songStatus =
+        `Song ${payload.song} programmed with ${payload.length} notes.`;
     } catch (error) {
       this.songStatus = error instanceof Error ? error.message : String(error);
     }
@@ -1013,10 +1016,22 @@ class FootDashboard extends LitElement {
           </div>
           ${this.actionStatus
             ? html`
-              <p class="surface-status" data-variant="${this.actionStatus
-                  .includes("Unknown")
-                ? "error"
-                : "success"}">${this.actionStatus}</p>
+              <p
+                class="surface-status"
+                role="${this.actionStatus.includes("Unknown") ||
+                    this.actionStatus.toLowerCase().includes("error")
+                  ? "alert"
+                  : "status"}"
+                aria-live="${this.actionStatus.includes("Unknown") ||
+                    this.actionStatus.toLowerCase().includes("error")
+                  ? "assertive"
+                  : "polite"}"
+                data-variant="${this.actionStatus.includes("Unknown")
+                  ? "error"
+                  : "success"}"
+              >
+                ${this.actionStatus}
+              </p>
             `
             : ""}
         </article>
@@ -1094,7 +1109,9 @@ class FootDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button class="surface-action" type="submit">💡 Update power LED</button>
+              <button class="surface-action" type="submit">
+                💡 Update power LED
+              </button>
             </div>
           </form>
         </article>
@@ -1135,7 +1152,8 @@ class FootDashboard extends LitElement {
           </form>
           ${this.songStatus
             ? html`
-              <p class="surface-status">${this.songStatus}</p>
+              <p class="surface-status" role="status" aria-live="polite">${this
+                .songStatus}</p>
             `
             : ""}
         </article>
