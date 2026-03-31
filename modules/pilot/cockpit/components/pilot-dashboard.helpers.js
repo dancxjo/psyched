@@ -36,16 +36,25 @@ export function encodeBytesToBase64(bytes) {
   if (!bytes) {
     return "";
   }
-  const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = bytes instanceof ArrayBuffer
+    ? new Uint8Array(bytes)
+    : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // ⚡ Bolt: Chunked processing to avoid O(N^2) performance and "Maximum call stack size exceeded" errors
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  const chunkSize = 8192;
+  for (let i = 0; i < view.length; i += chunkSize) {
+    const chunk = view.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
   }
+
   if (typeof btoa === "function") {
     return btoa(binary);
   }
   // Fallback for environments without btoa (e.g., Node tests)
+  // deno-lint-ignore no-node-globals
   if (typeof Buffer !== "undefined") {
+    // deno-lint-ignore no-node-globals
     return Buffer.from(binary, "binary").toString("base64");
   }
   throw new Error("No base64 encoder available");
@@ -237,8 +246,8 @@ export function normaliseDebugSnapshot(snapshot) {
       const vectorLength = Number.isFinite(Number(entry.vector_len))
         ? Number(entry.vector_len)
         : Array.isArray(entry.vector)
-          ? entry.vector.length
-          : 0;
+        ? entry.vector.length
+        : 0;
       return {
         topic,
         kind: cleanString(entry.kind),

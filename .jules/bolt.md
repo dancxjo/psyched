@@ -1,0 +1,3 @@
+## 2024-03-31 - Base64 Conversion Stack Overflow and O(N^2) Bottleneck
+**Learning:** Using byte-by-byte string concatenation (`binary += String.fromCharCode(byte)`) for large arrays (like camera chunks or audio buffers) when converting to Base64 in JavaScript leads to severe O(N^2) performance degradation. However, doing `String.fromCharCode.apply(null, array)` on the entire array at once for very large payloads throws "Maximum call stack size exceeded" errors.
+**Action:** Always process large byte arrays in chunks (e.g., 8192-byte limits) before encoding to Base64 using `String.fromCharCode.apply(null, chunk)` to prevent both the O(N^2) bottleneck and V8 call stack exhaustion.
