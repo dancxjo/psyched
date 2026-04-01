@@ -1,0 +1,3 @@
+## 2024-04-01 - Prevent O(N^2) bottlenecks when converting byte arrays to strings
+**Learning:** Using `binary += String.fromCharCode(byte)` in a loop creates an O(N^2) string concatenation bottleneck, significantly degrading performance on large arrays (like video frames or audio chunks). Converting the entire array at once with `String.fromCharCode.apply(null, array)` is faster but can cause "Maximum call stack size exceeded" errors for large arrays.
+**Action:** Use chunked array processing (e.g., 8192-byte chunks) with `String.fromCharCode.apply(null, chunk)` to prevent both performance bottlenecks and stack overflows.
