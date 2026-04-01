@@ -152,7 +152,7 @@ class Neo4jGraphStore(GraphStoreProtocol):
     """Implementation of :class:`GraphStoreProtocol` backed by Neo4j."""
 
     def __init__(self, uri: str, user: str, password: str) -> None:  # pragma: no cover - trivial wiring
-        self._driver = _lazy_import_neo4j_driver()(uri, auth=(user, password))
+        self._driver = _lazy_import_neo4j_driver()(uri, auth=(user, password) if password else None)
 
     def close(self) -> None:  # pragma: no cover - used in production
         self._driver.close()
