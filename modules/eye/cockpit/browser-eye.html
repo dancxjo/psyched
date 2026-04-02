@@ -222,8 +222,14 @@
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
+        // ⚡ Bolt: Chunked processing prevents O(N^2) string concatenation performance
+        // penalty and avoids "Maximum call stack size exceeded" errors for large arrays.
         let binary = '';
-        bytes.forEach((b) => { binary += String.fromCharCode(b); });
+        const CHUNK_SIZE = 8192;
+        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+          const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+          binary += String.fromCharCode.apply(null, chunk);
+        }
         const payload = {
           type: 'frame',
           sequence: ++state.sequence,

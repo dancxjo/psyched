@@ -1,0 +1,3 @@
+## 2024-04-02 - Base64 Encoding Bottlenecks
+**Learning:** Using `String.fromCharCode` in a loop or `String.fromCharCode.apply(null, array)` to convert large byte arrays (like camera/microphone frames) to Base64 causes significant performance bottlenecks. The former leads to O(N^2) behavior due to string concatenation, and the latter can hit "Maximum call stack size exceeded" errors if the array is too large.
+**Action:** Optimize by using chunked processing (e.g., 8192-byte chunks) with `String.fromCharCode.apply(null, chunk)` instead of looping byte-by-byte or processing the entire array at once.

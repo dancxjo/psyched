@@ -37,9 +37,13 @@ export function encodeBytesToBase64(bytes) {
     return "";
   }
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // ⚡ Bolt: Chunked processing prevents O(N^2) string concatenation performance
+  // penalty and avoids "Maximum call stack size exceeded" errors for large arrays.
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  const CHUNK_SIZE = 8192;
+  for (let i = 0; i < view.byteLength; i += CHUNK_SIZE) {
+    const chunk = view.subarray(i, i + CHUNK_SIZE);
+    binary += String.fromCharCode.apply(null, chunk);
   }
   if (typeof btoa === "function") {
     return btoa(binary);
