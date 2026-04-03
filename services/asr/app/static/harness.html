@@ -475,8 +475,11 @@
         function int16ToBase64(int16Array) {
           const bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
           let binary = '';
-          for (let i = 0; i < bytes.length; i += 1) {
-            binary += String.fromCharCode(bytes[i] & 0xff);
+          // ⚡ Bolt: Chunked processing prevents Maximum Call Stack Exceeded and O(N^2) string concat performance bottlenecks
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
           }
           return btoa(binary);
         }

@@ -1,0 +1,3 @@
+## 2024-05-25 - JS Base64 String Concat Bottleneck
+**Learning:** Converting large byte arrays to Base64 in JavaScript using a byte-by-byte `String.fromCharCode` loop inside `+=` concatenation is an $O(N^2)$ bottleneck due to string immutability and memory reallocation. Using `String.fromCharCode.apply(null, array)` is faster but can throw a "Maximum call stack size exceeded" error for large arrays.
+**Action:** Always use a chunked approach (`8192` bytes is a safe chunk size) with `String.fromCharCode.apply(null, chunk)` when polyfilling Base64 encoding for large files to avoid performance bottlenecks and call stack limits.
