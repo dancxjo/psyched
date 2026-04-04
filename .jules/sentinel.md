@@ -1,0 +1,4 @@
+## 2024-05-18 - Hardcoded Default Credentials in Docker Manifests
+**Vulnerability:** The Neo4j graph database service's `docker-compose.yml` file contained a hardcoded, default password (`NEO4J_AUTH: neo4j/password`). This allows anyone with network access to the database container to gain full administrative privileges.
+**Learning:** Hardcoded credentials are a critical security risk. When removing them as 'Sentinel', we must not completely disable the underlying authentication mechanisms (e.g., hardcoding `NEO4J_AUTH: none`) as a workaround, as this introduces a critical security regression.
+**Prevention:** Instead of hardcoding credentials, use environment variables to configure authentication dynamically with secure fallbacks (e.g., `NEO4J_AUTH: ${NEO4J_AUTH:-none}`). This safely allows dynamic authentication via environment variables while safely defaulting to `none` to prevent breaking local development environments.
