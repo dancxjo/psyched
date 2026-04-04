@@ -1,0 +1,4 @@
+## 2026-04-04 - ARIA Live Regions on Surface Status
+
+**Learning:** Dynamic status and error messages in the `.surface-status` component must include appropriate `aria-live` regions (like `role="status" aria-live="polite"` for loading states or `role="alert" aria-live="assertive"` for errors). Without them, screen reader users miss crucial state changes and feedback in dashboards and log viewers.
+**Action:** When creating or modifying dynamic feedback elements or custom components like `.surface-status`, always add `aria-live` or specific ARIA roles to ensure the changes are announced correctly.
