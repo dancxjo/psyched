@@ -259,17 +259,31 @@ class CockpitModuleLogs extends LitElement {
   _renderStatus() {
     if (!this.module) {
       return html`
-        <p class="surface-status" data-variant="warning">Module not specified.</p>
+        <p
+          class="surface-status"
+          data-variant="warning"
+          role="alert"
+          aria-live="assertive"
+        >
+          Module not specified.
+        </p>
       `;
     }
     if (this.errorMessage) {
       return html`
-        <p class="surface-status" data-variant="error">${this.errorMessage}</p>
+        <p
+          class="surface-status"
+          data-variant="error"
+          role="alert"
+          aria-live="assertive"
+        >
+          ${this.errorMessage}
+        </p>
       `;
     }
     if (this.loading && !this.lines.length) {
       return html`
-        <p class="surface-status">Loading log…</p>
+        <p class="surface-status" role="status" aria-live="polite">Loading log…</p>
       `;
     }
     if (!this.lines.length) {
@@ -415,12 +429,10 @@ class CockpitModuleLogs extends LitElement {
               title="${clearAction.label}"
               @click="${() => this._clearLogs()}"
             >
-              <span class="surface-action__icon" aria-hidden="true"
-                >${clearAction.icon}</span
-              >
+              <span class="surface-action__icon" aria-hidden="true">${clearAction
+                .icon}</span>
               <span class="surface-action__label" aria-hidden="true"
-                >${clearAction.label}</span
-              >
+              >${clearAction.label}</span>
             </button>
             <button
               type="button"
@@ -431,12 +443,10 @@ class CockpitModuleLogs extends LitElement {
               title="${copyAction.label}"
               @click="${() => this._copyLogs()}"
             >
-              <span class="surface-action__icon" aria-hidden="true"
-                >${copyAction.icon}</span
-              >
+              <span class="surface-action__icon" aria-hidden="true">${copyAction
+                .icon}</span>
               <span class="surface-action__label" aria-hidden="true"
-                >${copyAction.label}</span
-              >
+              >${copyAction.label}</span>
             </button>
             <button
               type="button"
@@ -446,12 +456,10 @@ class CockpitModuleLogs extends LitElement {
               title="${refreshAction.label}"
               @click="${() => this.refresh()}"
             >
-              <span class="surface-action__icon" aria-hidden="true"
-                >${refreshAction.icon}</span
-              >
+              <span class="surface-action__icon" aria-hidden="true">${refreshAction
+                .icon}</span>
               <span class="surface-action__label" aria-hidden="true"
-                >${refreshAction.label}</span
-              >
+              >${refreshAction.label}</span>
             </button>
           </div>
           <div class="module-log-panel__meta">
@@ -492,12 +500,10 @@ class CockpitModuleLogs extends LitElement {
                   aria-label="${startStopAction.label}"
                   title="${startStopAction.label}"
                 >
-                  <span class="surface-action__icon" aria-hidden="true"
-                    >${startStopAction.icon}</span
-                  >
-                  <span class="surface-action__label" aria-hidden="true"
-                    >${startStopAction.label}</span
-                  >
+                  <span class="surface-action__icon" aria-hidden="true">${startStopAction
+                    .icon}</span>
+                  <span class="surface-action__label" aria-hidden="true">${startStopAction
+                    .label}</span>
                 </button>
                 <button
                   type="button"
@@ -510,12 +516,10 @@ class CockpitModuleLogs extends LitElement {
                   aria-label="${enableDisableAction.label}"
                   title="${enableDisableAction.label}"
                 >
-                  <span class="surface-action__icon" aria-hidden="true"
-                    >${enableDisableAction.icon}</span
-                  >
-                  <span class="surface-action__label" aria-hidden="true"
-                    >${enableDisableAction.label}</span
-                  >
+                  <span class="surface-action__icon" aria-hidden="true">${enableDisableAction
+                    .icon}</span>
+                  <span class="surface-action__label" aria-hidden="true">${enableDisableAction
+                    .label}</span>
                 </button>
                 ${systemd.exists
                   ? html`
@@ -527,12 +531,10 @@ class CockpitModuleLogs extends LitElement {
                       aria-label="${teardownAction.label}"
                       title="${teardownAction.label}"
                     >
-                      <span class="surface-action__icon" aria-hidden="true"
-                        >${teardownAction.icon}</span
-                      >
-                      <span class="surface-action__label" aria-hidden="true"
-                        >${teardownAction.label}</span
-                      >
+                      <span class="surface-action__icon" aria-hidden="true">${teardownAction
+                        .icon}</span>
+                      <span class="surface-action__label" aria-hidden="true">${teardownAction
+                        .label}</span>
                     </button>
                   `
                   : html`
@@ -544,12 +546,10 @@ class CockpitModuleLogs extends LitElement {
                       aria-label="${setupAction.label}"
                       title="${setupAction.label}"
                     >
-                      <span class="surface-action__icon" aria-hidden="true"
-                        >${setupAction.icon}</span
-                      >
-                      <span class="surface-action__label" aria-hidden="true"
-                        >${setupAction.label}</span
-                      >
+                      <span class="surface-action__icon" aria-hidden="true">${setupAction
+                        .icon}</span>
+                      <span class="surface-action__label" aria-hidden="true">${setupAction
+                        .label}</span>
                     </button>
                   `}
                 <button
@@ -560,12 +560,10 @@ class CockpitModuleLogs extends LitElement {
                   aria-label="${debugAction.label}"
                   title="${debugAction.label}"
                 >
-                  <span class="surface-action__icon" aria-hidden="true"
-                    >${debugAction.icon}</span
-                  >
-                  <span class="surface-action__label" aria-hidden="true"
-                    >${debugAction.label}</span
-                  >
+                  <span class="surface-action__icon" aria-hidden="true">${debugAction
+                    .icon}</span>
+                  <span class="surface-action__label" aria-hidden="true">${debugAction
+                    .label}</span>
                 </button>
               </div>
             `
