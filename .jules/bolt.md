@@ -1,0 +1,3 @@
+## 2024-05-24 - Chunked Array Processing for Base64 Encoding
+**Learning:** Converting large `Uint8Array` buffers to binary strings via byte-by-byte concatenation (`binary += String.fromCharCode(bytes[i])`) introduces a severe O(N^2) string allocation bottleneck that blocks the main thread. Applying `String.fromCharCode.apply(null, array)` across the entire buffer crashes with "Maximum call stack size exceeded" for large payloads.
+**Action:** Always process large byte arrays in chunks (e.g., 8192 bytes) using `String.fromCharCode.apply(null, chunk)` to achieve safe, near-instantaneous encoding without blocking the thread or blowing the call stack.
