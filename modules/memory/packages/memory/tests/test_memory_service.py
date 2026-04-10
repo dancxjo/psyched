@@ -86,6 +86,9 @@ class FakeGraphStore:
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         return self.memories[memory_id]
 
+    def fetch_memories(self, memory_ids: Sequence[str]) -> Mapping[str, Mapping[str, Any]]:
+        return {m_id: self.memories[m_id] for m_id in memory_ids if m_id in self.memories}
+
 
 @pytest.fixture(name="service")
 def fixture_memory_service() -> MemoryService:
