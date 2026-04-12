@@ -38,8 +38,11 @@ export function encodeBytesToBase64(bytes) {
   }
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  // Process in chunks to prevent 'Maximum call stack size exceeded' while maintaining high performance
+  const chunkSize = 8192;
+  for (let i = 0; i < view.byteLength; i += chunkSize) {
+    const chunk = view.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
   }
   if (typeof btoa === "function") {
     return btoa(binary);

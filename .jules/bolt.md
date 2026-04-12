@@ -1,0 +1,3 @@
+## 2024-06-25 - Avoid Byte-By-Byte String Concatenation and Full-Array apply for Base64 Conversions
+**Learning:** In JavaScript, converting large byte arrays (like raw PCM audio or video frames) to base64 using a byte-by-byte `forEach` or `for` loop with `String.fromCharCode` creates O(N^2) performance bottlenecks due to string concatenation overhead. Conversely, applying `String.fromCharCode.apply(null, array)` on the entire array at once can cause "Maximum call stack size exceeded" errors for large buffers.
+**Action:** Always process large byte arrays in chunks (e.g., 8192 bytes) when converting to binary strings, using `String.fromCharCode.apply(null, chunk)` within a loop. This approach maintains high performance while staying safely within call stack limits.
