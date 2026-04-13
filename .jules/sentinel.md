@@ -1,0 +1,4 @@
+## 2026-04-13 - Enforce secure configuration in docker-compose
+**Vulnerability:** The database credentials for Neo4j (`neo4j/password`) were hardcoded in `services/graphs/docker-compose.yml`, which is a critical security vulnerability as it could expose the database to unauthorized access.
+**Learning:** Default, insecure configurations in infrastructure definitions are easily overlooked and can silently allow unauthorized access if not replaced before deployment. Falling back to an empty string or standard default when an environment variable is missing is an insecure fail-open pattern.
+**Prevention:** Always enforce the explicit injection of secrets in container orchestrations. Use Docker Compose's variable requirement syntax (e.g., `${NEO4J_AUTH?must be set}`) to ensure the system fails securely (fails to start) if the required credentials are not explicitly provided by the environment, rather than silently falling back to insecure defaults.
