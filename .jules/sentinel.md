@@ -1,0 +1,4 @@
+## 2024-04-16 - Hardcoded credentials in docker-compose.yml
+**Vulnerability:** Found hardcoded Neo4j credentials (`NEO4J_AUTH: neo4j/password`) in `services/graphs/docker-compose.yml`.
+**Learning:** Hardcoded credentials should never be committed to source code as they pose a critical security risk. We must enforce the presence of environment variables instead of falling back to insecure defaults.
+**Prevention:** Use variable substitution with mandatory checking (`${NEO4J_AUTH?must be set}`) in docker-compose files to enforce that the variable is provided, failing securely rather than defaulting to an insecure state.
