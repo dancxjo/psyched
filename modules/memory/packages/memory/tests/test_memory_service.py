@@ -8,7 +8,16 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, MutableSequence, Optional, Sequence
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+)
 
 import pytest
 
@@ -78,13 +87,22 @@ class FakeGraphStore:
         relation_type: str,
         properties: Optional[Mapping[str, Any]] = None,
     ) -> None:
-        self.associations.append((source_id, target_id, relation_type, dict(properties or {})))
+        self.associations.append(
+            (source_id, target_id, relation_type, dict(properties or {}))
+        )
 
-    def link_identity(self, memory_id: str, identity_id: str, properties: Mapping[str, Any]) -> None:
+    def link_identity(
+        self, memory_id: str, identity_id: str, properties: Mapping[str, Any]
+    ) -> None:
         self.identity_links.append((memory_id, identity_id, dict(properties)))
 
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         return self.memories[memory_id]
+
+    def fetch_memories(
+        self, memory_ids: Sequence[str]
+    ) -> Mapping[str, Mapping[str, Any]]:
+        return {mid: self.memories[mid] for mid in memory_ids if mid in self.memories}
 
 
 @pytest.fixture(name="service")
@@ -147,7 +165,9 @@ def test_memorize_batches_vectors_until_threshold(service: MemoryService) -> Non
     assert len(service.graph_store.frame_links) == 2  # type: ignore[attr-defined]
 
 
-def test_memorize_without_embedding_skips_vector_storage(service: MemoryService) -> None:
+def test_memorize_without_embedding_skips_vector_storage(
+    service: MemoryService,
+) -> None:
     """Given an event lacking an embedding, only the graph is updated."""
 
     event = _build_event(
@@ -239,13 +259,22 @@ def test_associate_records_relationship(service: MemoryService) -> None:
     )
     record = service.memorize(event)
 
-    service.associate(record.memory_id, record.memory_id, relation_type="REMEMBERS", properties={"confidence": 0.8})
+    service.associate(
+        record.memory_id,
+        record.memory_id,
+        relation_type="REMEMBERS",
+        properties={"confidence": 0.8},
+    )
 
     associations = service.graph_store.associations  # type: ignore[attr-defined]
-    assert associations == [(record.memory_id, record.memory_id, "REMEMBERS", {"confidence": 0.8})]
+    assert associations == [
+        (record.memory_id, record.memory_id, "REMEMBERS", {"confidence": 0.8})
+    ]
 
 
-def test_recall_enriches_vector_results_with_graph_context(service: MemoryService) -> None:
+def test_recall_enriches_vector_results_with_graph_context(
+    service: MemoryService,
+) -> None:
     """Vector results are hydrated with metadata fetched from the graph store."""
 
     event = _build_event(
@@ -257,7 +286,9 @@ def test_recall_enriches_vector_results_with_graph_context(service: MemoryServic
         {"id": "person:alice", "name": "Alice Example"}
     ]
 
-    fake_result = MemoryRecallResult(memory_id=record.memory_id, score=0.92, metadata={"foo": "bar"})
+    fake_result = MemoryRecallResult(
+        memory_id=record.memory_id, score=0.92, metadata={"foo": "bar"}
+    )
     service.vector_store.queue_search_result("face", [fake_result])  # type: ignore[attr-defined]
 
     results = service.recall(kind="face", embedding=[0.7, 0.4])
