@@ -95,7 +95,9 @@ class MemoryEventPayload:
         normalised: MutableMapping[str, Any] = dict(self.json_data)
         object.__setattr__(self, "json_data", normalised)
         if self.embedding is not None:
-            object.__setattr__(self, "embedding", [float(value) for value in self.embedding])
+            object.__setattr__(
+                self, "embedding", [float(value) for value in self.embedding]
+            )
 
     @property
     def metadata(self) -> Mapping[str, Any]:

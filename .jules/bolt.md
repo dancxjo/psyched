@@ -1,0 +1,3 @@
+## 2024-05-19 - Mitigate N+1 Query Problem in MemoryService Recall
+**Learning:** During the recall process in `MemoryService`, calling `fetch_memory` for each individual memory retrieved from the vector store causes an N+1 query problem, increasing database round-trips linearly with the results.
+**Action:** Use batch retrieval. I added `fetch_memories(memory_ids)` to `GraphStoreProtocol` and implemented it in `Neo4jGraphStore` using Cypher's `UNWIND` clause. Then, I optimized `MemoryService.recall` to batch retrieve metadata in a single call, dramatically improving performance for large result sets.

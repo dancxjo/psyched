@@ -30,17 +30,27 @@ class MemoryNode(Node):
     def __init__(self, service: Optional[MemoryService] = None) -> None:
         super().__init__("memory")
         self._service = service or self._build_service()
-        self._memorize_srv = self.create_service(MemorizeSrv, "/memory/memorize", self._handle_memorize)
-        self._associate_srv = self.create_service(AssociateSrv, "/memory/associate", self._handle_associate)
-        self._recall_srv = self.create_service(RecallSrv, "/memory/recall", self._handle_recall)
-        self._tag_identity_srv = self.create_service(TagIdentitySrv, "/memory/tag_identity", self._handle_tag_identity)
+        self._memorize_srv = self.create_service(
+            MemorizeSrv, "/memory/memorize", self._handle_memorize
+        )
+        self._associate_srv = self.create_service(
+            AssociateSrv, "/memory/associate", self._handle_associate
+        )
+        self._recall_srv = self.create_service(
+            RecallSrv, "/memory/recall", self._handle_recall
+        )
+        self._tag_identity_srv = self.create_service(
+            TagIdentitySrv, "/memory/tag_identity", self._handle_tag_identity
+        )
         self._pilot_feed_publisher = self._create_pilot_feed_publisher()
         self._closeables = self._collect_closeables()
 
     # ------------------------------------------------------------------
     # Service handlers
     # ------------------------------------------------------------------
-    def _handle_memorize(self, request: MemorizeSrv.Request, response: MemorizeSrv.Response) -> MemorizeSrv.Response:
+    def _handle_memorize(
+        self, request: MemorizeSrv.Request, response: MemorizeSrv.Response
+    ) -> MemorizeSrv.Response:
         try:
             event = self._convert_event(request.event)
             record = self._service.memorize(event, flush=request.flush)
@@ -53,7 +63,9 @@ class MemoryNode(Node):
             response.vector_id = ""
         return response
 
-    def _handle_associate(self, request: AssociateSrv.Request, response: AssociateSrv.Response) -> AssociateSrv.Response:
+    def _handle_associate(
+        self, request: AssociateSrv.Request, response: AssociateSrv.Response
+    ) -> AssociateSrv.Response:
         try:
             properties = self._decode_json(request.json_properties)
             self._service.associate(
@@ -68,9 +80,13 @@ class MemoryNode(Node):
             response.success = False
         return response
 
-    def _handle_recall(self, request: RecallSrv.Request, response: RecallSrv.Response) -> RecallSrv.Response:
+    def _handle_recall(
+        self, request: RecallSrv.Request, response: RecallSrv.Response
+    ) -> RecallSrv.Response:
         try:
-            embedding: Optional[Sequence[float]] = list(request.embedding) if request.embedding else None
+            embedding: Optional[Sequence[float]] = (
+                list(request.embedding) if request.embedding else None
+            )
             text_query = request.text or None
             results = self._service.recall(
                 kind=request.kind,
@@ -118,27 +134,37 @@ class MemoryNode(Node):
     # Helpers
     # ------------------------------------------------------------------
     def _build_service(self) -> MemoryService:
-        qdrant_url = str(self.declare_parameter("qdrant.url", "http://localhost:6333").value)
+        qdrant_url = str(
+            self.declare_parameter("qdrant.url", "http://localhost:6333").value
+        )
         qdrant_api_key = str(self.declare_parameter("qdrant.api_key", "").value)
-        neo4j_uri = str(self.declare_parameter("neo4j.uri", "bolt://localhost:7687").value)
+        neo4j_uri = str(
+            self.declare_parameter("neo4j.uri", "bolt://localhost:7687").value
+        )
         neo4j_user = str(self.declare_parameter("neo4j.user", "neo4j").value)
         neo4j_password = str(self.declare_parameter("neo4j.password", "test").value)
         batch_size = int(self.declare_parameter("memory.batch_size", 10).value)
 
         vector_store = self._create_vector_store(qdrant_url, qdrant_api_key)
         graph_store = self._create_graph_store(neo4j_uri, neo4j_user, neo4j_password)
-        return MemoryService(vector_store=vector_store, graph_store=graph_store, batch_size=batch_size)
+        return MemoryService(
+            vector_store=vector_store, graph_store=graph_store, batch_size=batch_size
+        )
 
     def _create_vector_store(self, url: str, api_key: str) -> QdrantVectorStore:
         try:
             from qdrant_client import QdrantClient
         except ImportError as exc:  # pragma: no cover - import guard
-            raise RuntimeError("qdrant-client must be installed to launch the memory node") from exc
+            raise RuntimeError(
+                "qdrant-client must be installed to launch the memory node"
+            ) from exc
 
         client = QdrantClient(url=url, api_key=api_key or None)
         return QdrantVectorStore(client)
 
-    def _create_graph_store(self, uri: str, user: str, password: str) -> Neo4jGraphStore:
+    def _create_graph_store(
+        self, uri: str, user: str, password: str
+    ) -> Neo4jGraphStore:
         return Neo4jGraphStore(uri, user, password)
 
     def _collect_closeables(self) -> list[object]:
@@ -154,7 +180,9 @@ class MemoryNode(Node):
             try:
                 self.destroy_publisher(publisher)
             except Exception:
-                self.get_logger().debug("Failed to destroy pilot feed publisher", exc_info=True)
+                self.get_logger().debug(
+                    "Failed to destroy pilot feed publisher", exc_info=True
+                )
             finally:
                 self._pilot_feed_publisher = None
         try:
@@ -200,12 +228,15 @@ class MemoryNode(Node):
             message.data = self._encode_json(payload)
             publisher.publish(message)
         except Exception:
-            self.get_logger().debug("Failed to publish memory pilot feed entry", exc_info=True)
+            self.get_logger().debug(
+                "Failed to publish memory pilot feed entry", exc_info=True
+            )
 
     @staticmethod
     def _convert_event(message: MemoryEventMsg) -> MemoryEventPayload:
         stamp = datetime.fromtimestamp(
-            float(message.header.stamp.sec) + float(message.header.stamp.nanosec) / 1_000_000_000,
+            float(message.header.stamp.sec)
+            + float(message.header.stamp.nanosec) / 1_000_000_000,
             tz=timezone.utc,
         )
         metadata = MemoryNode._decode_json(message.json_data)
@@ -216,7 +247,9 @@ class MemoryNode(Node):
             source=source or message.header.frame_id or "unknown",
         )
         embedding = list(message.embedding) if message.embedding else None
-        return MemoryEventPayload(header=header, kind=message.kind, json_data=metadata, embedding=embedding)
+        return MemoryEventPayload(
+            header=header, kind=message.kind, json_data=metadata, embedding=embedding
+        )
 
     @staticmethod
     def _decode_json(raw: str) -> dict:
@@ -238,7 +271,12 @@ class MemoryNode(Node):
     def _summarise_metadata(metadata: Mapping[str, object]) -> str:
         if not isinstance(metadata, Mapping):
             return ""
-        for key in ("title", "thought_sentence", "spoken_sentence", "situation_overview"):
+        for key in (
+            "title",
+            "thought_sentence",
+            "spoken_sentence",
+            "situation_overview",
+        ):
             value = metadata.get(key)
             if isinstance(value, str):
                 text = value.strip()
@@ -269,7 +307,12 @@ class MemoryNode(Node):
                 if text and text not in labels:
                     labels.append(text)
 
-        for field in ("memory_tag", "memory_collection_text", "memory_collection_raw", "memory_collection_emoji"):
+        for field in (
+            "memory_tag",
+            "memory_collection_text",
+            "memory_collection_raw",
+            "memory_collection_emoji",
+        ):
             _append(metadata.get(field))
 
         tags = metadata.get("tags")
