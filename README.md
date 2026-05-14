@@ -2,6 +2,8 @@
 
 > _A nervous system for robots, and a mirror for their makers._
 
+**Psyched** is part of the [Project PETE](https://dancxjo.github.io/project-pete.html) lineage: the Pseudoconscious Experiment in Thought and Emotions. In that history, Psyched represents the distributed robotics era: ROS 2 for the body, containerized cognition services for the forebrain, and a cockpit for observing the creature-in-progress.
+
 **Psyched** is a **template for building embodied minds**. It shows how to grow
 a robot from living code: sensors, thoughts, and voice stitched together across
 machines.
