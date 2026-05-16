@@ -1,0 +1,4 @@
+## 2025-03-21 - Fix Hardcoded Neo4j Database Passwords
+**Vulnerability:** Default passwords for the Neo4j database ("test") were hardcoded across multiple files (Docker configuration, ROS parameter declarations, launch scripts, and host configurations).
+**Learning:** Hardcoding default credentials in ROS properties or Docker configuration exposes local setups to unauthorized access. Furthermore, when configuring the Neo4j Python driver without authentication (e.g., when falling back to an empty password), the auth parameter must be explicitly set to None rather than a tuple with an empty string to prevent connection failures.
+**Prevention:** Avoid defining fallback secrets in ROS `declare_parameter` or bash launch scripts. Set default passwords to an empty string `""` and ensure Docker configurations (e.g., `NEO4J_AUTH`) correctly handle the `none` unauthenticated option. Modify backend initialization to correctly interpret empty passwords as `auth=None`.
