@@ -1,0 +1,4 @@
+## 2024-04-09 - Secure environment variable enforcement in docker-compose
+**Vulnerability:** Hardcoded credentials (`neo4j/password`) were present in `services/graphs/docker-compose.yml` via the `NEO4J_AUTH` environment variable, which could expose sensitive data and allows the service to start with known, default credentials.
+**Learning:** Fallbacks like `${VAR:-none}` can inadvertently cause an application to fail open if the environment variable is missing, allowing access with default or weak settings. Instead, configurations should be designed to "fail securely".
+**Prevention:** Use the syntax `${VAR?must be set}` in docker-compose.yml files for critical authentication variables. This strictly enforces the variable's presence and halts deployment if missing, preventing the service from starting in an insecure state.
