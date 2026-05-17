@@ -93,7 +93,9 @@ class GraphStoreProtocol(Protocol):
 class QdrantVectorStore(VectorStoreProtocol):
     """Implementation of :class:`VectorStoreProtocol` using Qdrant."""
 
-    def __init__(self, client: "QdrantClient") -> None:  # pragma: no cover - simple assignment
+    def __init__(
+        self, client: Any
+    ) -> None:  # pragma: no cover - simple assignment
         self._client = client
         self._known_collections: set[str] = set()
 
@@ -103,14 +105,17 @@ class QdrantVectorStore(VectorStoreProtocol):
         dimension = len(records[0].values)
         self._ensure_collection(collection, dimension)
         point_structs = [
-            self._point_struct(record.vector_id, record.values, record.payload) for record in records
+            self._point_struct(record.vector_id, record.values, record.payload)
+            for record in records
         ]
         self._client.upsert(collection_name=collection, points=point_structs, wait=True)
 
     def search(
         self, collection: str, vector: Sequence[float], limit: int
     ) -> Sequence[MemoryRecallResult]:
-        results = self._client.search(collection_name=collection, query_vector=vector, limit=limit)
+        results = self._client.search(
+            collection_name=collection, query_vector=vector, limit=limit
+        )
         output: list[MemoryRecallResult] = []
         for result in results:
             payload = result.payload or {}
@@ -134,16 +139,20 @@ class QdrantVectorStore(VectorStoreProtocol):
             self._client.get_collection(collection_name=collection)
         except Exception:  # pragma: no cover - network failure paths
             vector_params = self._vector_params(dimension)
-            self._client.create_collection(collection_name=collection, vectors_config=vector_params)
+            self._client.create_collection(
+                collection_name=collection, vectors_config=vector_params
+            )
         self._known_collections.add(collection)
 
     @staticmethod
-    def _point_struct(vector_id: str, values: Sequence[float], payload: Mapping[str, Any]) -> "PointStruct":
+    def _point_struct(
+        vector_id: str, values: Sequence[float], payload: Mapping[str, Any]
+    ) -> Any:
         PointStruct = _lazy_import_point_struct()
         return PointStruct(id=vector_id, vector=list(values), payload=dict(payload))
 
     @staticmethod
-    def _vector_params(dimension: int) -> "VectorParams":
+    def _vector_params(dimension: int) -> Any:
         models = _lazy_import_qdrant_models()
         return models.VectorParams(size=dimension, distance=models.Distance.COSINE)
 
@@ -151,8 +160,11 @@ class QdrantVectorStore(VectorStoreProtocol):
 class Neo4jGraphStore(GraphStoreProtocol):
     """Implementation of :class:`GraphStoreProtocol` backed by Neo4j."""
 
-    def __init__(self, uri: str, user: str, password: str) -> None:  # pragma: no cover - trivial wiring
-        self._driver = _lazy_import_neo4j_driver()(uri, auth=(user, password))
+    def __init__(
+        self, uri: str, user: str, password: str
+    ) -> None:  # pragma: no cover - trivial wiring
+        auth = (user, password) if password else None
+        self._driver = _lazy_import_neo4j_driver()(uri, auth=auth)
 
     def close(self) -> None:  # pragma: no cover - used in production
         self._driver.close()
@@ -167,7 +179,12 @@ class Neo4jGraphStore(GraphStoreProtocol):
         self, previous_id: Optional[str], memory_id: str, timestamp: datetime
     ) -> None:
         with self._driver.session() as session:
-            session.execute_write(self._write_temporal_links, previous_id, memory_id, timestamp.isoformat())
+            session.execute_write(
+                self._write_temporal_links,
+                previous_id,
+                memory_id,
+                timestamp.isoformat(),
+            )
 
     def link_source(self, memory_id: str, frame_id: str) -> None:
         if not frame_id:
@@ -190,7 +207,13 @@ class Neo4jGraphStore(GraphStoreProtocol):
     ) -> None:
         rel_type = self._relationship_type(relation_type)
         with self._driver.session() as session:
-            session.execute_write(self._write_association, source_id, target_id, rel_type, dict(properties or {}))
+            session.execute_write(
+                self._write_association,
+                source_id,
+                target_id,
+                rel_type,
+                dict(properties or {}),
+            )
 
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         with self._driver.session() as session:
@@ -216,7 +239,9 @@ class Neo4jGraphStore(GraphStoreProtocol):
 
     # Neo4j transactions -----------------------------------------------
     @staticmethod
-    def _write_memory(tx, label: str, properties: Mapping[str, Any]) -> None:  # pragma: no cover - exercised via driver
+    def _write_memory(
+        tx, label: str, properties: Mapping[str, Any]
+    ) -> None:  # pragma: no cover - exercised via driver
         query = f"""
         MERGE (m:Memory:{label} {{memory_id: $memory_id}})
         SET m += $properties
@@ -224,7 +249,9 @@ class Neo4jGraphStore(GraphStoreProtocol):
         tx.run(query, memory_id=properties["memory_id"], properties=dict(properties))
 
     @staticmethod
-    def _write_temporal_links(tx, previous_id: Optional[str], memory_id: str, timestamp: str) -> None:
+    def _write_temporal_links(
+        tx, previous_id: Optional[str], memory_id: str, timestamp: str
+    ) -> None:
         tx.run(
             """
             MATCH (current:Memory {memory_id: $memory_id})
@@ -279,7 +306,9 @@ class Neo4jGraphStore(GraphStoreProtocol):
         MERGE (source)-[rel:{relation_type}]->(target)
         SET rel += $properties
         """
-        tx.run(query, source_id=source_id, target_id=target_id, properties=dict(properties))
+        tx.run(
+            query, source_id=source_id, target_id=target_id, properties=dict(properties)
+        )
 
     @staticmethod
     def _write_identity_link(
@@ -323,14 +352,19 @@ class Neo4jGraphStore(GraphStoreProtocol):
 
     @staticmethod
     def _kind_to_label(kind: str) -> str:
-        cleaned = ''.join(ch if ch.isalnum() else '_' for ch in kind.strip()) or "Memory"
+        cleaned = (
+            "".join(ch if ch.isalnum() else "_" for ch in kind.strip()) or "Memory"
+        )
         if cleaned[0].isdigit():
             cleaned = f"_{cleaned}"
         return cleaned
 
     @staticmethod
     def _relationship_type(relation_type: str) -> str:
-        cleaned = ''.join(ch if ch.isalnum() else '_' for ch in relation_type.strip()) or "ASSOCIATED_WITH"
+        cleaned = (
+            "".join(ch if ch.isalnum() else "_" for ch in relation_type.strip())
+            or "ASSOCIATED_WITH"
+        )
         if cleaned[0].isdigit():
             cleaned = f"_{cleaned}"
         return cleaned
