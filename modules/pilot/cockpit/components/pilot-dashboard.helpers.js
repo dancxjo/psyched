@@ -36,10 +36,15 @@ export function encodeBytesToBase64(bytes) {
   if (!bytes) {
     return "";
   }
-  const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  // ⚡ Bolt: Chunked processing prevents O(N^2) string concatenation bottleneck
+  const chunkSize = 8192;
+  for (let i = 0; i < view.byteLength; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, view.subarray(i, i + chunkSize));
   }
   if (typeof btoa === "function") {
     return btoa(binary);
@@ -114,23 +119,23 @@ export function normaliseFeelingIntent(message) {
   if (!message || typeof message !== "object") {
     return null;
   }
-  const cleanString = (
-    value,
-  ) => (typeof value === "string" ? value.trim() : "");
+  const cleanString = (value) =>
+    typeof value === "string" ? value.trim() : "";
   const stamp = parseRosStamp(message.stamp);
   const goals = Array.isArray(message.goals)
-    ? message.goals.filter((goal) => typeof goal === "string" && goal.trim())
-      .map((goal) => goal.trim())
+    ? message.goals
+        .filter((goal) => typeof goal === "string" && goal.trim())
+        .map((goal) => goal.trim())
     : [];
   const sourceTopics = Array.isArray(message.source_topics)
     ? message.source_topics
-      .filter((topic) => typeof topic === "string" && topic.trim())
-      .map((topic) => topic.trim())
+        .filter((topic) => typeof topic === "string" && topic.trim())
+        .map((topic) => topic.trim())
     : [];
   const episodeId = cleanString(message.episode_id);
   const situationId = cleanString(message.situation_id);
-  const id = episodeId || situationId ||
-    (stamp ? `intent-${stamp.getTime()}` : null);
+  const id =
+    episodeId || situationId || (stamp ? `intent-${stamp.getTime()}` : null);
 
   return {
     id,
@@ -194,17 +199,17 @@ export function normaliseFeelingIntent(message) {
  * }}
  */
 export function normaliseDebugSnapshot(snapshot) {
-  const cleanString = (
-    value,
-  ) => (typeof value === "string" ? value.trim() : "");
+  const cleanString = (value) =>
+    typeof value === "string" ? value.trim() : "";
   const cleanStringArray = (value) =>
     Array.isArray(value)
       ? Array.from(
-        new Set(
-          value.filter((entry) => typeof entry === "string" && entry.trim())
-            .map((entry) => entry.trim()),
-        ),
-      )
+          new Set(
+            value
+              .filter((entry) => typeof entry === "string" && entry.trim())
+              .map((entry) => entry.trim()),
+          ),
+        )
       : [];
   const data = snapshot && typeof snapshot === "object" ? snapshot : {};
   const status = cleanString(data.status) || "unknown";
@@ -216,9 +221,8 @@ export function normaliseDebugSnapshot(snapshot) {
     heartbeat = Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
-  const configRaw = data.config && typeof data.config === "object"
-    ? data.config
-    : {};
+  const configRaw =
+    data.config && typeof data.config === "object" ? data.config : {};
   const debounceSecondsRaw = Number(configRaw.debounce_seconds);
   const windowSecondsRaw = Number(configRaw.window_seconds);
 

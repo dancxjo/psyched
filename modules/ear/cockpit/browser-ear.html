@@ -217,11 +217,16 @@
             const data = event.inputBuffer.getChannelData(0);
             const downsampled = downsample(data, state.audioContext.sampleRate, state.targetSampleRate);
             const pcm = floatTo16BitPCM(downsampled);
+            let binary = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < pcm.length; i += chunkSize) {
+              binary += String.fromCharCode.apply(null, pcm.subarray(i, i + chunkSize));
+            }
             const payload = {
               type: 'chunk',
               sample_rate: state.targetSampleRate,
               channels: 1,
-              pcm: btoa(String.fromCharCode.apply(null, pcm)),
+              pcm: btoa(binary),
             };
             state.ws.send(JSON.stringify(payload));
           };
