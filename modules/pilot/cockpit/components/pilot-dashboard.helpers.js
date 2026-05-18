@@ -36,10 +36,15 @@ export function encodeBytesToBase64(bytes) {
   if (!bytes) {
     return "";
   }
-  const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const view = bytes instanceof ArrayBuffer
+    ? new Uint8Array(bytes)
+    : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  // ⚡ Bolt: Chunked processing prevents Maximum Call Stack Exceeded and O(N^2) string concat performance bottlenecks
+  const chunkSize = 8192;
+  for (let i = 0; i < view.length; i += chunkSize) {
+    const chunk = view.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
   }
   if (typeof btoa === "function") {
     return btoa(binary);
@@ -237,8 +242,8 @@ export function normaliseDebugSnapshot(snapshot) {
       const vectorLength = Number.isFinite(Number(entry.vector_len))
         ? Number(entry.vector_len)
         : Array.isArray(entry.vector)
-          ? entry.vector.length
-          : 0;
+        ? entry.vector.length
+        : 0;
       return {
         topic,
         kind: cleanString(entry.kind),
