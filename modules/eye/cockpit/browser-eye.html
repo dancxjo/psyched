@@ -223,7 +223,11 @@
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
         let binary = '';
-        bytes.forEach((b) => { binary += String.fromCharCode(b); });
+        // ⚡ Bolt: Chunked processing to prevent O(N^2) string concatenation bottleneck for large payloads
+        const CHUNK_SIZE = 8192;
+        for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK_SIZE));
+        }
         const payload = {
           type: 'frame',
           sequence: ++state.sequence,
