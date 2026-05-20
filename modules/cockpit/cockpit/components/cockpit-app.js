@@ -98,24 +98,24 @@ class CockpitApp extends LitElement {
     if (typeof window === 'undefined') {
       return;
     }
-    const cockpitGlobals = window.Cockpit ? { ...window.Cockpit } : {};
+    const cockpitGlobals = globalThis.Cockpit ? { ...globalThis.Cockpit } : {};
     cockpitGlobals.bridge = {
       ...(cockpitGlobals.bridge || {}),
       ...(bridge || {}),
     };
-    window.Cockpit = cockpitGlobals;
+    globalThis.Cockpit = cockpitGlobals;
   }
 
   updateHostGlobals(host) {
     if (typeof window === 'undefined' || !host || typeof host !== 'object') {
       return;
     }
-    const cockpitGlobals = window.Cockpit ? { ...window.Cockpit } : {};
+    const cockpitGlobals = globalThis.Cockpit ? { ...globalThis.Cockpit } : {};
     cockpitGlobals.host = {
       ...(cockpitGlobals.host || {}),
       ...host,
     };
-    window.Cockpit = cockpitGlobals;
+    globalThis.Cockpit = cockpitGlobals;
   }
 
   broadcastNavigation() {
@@ -124,14 +124,14 @@ class CockpitApp extends LitElement {
     }
 
     const sections = buildNavigationSections(this.modules);
-    const cockpitGlobals = window.Cockpit ? { ...window.Cockpit } : {};
+    const cockpitGlobals = globalThis.Cockpit ? { ...globalThis.Cockpit } : {};
     cockpitGlobals.navigation = {
       ...(cockpitGlobals.navigation || {}),
       sections,
     };
-    window.Cockpit = cockpitGlobals;
+    globalThis.Cockpit = cockpitGlobals;
 
-    window.dispatchEvent(new CustomEvent('cockpit-sections', { detail: sections }));
+    globalThis.dispatchEvent(new CustomEvent('cockpit-sections', { detail: sections }));
   }
 
   render() {
@@ -142,7 +142,7 @@ class CockpitApp extends LitElement {
       return html`<section class="cockpit-error">
         <h2>Failed to load modules</h2>
         <p>${this.errorMessage}</p>
-        <button type="button" @click=${() => this.refresh()}>🔄 Retry</button>
+        <button type="button" class="surface-button" aria-label="Retry loading modules" @click=${() => this.refresh()}>🔄 Retry</button>
       </section>`;
     }
     if (!this.modules.length) {
