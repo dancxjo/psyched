@@ -114,7 +114,7 @@ class ActionRegistry:
     def list_modules(self) -> Iterable[str]:
         """Yield the module identifiers with registered actions."""
 
-        return list(self._actions.keys())
+        return list(self._actions)
 
     def list_actions(self, module: str) -> Iterable[ModuleAction]:
         """Return the actions registered for *module*."""
