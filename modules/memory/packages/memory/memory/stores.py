@@ -81,6 +81,9 @@ class GraphStoreProtocol(Protocol):
     def fetch_memory(self, memory_id: str) -> Mapping[str, Any]:
         """Return metadata describing a stored memory node."""
 
+    def fetch_memories(self, memory_ids: Sequence[str]) -> Mapping[str, Mapping[str, Any]]:
+        """Return metadata describing multiple stored memory nodes."""
+
     def link_identity(
         self,
         memory_id: str,
@@ -196,6 +199,13 @@ class Neo4jGraphStore(GraphStoreProtocol):
         with self._driver.session() as session:
             record = session.execute_read(self._read_memory, memory_id)
             return record or {}
+
+    def fetch_memories(self, memory_ids: Sequence[str]) -> Mapping[str, Mapping[str, Any]]:
+        if not memory_ids:
+            return {}
+        with self._driver.session() as session:
+            records = session.execute_read(self._read_memories, list(memory_ids))
+            return records or {}
 
     def link_identity(
         self,
@@ -320,6 +330,28 @@ class Neo4jGraphStore(GraphStoreProtocol):
                 dict(identity) for identity in identities if identity is not None
             ]
         return node
+
+    @staticmethod
+    def _read_memories(tx, memory_ids: list[str]) -> Mapping[str, Mapping[str, Any]]:
+        result = tx.run(
+            """
+            UNWIND $memory_ids AS memory_id
+            MATCH (memory:Memory {memory_id: memory_id})
+            OPTIONAL MATCH (memory)-[:IDENTIFIES]->(identity:Identity)
+            RETURN memory.memory_id AS id, memory, collect(identity) AS identities
+            """,
+            memory_ids=memory_ids,
+        )
+        output = {}
+        for record in result:
+            node = dict(record["memory"])
+            identities = record.get("identities") if record else None
+            if identities:
+                node["identities"] = [
+                    dict(identity) for identity in identities if identity is not None
+                ]
+            output[record["id"]] = node
+        return output
 
     @staticmethod
     def _kind_to_label(kind: str) -> str:

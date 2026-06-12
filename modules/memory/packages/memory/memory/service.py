@@ -301,8 +301,13 @@ class MemoryService:
         query_vector = self._resolve_query_vector(kind=kind, embedding=embedding, text=text)
         results = self.vector_store.search(kind, query_vector, limit)
         enriched: List[MemoryRecallResult] = []
+
+        # Batch fetch metadata for all search results to avoid N+1 query problem
+        memory_ids = [result.memory_id for result in results]
+        graph_metadata_batch = getattr(self.graph_store, "fetch_memories", lambda ids: {m_id: self.graph_store.fetch_memory(m_id) for m_id in ids})(memory_ids)
+
         for result in results:
-            graph_metadata = self.graph_store.fetch_memory(result.memory_id)
+            graph_metadata = graph_metadata_batch.get(result.memory_id, {})
             merged_metadata = {**graph_metadata.get("metadata", {}), **dict(result.metadata)}
             merged_metadata.update(
                 {
