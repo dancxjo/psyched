@@ -132,7 +132,11 @@ function ensureToggle(header) {
     toggle.className = "surface-card__toggle icon-button icon-button--compact";
     header.appendChild(toggle);
   } else {
-    toggle.classList.add("surface-card__toggle", "icon-button", "icon-button--compact");
+    toggle.classList.add(
+      "surface-card__toggle",
+      "icon-button",
+      "icon-button--compact",
+    );
   }
   return toggle;
 }
@@ -200,6 +204,7 @@ function applyCollapsedState(card, toggle, content, collapsed, titleText) {
   }
   toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
   toggle.setAttribute("aria-label", hiddenLabel);
+  toggle.setAttribute("title", hiddenLabel);
 }
 
 function monitorShadowRoot(shadowRoot) {
