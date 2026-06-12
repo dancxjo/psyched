@@ -1,0 +1,3 @@
+## 2025-01-20 - Process Large Byte Arrays in Chunks for Base64 Encoding
+**Learning:** `String.fromCharCode.apply(null, array)` fails with a "Maximum call stack size exceeded" error or introduces O(N^2) bottlenecks when processing large byte arrays directly because every byte is passed as a separate argument to the function on the call stack.
+**Action:** When converting large byte arrays to Base64 in JavaScript, process the array in smaller chunks (e.g., 8192 bytes) using a loop and `String.fromCharCode.apply(null, chunk)` to concatenate the results before applying `btoa()`.
