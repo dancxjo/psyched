@@ -1,0 +1,5 @@
+## 2024-05-18 - Surface Action Button Structure
+
+**Learning:** In the cockpit UI, `.surface-action` buttons require a specific internal markup structure to function correctly with screen readers and to trigger the intended CSS hover-to-expand transition. They should wrap their content in `<span class="surface-action__icon" aria-hidden="true">` and `<span class="surface-action__label" aria-hidden="true">` spans, with the parent `<button>` containing `aria-label` and `title` attributes.
+
+**Action:** When implementing or fixing icon-and-text buttons in the web cockpit, ensure the `.surface-action` pattern uses the `aria-label`/`title` on the parent button and sets `aria-hidden="true"` on the internal structural spans to prevent redundant screen reader announcements while maintaining visual hover effects.
