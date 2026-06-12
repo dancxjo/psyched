@@ -159,7 +159,7 @@ class StreamManager:
         await self._ros.close_stream(stream_id)
 
     async def close_all(self) -> None:
-        for stream_id in list(self._streams.keys()):
+        for stream_id in list(self._streams):
             await self.release(stream_id)
 
 

@@ -1,0 +1,1 @@
+## 2024-03-15 - Dictionary iteration\n**Learning:** Iterate dictionaries directly (`for key in dict:`) instead of calling `.keys()` (`for key in dict.keys():`) to avoid method call and iterator instantiation overhead. This applies to codebase python scripts.\n**Action:** Use `for key in dict:` consistently in Python code for better performance.

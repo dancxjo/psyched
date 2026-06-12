@@ -77,7 +77,7 @@ def test_build_prompt_structures_context_and_actions() -> None:
         payload["available_actions"]["voice"]["say(text: str)"]
         == "Enqueue text-to-speech playback in the voice module queue."
     )
-    assert list(payload["available_actions"]["voice"].keys()) == [
+    assert list(payload["available_actions"]["voice"]) == [
         "pause_speech()",
         "say(text: str)",
     ]

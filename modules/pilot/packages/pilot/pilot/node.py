@@ -606,7 +606,7 @@ def _expand_positional_arguments(
 
     # Respect the order declared in the JSON schema so positional arguments map
     # to predictable parameter names.
-    candidate_names = [str(name) for name in props.keys()]
+    candidate_names = [str(name) for name in props]
     available = [name for name in candidate_names if name not in normalised]
 
     if len(values) > len(available):
@@ -1287,7 +1287,7 @@ class PilotNode(Node):
                 "config": {
                     "debounce_seconds": self._debounce_seconds,
                     "window_seconds": self._window_seconds,
-                    "context_topics": list(self._topic_cache.keys()),
+                    "context_topics": list(self._topic_cache),
                     "sensation_topics": [r.topic for _, r in self._sensation_records] if self._sensation_records else [],
                 },
                 "recent_sensations": [
@@ -1592,7 +1592,7 @@ class PilotNode(Node):
 
         msg = FeelingIntent()
         msg.stamp = self.get_clock().now().to_msg()
-        source_topics = sorted(set(context.topics.keys()) | {record.topic for record in recent_records})
+        source_topics = sorted(set(context.topics) | {record.topic for record in recent_records})
         msg.source_topics = source_topics
         msg.situation_overview = feeling_data.situation_overview
         msg.attitude_emoji = feeling_data.attitude_emoji
