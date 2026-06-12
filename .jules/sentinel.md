@@ -1,0 +1,4 @@
+## 2026-03-27 - Securely configuring Neo4j authentication with empty passwords
+**Vulnerability:** Hardcoded default passwords for Neo4j (e.g. "test", "password") were present in docker-compose, launch scripts, node parameter defaults, and host configuration toml files.
+**Learning:** Removing hardcoded credentials by falling back to empty strings can break Neo4j Python drivers if auth isn't explicitly set to `None`. Setting `NEO4J_AUTH: none` in docker-compose requires `auth=None` in the Python driver, rather than passing a tuple with an empty string like `("neo4j", "")`.
+**Prevention:** Use environment variables for authentication with secure fallback mechanisms. When an empty password is provided or auth is disabled, ensure the driver is initialized with `auth=None`. Always verify authentication logic across deployment (docker-compose), runtime execution (launch scripts, toml config), and application code parameters.
