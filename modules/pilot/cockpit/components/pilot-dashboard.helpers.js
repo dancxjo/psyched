@@ -37,10 +37,15 @@ export function encodeBytesToBase64(bytes) {
     return "";
   }
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // Use chunked base64 encoding to prevent O(N^2) bottlenecks and Maximum call stack size exceeded errors
+  const chunkSize = 8192;
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  for (let i = 0; i < view.length; i += chunkSize) {
+    const chunk = view.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
   }
+
   if (typeof btoa === "function") {
     return btoa(binary);
   }
