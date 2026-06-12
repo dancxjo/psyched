@@ -227,7 +227,7 @@ function formatErrorMessage(error, fallback) {
  * @param {Array<Record<string, any>>} modules Resolved module payloads.
  */
 function renderModules(modules) {
-  root.innerHTML = '';
+  root.replaceChildren();
   if (!modules.length) {
     root.appendChild(emptyState());
     return;
@@ -409,10 +409,24 @@ function setCardStatus(node, message, tone) {
 function emptyState() {
   const wrapper = document.createElement('section');
   wrapper.className = 'config-empty';
-  wrapper.innerHTML = `
-    <h2>No modules configured</h2>
-    <p>The host manifest does not list any modules yet. Add entries under <code>host.modules</code> to begin configuring them.</p>
-  `;
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'No modules configured';
+
+  const p = document.createElement('p');
+  p.textContent = 'The host manifest does not list any modules yet. Add entries under ';
+
+  const code = document.createElement('code');
+  code.textContent = 'host.modules';
+
+  const pTail = document.createTextNode(' to begin configuring them.');
+
+  p.appendChild(code);
+  p.appendChild(pTail);
+
+  wrapper.appendChild(heading);
+  wrapper.appendChild(p);
+
   return wrapper;
 }
 
