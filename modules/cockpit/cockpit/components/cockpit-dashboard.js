@@ -141,11 +141,9 @@ class CockpitDashboard extends LitElement {
                 @click="${() => this.refresh()}"
               >
                 <span class="surface-action__icon" aria-hidden="true"
-                  >${refreshIcon}</span
-                >
+                >${refreshIcon}</span>
                 <span class="surface-action__label" aria-hidden="true"
-                  >${refreshLabel}</span
-                >
+                >${refreshLabel}</span>
               </button>
             </div>
           </header>
@@ -161,19 +159,30 @@ class CockpitDashboard extends LitElement {
   _renderStatus() {
     if (this.errorMessage) {
       return html`
-        <p class="surface-status" data-variant="error">${this.errorMessage}</p>
+        <p
+          class="surface-status"
+          data-variant="error"
+          role="alert"
+          aria-live="assertive"
+        >
+          ${this.errorMessage}
+        </p>
       `;
     }
     if (this.loading) {
       return html`
-        <p class="surface-status">Loading cockpit metadata…</p>
+        <p class="surface-status" role="status" aria-live="polite">
+          Loading cockpit metadata…
+        </p>
       `;
     }
     const timestamp = this.lastUpdated instanceof Date
       ? this.lastUpdated.toLocaleTimeString()
       : "Never";
     return html`
-      <p class="surface-status">Updated ${timestamp}</p>
+      <p class="surface-status" role="status" aria-live="polite">
+        Updated ${timestamp}
+      </p>
     `;
   }
 
@@ -190,7 +199,8 @@ class CockpitDashboard extends LitElement {
         <span class="surface-metric__label">Host</span>
         <span class="surface-metric__value surface-metric__value--large"
         >${this.host.name}</span>
-        <span class="surface-status">Shortname: ${this.host.shortname}</span>
+        <span class="surface-status" role="status" aria-live="polite"
+        >Shortname: ${this.host.shortname}</span>
         <div class="host-actions">
           <button
             type="button"
@@ -201,12 +211,8 @@ class CockpitDashboard extends LitElement {
             title="${shutdownLabel}"
             @click="${() => this._confirmHostOperation("shutdown")}"
           >
-            <span class="surface-action__icon" aria-hidden="true"
-              >${shutdownIcon}</span
-            >
-            <span class="surface-action__label" aria-hidden="true"
-              >${shutdownLabel}</span
-            >
+            <span class="surface-action__icon" aria-hidden="true">${shutdownIcon}</span>
+            <span class="surface-action__label" aria-hidden="true">${shutdownLabel}</span>
           </button>
           <button
             type="button"
@@ -217,18 +223,23 @@ class CockpitDashboard extends LitElement {
             title="${restartLabel}"
             @click="${() => this._confirmHostOperation("restart")}"
           >
-            <span class="surface-action__icon" aria-hidden="true"
-              >${restartIcon}</span
-            >
-            <span class="surface-action__label" aria-hidden="true"
-              >${restartLabel}</span
-            >
+            <span class="surface-action__icon" aria-hidden="true">${restartIcon}</span>
+            <span class="surface-action__label" aria-hidden="true">${restartLabel}</span>
           </button>
         </div>
         ${this.hostActionStatus
           ? html`
-            <p class="surface-status" data-variant="${this.hostActionVariant ||
-              undefined}">${this.hostActionStatus}</p>
+            <p
+              class="surface-status"
+              data-variant="${this.hostActionVariant ||
+                undefined}"
+              role="${this.hostActionVariant === "error" ? "alert" : "status"}"
+              aria-live="${this.hostActionVariant === "error"
+                ? "assertive"
+                : "polite"}"
+            >
+              ${this.hostActionStatus}
+            </p>
           `
           : ""}
       </section>
