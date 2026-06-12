@@ -105,7 +105,9 @@ class MemoryService:
     # ------------------------------------------------------------------
     # Memorisation
     # ------------------------------------------------------------------
-    def memorize(self, event: MemoryEventPayload, *, flush: bool = True) -> MemoryRecord:
+    def memorize(
+        self, event: MemoryEventPayload, *, flush: bool = True
+    ) -> MemoryRecord:
         """Persist a new memory event.
 
         The embedding is queued for batch insertion.  The Neo4j node is
@@ -120,7 +122,9 @@ class MemoryService:
         vector_id: Optional[str] = None
 
         if event.embedding is not None:
-            vector_id = self._queue_vector(event.kind, memory_id, event.embedding, metadata, timestamp, event)
+            vector_id = self._queue_vector(
+                event.kind, memory_id, event.embedding, metadata, timestamp, event
+            )
             if flush or self._pending_count(event.kind) >= self._batch_size:
                 self.flush_vectors()
 
@@ -173,7 +177,9 @@ class MemoryService:
     ) -> None:
         """Create an explicit association between two memories."""
 
-        self.graph_store.create_association(source_id, target_id, relation_type, properties)
+        self.graph_store.create_association(
+            source_id, target_id, relation_type, properties
+        )
 
     # ------------------------------------------------------------------
     # Identity tagging
@@ -203,21 +209,33 @@ class MemoryService:
             raise ValueError(f"Memory '{memory_key}' not found")
 
         metadata_raw = record.get("metadata") if isinstance(record, Mapping) else {}
-        metadata: Dict[str, Any] = dict(metadata_raw) if isinstance(metadata_raw, Mapping) else {}
+        metadata: Dict[str, Any] = (
+            dict(metadata_raw) if isinstance(metadata_raw, Mapping) else {}
+        )
 
-        existing_identity = metadata.get("identity") if isinstance(metadata.get("identity"), Mapping) else None
-        candidate_id = self._normalise_text(identity_id) if identity_id is not None else ""
+        existing_identity = (
+            metadata.get("identity")
+            if isinstance(metadata.get("identity"), Mapping)
+            else None
+        )
+        candidate_id = (
+            self._normalise_text(identity_id) if identity_id is not None else ""
+        )
         if not candidate_id and existing_identity:
             candidate_id = self._normalise_text(
                 existing_identity.get("id"),
                 existing_identity.get("identity_id"),
                 existing_identity.get("uuid"),
             )
-        identity_key = candidate_id or self._generate_identity_id(label_text, memory_key)
+        identity_key = candidate_id or self._generate_identity_id(
+            label_text, memory_key
+        )
 
         alias_source: List[str] = []
         if existing_identity:
-            alias_source.extend(self._normalise_text_list(existing_identity.get("aliases")))
+            alias_source.extend(
+                self._normalise_text_list(existing_identity.get("aliases"))
+            )
         alias_source.extend(self._normalise_text_list(aliases))
         alias_source = self._extend_unique(alias_source, [label_text])
 
@@ -254,7 +272,9 @@ class MemoryService:
         if isinstance(tags_field, list):
             if label_text not in tags_field:
                 tags_field.append(label_text)
-        elif isinstance(tags_field, Sequence) and not isinstance(tags_field, (str, bytes)):
+        elif isinstance(tags_field, Sequence) and not isinstance(
+            tags_field, (str, bytes)
+        ):
             tags_list = list(tags_field)
             if label_text not in tags_list:
                 tags_list.append(label_text)
@@ -298,12 +318,24 @@ class MemoryService:
     ) -> List[MemoryRecallResult]:
         """Return memories similar to the provided query."""
 
-        query_vector = self._resolve_query_vector(kind=kind, embedding=embedding, text=text)
+        query_vector = self._resolve_query_vector(
+            kind=kind, embedding=embedding, text=text
+        )
         results = self.vector_store.search(kind, query_vector, limit)
+
+        # ⚡ Bolt Optimization: Batch fetch graph metadata to prevent N+1 query problem.
+        # Instead of querying Neo4j individually for each search result, we retrieve
+        # all corresponding graph nodes in a single database round-trip.
+        memory_ids = [result.memory_id for result in results]
+        graph_memories = self.graph_store.fetch_memories(memory_ids)
+
         enriched: List[MemoryRecallResult] = []
         for result in results:
-            graph_metadata = self.graph_store.fetch_memory(result.memory_id)
-            merged_metadata = {**graph_metadata.get("metadata", {}), **dict(result.metadata)}
+            graph_metadata = graph_memories.get(result.memory_id, {})
+            merged_metadata = {
+                **graph_metadata.get("metadata", {}),
+                **dict(result.metadata),
+            }
             merged_metadata.update(
                 {
                     "kind": graph_metadata.get("kind", kind),
@@ -354,7 +386,9 @@ class MemoryService:
             "source": event.header.source,
             "metadata": dict(metadata),
         }
-        record = VectorRecord(vector_id=vector_id, values=list(embedding), payload=payload)
+        record = VectorRecord(
+            vector_id=vector_id, values=list(embedding), payload=payload
+        )
         self._vector_queue[collection].append(record)
         return vector_id
 
@@ -410,23 +444,38 @@ class MemoryService:
             self._merge_identity_lists(bucket["props"], graph_props, "signatures")
             self._merge_identity_lists(bucket["props"], graph_props, "memory_ids")
             self._merge_identity_lists(bucket["display"], display_identity, "aliases")
-            self._merge_identity_lists(bucket["display"], display_identity, "signatures")
-            self._merge_identity_lists(bucket["display"], display_identity, "memory_ids")
+            self._merge_identity_lists(
+                bucket["display"], display_identity, "signatures"
+            )
+            self._merge_identity_lists(
+                bucket["display"], display_identity, "memory_ids"
+            )
             if display_identity.get("name"):
                 bucket["display"].setdefault("name", display_identity["name"])
-            candidate_confidence = self._coerce_float(display_identity.get("confidence"))
+            candidate_confidence = self._coerce_float(
+                display_identity.get("confidence")
+            )
             if candidate_confidence is not None:
-                existing_confidence = self._coerce_float(bucket["display"].get("confidence"))
-                if existing_confidence is None or candidate_confidence > existing_confidence:
+                existing_confidence = self._coerce_float(
+                    bucket["display"].get("confidence")
+                )
+                if (
+                    existing_confidence is None
+                    or candidate_confidence > existing_confidence
+                ):
                     bucket["display"]["confidence"] = candidate_confidence
         cleaned: List[Dict[str, Any]] = []
         prepared: List[tuple[str, Dict[str, Any]]] = []
         for identity_id, bundle in consolidated.items():
             props = {
-                key: value for key, value in bundle["props"].items() if value not in (None, [], {})
+                key: value
+                for key, value in bundle["props"].items()
+                if value not in (None, [], {})
             }
             display = {
-                key: value for key, value in bundle["display"].items() if value not in (None, [], {})
+                key: value
+                for key, value in bundle["display"].items()
+                if value not in (None, [], {})
             }
             display.setdefault("id", identity_id)
             if props.get("signatures"):
@@ -471,7 +520,9 @@ class MemoryService:
         if labels:
             aliases = self._extend_unique(aliases, labels)
         signatures = self._normalise_text_list(candidate.get("signatures"))
-        signature_history = self._normalise_text_list(candidate.get("signature_history"))
+        signature_history = self._normalise_text_list(
+            candidate.get("signature_history")
+        )
         if signature_history:
             signatures = self._extend_unique(signatures, signature_history)
         signature_hint = self._normalise_text(candidate.get("signature"))
@@ -526,7 +577,9 @@ class MemoryService:
             if text:
                 items.append(text)
             return items
-        if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
+        if isinstance(value, Sequence) and not isinstance(
+            value, (bytes, bytearray, str)
+        ):
             for element in value:
                 text = self._normalise_text(element)
                 if text and text not in items:
@@ -598,7 +651,9 @@ class MemoryService:
             return embedding
         if text is not None:
             if self._embedding_provider is None:
-                raise ValueError("text recall requested but no embedding provider is configured")
+                raise ValueError(
+                    "text recall requested but no embedding provider is configured"
+                )
             return self._embedding_provider.embed_text(text, kind=kind)
         raise ValueError("either embedding or text must be provided")
 
