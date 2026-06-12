@@ -125,7 +125,11 @@
   <body>
     <main>
       <h1>ASR Service Harness</h1>
-      <p>This lightweight harness streams microphone audio or WAV uploads to the ASR websocket endpoint so you can verify partial and final transcripts without the ROS stack.</p>
+      <p>
+        This lightweight harness streams microphone audio or WAV uploads to the
+        ASR websocket endpoint so you can verify partial and final transcripts
+        without the ROS stack.
+      </p>
 
       <section id="connection">
         <h2>Connection</h2>
@@ -134,14 +138,24 @@
           <button id="disconnect" disabled>Disconnect</button>
           <label>
             Target sample rate (Hz)
-            <input id="sample-rate" type="number" min="8000" max="48000" step="1000" value="16000" />
+            <input
+              id="sample-rate"
+              type="number"
+              min="8000"
+              max="48000"
+              step="1000"
+              value="16000"
+            />
           </label>
         </div>
       </section>
 
       <section id="microphone">
         <h2>Microphone streaming</h2>
-        <p>Capture live audio from this browser and stream it directly to the ASR service.</p>
+        <p>
+          Capture live audio from this browser and stream it directly to the ASR
+          service.
+        </p>
         <div id="mic-controls" class="controls">
           <button id="start-record" disabled>Start recording</button>
           <button id="stop-record" disabled>Stop recording</button>
@@ -150,7 +164,10 @@
 
       <section id="upload">
         <h2>Upload WAV for transcription</h2>
-        <p>Select a mono or stereo WAV file; the harness will downmix and resample it before streaming.</p>
+        <p>
+          Select a mono or stereo WAV file; the harness will downmix and
+          resample it before streaming.
+        </p>
         <div class="controls">
           <input id="file-input" type="file" accept="audio/wav,audio/x-wav" />
           <button id="send-file" disabled>Stream file</button>
@@ -158,7 +175,9 @@
       </section>
 
       <section id="status">
-        <div>Connection: <strong id="connection-status">Disconnected</strong></div>
+        <div>
+          Connection: <strong id="connection-status">Disconnected</strong>
+        </div>
         <div>Partial transcript: <span id="partial-text">—</span></div>
         <div>Last final transcript: <span id="final-text">—</span></div>
       </section>
@@ -172,17 +191,19 @@
     <script>
       (() => {
         const elements = {
-          connect: document.getElementById('connect'),
-          disconnect: document.getElementById('disconnect'),
-          startRecord: document.getElementById('start-record'),
-          stopRecord: document.getElementById('stop-record'),
-          fileInput: document.getElementById('file-input'),
-          sendFile: document.getElementById('send-file'),
-          sampleRate: document.getElementById('sample-rate'),
-          connectionStatus: document.getElementById('connection-status'),
-          partialText: document.getElementById('partial-text'),
-          finalText: document.getElementById('final-text'),
-          eventLog: document.getElementById('event-log'),
+          connect: document.getElementById("connect"),
+          disconnect: document.getElementById("disconnect"),
+          startRecord: document.getElementById("start-record"),
+          stopRecord: document.getElementById("stop-record"),
+          fileInput: document.getElementById("file-input"),
+          sendFile: document.getElementById("send-file"),
+          sampleRate: document.getElementById("sample-rate"),
+          connectionStatus: document.getElementById(
+            "connection-status",
+          ),
+          partialText: document.getElementById("partial-text"),
+          finalText: document.getElementById("final-text"),
+          eventLog: document.getElementById("event-log"),
         };
 
         const state = {
@@ -195,12 +216,16 @@
         };
 
         function websocketUrl() {
-          const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+          const protocol = window.location.protocol === "https:"
+            ? "wss"
+            : "ws";
           return `${protocol}://${window.location.host}/asr`;
         }
 
         function setConnectionState(connected) {
-          elements.connectionStatus.textContent = connected ? 'Connected' : 'Disconnected';
+          elements.connectionStatus.textContent = connected
+            ? "Connected"
+            : "Disconnected";
           elements.connect.disabled = connected;
           elements.disconnect.disabled = !connected;
           elements.startRecord.disabled = !connected;
@@ -208,21 +233,23 @@
           elements.sendFile.disabled = !connected;
         }
 
-        function logEvent(kind, text, extra = '') {
-          const entry = document.createElement('li');
+        function logEvent(kind, text, extra = "") {
+          const entry = document.createElement("li");
           entry.classList.add(`event-${kind}`);
-          const meta = document.createElement('span');
-          meta.className = 'event-meta';
-          meta.textContent = `${new Date().toLocaleTimeString()} · ${kind.toUpperCase()}`;
+          const meta = document.createElement("span");
+          meta.className = "event-meta";
+          meta.textContent = `${
+            new Date().toLocaleTimeString()
+          } · ${kind.toUpperCase()}`;
           entry.appendChild(meta);
-          const body = document.createElement('div');
-          body.textContent = text || '—';
+          const body = document.createElement("div");
+          body.textContent = text || "—";
           entry.appendChild(body);
           if (extra) {
-            const details = document.createElement('div');
+            const details = document.createElement("div");
             details.textContent = extra;
-            details.style.opacity = '0.7';
-            details.style.fontSize = '0.75rem';
+            details.style.opacity = "0.7";
+            details.style.fontSize = "0.75rem";
             entry.appendChild(details);
           }
           elements.eventLog.prepend(entry);
@@ -238,7 +265,9 @@
             state.processor = null;
           }
           if (state.mediaStream) {
-            state.mediaStream.getTracks().forEach((track) => track.stop());
+            state.mediaStream.getTracks().forEach((track) =>
+              track.stop()
+            );
             state.mediaStream = null;
           }
           if (state.audioContext) {
@@ -254,30 +283,36 @@
             return;
           }
           try {
-            state.targetSampleRate = Math.max(8000, Math.min(48000, Number(elements.sampleRate.value) || 16000));
+            state.targetSampleRate = Math.max(
+              8000,
+              Math.min(
+                48000,
+                Number(elements.sampleRate.value) || 16000,
+              ),
+            );
           } catch (_) {
             state.targetSampleRate = 16000;
           }
           const ws = new WebSocket(websocketUrl());
-          ws.addEventListener('open', () => {
+          ws.addEventListener("open", () => {
             state.ws = ws;
             setConnectionState(true);
-            logEvent('info', 'WebSocket connected');
+            logEvent("info", "WebSocket connected");
           });
-          ws.addEventListener('close', () => {
+          ws.addEventListener("close", () => {
             if (state.ws === ws) {
               state.ws = null;
               closeAudioResources();
               setConnectionState(false);
-              elements.partialText.textContent = '—';
-              logEvent('info', 'WebSocket disconnected');
+              elements.partialText.textContent = "—";
+              logEvent("info", "WebSocket disconnected");
             }
           });
-          ws.addEventListener('error', (event) => {
-            console.error('WebSocket error', event);
-            logEvent('error', 'WebSocket error occurred');
+          ws.addEventListener("error", (event) => {
+            console.error("WebSocket error", event);
+            logEvent("error", "WebSocket error occurred");
           });
-          ws.addEventListener('message', (event) => {
+          ws.addEventListener("message", (event) => {
             handleServiceMessage(event.data);
           });
         }
@@ -286,7 +321,7 @@
           if (!state.ws) {
             return;
           }
-          state.ws.close(1000, 'Client requested close');
+          state.ws.close(1000, "Client requested close");
           state.ws = null;
           closeAudioResources();
           setConnectionState(false);
@@ -300,15 +335,27 @@
             .getUserMedia({ audio: true })
             .then((stream) => {
               state.mediaStream = stream;
-              state.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
-              const input = state.audioContext.createMediaStreamSource(stream);
-              const processor = state.audioContext.createScriptProcessor(4096, input.channelCount, 1);
+              state.audioContext =
+                new (window.AudioContext || window.webkitAudioContext)({
+                  sampleRate: 48000,
+                });
+              const input = state.audioContext.createMediaStreamSource(
+                stream,
+              );
+              const processor = state.audioContext
+                .createScriptProcessor(4096, input.channelCount, 1);
               processor.onaudioprocess = (event) => {
-                if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                if (
+                  !state.ws || state.ws.readyState !== WebSocket.OPEN
+                ) {
                   return;
                 }
                 const channelData = event.inputBuffer.getChannelData(0);
-                const downsampled = downsample(channelData, state.audioContext.sampleRate, state.targetSampleRate);
+                const downsampled = downsample(
+                  channelData,
+                  state.audioContext.sampleRate,
+                  state.targetSampleRate,
+                );
                 const pcm = floatTo16BitPCM(downsampled);
                 sendPcmChunk(pcm, state.targetSampleRate, 1);
               };
@@ -317,17 +364,21 @@
               state.processor = processor;
               elements.startRecord.disabled = true;
               elements.stopRecord.disabled = false;
-              logEvent('info', 'Microphone capture started');
+              logEvent("info", "Microphone capture started");
             })
             .catch((error) => {
-              console.error('Failed to access microphone', error);
-              logEvent('error', 'Microphone access denied', String(error));
+              console.error("Failed to access microphone", error);
+              logEvent(
+                "error",
+                "Microphone access denied",
+                String(error),
+              );
             });
         }
 
         function stopRecording() {
           closeAudioResources();
-          logEvent('info', 'Microphone capture stopped');
+          logEvent("info", "Microphone capture stopped");
         }
 
         function handleServiceMessage(raw) {
@@ -335,69 +386,86 @@
           try {
             payload = JSON.parse(raw);
           } catch (error) {
-            logEvent('info', raw);
+            logEvent("info", raw);
             return;
           }
-          const eventName = typeof payload.event === 'string' ? payload.event.toLowerCase() : '';
+          const eventName = typeof payload.event === "string"
+            ? payload.event.toLowerCase()
+            : "";
           const text = resolveText(payload);
-          if (eventName === 'partial') {
-            elements.partialText.textContent = text || '…';
-            logEvent('partial', text);
+          if (eventName === "partial") {
+            elements.partialText.textContent = text || "…";
+            logEvent("partial", text);
             return;
           }
-          if (eventName === 'final') {
-            elements.partialText.textContent = '—';
-            elements.finalText.textContent = text || '—';
-            const timing = timingSummary(payload.start_ms, payload.end_ms);
-            logEvent('final', text, timing);
+          if (eventName === "final") {
+            elements.partialText.textContent = "—";
+            elements.finalText.textContent = text || "—";
+            const timing = timingSummary(
+              payload.start_ms,
+              payload.end_ms,
+            );
+            logEvent("final", text, timing);
             return;
           }
-          if (eventName === 'ready') {
-            const sampleRate = payload.sample_rate || payload.sampleRate || 'unknown';
-            logEvent('info', `Service ready (sample rate ${sampleRate})`);
+          if (eventName === "ready") {
+            const sampleRate = payload.sample_rate ||
+              payload.sampleRate || "unknown";
+            logEvent(
+              "info",
+              `Service ready (sample rate ${sampleRate})`,
+            );
             return;
           }
-          if (eventName === 'error') {
-            logEvent('error', payload.message || 'Service reported an error');
+          if (eventName === "error") {
+            logEvent(
+              "error",
+              payload.message || "Service reported an error",
+            );
             return;
           }
-          logEvent('info', JSON.stringify(payload));
+          logEvent("info", JSON.stringify(payload));
         }
 
         function resolveText(payload) {
-          if (typeof payload.text === 'string' && payload.text.trim()) {
+          if (typeof payload.text === "string" && payload.text.trim()) {
             return payload.text.trim();
           }
           if (Array.isArray(payload.segments)) {
             const pieces = payload.segments
-              .map((segment) => (segment && typeof segment.text === 'string' ? segment.text.trim() : ''))
+              .map((
+                segment,
+              ) => (segment && typeof segment.text === "string"
+                ? segment.text.trim()
+                : "")
+              )
               .filter((part) => part.length > 0);
             if (pieces.length) {
-              return pieces.join(' ');
+              return pieces.join(" ");
             }
           }
-          return '';
+          return "";
         }
 
         function timingSummary(start, end) {
           const startMs = coerceInt(start);
           const endMs = coerceInt(end);
           if (startMs == null && endMs == null) {
-            return '';
+            return "";
           }
           const startLabel = formatMilliseconds(startMs);
           const endLabel = formatMilliseconds(endMs);
           if (startLabel && endLabel) {
             return `${startLabel} → ${endLabel}`;
           }
-          return startLabel || endLabel || '';
+          return startLabel || endLabel || "";
         }
 
         function coerceInt(value) {
-          if (typeof value === 'number') {
+          if (typeof value === "number") {
             return Number.isFinite(value) ? Math.trunc(value) : null;
           }
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             const trimmed = value.trim();
             if (!trimmed) {
               return null;
@@ -411,11 +479,11 @@
         function formatMilliseconds(ms) {
           const value = coerceInt(ms);
           if (value == null) {
-            return '';
+            return "";
           }
           const seconds = value / 1000;
           if (!Number.isFinite(seconds)) {
-            return '';
+            return "";
           }
           if (seconds < 60) {
             return `${seconds.toFixed(2)} s`;
@@ -430,12 +498,18 @@
             return buffer;
           }
           const ratio = inputRate / outputRate;
-          const newLength = Math.max(1, Math.round(buffer.length / ratio));
+          const newLength = Math.max(
+            1,
+            Math.round(buffer.length / ratio),
+          );
           const result = new Float32Array(newLength);
           let offset = 0;
           for (let i = 0; i < newLength; i += 1) {
             const start = Math.floor(i * ratio);
-            const end = Math.min(buffer.length, Math.floor((i + 1) * ratio));
+            const end = Math.min(
+              buffer.length,
+              Math.floor((i + 1) * ratio),
+            );
             let sum = 0;
             let count = 0;
             for (let j = start; j < end; j += 1) {
@@ -452,8 +526,15 @@
           const buffer = new ArrayBuffer(length * 2);
           const view = new DataView(buffer);
           for (let i = 0; i < length; i += 1) {
-            const sample = Math.max(-1, Math.min(1, float32Array[i] || 0));
-            view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+            const sample = Math.max(
+              -1,
+              Math.min(1, float32Array[i] || 0),
+            );
+            view.setInt16(
+              i * 2,
+              sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+              true,
+            );
           }
           return new Int16Array(buffer);
         }
@@ -464,7 +545,7 @@
           }
           const base64 = int16ToBase64(int16Array);
           const payload = {
-            type: 'chunk',
+            type: "chunk",
             sample_rate: sampleRate,
             channels,
             pcm: base64,
@@ -473,77 +554,119 @@
         }
 
         function int16ToBase64(int16Array) {
-          const bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
-          let binary = '';
-          for (let i = 0; i < bytes.length; i += 1) {
-            binary += String.fromCharCode(bytes[i] & 0xff);
+          const bytes = new Uint8Array(
+            int16Array.buffer,
+            int16Array.byteOffset,
+            int16Array.byteLength,
+          );
+          let binary = "";
+          // Process in chunks to avoid Maximum call stack size exceeded and O(N^2) string concatenation overhead
+        const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(
+              null,
+              bytes.subarray(i, i + chunkSize),
+            );
           }
           return btoa(binary);
         }
 
         function handleFileSend() {
           const file = elements.fileInput.files?.[0];
-          if (!file || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
+          if (
+            !file || !state.ws || state.ws.readyState !== WebSocket.OPEN
+          ) {
             return;
           }
           elements.sendFile.disabled = true;
           state.sendingFile = true;
-          logEvent('info', `Loading ${file.name}`);
+          logEvent("info", `Loading ${file.name}`);
           const reader = new FileReader();
           reader.onload = () => {
             const arrayBuffer = reader.result;
             if (!(arrayBuffer instanceof ArrayBuffer)) {
-              logEvent('error', 'Unable to read file');
+              logEvent("error", "Unable to read file");
               elements.sendFile.disabled = false;
               state.sendingFile = false;
               return;
             }
-            const context = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+            const context = new (window.OfflineAudioContext ||
+              window.webkitOfflineAudioContext)(1, 1, 44100);
             context.decodeAudioData(
               arrayBuffer.slice(0),
               (audioBuffer) => {
                 const channelData = audioBuffer.getChannelData(0);
-                const downsampled = downsample(channelData, audioBuffer.sampleRate, state.targetSampleRate);
-                const chunkSize = Math.max(1, Math.round(state.targetSampleRate * 0.5));
-                for (let index = 0; index < downsampled.length; index += chunkSize) {
-                  const slice = downsampled.subarray(index, index + chunkSize);
+                const downsampled = downsample(
+                  channelData,
+                  audioBuffer.sampleRate,
+                  state.targetSampleRate,
+                );
+                const chunkSize = Math.max(
+                  1,
+                  Math.round(state.targetSampleRate * 0.5),
+                );
+                for (
+                  let index = 0;
+                  index < downsampled.length;
+                  index += chunkSize
+                ) {
+                  const slice = downsampled.subarray(
+                    index,
+                    index + chunkSize,
+                  );
                   const pcm = floatTo16BitPCM(slice);
                   sendPcmChunk(pcm, state.targetSampleRate, 1);
                 }
-                logEvent('info', `Finished streaming ${file.name}`);
+                logEvent("info", `Finished streaming ${file.name}`);
                 elements.sendFile.disabled = false;
                 state.sendingFile = false;
               },
               (error) => {
-                console.error('Failed to decode audio file', error);
-                logEvent('error', 'Failed to decode audio file', String(error));
+                console.error("Failed to decode audio file", error);
+                logEvent(
+                  "error",
+                  "Failed to decode audio file",
+                  String(error),
+                );
                 elements.sendFile.disabled = false;
                 state.sendingFile = false;
               },
             );
           };
           reader.onerror = (error) => {
-            console.error('File read error', error);
-            logEvent('error', 'File read error', String(error));
+            console.error("File read error", error);
+            logEvent("error", "File read error", String(error));
             elements.sendFile.disabled = false;
             state.sendingFile = false;
           };
           reader.readAsArrayBuffer(file);
         }
 
-        elements.connect.addEventListener('click', () => connect());
-        elements.disconnect.addEventListener('click', () => disconnect());
-        elements.startRecord.addEventListener('click', () => startRecording());
-        elements.stopRecord.addEventListener('click', () => stopRecording());
-        elements.sendFile.addEventListener('click', () => handleFileSend());
-        elements.sampleRate.addEventListener('change', () => {
+        elements.connect.addEventListener("click", () => connect());
+        elements.disconnect.addEventListener(
+          "click",
+          () => disconnect(),
+        );
+        elements.startRecord.addEventListener(
+          "click",
+          () => startRecording(),
+        );
+        elements.stopRecord.addEventListener(
+          "click",
+          () => stopRecording(),
+        );
+        elements.sendFile.addEventListener(
+          "click",
+          () => handleFileSend(),
+        );
+        elements.sampleRate.addEventListener("change", () => {
           const next = Number(elements.sampleRate.value);
           if (Number.isFinite(next) && next >= 8000 && next <= 48000) {
             state.targetSampleRate = Math.trunc(next);
           }
         });
 
-        window.addEventListener('beforeunload', () => {
+        window.addEventListener("beforeunload", () => {
           disconnect();
         });
       })();
