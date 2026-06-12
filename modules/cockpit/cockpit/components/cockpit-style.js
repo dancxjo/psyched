@@ -453,6 +453,11 @@ export const surfaceStyles = css`
     outline: none;
   }
 
+  .surface-button:focus-visible,
+  .surface-action:focus-visible {
+    box-shadow: 0 0 0 2px rgba(88, 178, 220, 0.8), 0 4px 10px rgba(0, 0, 0, 0.25);
+  }
+
   .surface-button[disabled],
   .surface-action[disabled] {
     opacity: 0.45;
