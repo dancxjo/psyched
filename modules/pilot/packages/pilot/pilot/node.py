@@ -606,7 +606,7 @@ def _expand_positional_arguments(
 
     # Respect the order declared in the JSON schema so positional arguments map
     # to predictable parameter names.
-    candidate_names = [str(name) for name in props.keys()]
+    candidate_names = [str(name) for name in props]
     available = [name for name in candidate_names if name not in normalised]
 
     if len(values) > len(available):

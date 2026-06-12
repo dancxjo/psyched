@@ -54,7 +54,7 @@ def summarise_pilot_feed(payload: Any) -> str:
         return f'Memory update ({kind}): "{summary}".'
     metadata = record.get("metadata")
     if isinstance(metadata, Mapping):
-        keys = sorted(str(key) for key in metadata.keys())
+        keys = sorted(str(key) for key in metadata)
         if keys:
             return f"Memory update ({kind}) with metadata keys: {', '.join(keys)}."
     return f"Memory update ({kind})."

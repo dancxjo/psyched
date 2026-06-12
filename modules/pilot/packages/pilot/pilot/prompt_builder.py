@@ -248,7 +248,7 @@ def _condense_status(status: Any) -> Dict[str, Any]:
     modules = status.get("modules")
     module_names: List[str] = []
     if isinstance(modules, Mapping):
-        module_names = sorted(str(key) for key in modules.keys())
+        module_names = sorted(str(key) for key in modules)
     elif isinstance(modules, Sequence) and not isinstance(modules, (str, bytes, bytearray)):
         for entry in modules:
             if isinstance(entry, Mapping):
