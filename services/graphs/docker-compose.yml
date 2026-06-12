@@ -3,7 +3,7 @@ services:
     image: neo4j:latest
     container_name: graphs
     environment:
-      NEO4J_AUTH: neo4j/password
+      NEO4J_AUTH: ${NEO4J_AUTH:-none}
     ports:
       - "7474:7474"
       - "7687:7687"
