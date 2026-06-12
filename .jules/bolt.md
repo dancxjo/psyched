@@ -1,0 +1,3 @@
+## 2024-04-09 - Avoid O(N^2) byte array string concatenations
+**Learning:** Concatenating a string byte-by-byte in a `for` loop (e.g. `binary += String.fromCharCode(view[i])`) when converting large Uint8Arrays to Base64 scales extremely poorly (O(N^2) time complexity) because V8/engines must reallocate the increasingly large string repeatedly. It also becomes a bottleneck in the browser thread.
+**Action:** When producing base64 from a large ArrayBuffer/Uint8Array, always slice the array into chunks (e.g., 8192 bytes) and use `String.fromCharCode.apply(null, chunk)` inside the loop, before joining the mapped chunks at the end. Do not use `.apply(null, full_array)` as it will crash with "Maximum call stack size exceeded".
