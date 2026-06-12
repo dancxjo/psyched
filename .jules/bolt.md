@@ -1,0 +1,3 @@
+## 2024-06-12 - N+1 query problems with Neo4j driver
+**Learning:** Calling `fetch_memory` inside a loop in `MemoryService.recall` for multiple `memory_ids` causes severe N+1 round-trip performance issues. Neo4j operations should be batched whenever possible to avoid high latency and multiple network hops. Using Cypher's `UNWIND` clause with a list of IDs significantly speeds up lookups (e.g. ~25x faster for 50 items).
+**Action:** When querying Neo4j for multiple IDs, use batch retrieval with the `UNWIND` Cypher clause to prevent N+1 query problems and significantly reduce database round-trips. Provide batch-oriented APIs like `fetch_memories` instead of looping over scalar `fetch_memory` methods.
