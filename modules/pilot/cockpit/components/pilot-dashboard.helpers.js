@@ -37,15 +37,21 @@ export function encodeBytesToBase64(bytes) {
     return "";
   }
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  // ⚡ Bolt: Chunked processing to avoid O(N^2) byte-by-byte string concatenation overhead
   let binary = "";
-  for (let i = 0; i < view.byteLength; i += 1) {
-    binary += String.fromCharCode(view[i]);
+  const chunk = 8192;
+  for (let i = 0; i < view.byteLength; i += chunk) {
+    binary += String.fromCharCode.apply(null, view.subarray(i, i + chunk));
   }
+
   if (typeof btoa === "function") {
     return btoa(binary);
   }
   // Fallback for environments without btoa (e.g., Node tests)
+  // deno-lint-ignore no-node-globals
   if (typeof Buffer !== "undefined") {
+    // deno-lint-ignore no-node-globals
     return Buffer.from(binary, "binary").toString("base64");
   }
   throw new Error("No base64 encoder available");

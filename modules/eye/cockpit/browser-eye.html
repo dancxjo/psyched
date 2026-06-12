@@ -222,8 +222,14 @@
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
+
+        // ⚡ Bolt: Use chunked conversion to prevent O(N^2) performance hit
         let binary = '';
-        bytes.forEach((b) => { binary += String.fromCharCode(b); });
+        const chunk = 8192;
+        for (let i = 0; i < bytes.byteLength; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+
         const payload = {
           type: 'frame',
           sequence: ++state.sequence,
