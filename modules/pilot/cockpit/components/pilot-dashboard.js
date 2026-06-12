@@ -348,7 +348,7 @@ class PilotDashboard extends LitElement {
               </ul>
             `
           : html`
-              <p class="empty-placeholder">No context topics observed yet.</p>
+              <p class="surface-empty empty-placeholder">No context topics observed yet.</p>
             `}
         </section>
         <section>
@@ -367,7 +367,7 @@ class PilotDashboard extends LitElement {
               </ul>
             `
           : html`
-              <p class="empty-placeholder">No sensation streams recorded yet.</p>
+              <p class="surface-empty empty-placeholder">No sensation streams recorded yet.</p>
             `}
         </section>
       `,
@@ -447,7 +447,7 @@ class PilotDashboard extends LitElement {
             </ul>
           `
           : html`
-            <p class="empty-placeholder">
+            <p class="surface-empty empty-placeholder">
               No FeelingIntent messages received from the pilot yet.
             </p>
           `}
@@ -469,7 +469,7 @@ class PilotDashboard extends LitElement {
           <p class="section-note">
             Prompt history will appear here once the planner publishes telemetry.
           </p>
-          <p class="empty-placeholder">No prompt captured yet.</p>
+          <p class="surface-empty empty-placeholder">No prompt captured yet.</p>
         `,
     });
 
@@ -516,7 +516,7 @@ class PilotDashboard extends LitElement {
               </ul>
             `
           : html`
-              <p class="empty-placeholder">No sensations recorded in the current window.</p>
+              <p class="surface-empty empty-placeholder">No sensations recorded in the current window.</p>
             `}
         `,
     });
@@ -589,7 +589,7 @@ class PilotDashboard extends LitElement {
             </ul>
           `
           : html`
-            <p class="empty-placeholder">No command scripts executed yet.</p>
+            <p class="surface-empty empty-placeholder">No command scripts executed yet.</p>
           `}
       `,
     });
