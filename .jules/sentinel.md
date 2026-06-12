@@ -1,0 +1,4 @@
+## 2024-03-24 - Enforce Database Authentication Environment Variables
+**Vulnerability:** Hardcoded database credentials (neo4j/password) in `docker-compose.yml` or fallback defaults (e.g. `${NEO4J_AUTH:-none}`).
+**Learning:** Defaulting to 'none' or hardcoding passwords causes the application to fail open and expose the database directly if the environment variable is not supplied or if there is a misconfiguration in how variables are injected.
+**Prevention:** Always use `${VAR?must be set}` syntax for critical authentication variables in `docker-compose.yml` files. This enforces a fail-secure approach where the container outright refuses to start rather than exposing unprotected access.
