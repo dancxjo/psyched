@@ -221,7 +221,15 @@
               type: 'chunk',
               sample_rate: state.targetSampleRate,
               channels: 1,
-              pcm: btoa(String.fromCharCode.apply(null, pcm)),
+              pcm: (() => {
+                let binary = '';
+                const chunkSize = 8192;
+                for (let i = 0; i < pcm.length; i += chunkSize) {
+                  const chunk = pcm.subarray(i, i + chunkSize);
+                  binary += String.fromCharCode.apply(null, chunk);
+                }
+                return btoa(binary);
+              })(),
             };
             state.ws.send(JSON.stringify(payload));
           };
