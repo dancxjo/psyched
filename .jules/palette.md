@@ -1,0 +1,3 @@
+## 2025-04-07 - Dynamic Status Accessibility in Cockpit UI
+**Learning:** Dynamic `.surface-status` elements that render text conditionally (e.g. error messages, loading states) lack immediate screen reader feedback without explicit ARIA live regions. Because they are typically rendered via Lit conditional logic, they are injected into the DOM after user interaction, making them invisible to screen readers unless configured properly.
+**Action:** When adding or modifying `.surface-status` messages that display dynamic feedback (like errors or load progress), always apply `role="alert" aria-live="assertive"` for critical/error messages and `role="status" aria-live="polite"` for non-critical/loading updates.
