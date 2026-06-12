@@ -16,7 +16,9 @@ from pathlib import Path
 import pytest
 
 
-def test_package_installs_and_imports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_package_installs_and_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Given the project is installed in isolation, the :mod:`memory` package is importable."""
     package_root = Path(__file__).resolve().parents[1]
     install_root = tmp_path / "site-packages"
@@ -42,7 +44,9 @@ def test_package_installs_and_imports(tmp_path: Path, monkeypatch: pytest.Monkey
         module = importlib.import_module("memory")
         assert module.MemoryService is not None
         entrypoint = install_root / "bin" / "memory_node"
-        assert entrypoint.exists(), "Expected the memory_node console script to be installed"
+        assert (
+            entrypoint.exists()
+        ), "Expected the memory_node console script to be installed"
     finally:
         if egg_info_dir.exists():
             shutil.rmtree(egg_info_dir)
