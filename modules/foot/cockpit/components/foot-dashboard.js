@@ -9,14 +9,14 @@ import "/components/joystick-control.js";
 import { normaliseTopic, streamActionForTopic } from "../utils/streams.js";
 
 import {
+  buildDefineSongPayload,
   buildParameterRequest,
   buildPowerLedPayload,
-  buildDefineSongPayload,
   formatJointState,
   formatOdometry,
   formatParameterEvent,
-  SONG_LIMITS,
   parseSongSheet,
+  SONG_LIMITS,
   toAsciiPayload,
 } from "./foot-dashboard.helpers.js";
 
@@ -33,9 +33,11 @@ function createFootSocket(options, onError) {
     ...options,
     ...(action
       ? {
-          action,
-          arguments: Object.keys(actionArguments).length ? actionArguments : undefined,
-        }
+        action,
+        arguments: Object.keys(actionArguments).length
+          ? actionArguments
+          : undefined,
+      }
       : {}),
   });
   const handler = typeof onError === "function" ? onError : () => undefined;
@@ -867,7 +869,7 @@ class FootDashboard extends LitElement {
     }
   }
 
-  async submitSongDefinition(event) {
+  submitSongDefinition(event) {
     event.preventDefault();
     const parsed = parseSongSheet(this.songForm.notes);
     if (!parsed.length) {
@@ -882,7 +884,8 @@ class FootDashboard extends LitElement {
         "create_msgs/msg/DefineSong",
       );
       socket.send(JSON.stringify(payload));
-      this.songStatus = `Song ${payload.song} programmed with ${payload.length} notes.`;
+      this.songStatus =
+        `Song ${payload.song} programmed with ${payload.length} notes.`;
     } catch (error) {
       this.songStatus = error instanceof Error ? error.message : String(error);
     }
@@ -1006,10 +1009,24 @@ class FootDashboard extends LitElement {
         <article class="surface-card">
           <h3 class="surface-card__title">Mobility actions</h3>
           <div class="surface-actions surface-actions--grid">
-            <button class="surface-action" @click="${() =>
-              this.sendSimple("dock")}">⚓ Dock</button>
-            <button class="surface-action" @click="${() =>
-              this.sendSimple("undock")}">🛫 Undock</button>
+            <button
+              class="surface-action"
+              @click="${() => this.sendSimple("dock")}"
+              aria-label="Dock"
+              title="Dock"
+            >
+              <span class="surface-action__icon" aria-hidden="true">⚓</span>
+              <span class="surface-action__label" aria-hidden="true">Dock</span>
+            </button>
+            <button
+              class="surface-action"
+              @click="${() => this.sendSimple("undock")}"
+              aria-label="Undock"
+              title="Undock"
+            >
+              <span class="surface-action__icon" aria-hidden="true">🛫</span>
+              <span class="surface-action__label" aria-hidden="true">Undock</span>
+            </button>
           </div>
           ${this.actionStatus
             ? html`
@@ -1061,7 +1078,16 @@ class FootDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button class="surface-action" type="submit">🔤 Update ASCII</button>
+              <button
+                class="surface-action"
+                type="submit"
+                aria-label="Update ASCII"
+                title="Update ASCII"
+              >
+                <span class="surface-action__icon" aria-hidden="true">🔤</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >Update ASCII</span>
+              </button>
             </div>
           </form>
           <form @submit="${(event) => this.sendPowerLed(event)}">
@@ -1094,7 +1120,16 @@ class FootDashboard extends LitElement {
               />
             </label>
             <div class="surface-actions">
-              <button class="surface-action" type="submit">💡 Update power LED</button>
+              <button
+                class="surface-action"
+                type="submit"
+                aria-label="Update power LED"
+                title="Update power LED"
+              >
+                <span class="surface-action__icon" aria-hidden="true">💡</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >Update power LED</span>
+              </button>
             </div>
           </form>
         </article>
@@ -1126,10 +1161,26 @@ class FootDashboard extends LitElement {
               </label>
             </div>
             <div class="surface-actions surface-actions--grid">
-              <button class="surface-action" type="submit">🎼 Define song</button>
-              <button class="surface-action" type="button" @click="${(event) =>
-                this.playSong(event)}">
-                🎵 Play song
+              <button
+                class="surface-action"
+                type="submit"
+                aria-label="Define song"
+                title="Define song"
+              >
+                <span class="surface-action__icon" aria-hidden="true">🎼</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >Define song</span>
+              </button>
+              <button
+                class="surface-action"
+                type="button"
+                @click="${(event) => this.playSong(event)}"
+                aria-label="Play song"
+                title="Play song"
+              >
+                <span class="surface-action__icon" aria-hidden="true">🎵</span>
+                <span class="surface-action__label" aria-hidden="true"
+                >Play song</span>
               </button>
             </div>
           </form>
