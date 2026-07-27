@@ -62,6 +62,34 @@ class TestHungerFeeler:
             for sentiment in sentiments
         ), sentiments
 
+    def test_none_charge_fraction_returns_nothing(self) -> None:
+        state = make_state(battery=BatteryState(charge_fraction=None, is_charging=False))
+        assert hunger_feeler(state) == []
+
+    def test_satiated_when_charge_is_high(self) -> None:
+        state = make_state(battery=BatteryState(charge_fraction=0.85, is_charging=False))
+        sentiments = hunger_feeler(state)
+        assert any("nourished and steady" in s.narrative.lower() for s in sentiments)
+
+    def test_hungry_phase_before_panic(self) -> None:
+        state = make_state(battery=BatteryState(charge_fraction=0.45, is_charging=False))
+        sentiments = hunger_feeler(state)
+        assert any("hunger nibbling" in s.narrative.lower() for s in sentiments)
+
+    def test_charging_relief_narrative(self) -> None:
+        state = make_state(battery=BatteryState(charge_fraction=0.2, is_charging=True))
+        sentiments = hunger_feeler(state)
+        recharging = next(s for s in sentiments if s.name == "recharging")
+        assert "calm relief" in recharging.narrative.lower()
+        assert recharging.intensity == 0.5
+
+    def test_charging_electrons_narrative(self) -> None:
+        state = make_state(battery=BatteryState(charge_fraction=0.7, is_charging=True))
+        sentiments = hunger_feeler(state)
+        recharging = next(s for s in sentiments if s.name == "recharging")
+        assert "fresh electrons" in recharging.narrative.lower()
+        assert recharging.intensity == 0.35
+
 
 class TestLoadFeeler:
     """Stress mapping for computational resource pressure."""
