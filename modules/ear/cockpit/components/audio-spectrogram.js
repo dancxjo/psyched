@@ -70,9 +70,15 @@ class CockpitAudioSpectrogram extends LitElement {
     return this;
   }
 
+  _ensureCanvas() {
+    if (!this._canvas) {
+      this._canvas = this.querySelector('canvas');
+      this._context = this._canvas?.getContext('2d') ?? null;
+    }
+  }
+
   firstUpdated() {
-    this._canvas = this.querySelector('canvas');
-    this._context = this._canvas?.getContext('2d') ?? null;
+    this._ensureCanvas();
     if (!this._historyCanvas && typeof document !== 'undefined') {
       this._historyCanvas = document.createElement('canvas');
       this._historyCtx = this._historyCanvas.getContext('2d');
@@ -135,9 +141,7 @@ class CockpitAudioSpectrogram extends LitElement {
   }
 
   _syncCanvasDimensions() {
-    if (!this._canvas) {
-      this._canvas = this.querySelector('canvas');
-    }
+    this._ensureCanvas();
     if (!this._canvas) {
       return;
     }
@@ -311,6 +315,7 @@ class CockpitAudioSpectrogram extends LitElement {
   }
 
   _renderSpectrogram() {
+    this._ensureCanvas();
     if (!this._context || !this._canvas) {
       return;
     }
@@ -336,6 +341,7 @@ class CockpitAudioSpectrogram extends LitElement {
   }
 
   _renderFallback() {
+    this._ensureCanvas();
     if (!this._context || !this._canvas) {
       return;
     }
