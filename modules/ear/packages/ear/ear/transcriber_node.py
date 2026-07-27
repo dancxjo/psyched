@@ -337,7 +337,7 @@ class TranscriberNode(Node):
         self._forward_transcript_to_conversant(text)
 
     @staticmethod
-    def _segments_to_text(segments: Sequence[TranscriptionSegment]) -> str:
+    def _segments_to_text(segments: Sequence[TranscriptSegment]) -> str:
         parts = [segment.text.strip() for segment in segments if getattr(segment, "text", "").strip()]
         return " ".join(parts)
 
